@@ -30,8 +30,8 @@ export default function ConfigRequiredPage() {
         </p>
       </div>
       <Link
-        href="/"
         className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:opacity-90"
+        href="/"
       >
         Tentar novamente
       </Link>

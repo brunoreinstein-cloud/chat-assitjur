@@ -1,12 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { auth, GET as AuthGET, POST as AuthPOST } from "@/app/(auth)/auth";
+import { GET as AuthGET, POST as AuthPOST, auth } from "@/app/(auth)/auth";
 
 const authErrorResponse = (error: unknown) =>
   NextResponse.json(
     {
       error: "AuthError",
-      message:
-        error instanceof Error ? error.message : "Authentication failed",
+      message: error instanceof Error ? error.message : "Authentication failed",
     },
     { status: 500 }
   );
@@ -53,7 +52,7 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  context: { params: Promise<{ nextauth: string[] }> }
+  _context: { params: Promise<{ nextauth: string[] }> }
 ) {
   try {
     return await AuthPOST(request as NextRequest);

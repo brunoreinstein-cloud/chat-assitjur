@@ -1,5 +1,11 @@
 # Base de conhecimento
 
+## Projeto: Agente Revisor de Defesas Trabalhistas
+
+O assistente usa por padrão as instruções do **Agente Revisor de Defesas Trabalhistas v3.1** (auditor jurídico sênior — contencioso trabalhista). As instruções completas estão em `lib/ai/agent-revisor-defesas.ts`. Se o usuário não enviar "Instruções do agente" no chat, o backend aplica esse bloco automaticamente.
+
+---
+
 ## Implementação atual (injeção direta)
 
 - **Tabela:** `KnowledgeDocument` (id, userId, title, content, createdAt).

@@ -10,6 +10,7 @@ import {
 import { after } from "next/server";
 import { createResumableStreamContext } from "resumable-stream";
 import { auth, type UserType } from "@/app/(auth)/auth";
+import { AGENTE_REVISOR_DEFESAS_INSTRUCTIONS } from "@/lib/ai/agent-revisor-defesas";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
@@ -38,6 +39,31 @@ import { generateTitleFromUserMessage } from "../../actions";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
 
 export const maxDuration = 60;
+
+/** Converte partes do tipo "document" (PDF) em partes "text" para o modelo. */
+function normalizeMessageParts(messages: ChatMessage[]): ChatMessage[] {
+  return messages.map((msg) => {
+    if (!msg.parts?.length) return msg;
+    const normalizedParts = msg.parts.flatMap(
+      (part: { type?: string; text?: string; name?: string; url?: string; mediaType?: string }) => {
+        if (
+          part.type === "document" &&
+          typeof part.text === "string" &&
+          part.name
+        ) {
+          return [
+            {
+              type: "text" as const,
+              text: `[Documento: ${part.name}]\n\n${part.text}`,
+            },
+          ];
+        }
+        return [part];
+      }
+    );
+    return { ...msg, parts: normalizedParts };
+  });
+}
 
 function getStreamContext() {
   try {
@@ -153,17 +179,21 @@ export async function POST(request: Request) {
       selectedChatModel.includes("reasoning") ||
       selectedChatModel.includes("thinking");
 
-    const modelMessages = await convertToModelMessages(uiMessages);
+    const normalizedMessages = normalizeMessageParts(uiMessages);
+    const modelMessages = await convertToModelMessages(normalizedMessages);
 
     const stream = createUIMessageStream({
       originalMessages: isToolApprovalFlow ? uiMessages : undefined,
       execute: async ({ writer: dataStream }) => {
+        const effectiveAgentInstructions =
+          agentInstructions?.trim() || AGENTE_REVISOR_DEFESAS_INSTRUCTIONS;
+
         const result = streamText({
           model: getLanguageModel(selectedChatModel),
           system: systemPrompt({
             selectedChatModel,
             requestHints,
-            agentInstructions,
+            agentInstructions: effectiveAgentInstructions,
             knowledgeContext,
           }),
           messages: modelMessages,

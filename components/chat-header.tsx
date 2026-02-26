@@ -1,11 +1,10 @@
 "use client";
 
-import Link from "next/link";
+import { BookOpenIcon, SparklesIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { memo, useState } from "react";
-import { useWindowSize } from "usehooks-ts";
-import { BookOpenIcon, SparklesIcon } from "lucide-react";
 import useSWR, { useSWRConfig } from "swr";
+import { useWindowSize } from "usehooks-ts";
 import { SidebarToggle } from "@/components/sidebar-toggle";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,10 +18,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { PlusIcon, VercelIcon } from "./icons";
+import { fetcher } from "@/lib/utils";
+import { PlusIcon } from "./icons";
 import { useSidebar } from "./ui/sidebar";
 import { VisibilitySelector, type VisibilityType } from "./visibility-selector";
-import { fetcher } from "@/lib/utils";
 
 const AGENT_INSTRUCTIONS_MAX_LENGTH = 4000;
 
@@ -43,7 +42,9 @@ function PureChatHeader({
   agentInstructions: string;
   setAgentInstructions: (value: string) => void;
   knowledgeDocumentIds: string[];
-  setKnowledgeDocumentIds: (value: string[] | ((prev: string[]) => string[])) => void;
+  setKnowledgeDocumentIds: (
+    value: string[] | ((prev: string[]) => string[])
+  ) => void;
 }) {
   const router = useRouter();
   const { open } = useSidebar();
@@ -153,9 +154,9 @@ function PureChatHeader({
         <Dialog onOpenChange={handleOpenChange} open={dialogOpen}>
           <DialogTrigger asChild>
             <Button
-              aria-label="Configurar instruções do agente"
+              aria-label="Configurar instruções do agente (padrão: Revisor de Defesas)"
               className="order-2 h-8 px-2 md:h-fit md:px-2"
-              title="Instruções do agente"
+              title="Instruções do agente (padrão: Revisor de Defesas)"
               type="button"
               variant="outline"
             >
@@ -166,20 +167,20 @@ function PureChatHeader({
             <DialogHeader>
               <DialogTitle>Instruções do agente</DialogTitle>
               <DialogDescription>
-                Oriente como o assistente deve responder neste chat: tom, estilo,
-                formato ou regras específicas. Deixe em branco para usar o
-                padrão.
+                Por padrão o agente atua como Revisor de Defesas Trabalhistas
+                (auditoria, parecer, roteiros). Sobrescreva aqui apenas se
+                quiser outro comportamento neste chat.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-2">
               <Label htmlFor="agent-instructions">
-                Prompt de orientação (opcional)
+                Sobrescrever orientações (opcional)
               </Label>
               <Textarea
                 id="agent-instructions"
                 maxLength={AGENT_INSTRUCTIONS_MAX_LENGTH}
                 onChange={(e) => setLocalInstructions(e.target.value)}
-                placeholder="Ex: Responda sempre em tom formal e técnico. Use listas quando enumerar opções."
+                placeholder="Deixe em branco = Revisor de Defesas. Ou descreva outro tom/regras para este chat."
                 rows={4}
                 value={localInstructions}
               />
@@ -199,9 +200,9 @@ function PureChatHeader({
         >
           <DialogTrigger asChild>
             <Button
-              aria-label="Selecionar base de conhecimento"
+              aria-label="Selecionar base de conhecimento (ex.: bancodetese)"
               className="order-2 h-8 px-2 md:h-fit md:px-2"
-              title="Base de conhecimento"
+              title="Base de conhecimento (ex.: bancodetese)"
               type="button"
               variant="outline"
             >
@@ -212,8 +213,8 @@ function PureChatHeader({
             <DialogHeader>
               <DialogTitle>Base de conhecimento</DialogTitle>
               <DialogDescription>
-                Selecione os documentos que o assistente deve usar como
-                contexto nas respostas (máx. 20). Crie novos documentos abaixo.
+                Use para @bancodetese (teses, precedentes) ou outros contextos.
+                Selecione até 20 documentos. Crie novos abaixo.
               </DialogDescription>
             </DialogHeader>
 
@@ -239,7 +240,9 @@ function PureChatHeader({
                 <p className="text-destructive text-sm">{addDocError}</p>
               )}
               <Button
-                disabled={isAddingDoc || !newDocTitle.trim() || !newDocContent.trim()}
+                disabled={
+                  isAddingDoc || !newDocTitle.trim() || !newDocContent.trim()
+                }
                 type="submit"
                 variant="secondary"
               >
@@ -255,7 +258,7 @@ function PureChatHeader({
               ) : (
                 <ul className="grid gap-2">
                   {knowledgeDocs.map((doc) => (
-                    <li key={doc.id} className="flex items-center gap-2">
+                    <li className="flex items-center gap-2" key={doc.id}>
                       <input
                         checked={localKnowledgeIds.includes(doc.id)}
                         id={`kb-${doc.id}`}
@@ -276,20 +279,6 @@ function PureChatHeader({
           </DialogContent>
         </Dialog>
       )}
-
-      <Button
-        asChild
-        className="order-3 hidden bg-zinc-900 px-2 text-zinc-50 hover:bg-zinc-800 md:ml-auto md:flex md:h-fit dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
-      >
-        <Link
-          href="https://vercel.com/templates/next.js/chatbot"
-          rel="noopener noreferrer"
-          target="_blank"
-        >
-          <VercelIcon size={16} />
-          Deploy with Vercel
-        </Link>
-      </Button>
     </header>
   );
 }
@@ -300,7 +289,8 @@ export const ChatHeader = memo(PureChatHeader, (prevProps, nextProps) => {
     prevProps.selectedVisibilityType === nextProps.selectedVisibilityType &&
     prevProps.isReadonly === nextProps.isReadonly &&
     prevProps.agentInstructions === nextProps.agentInstructions &&
-    prevProps.knowledgeDocumentIds.length === nextProps.knowledgeDocumentIds.length &&
+    prevProps.knowledgeDocumentIds.length ===
+      nextProps.knowledgeDocumentIds.length &&
     prevProps.knowledgeDocumentIds.every(
       (id, i) => id === nextProps.knowledgeDocumentIds[i]
     )

@@ -12,7 +12,18 @@ const filePartSchema = z.object({
   url: z.string().url(),
 });
 
-const partSchema = z.union([textPartSchema, filePartSchema]);
+/** Parte com texto extraído de PDF (PI, Contestação, etc.) */
+const documentPartSchema = z.object({
+  type: z.enum(["document"]),
+  name: z.string().min(1).max(200),
+  text: z.string().min(1).max(500_000),
+});
+
+const partSchema = z.union([
+  textPartSchema,
+  filePartSchema,
+  documentPartSchema,
+]);
 
 const userMessageSchema = z.object({
   id: z.string().uuid(),

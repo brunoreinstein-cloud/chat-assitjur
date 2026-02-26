@@ -147,18 +147,33 @@ function PureMultimodalInput({
   const submitForm = useCallback(() => {
     window.history.pushState({}, "", `/chat/${chatId}`);
 
-    sendMessage({
-      role: "user",
-      parts: [
-        ...attachments.map((attachment) => ({
+    const attachmentParts = attachments.flatMap((attachment) => {
+      if (attachment.extractedText != null) {
+        return [
+          {
+            type: "document" as const,
+            name: attachment.name,
+            text: attachment.extractedText,
+          },
+        ];
+      }
+      return [
+        {
           type: "file" as const,
           url: attachment.url,
           name: attachment.name,
           mediaType: attachment.contentType,
-        })),
+        },
+      ];
+    });
+
+    sendMessage({
+      role: "user",
+      parts: [
+        ...attachmentParts,
         {
           type: "text",
-          text: input,
+          text: input.trim() || "(sem texto adicional)",
         },
       ],
     });
@@ -195,12 +210,15 @@ function PureMultimodalInput({
 
       if (response.ok) {
         const data = await response.json();
-        const { url, pathname, contentType } = data;
+        const { url, pathname, contentType, extractedText } = data;
 
         return {
           url,
-          name: pathname,
-          contentType,
+          name: pathname ?? data.pathname ?? file.name,
+          contentType: contentType ?? file.type,
+          ...(typeof extractedText === "string"
+            ? { extractedText }
+            : {}),
         };
       }
       const { error } = await response.json();
@@ -308,6 +326,7 @@ function PureMultimodalInput({
         )}
 
       <input
+        accept="image/jpeg,image/png,application/pdf"
         className="pointer-events-none fixed -top-4 -left-4 size-0.5 opacity-0"
         multiple
         onChange={handleFileChange}
@@ -371,7 +390,7 @@ function PureMultimodalInput({
             maxHeight={200}
             minHeight={44}
             onChange={handleInput}
-            placeholder="Envie uma mensagem..."
+            placeholder="Cole o texto da Petição Inicial e da Contestação, ou descreva o caso e anexe documentos..."
             ref={textareaRef}
             rows={1}
             value={input}
@@ -396,7 +415,10 @@ function PureMultimodalInput({
             <PromptInputSubmit
               className="size-8 rounded-full bg-primary text-primary-foreground transition-colors duration-200 hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
               data-testid="send-button"
-              disabled={!input.trim() || uploadQueue.length > 0}
+              disabled={
+              (attachments.length === 0 && !input.trim()) ||
+              uploadQueue.length > 0
+            }
               status={status}
             >
               <ArrowUpIcon size={14} />

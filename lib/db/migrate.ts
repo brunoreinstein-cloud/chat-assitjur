@@ -8,7 +8,9 @@ config({ path: ".env.local" });
 
 const runMigrate = async () => {
   if (process.env.VERCEL) {
-    console.log("⏭️  Vercel build: skipping migrations (run them separately or in CI)");
+    console.log(
+      "⏭️  Vercel build: skipping migrations (run them separately or in CI)"
+    );
     process.exit(0);
   }
   if (!process.env.POSTGRES_URL) {

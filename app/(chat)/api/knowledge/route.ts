@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
 import {
   createKnowledgeDocument,
@@ -6,7 +7,6 @@ import {
   getKnowledgeDocumentsByUserId,
 } from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
-import { z } from "zod";
 
 const createBodySchema = z.object({
   title: z.string().min(1).max(512),
@@ -25,7 +25,10 @@ export async function GET(request: Request) {
   const idsParam = searchParams.get("ids");
 
   if (idsParam) {
-    const ids = idsParam.split(",").map((id) => id.trim()).filter(Boolean);
+    const ids = idsParam
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
     if (ids.length === 0) {
       return Response.json([]);
     }
@@ -77,7 +80,10 @@ export async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
   if (!id) {
-    return new ChatbotError("bad_request:api", "Parameter id is required").toResponse();
+    return new ChatbotError(
+      "bad_request:api",
+      "Parameter id is required"
+    ).toResponse();
   }
 
   const deleted = await deleteKnowledgeDocumentById({

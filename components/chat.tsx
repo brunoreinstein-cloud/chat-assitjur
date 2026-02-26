@@ -211,8 +211,8 @@ export function Chat({
         <ChatHeader
           agentInstructions={agentInstructions}
           chatId={id}
-          knowledgeDocumentIds={knowledgeDocumentIds}
           isReadonly={isReadonly}
+          knowledgeDocumentIds={knowledgeDocumentIds}
           selectedVisibilityType={initialVisibilityType}
           setAgentInstructions={setAgentInstructions}
           setKnowledgeDocumentIds={setKnowledgeDocumentIds}

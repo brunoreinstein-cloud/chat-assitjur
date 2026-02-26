@@ -54,7 +54,6 @@ export default function GlobalError({
               </pre>
             )}
             <button
-              type="button"
               onClick={() => reset()}
               style={{
                 background: "#000",
@@ -65,6 +64,7 @@ export default function GlobalError({
                 fontSize: "1rem",
                 cursor: "pointer",
               }}
+              type="button"
             >
               Tentar novamente
             </button>

@@ -87,8 +87,7 @@ export function SidebarUserNav({ user }: { user: User }) {
                   if (status === "loading") {
                     toast({
                       type: "error",
-                      description:
-                        "Verificando autenticação. Tente novamente!",
+                      description: "Verificando autenticação. Tente novamente!",
                     });
 
                     return;

@@ -1,7 +1,10 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  // Raiz absoluta evita aviso de múltiplos lockfiles e funciona na Vercel
+  turbopack: { root: path.resolve(process.cwd()) },
   images: {
     remotePatterns: [
       {

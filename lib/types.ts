@@ -54,4 +54,6 @@ export type Attachment = {
   name: string;
   url: string;
   contentType: string;
+  /** Texto extraído de PDF; presente quando contentType === "application/pdf" */
+  extractedText?: string;
 };

@@ -14,6 +14,7 @@ export const PreviewAttachment = ({
   onRemove?: () => void;
 }) => {
   const { name, url, contentType } = attachment;
+  const isPdf = contentType === "application/pdf";
 
   return (
     <div
@@ -22,15 +23,27 @@ export const PreviewAttachment = ({
     >
       {contentType?.startsWith("image") ? (
         <Image
-          alt={name ?? "An image attachment"}
+          alt={name ?? "Imagem anexada"}
           className="size-full object-cover"
           height={64}
           src={url}
           width={64}
         />
       ) : (
-        <div className="flex size-full items-center justify-center text-muted-foreground text-xs">
-          File
+        <div
+          className="flex size-full flex-col items-center justify-center gap-0.5 text-muted-foreground text-xs"
+          title={name}
+        >
+          {isPdf ? (
+            <>
+              <span className="font-medium">PDF</span>
+              <span className="truncate px-1 max-w-full" title={name}>
+                {name}
+              </span>
+            </>
+          ) : (
+            <span>Arquivo</span>
+          )}
         </div>
       )}
 

@@ -70,7 +70,9 @@ export async function createUser(email: string, password: string) {
   const hashedPassword = generateHashedPassword(password);
 
   try {
-    return await getDb().insert(user).values({ email, password: hashedPassword });
+    return await getDb()
+      .insert(user)
+      .values({ email, password: hashedPassword });
   } catch (_error) {
     throw new ChatbotError("bad_request:database", "Failed to create user");
   }
@@ -245,7 +247,10 @@ export async function getChatsByUserId({
 
 export async function getChatById({ id }: { id: string }) {
   try {
-    const [selectedChat] = await getDb().select().from(chat).where(eq(chat.id, id));
+    const [selectedChat] = await getDb()
+      .select()
+      .from(chat)
+      .where(eq(chat.id, id));
     if (!selectedChat) {
       return null;
     }
@@ -272,7 +277,10 @@ export async function updateMessage({
   parts: DBMessage["parts"];
 }) {
   try {
-    return await getDb().update(message).set({ parts }).where(eq(message.id, id));
+    return await getDb()
+      .update(message)
+      .set({ parts })
+      .where(eq(message.id, id));
   } catch (_error) {
     throw new ChatbotError("bad_request:database", "Failed to update message");
   }
@@ -314,11 +322,13 @@ export async function voteMessage({
         .set({ isUpvoted: type === "up" })
         .where(and(eq(vote.messageId, messageId), eq(vote.chatId, chatId)));
     }
-    return await getDb().insert(vote).values({
-      chatId,
-      messageId,
-      isUpvoted: type === "up",
-    });
+    return await getDb()
+      .insert(vote)
+      .values({
+        chatId,
+        messageId,
+        isUpvoted: type === "up",
+      });
   } catch (_error) {
     throw new ChatbotError("bad_request:database", "Failed to vote message");
   }
@@ -520,7 +530,10 @@ export async function updateChatVisibilityById({
   visibility: "private" | "public";
 }) {
   try {
-    return await getDb().update(chat).set({ visibility }).where(eq(chat.id, chatId));
+    return await getDb()
+      .update(chat)
+      .set({ visibility })
+      .where(eq(chat.id, chatId));
   } catch (_error) {
     throw new ChatbotError(
       "bad_request:database",
@@ -638,7 +651,11 @@ export async function createKnowledgeDocument({
   }
 }
 
-export async function getKnowledgeDocumentsByUserId({ userId }: { userId: string }) {
+export async function getKnowledgeDocumentsByUserId({
+  userId,
+}: {
+  userId: string;
+}) {
   try {
     return await getDb()
       .select()
@@ -665,10 +682,7 @@ export async function getKnowledgeDocumentById({
       .select()
       .from(knowledgeDocument)
       .where(
-        and(
-          eq(knowledgeDocument.id, id),
-          eq(knowledgeDocument.userId, userId)
-        )
+        and(eq(knowledgeDocument.id, id), eq(knowledgeDocument.userId, userId))
       );
     return doc ?? null;
   } catch (_error) {
@@ -686,7 +700,9 @@ export async function getKnowledgeDocumentsByIds({
   ids: string[];
   userId: string;
 }) {
-  if (ids.length === 0) return [];
+  if (ids.length === 0) {
+    return [];
+  }
   try {
     return await getDb()
       .select()
@@ -717,10 +733,7 @@ export async function deleteKnowledgeDocumentById({
     const [deleted] = await getDb()
       .delete(knowledgeDocument)
       .where(
-        and(
-          eq(knowledgeDocument.id, id),
-          eq(knowledgeDocument.userId, userId)
-        )
+        and(eq(knowledgeDocument.id, id), eq(knowledgeDocument.userId, userId))
       )
       .returning();
     return deleted ?? null;

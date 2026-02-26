@@ -11,7 +11,7 @@ export default function ErrorBoundary({
 }>) {
   useEffect(() => {
     // Opcional: enviar para serviço de logging
-  }, [error]);
+  }, []);
 
   const isConfigError =
     error.message.includes("POSTGRES_URL") ||
@@ -30,9 +30,9 @@ export default function ErrorBoundary({
         </pre>
       )}
       <button
-        type="button"
-        onClick={() => reset()}
         className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:opacity-90"
+        onClick={() => reset()}
+        type="button"
       >
         Tentar novamente
       </button>
