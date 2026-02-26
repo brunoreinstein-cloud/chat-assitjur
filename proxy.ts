@@ -6,6 +6,18 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   /*
+   * Na Vercel, sem POSTGRES_URL ou AUTH_SECRET, mostrar página de configuração
+   * em vez de deixar a app devolver 500.
+   */
+  if (
+    process.env.VERCEL &&
+    (!process.env.POSTGRES_URL || !process.env.AUTH_SECRET) &&
+    pathname !== "/config-required"
+  ) {
+    return NextResponse.rewrite(new URL("/config-required", request.url));
+  }
+
+  /*
    * Playwright starts the dev server and requires a 200 status to
    * begin the tests, so this ensures that the tests can start
    */
