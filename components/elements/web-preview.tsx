@@ -147,7 +147,7 @@ export const WebPreviewUrl = ({
       className="h-8 flex-1 text-sm"
       onChange={onChange}
       onKeyDown={handleKeyDown}
-      placeholder="Enter URL..."
+      placeholder="Digite a URL..."
       value={value ?? url}
       {...props}
     />
@@ -172,7 +172,7 @@ export const WebPreviewBody = ({
         className={cn("size-full", className)}
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"
         src={(src ?? url) || undefined}
-        title="Preview"
+        title="Visualização"
         {...props}
       />
       {loading}
@@ -225,7 +225,7 @@ export const WebPreviewConsole = ({
       >
         <div className="max-h-48 space-y-1 overflow-y-auto">
           {logs.length === 0 ? (
-            <p className="text-muted-foreground">No console output</p>
+            <p className="text-muted-foreground">Nenhuma saída no console</p>
           ) : (
             logs.map((log, index) => (
               <div

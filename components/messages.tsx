@@ -90,7 +90,7 @@ function PureMessages({
       </div>
 
       <button
-        aria-label="Scroll to bottom"
+        aria-label="Rolar para o final"
         className={`absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full border bg-background p-2 shadow-lg transition-all hover:bg-muted ${
           isAtBottom
             ? "pointer-events-none scale-0 opacity-0"

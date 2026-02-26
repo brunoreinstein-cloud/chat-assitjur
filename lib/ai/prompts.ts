@@ -59,21 +59,33 @@ About the origin of user's request:
 export const systemPrompt = ({
   selectedChatModel,
   requestHints,
+  agentInstructions,
+  knowledgeContext,
 }: {
   selectedChatModel: string;
   requestHints: RequestHints;
+  /** Optional guidance prompt: orients how the assistant should respond (persona, tone, format). */
+  agentInstructions?: string;
+  /** Optional context from the knowledge base to ground answers. */
+  knowledgeContext?: string;
 }) => {
   const requestPrompt = getRequestPromptFromHints(requestHints);
 
-  // reasoning models don't need artifacts prompt (they can't use tools)
-  if (
+  let base =
     selectedChatModel.includes("reasoning") ||
     selectedChatModel.includes("thinking")
-  ) {
-    return `${regularPrompt}\n\n${requestPrompt}`;
+      ? `${regularPrompt}\n\n${requestPrompt}`
+      : `${regularPrompt}\n\n${requestPrompt}\n\n${artifactsPrompt}`;
+
+  if (agentInstructions?.trim()) {
+    base += `\n\n## Orientações para este agente\n${agentInstructions.trim()}`;
   }
 
-  return `${regularPrompt}\n\n${requestPrompt}\n\n${artifactsPrompt}`;
+  if (knowledgeContext?.trim()) {
+    base += `\n\n## Base de conhecimento (use para fundamentar suas respostas)\n${knowledgeContext.trim()}`;
+  }
+
+  return base;
 };
 
 export const codePrompt = `

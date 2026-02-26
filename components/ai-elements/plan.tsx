@@ -136,7 +136,7 @@ export const PlanTrigger = ({ className, ...props }: PlanTriggerProps) => (
       {...props}
     >
       <ChevronsUpDownIcon className="size-4" />
-      <span className="sr-only">Toggle plan</span>
+      <span className="sr-only">Alternar plano</span>
     </Button>
   </CollapsibleTrigger>
 );

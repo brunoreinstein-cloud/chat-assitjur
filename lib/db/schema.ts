@@ -168,3 +168,16 @@ export const stream = pgTable(
 );
 
 export type Stream = InferSelectModel<typeof stream>;
+
+/** Base de conhecimento: documentos que podem ser usados como contexto no chat (RAG ou injeção direta). */
+export const knowledgeDocument = pgTable("KnowledgeDocument", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => user.id),
+  title: varchar("title", { length: 512 }).notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+});
+
+export type KnowledgeDocument = InferSelectModel<typeof knowledgeDocument>;

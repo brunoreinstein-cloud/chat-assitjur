@@ -46,15 +46,15 @@ export function AppSidebar({ user }: { user: User | undefined }) {
     });
 
     toast.promise(deletePromise, {
-      loading: "Deleting all chats...",
+      loading: "Excluindo todos os chats...",
       success: () => {
         mutate(unstable_serialize(getChatHistoryPaginationKey));
         setShowDeleteAllDialog(false);
         router.replace("/");
         router.refresh();
-        return "All chats deleted successfully";
+        return "Todos os chats foram excluídos";
       },
-      error: "Failed to delete all chats",
+      error: "Falha ao excluir todos os chats",
     });
   };
 
@@ -89,7 +89,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent align="end" className="hidden md:block">
-                      Delete All Chats
+                      Excluir todos os chats
                     </TooltipContent>
                   </Tooltip>
                 )}
@@ -109,7 +109,7 @@ export function AppSidebar({ user }: { user: User | undefined }) {
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent align="end" className="hidden md:block">
-                    New Chat
+                    Novo chat
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -128,16 +128,16 @@ export function AppSidebar({ user }: { user: User | undefined }) {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete all chats?</AlertDialogTitle>
+            <AlertDialogTitle>Excluir todos os chats?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete all
-              your chats and remove them from our servers.
+              Esta ação não pode ser desfeita. Todos os seus chats serão
+              excluídos permanentemente dos nossos servidores.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteAll}>
-              Delete All
+              Excluir tudo
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

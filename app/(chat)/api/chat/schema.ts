@@ -34,6 +34,10 @@ export const postRequestBodySchema = z.object({
   messages: z.array(messageSchema).optional(),
   selectedChatModel: z.string(),
   selectedVisibilityType: z.enum(["public", "private"]),
+  /** Optional agent guidance prompt: instructions that orient how the assistant should respond (persona, tone, format). */
+  agentInstructions: z.string().max(4000).optional(),
+  /** Optional IDs of knowledge base documents to inject as context for this request. */
+  knowledgeDocumentIds: z.array(z.string().uuid()).max(20).optional(),
 });
 
 export type PostRequestBody = z.infer<typeof postRequestBodySchema>;

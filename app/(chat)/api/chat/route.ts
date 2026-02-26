@@ -22,6 +22,7 @@ import {
   createStreamId,
   deleteChatById,
   getChatById,
+  getKnowledgeDocumentsByIds,
   getMessageCountByUserId,
   getMessagesByChatId,
   saveChat,
@@ -59,8 +60,15 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { id, message, messages, selectedChatModel, selectedVisibilityType } =
-      requestBody;
+    const {
+      id,
+      message,
+      messages,
+      selectedChatModel,
+      selectedVisibilityType,
+      agentInstructions,
+      knowledgeDocumentIds,
+    } = requestBody;
 
     const session = await auth();
 
@@ -115,6 +123,17 @@ export async function POST(request: Request) {
       country,
     };
 
+    let knowledgeContext: string | undefined;
+    if (knowledgeDocumentIds?.length && session.user.id) {
+      const knowledgeDocs = await getKnowledgeDocumentsByIds({
+        ids: knowledgeDocumentIds,
+        userId: session.user.id,
+      });
+      knowledgeContext = knowledgeDocs
+        .map((doc) => `--- ${doc.title} ---\n${doc.content}`)
+        .join("\n\n");
+    }
+
     if (message?.role === "user") {
       await saveMessages({
         messages: [
@@ -141,7 +160,12 @@ export async function POST(request: Request) {
       execute: async ({ writer: dataStream }) => {
         const result = streamText({
           model: getLanguageModel(selectedChatModel),
-          system: systemPrompt({ selectedChatModel, requestHints }),
+          system: systemPrompt({
+            selectedChatModel,
+            requestHints,
+            agentInstructions,
+            knowledgeContext,
+          }),
           messages: modelMessages,
           stopWhen: stepCountIs(5),
           experimental_activeTools: isReasoningModel

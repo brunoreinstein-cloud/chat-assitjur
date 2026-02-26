@@ -10,13 +10,13 @@ const getActionText = (
 ) => {
   switch (type) {
     case "create":
-      return tense === "present" ? "Creating" : "Created";
+      return tense === "present" ? "Criando" : "Criado";
     case "update":
-      return tense === "present" ? "Updating" : "Updated";
+      return tense === "present" ? "Atualizando" : "Atualizado";
     case "request-suggestions":
       return tense === "present"
-        ? "Adding suggestions"
-        : "Added suggestions to";
+        ? "Adicionando sugestões"
+        : "Adicionadas sugestões em";
     default:
       return null;
   }
@@ -41,7 +41,7 @@ function PureDocumentToolResult({
       onClick={(event) => {
         if (isReadonly) {
           toast.error(
-            "Viewing files in shared chats is currently not supported."
+            "Visualizar arquivos em chats compartilhados não é suportado no momento."
           );
           return;
         }
@@ -107,7 +107,7 @@ function PureDocumentToolCall({
       onClick={(event) => {
         if (isReadonly) {
           toast.error(
-            "Viewing files in shared chats is currently not supported."
+            "Visualizar arquivos em chats compartilhados não é suportado no momento."
           );
           return;
         }
@@ -147,7 +147,7 @@ function PureDocumentToolCall({
               : type === "update" && "description" in args
                 ? `"${args.description}"`
                 : type === "request-suggestions"
-                  ? "for document"
+                  ? "para o documento"
                   : ""
           }`}
         </div>

@@ -206,7 +206,7 @@ function PureMultimodalInput({
       const { error } = await response.json();
       toast.error(error);
     } catch (_error) {
-      toast.error("Failed to upload file, please try again!");
+      toast.error("Falha ao enviar o arquivo. Tente novamente!");
     }
   }, []);
 
@@ -254,7 +254,7 @@ function PureMultimodalInput({
       // Prevent default paste behavior for images
       event.preventDefault();
 
-      setUploadQueue((prev) => [...prev, "Pasted image"]);
+      setUploadQueue((prev) => [...prev, "Imagem colada"]);
 
       try {
         const uploadPromises = imageItems
@@ -276,7 +276,7 @@ function PureMultimodalInput({
         ]);
       } catch (error) {
         console.error("Error uploading pasted images:", error);
-        toast.error("Failed to upload pasted image(s)");
+        toast.error("Falha ao enviar a(s) imagem(ns) colada(s)");
       } finally {
         setUploadQueue([]);
       }
@@ -324,7 +324,7 @@ function PureMultimodalInput({
             return;
           }
           if (status !== "ready") {
-            toast.error("Please wait for the model to finish its response!");
+            toast.error("Aguarde o modelo terminar a resposta!");
           } else {
             submitForm();
           }
@@ -371,7 +371,7 @@ function PureMultimodalInput({
             maxHeight={200}
             minHeight={44}
             onChange={handleInput}
-            placeholder="Send a message..."
+            placeholder="Envie uma mensagem..."
             ref={textareaRef}
             rows={1}
             value={input}
@@ -482,7 +482,7 @@ function PureModelSelectorCompact({
     openai: "OpenAI",
     google: "Google",
     xai: "xAI",
-    reasoning: "Reasoning",
+    reasoning: "Raciocínio",
   };
 
   return (
@@ -494,7 +494,7 @@ function PureModelSelectorCompact({
         </Button>
       </ModelSelectorTrigger>
       <ModelSelectorContent>
-        <ModelSelectorInput placeholder="Search models..." />
+        <ModelSelectorInput placeholder="Buscar modelos..." />
         <ModelSelectorList>
           {Object.entries(modelsByProvider).map(
             ([providerKey, providerModels]) => (

@@ -21,7 +21,7 @@ export function AuthForm({
           className="font-normal text-zinc-600 dark:text-zinc-400"
           htmlFor="email"
         >
-          Email Address
+          E-mail
         </Label>
 
         <Input
@@ -31,7 +31,7 @@ export function AuthForm({
           defaultValue={defaultEmail}
           id="email"
           name="email"
-          placeholder="user@acme.com"
+          placeholder="seu@email.com"
           required
           type="email"
         />
@@ -42,7 +42,7 @@ export function AuthForm({
           className="font-normal text-zinc-600 dark:text-zinc-400"
           htmlFor="password"
         >
-          Password
+          Senha
         </Label>
 
         <Input

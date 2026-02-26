@@ -71,11 +71,25 @@ export function Chat({
   const [input, setInput] = useState<string>("");
   const [showCreditCardAlert, setShowCreditCardAlert] = useState(false);
   const [currentModelId, setCurrentModelId] = useState(initialChatModel);
+  const [agentInstructions, setAgentInstructions] = useState<string>("");
+  const [knowledgeDocumentIds, setKnowledgeDocumentIds] = useState<string[]>(
+    []
+  );
   const currentModelIdRef = useRef(currentModelId);
+  const agentInstructionsRef = useRef(agentInstructions);
+  const knowledgeDocumentIdsRef = useRef(knowledgeDocumentIds);
 
   useEffect(() => {
     currentModelIdRef.current = currentModelId;
   }, [currentModelId]);
+
+  useEffect(() => {
+    agentInstructionsRef.current = agentInstructions;
+  }, [agentInstructions]);
+
+  useEffect(() => {
+    knowledgeDocumentIdsRef.current = knowledgeDocumentIds;
+  }, [knowledgeDocumentIds]);
 
   const {
     messages,
@@ -126,6 +140,12 @@ export function Chat({
               : { message: lastMessage }),
             selectedChatModel: currentModelIdRef.current,
             selectedVisibilityType: visibilityType,
+            ...(agentInstructionsRef.current?.trim()
+              ? { agentInstructions: agentInstructionsRef.current.trim() }
+              : {}),
+            ...(knowledgeDocumentIdsRef.current.length > 0
+              ? { knowledgeDocumentIds: knowledgeDocumentIdsRef.current }
+              : {}),
             ...request.body,
           },
         };
@@ -189,9 +209,13 @@ export function Chat({
     <>
       <div className="overscroll-behavior-contain flex h-dvh min-w-0 touch-pan-y flex-col bg-background">
         <ChatHeader
+          agentInstructions={agentInstructions}
           chatId={id}
+          knowledgeDocumentIds={knowledgeDocumentIds}
           isReadonly={isReadonly}
           selectedVisibilityType={initialVisibilityType}
+          setAgentInstructions={setAgentInstructions}
+          setKnowledgeDocumentIds={setKnowledgeDocumentIds}
         />
 
         <Messages

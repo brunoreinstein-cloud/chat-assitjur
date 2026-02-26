@@ -38,7 +38,7 @@ export type ModelSelectorContentProps = ComponentProps<typeof DialogContent> & {
 export const ModelSelectorContent = ({
   className,
   children,
-  title = "Model Selector",
+  title = "Selecionar modelo",
   ...props
 }: ModelSelectorContentProps) => (
   <DialogContent className={cn("p-0", className)} {...props}>

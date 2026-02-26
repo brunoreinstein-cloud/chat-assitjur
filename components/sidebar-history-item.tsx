@@ -57,7 +57,7 @@ const PureChatItem = ({
             showOnHover={!isActive}
           >
             <MoreHorizontalIcon />
-            <span className="sr-only">More</span>
+            <span className="sr-only">Mais</span>
           </SidebarMenuAction>
         </DropdownMenuTrigger>
 
@@ -77,7 +77,7 @@ const PureChatItem = ({
                 >
                   <div className="flex flex-row items-center gap-2">
                     <LockIcon size={12} />
-                    <span>Private</span>
+                    <span>Privado</span>
                   </div>
                   {visibilityType === "private" ? (
                     <CheckCircleFillIcon />
@@ -104,7 +104,7 @@ const PureChatItem = ({
             onSelect={() => onDelete(chat.id)}
           >
             <TrashIcon />
-            <span>Delete</span>
+            <span>Excluir</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

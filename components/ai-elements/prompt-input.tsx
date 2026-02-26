@@ -294,7 +294,7 @@ export function PromptInputAttachment({
     data.mediaType?.startsWith("image/") && data.url ? "image" : "file";
   const isImage = mediaType === "image";
 
-  const attachmentLabel = filename || (isImage ? "Image" : "Attachment");
+  const attachmentLabel = filename || (isImage ? "Imagem" : "Anexo");
 
   return (
     <PromptInputHoverCard>
@@ -325,7 +325,7 @@ export function PromptInputAttachment({
               )}
             </div>
             <Button
-              aria-label="Remove attachment"
+              aria-label="Remover anexo"
               className="absolute inset-0 size-5 cursor-pointer rounded p-0 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 [&>svg]:size-2.5"
               onClick={(e) => {
                 e.stopPropagation();
@@ -335,7 +335,7 @@ export function PromptInputAttachment({
               variant="ghost"
             >
               <XIcon />
-              <span className="sr-only">Remove</span>
+              <span className="sr-only">Remover</span>
             </Button>
           </div>
 
@@ -359,7 +359,7 @@ export function PromptInputAttachment({
           <div className="flex items-center gap-2.5">
             <div className="min-w-0 flex-1 space-y-1 px-0.5">
               <h4 className="text-sm font-semibold leading-none truncate">
-                {filename || (isImage ? "Image" : "Attachment")}
+                {filename || (isImage ? "Imagem" : "Anexo")}
               </h4>
               {data.mediaType && (
                 <p className="font-mono text-xs truncate text-muted-foreground">
@@ -411,7 +411,7 @@ export type PromptInputActionAddAttachmentsProps = ComponentProps<
 };
 
 export const PromptInputActionAddAttachments = ({
-  label = "Add photos or files",
+  label = "Adicionar fotos ou arquivos",
   ...props
 }: PromptInputActionAddAttachmentsProps) => {
   const attachments = usePromptInputAttachments();
@@ -519,7 +519,7 @@ export const PromptInput = ({
       if (incoming.length && accepted.length === 0) {
         onError?.({
           code: "accept",
-          message: "No files match the accepted types.",
+          message: "Nenhum arquivo corresponde aos tipos aceitos.",
         });
         return;
       }
@@ -529,7 +529,7 @@ export const PromptInput = ({
       if (accepted.length > 0 && sized.length === 0) {
         onError?.({
           code: "max_file_size",
-          message: "All files exceed the maximum size.",
+          message: "Todos os arquivos excedem o tamanho máximo.",
         });
         return;
       }
@@ -544,7 +544,7 @@ export const PromptInput = ({
         if (typeof capacity === "number" && sized.length > capacity) {
           onError?.({
             code: "max_files",
-            message: "Too many files. Some were not added.",
+            message: "Muitos arquivos. Alguns não foram adicionados.",
           });
         }
         const next: (FileUIPart & { id: string })[] = [];
@@ -787,12 +787,12 @@ export const PromptInput = ({
     <>
       <input
         accept={accept}
-        aria-label="Upload files"
+        aria-label="Enviar arquivos"
         className="hidden"
         multiple={multiple}
         onChange={handleChange}
         ref={inputRef}
-        title="Upload files"
+        title="Enviar arquivos"
         type="file"
       />
       <form
@@ -831,7 +831,7 @@ export type PromptInputTextareaProps = ComponentProps<
 export const PromptInputTextarea = ({
   onChange,
   className,
-  placeholder = "What would you like to know?",
+  placeholder = "O que você gostaria de saber?",
   ...props
 }: PromptInputTextareaProps) => {
   const controller = useOptionalPromptInputController();
@@ -1054,7 +1054,7 @@ export const PromptInputSubmit = ({
 
   return (
     <InputGroupButton
-      aria-label="Submit"
+      aria-label="Enviar"
       className={cn(className)}
       size={size}
       type="submit"

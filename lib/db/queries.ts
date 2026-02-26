@@ -23,6 +23,7 @@ import {
   chat,
   type DBMessage,
   document,
+  knowledgeDocument,
   message,
   type Suggestion,
   stream,
@@ -597,6 +598,123 @@ export async function getStreamIdsByChatId({ chatId }: { chatId: string }) {
     throw new ChatbotError(
       "bad_request:database",
       "Failed to get stream ids by chat id"
+    );
+  }
+}
+
+export async function createKnowledgeDocument({
+  userId,
+  title,
+  content,
+}: {
+  userId: string;
+  title: string;
+  content: string;
+}) {
+  try {
+    const [created] = await db
+      .insert(knowledgeDocument)
+      .values({ userId, title, content })
+      .returning();
+    return created;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to create knowledge document"
+    );
+  }
+}
+
+export async function getKnowledgeDocumentsByUserId({ userId }: { userId: string }) {
+  try {
+    return await db
+      .select()
+      .from(knowledgeDocument)
+      .where(eq(knowledgeDocument.userId, userId))
+      .orderBy(desc(knowledgeDocument.createdAt));
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get knowledge documents by user id"
+    );
+  }
+}
+
+export async function getKnowledgeDocumentById({
+  id,
+  userId,
+}: {
+  id: string;
+  userId: string;
+}) {
+  try {
+    const [doc] = await db
+      .select()
+      .from(knowledgeDocument)
+      .where(
+        and(
+          eq(knowledgeDocument.id, id),
+          eq(knowledgeDocument.userId, userId)
+        )
+      );
+    return doc ?? null;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get knowledge document by id"
+    );
+  }
+}
+
+export async function getKnowledgeDocumentsByIds({
+  ids,
+  userId,
+}: {
+  ids: string[];
+  userId: string;
+}) {
+  if (ids.length === 0) return [];
+  try {
+    return await db
+      .select()
+      .from(knowledgeDocument)
+      .where(
+        and(
+          inArray(knowledgeDocument.id, ids),
+          eq(knowledgeDocument.userId, userId)
+        )
+      )
+      .orderBy(asc(knowledgeDocument.title));
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get knowledge documents by ids"
+    );
+  }
+}
+
+export async function deleteKnowledgeDocumentById({
+  id,
+  userId,
+}: {
+  id: string;
+  userId: string;
+}) {
+  try {
+    const [deleted] = await db
+      .delete(knowledgeDocument)
+      .where(
+        and(
+          eq(knowledgeDocument.id, id),
+          eq(knowledgeDocument.userId, userId)
+        )
+      )
+      .returning();
+    return deleted ?? null;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to delete knowledge document"
     );
   }
 }

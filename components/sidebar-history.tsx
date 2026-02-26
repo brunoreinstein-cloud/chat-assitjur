@@ -135,7 +135,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
     });
 
     toast.promise(deletePromise, {
-      loading: "Deleting chat...",
+      loading: "Excluindo chat...",
       success: () => {
         mutate((chatHistories) => {
           if (chatHistories) {
@@ -153,9 +153,9 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
           router.refresh();
         }
 
-        return "Chat deleted successfully";
+        return "Chat excluído com sucesso";
       },
-      error: "Failed to delete chat",
+      error: "Falha ao excluir o chat",
     });
   };
 
@@ -164,7 +164,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
       <SidebarGroup>
         <SidebarGroupContent>
           <div className="flex w-full flex-row items-center justify-center gap-2 px-2 text-sm text-zinc-500">
-            Login to save and revisit previous chats!
+            Entre para salvar e revisitar seus chats!
           </div>
         </SidebarGroupContent>
       </SidebarGroup>
@@ -175,7 +175,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
     return (
       <SidebarGroup>
         <div className="px-2 py-1 text-sidebar-foreground/50 text-xs">
-          Today
+          Hoje
         </div>
         <SidebarGroupContent>
           <div className="flex flex-col">
@@ -205,7 +205,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
       <SidebarGroup>
         <SidebarGroupContent>
           <div className="flex w-full flex-row items-center justify-center gap-2 px-2 text-sm text-zinc-500">
-            Your conversations will appear here once you start chatting!
+            Suas conversas aparecerão aqui quando você começar a conversar!
           </div>
         </SidebarGroupContent>
       </SidebarGroup>
@@ -230,7 +230,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
                     {groupedChats.today.length > 0 && (
                       <div>
                         <div className="px-2 py-1 text-sidebar-foreground/50 text-xs">
-                          Today
+                          Hoje
                         </div>
                         {groupedChats.today.map((chat) => (
                           <ChatItem
@@ -250,7 +250,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
                     {groupedChats.yesterday.length > 0 && (
                       <div>
                         <div className="px-2 py-1 text-sidebar-foreground/50 text-xs">
-                          Yesterday
+                          Ontem
                         </div>
                         {groupedChats.yesterday.map((chat) => (
                           <ChatItem
@@ -270,7 +270,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
                     {groupedChats.lastWeek.length > 0 && (
                       <div>
                         <div className="px-2 py-1 text-sidebar-foreground/50 text-xs">
-                          Last 7 days
+                          Últimos 7 dias
                         </div>
                         {groupedChats.lastWeek.map((chat) => (
                           <ChatItem
@@ -290,7 +290,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
                     {groupedChats.lastMonth.length > 0 && (
                       <div>
                         <div className="px-2 py-1 text-sidebar-foreground/50 text-xs">
-                          Last 30 days
+                          Últimos 30 dias
                         </div>
                         {groupedChats.lastMonth.map((chat) => (
                           <ChatItem
@@ -310,7 +310,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
                     {groupedChats.older.length > 0 && (
                       <div>
                         <div className="px-2 py-1 text-sidebar-foreground/50 text-xs">
-                          Older than last month
+                          Mais de 30 dias
                         </div>
                         {groupedChats.older.map((chat) => (
                           <ChatItem

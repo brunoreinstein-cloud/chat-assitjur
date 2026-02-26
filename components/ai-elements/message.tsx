@@ -243,7 +243,7 @@ export const MessageBranchPrevious = ({
 
   return (
     <Button
-      aria-label="Previous branch"
+      aria-label="Branch anterior"
       disabled={totalBranches <= 1}
       onClick={goToPrevious}
       size="icon-sm"
@@ -267,7 +267,7 @@ export const MessageBranchNext = ({
 
   return (
     <Button
-      aria-label="Next branch"
+      aria-label="Próxima branch"
       disabled={totalBranches <= 1}
       onClick={goToNext}
       size="icon-sm"
@@ -334,7 +334,7 @@ export function MessageAttachment({
   const mediaType =
     data.mediaType?.startsWith("image/") && data.url ? "image" : "file";
   const isImage = mediaType === "image";
-  const attachmentLabel = filename || (isImage ? "Image" : "Attachment");
+  const attachmentLabel = filename || (isImage ? "Imagem" : "Anexo");
 
   return (
     <div
@@ -356,7 +356,7 @@ export function MessageAttachment({
           />
           {onRemove && (
             <Button
-              aria-label="Remove attachment"
+              aria-label="Remover anexo"
               className="absolute top-2 right-2 size-6 rounded-full bg-background/80 p-0 opacity-0 backdrop-blur-sm transition-opacity hover:bg-background group-hover:opacity-100 [&>svg]:size-3"
               onClick={(e) => {
                 e.stopPropagation();
@@ -366,7 +366,7 @@ export function MessageAttachment({
               variant="ghost"
             >
               <XIcon />
-              <span className="sr-only">Remove</span>
+              <span className="sr-only">Remover</span>
             </Button>
           )}
         </>
@@ -384,7 +384,7 @@ export function MessageAttachment({
           </Tooltip>
           {onRemove && (
             <Button
-              aria-label="Remove attachment"
+              aria-label="Remover anexo"
               className="size-6 shrink-0 rounded-full p-0 opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100 [&>svg]:size-3"
               onClick={(e) => {
                 e.stopPropagation();
@@ -394,7 +394,7 @@ export function MessageAttachment({
               variant="ghost"
             >
               <XIcon />
-              <span className="sr-only">Remove</span>
+              <span className="sr-only">Remover</span>
             </Button>
           )}
         </>
