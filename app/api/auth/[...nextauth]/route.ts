@@ -44,7 +44,7 @@ export async function GET(
   }
 
   try {
-    return await AuthGET(request as NextRequest);
+    return await AuthGET(request);
   } catch (error) {
     return authErrorResponse(error);
   }
@@ -55,7 +55,7 @@ export async function POST(
   _context: { params: Promise<{ nextauth: string[] }> }
 ) {
   try {
-    return await AuthPOST(request as NextRequest);
+    return await AuthPOST(request);
   } catch (error) {
     return authErrorResponse(error);
   }
