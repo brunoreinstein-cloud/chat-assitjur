@@ -40,7 +40,9 @@ async function listTables() {
       ORDER BY table_name
     `);
 
-    const tables = (rows as { table_name: string }[]).map((r) => r.table_name);
+    const tables = (rows as unknown as { table_name: string }[]).map(
+      (r) => r.table_name,
+    );
     if (tables.length === 0) {
       console.log("⚠️  Nenhuma tabela no schema public.");
       console.log("   Corra: pnpm db:migrate   ou   pnpm db:push");
