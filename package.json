@@ -15,6 +15,16 @@
     "db:pull": "drizzle-kit pull",
     "db:check": "drizzle-kit check",
     "db:up": "drizzle-kit up",
+    "supabase:link": "supabase link",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:status": "supabase status",
+    "supabase:types": "supabase gen types typescript --linked > lib/db/supabase-types.ts",
+    "vercel:link": "vercel link",
+    "vercel:pull": "vercel pull",
+    "vercel:env": "vercel env pull .env.local",
+    "vercel:deploy": "vercel",
+    "vercel:deploy:prod": "vercel --prod",
     "test": "export PLAYWRIGHT=True && pnpm exec playwright test"
   },
   "dependencies": {
@@ -114,10 +124,12 @@
     "baseline-browser-mapping": "^2.10.0",
     "drizzle-kit": "^0.25.0",
     "postcss": "^8",
+    "supabase": "^2.76.15",
     "tailwindcss": "^4.1.13",
     "tsx": "^4.19.1",
     "typescript": "^5.6.3",
-    "ultracite": "^7.0.11"
+    "ultracite": "^7.0.11",
+    "vercel": "^50.23.2"
   },
   "packageManager": "pnpm@9.12.3"
 }
