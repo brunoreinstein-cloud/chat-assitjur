@@ -18,6 +18,17 @@ export async function proxy(request: NextRequest) {
   }
 
   /*
+   * Não chamar getToken sem AUTH_SECRET (ex.: Edge pode não ter a variável).
+   * Redirecionar para config-required em vez de causar 500.
+   */
+  if (!process.env.AUTH_SECRET && pathname !== "/config-required") {
+    if (process.env.VERCEL) {
+      return NextResponse.rewrite(new URL("/config-required", request.url));
+    }
+    return NextResponse.next();
+  }
+
+  /*
    * Playwright starts the dev server and requires a 200 status to
    * begin the tests, so this ensures that the tests can start
    */
@@ -29,27 +40,34 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = await getToken({
-    req: request,
-    secret: process.env.AUTH_SECRET,
-    secureCookie: !isDevelopmentEnvironment,
-  });
+  try {
+    const token = await getToken({
+      req: request,
+      secret: process.env.AUTH_SECRET,
+      secureCookie: !isDevelopmentEnvironment,
+    });
 
-  if (!token) {
-    const redirectUrl = encodeURIComponent(request.url);
+    if (!token) {
+      const redirectUrl = encodeURIComponent(request.url);
 
-    return NextResponse.redirect(
-      new URL(`/api/auth/guest?redirectUrl=${redirectUrl}`, request.url)
-    );
+      return NextResponse.redirect(
+        new URL(`/api/auth/guest?redirectUrl=${redirectUrl}`, request.url)
+      );
+    }
+
+    const isGuest = guestRegex.test(token?.email ?? "");
+
+    if (token && !isGuest && ["/login", "/register"].includes(pathname)) {
+      return NextResponse.redirect(new URL("/", request.url));
+    }
+
+    return NextResponse.next();
+  } catch {
+    if (process.env.VERCEL && pathname !== "/config-required") {
+      return NextResponse.rewrite(new URL("/config-required", request.url));
+    }
+    return NextResponse.next();
   }
-
-  const isGuest = guestRegex.test(token?.email ?? "");
-
-  if (token && !isGuest && ["/login", "/register"].includes(pathname)) {
-    return NextResponse.redirect(new URL("/", request.url));
-  }
-
-  return NextResponse.next();
 }
 
 export const config = {
