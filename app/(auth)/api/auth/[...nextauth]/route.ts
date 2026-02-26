@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { auth, GET as AuthGET, POST as AuthPOST } from "@/app/(auth)/auth";
 
 const authErrorResponse = (error: unknown) =>
@@ -17,7 +17,7 @@ const sessionJsonHeaders = {
 } as const;
 
 export async function GET(
-  request: Request,
+  request: NextRequest,
   context: { params: Promise<{ nextauth: string[] }> }
 ) {
   const { nextauth } = await context.params;
@@ -52,7 +52,7 @@ export async function GET(
 }
 
 export async function POST(
-  request: Request,
+  request: NextRequest,
   context: { params: Promise<{ nextauth: string[] }> }
 ) {
   try {
