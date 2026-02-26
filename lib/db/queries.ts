@@ -44,8 +44,9 @@ let clientInstance: ReturnType<typeof postgres> | null = null;
 function getDb() {
   const url = process.env.POSTGRES_URL;
   if (!url) {
-    throw new Error(
-      "POSTGRES_URL is not set. In Vercel: Project Settings → Environment Variables → add POSTGRES_URL for Production."
+    throw new ChatbotError(
+      "bad_request:api",
+      "POSTGRES_URL is not set. Add it to .env.local (see .env.example)."
     );
   }
   if (!dbInstance) {
@@ -237,11 +238,11 @@ export async function getChatsByUserId({
       chats: hasMore ? filteredChats.slice(0, limit) : filteredChats,
       hasMore,
     };
-  } catch (_error) {
-    throw new ChatbotError(
-      "bad_request:database",
-      "Failed to get chats by user id"
-    );
+  } catch (error) {
+    if (error instanceof ChatbotError) throw error;
+    const cause =
+      error instanceof Error ? error.message : String(error);
+    throw new ChatbotError("bad_request:database", cause);
   }
 }
 

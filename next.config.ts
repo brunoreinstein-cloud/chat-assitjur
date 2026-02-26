@@ -1,5 +1,8 @@
 import path from "node:path";
 import type { NextConfig } from "next";
+const withBundleAnalyzer = require("@next/bundle-analyzer")({
+  enabled: process.env.ANALYZE === "true",
+});
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
@@ -12,11 +15,15 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "https",
-        //https://nextjs.org/docs/messages/next-image-unconfigured-host
         hostname: "*.public.blob.vercel-storage.com",
+      },
+      {
+        protocol: "https",
+        hostname: "*.supabase.co",
+        pathname: "/storage/v1/object/public/**",
       },
     ],
   },
 };
 
-export default nextConfig;
+export default withBundleAnalyzer(nextConfig);

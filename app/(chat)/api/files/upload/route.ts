@@ -3,6 +3,18 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { auth } from "@/app/(auth)/auth";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
+
+const SUPABASE_BUCKET =
+  process.env.SUPABASE_STORAGE_BUCKET ?? "chat-files";
+
+const isDev = process.env.NODE_ENV === "development";
+const hasBlobToken = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+
+function buildDataUrl(buffer: ArrayBuffer, contentType: string): string {
+  const base64 = Buffer.from(buffer).toString("base64");
+  return `data:${contentType};base64,${base64}`;
+}
 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png"] as const;
 const ACCEPTED_PDF_TYPE = "application/pdf" as const;
@@ -26,6 +38,33 @@ const FileSchema = z.object({
     ),
 });
 
+async function uploadFile(
+  userId: string,
+  filename: string,
+  fileBuffer: ArrayBuffer,
+  contentType: string
+): Promise<{ url: string; pathname: string } | null> {
+  const supabase = getSupabaseServerClient();
+  if (!supabase) return null;
+
+  const safeName = filename.replaceAll(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `${userId}/${Date.now()}-${safeName}`;
+
+  const { error } = await supabase.storage
+    .from(SUPABASE_BUCKET)
+    .upload(path, fileBuffer, {
+      contentType,
+      upsert: false,
+    });
+
+  if (error) return null;
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(path);
+  return { url: publicUrl, pathname: path };
+}
+
 async function extractTextFromPdf(buffer: ArrayBuffer): Promise<string> {
   const { PDFParse } = await import("pdf-parse");
   const parser = new PDFParse({ data: buffer });
@@ -43,7 +82,7 @@ async function extractTextFromPdf(buffer: ArrayBuffer): Promise<string> {
 export async function POST(request: Request) {
   const session = await auth();
 
-  if (!session) {
+  if (!session?.user?.id) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
@@ -76,20 +115,22 @@ export async function POST(request: Request) {
     const isPdf = file.type === ACCEPTED_PDF_TYPE;
 
     if (isPdf) {
-      let extractedText: string;
+      let extractedText = "";
       try {
         extractedText = await extractTextFromPdf(fileBuffer);
-      } catch (err) {
-        console.error("PDF parse error:", err);
-        return NextResponse.json(
-          {
-            error:
-              "Não foi possível extrair o texto do PDF. Verifique se o arquivo não está corrompido ou protegido.",
-          },
-          { status: 422 }
-        );
+      } catch {
+        // Continua com texto vazio: o ficheiro é enviado e o chat pode usá-lo sem texto extraído
       }
 
+      const uploadResult = await uploadFile(session.user.id, filename, fileBuffer, file.type);
+      if (uploadResult) {
+        return NextResponse.json({
+          url: uploadResult.url,
+          pathname: uploadResult.pathname,
+          contentType: file.type,
+          extractedText,
+        });
+      }
       try {
         const data = await put(filename, fileBuffer, { access: "public" });
         return NextResponse.json({
@@ -98,14 +139,34 @@ export async function POST(request: Request) {
           contentType: file.type,
           extractedText,
         });
-      } catch (_error) {
+      } catch {
+        if (isDev && !hasBlobToken) {
+          const dataUrl = buildDataUrl(fileBuffer, file.type);
+          return NextResponse.json({
+            url: dataUrl,
+            pathname: `dev/${filename}`,
+            contentType: file.type,
+            extractedText,
+          });
+        }
         return NextResponse.json(
-          { error: "Falha ao enviar o arquivo" },
+          {
+            error:
+              "Falha ao enviar o ficheiro. Configure Supabase Storage (NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) ou BLOB_READ_WRITE_TOKEN no .env.local.",
+          },
           { status: 500 }
         );
       }
     }
 
+    const uploadResult = await uploadFile(session.user.id, filename, fileBuffer, file.type);
+    if (uploadResult) {
+      return NextResponse.json({
+        url: uploadResult.url,
+        pathname: uploadResult.pathname,
+        contentType: file.type,
+      });
+    }
     try {
       const data = await put(filename, fileBuffer, { access: "public" });
       return NextResponse.json({
@@ -113,15 +174,29 @@ export async function POST(request: Request) {
         pathname: data.pathname ?? filename,
         contentType: file.type,
       });
-    } catch (_error) {
+    } catch {
+      if (isDev && !hasBlobToken) {
+        const dataUrl = buildDataUrl(fileBuffer, file.type);
+        return NextResponse.json({
+          url: dataUrl,
+          pathname: `dev/${filename}`,
+          contentType: file.type,
+        });
+      }
       return NextResponse.json(
-        { error: "Falha ao enviar o arquivo" },
+        {
+          error:
+            "Falha ao enviar o ficheiro. Configure Supabase Storage ou BLOB_READ_WRITE_TOKEN no .env.local.",
+        },
         { status: 500 }
       );
     }
-  } catch (_error) {
+  } catch {
     return NextResponse.json(
-      { error: "Erro ao processar a requisição" },
+      {
+        error:
+          "Erro ao processar o upload. Verifique o tamanho e o tipo do ficheiro (JPEG, PNG ou PDF até 5MB).",
+      },
       { status: 500 }
     );
   }

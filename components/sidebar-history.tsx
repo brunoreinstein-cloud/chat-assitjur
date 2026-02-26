@@ -4,7 +4,7 @@ import { isToday, isYesterday, subMonths, subWeeks } from "date-fns";
 import { motion } from "framer-motion";
 import { usePathname, useRouter } from "next/navigation";
 import type { User } from "next-auth";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import useSWRInfinite from "swr/infinite";
 import {
@@ -23,6 +23,7 @@ import {
   SidebarMenu,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { ChatbotError } from "@/lib/errors";
 import type { Chat } from "@/lib/db/schema";
 import { fetcher } from "@/lib/utils";
 import { LoaderIcon } from "./icons";
@@ -104,13 +105,25 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
 
   const {
     data: paginatedChatHistories,
+    error: historyError,
     setSize,
     isValidating,
     isLoading,
     mutate,
-  } = useSWRInfinite<ChatHistory>(getChatHistoryPaginationKey, fetcher, {
-    fallbackData: [],
-  });
+  } = useSWRInfinite<ChatHistory>(
+    (pageIndex, previousPageData) =>
+      user ? getChatHistoryPaginationKey(pageIndex, previousPageData) : null,
+    fetcher,
+    {
+      fallbackData: [],
+    }
+  );
+
+  useEffect(() => {
+    if (historyError instanceof ChatbotError) {
+      toast.error(historyError.cause ?? historyError.message);
+    }
+  }, [historyError]);
 
   const router = useRouter();
   const [deleteId, setDeleteId] = useState<string | null>(null);
