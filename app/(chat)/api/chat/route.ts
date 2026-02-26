@@ -37,6 +37,7 @@ import type { ChatMessage } from "@/lib/types";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
 import { generateTitleFromUserMessage } from "../../actions";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
+import { ZodError } from "zod";
 
 export const maxDuration = 60;
 
@@ -54,6 +55,9 @@ function normalizeMessageParts(messages: ChatMessage[]): ChatMessage[] {
         url?: string;
         mediaType?: string;
       };
+      if (p.type === "text" && (p.text?.trim().length ?? 0) === 0) {
+        return [];
+      }
       if (p.type === "document" && typeof p.text === "string" && p.name) {
         return [
           {
@@ -82,8 +86,29 @@ export async function POST(request: Request) {
   try {
     const json = await request.json();
     requestBody = postRequestBodySchema.parse(json);
-  } catch (_) {
-    return new ChatbotError("bad_request:api").toResponse();
+  } catch (error: unknown) {
+    const isDev = process.env.NODE_ENV === "development";
+    let cause: string | undefined;
+    if (isDev && error instanceof Error) {
+      if (error instanceof ZodError && error.issues.length > 0) {
+        const first = error.issues[0];
+        const path = first.path.join(".");
+        cause = path ? `${path}: ${first.message}` : first.message;
+        console.error("[POST /api/chat] Validação falhou:", cause, error.issues);
+      } else {
+        cause = error.message;
+        console.error("[POST /api/chat] Erro ao processar corpo:", cause);
+      }
+    }
+    return Response.json(
+      {
+        code: "bad_request:api",
+        message:
+          "Corpo do pedido inválido. Verifique id, message/messages, selectedChatModel e selectedVisibilityType.",
+        cause,
+      },
+      { status: 400 }
+    );
   }
 
   try {
@@ -96,6 +121,24 @@ export async function POST(request: Request) {
       agentInstructions,
       knowledgeDocumentIds,
     } = requestBody;
+
+    if (message?.role === "user" && message.parts) {
+      const hasContent = message.parts.some((p) => {
+        const part = p as { type?: string; text?: string };
+        if (part.type === "text") return (part.text?.trim().length ?? 0) > 0;
+        return part.type === "file" || part.type === "document";
+      });
+      if (!hasContent) {
+        return Response.json(
+          {
+            code: "bad_request:api",
+            message: "Corpo do pedido inválido.",
+            cause: "A mensagem não pode estar vazia. Escreve texto ou anexa um ficheiro.",
+          },
+          { status: 400 }
+        );
+      }
+    }
 
     const session = await auth();
 

@@ -39,6 +39,8 @@ export class ChatbotError extends Error {
   type: ErrorType;
   surface: Surface;
   statusCode: number;
+  /** Detalhe do erro (ex.: mensagem de validação Zod) devolvido pela API. */
+  cause?: string;
 
   constructor(errorCode: ErrorCode, cause?: string) {
     super();

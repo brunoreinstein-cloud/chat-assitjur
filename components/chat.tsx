@@ -157,18 +157,30 @@ export function Chat({
     onFinish: () => {
       mutate(unstable_serialize(getChatHistoryPaginationKey));
     },
-    onError: (error) => {
-      if (error instanceof ChatbotError) {
+    onError: (error: unknown) => {
+      const unwrapped =
+        error instanceof Error && error.cause instanceof ChatbotError
+          ? error.cause
+          : error;
+      if (unwrapped instanceof ChatbotError) {
         if (
-          error.message?.includes("AI Gateway requires a valid credit card")
+          unwrapped.message?.includes("AI Gateway requires a valid credit card")
         ) {
           setShowCreditCardAlert(true);
         } else {
+          const description =
+            unwrapped.cause ?? unwrapped.message;
           toast({
             type: "error",
-            description: error.message,
+            description,
           });
         }
+      } else {
+        const message =
+          unwrapped instanceof Error
+            ? unwrapped.message
+            : "Algo correu mal. Tente novamente.";
+        toast({ type: "error", description: message });
       }
     },
   });

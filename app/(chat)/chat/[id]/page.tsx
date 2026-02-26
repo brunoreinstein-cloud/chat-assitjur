@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { cookies } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -7,7 +8,32 @@ import { Chat } from "@/components/chat";
 import { DataStreamHandler } from "@/components/data-stream-handler";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { getChatById, getMessagesByChatId } from "@/lib/db/queries";
-import { convertToUIMessages } from "@/lib/utils";
+import { ChatbotError } from "@/lib/errors";
+import { convertToUIMessages, isUUID } from "@/lib/utils";
+
+function DatabaseUnavailable() {
+  return (
+    <div className="flex h-dvh flex-col items-center justify-center gap-4 p-6 text-center">
+      <h1 className="text-xl font-semibold">
+        Base de dados indisponível
+      </h1>
+      <p className="max-w-md text-muted-foreground">
+        Não foi possível ligar à base de dados. Verifique se a variável{" "}
+        <code className="rounded bg-muted px-1.5 py-0.5 text-sm">
+          POSTGRES_URL
+        </code>{" "}
+        está definida no <code className="rounded bg-muted px-1.5 py-0.5 text-sm">.env.local</code> e
+        se o PostgreSQL está a correr.
+      </p>
+      <Link
+        href="/"
+        className="text-primary underline underline-offset-4 hover:no-underline"
+      >
+        Voltar ao início
+      </Link>
+    </div>
+  );
+}
 
 export default function Page(props: { params: Promise<{ id: string }> }) {
   return (
@@ -19,7 +45,20 @@ export default function Page(props: { params: Promise<{ id: string }> }) {
 
 async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const chat = await getChatById({ id });
+
+  if (id === "new" || !isUUID(id)) {
+    redirect("/");
+  }
+
+  let chat: Awaited<ReturnType<typeof getChatById>>;
+  try {
+    chat = await getChatById({ id });
+  } catch (error) {
+    if (error instanceof ChatbotError && error.surface === "database") {
+      return <DatabaseUnavailable />;
+    }
+    throw error;
+  }
 
   if (!chat) {
     redirect("/");
@@ -41,9 +80,15 @@ async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
     }
   }
 
-  const messagesFromDb = await getMessagesByChatId({
-    id,
-  });
+  let messagesFromDb: Awaited<ReturnType<typeof getMessagesByChatId>>;
+  try {
+    messagesFromDb = await getMessagesByChatId({ id });
+  } catch (error) {
+    if (error instanceof ChatbotError && error.surface === "database") {
+      return <DatabaseUnavailable />;
+    }
+    throw error;
+  }
 
   const uiMessages = convertToUIMessages(messagesFromDb);
 

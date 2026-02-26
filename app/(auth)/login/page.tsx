@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { useActionState, useEffect, useState } from "react";
 
 import { AuthForm } from "@/components/auth-form";
 import { SubmitButton } from "@/components/submit-button";
 import { toast } from "@/components/toast";
 import { type LoginActionState, login } from "../actions";
+import { Button } from "@/components/ui/button";
 
 export default function Page() {
   const router = useRouter();
@@ -70,6 +71,17 @@ export default function Page() {
             </Link>
             {" gratuitamente."}
           </p>
+          <Button
+            className="mt-4 w-full"
+            type="button"
+            variant="outline"
+            onClick={async () => {
+              await signOut({ redirect: false });
+              globalThis.window.location.href = "/api/auth/guest";
+            }}
+          >
+            Continuar como visitante
+          </Button>
         </AuthForm>
       </div>
     </div>

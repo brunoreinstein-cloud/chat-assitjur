@@ -14,6 +14,8 @@
     "db:push": "drizzle-kit push",
     "db:pull": "drizzle-kit pull",
     "db:check": "drizzle-kit check",
+    "db:ping": "tsx scripts/db-ping.ts",
+    "db:tables": "tsx scripts/db-tables.ts",
     "db:up": "drizzle-kit up",
     "supabase:link": "supabase link",
     "supabase:start": "supabase start",

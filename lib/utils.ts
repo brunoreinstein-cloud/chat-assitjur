@@ -15,11 +15,39 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+async function parseErrorBody(response: Response): Promise<{ code?: string; cause?: string }> {
+  const contentType = response.headers.get("content-type");
+  if (!contentType?.includes("application/json")) {
+    return {
+      code: "bad_request:api",
+      cause: `Serviço indisponível (${response.status}). Verifique se a base de dados está configurada.`,
+    };
+  }
+  try {
+    const text = await response.text();
+    const trimmed = text.trimStart().replace(/^\uFEFF/, "");
+    const body = JSON.parse(trimmed) as {
+      code?: string;
+      message?: string;
+      cause?: string;
+    };
+    return {
+      code: body.code ?? "bad_request:api",
+      cause: body.cause ?? body.message,
+    };
+  } catch {
+    return {
+      code: "bad_request:api",
+      cause: `Erro inesperado (${response.status}).`,
+    };
+  }
+}
+
 export const fetcher = async (url: string) => {
   const response = await fetch(url);
 
   if (!response.ok) {
-    const { code, cause } = await response.json();
+    const { code, cause } = await parseErrorBody(response);
     throw new ChatbotError(code as ErrorCode, cause);
   }
 
@@ -34,7 +62,7 @@ export async function fetchWithErrorHandlers(
     const response = await fetch(input, init);
 
     if (!response.ok) {
-      const { code, cause } = await response.json();
+      const { code, cause } = await parseErrorBody(response);
       throw new ChatbotError(code as ErrorCode, cause);
     }
 
@@ -53,6 +81,13 @@ export function getLocalStorage(key: string) {
     return JSON.parse(localStorage.getItem(key) || '[]');
   }
   return [];
+}
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isUUID(value: string): boolean {
+  return UUID_REGEX.test(value);
 }
 
 export function generateUUID(): string {

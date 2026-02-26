@@ -80,32 +80,48 @@ export function SidebarUserNav({ user }: { user: User }) {
               {`Alternar modo ${resolvedTheme === "light" ? "escuro" : "claro"}`}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem asChild data-testid="user-nav-item-auth">
-              <button
-                className="w-full cursor-pointer"
-                onClick={() => {
-                  if (status === "loading") {
-                    toast({
-                      type: "error",
-                      description: "Verificando autenticação. Tente novamente!",
-                    });
-
-                    return;
-                  }
-
-                  if (isGuest) {
-                    router.push("/login");
-                  } else {
-                    signOut({
-                      redirectTo: "/",
-                    });
-                  }
-                }}
-                type="button"
-              >
-                {isGuest ? "Entrar na sua conta" : "Sair"}
-              </button>
-            </DropdownMenuItem>
+            {isGuest ? (
+              <>
+                <DropdownMenuItem asChild data-testid="user-nav-item-guest-restart">
+                  <button
+                    className="w-full cursor-pointer"
+                    onClick={async () => {
+                      if (status === "loading") return;
+                      await signOut({ redirect: false });
+                      globalThis.window.location.href = "/api/auth/guest";
+                    }}
+                    type="button"
+                  >
+                    Reiniciar como visitante
+                  </button>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild data-testid="user-nav-item-auth">
+                  <button
+                    className="w-full cursor-pointer"
+                    onClick={() => {
+                      if (status === "loading") return;
+                      router.push("/login");
+                    }}
+                    type="button"
+                  >
+                    Entrar na sua conta
+                  </button>
+                </DropdownMenuItem>
+              </>
+            ) : (
+              <DropdownMenuItem asChild data-testid="user-nav-item-auth">
+                <button
+                  className="w-full cursor-pointer"
+                  onClick={() => {
+                    if (status === "loading") return;
+                    signOut({ redirectTo: "/" });
+                  }}
+                  type="button"
+                >
+                  Sair
+                </button>
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>

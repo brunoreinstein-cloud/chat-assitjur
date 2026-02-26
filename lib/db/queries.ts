@@ -17,7 +17,7 @@ import postgres from "postgres";
 import type { ArtifactKind } from "@/components/artifact";
 import type { VisibilityType } from "@/components/visibility-selector";
 import { ChatbotError } from "../errors";
-import { generateUUID } from "../utils";
+import { generateUUID, isUUID } from "../utils";
 import {
   type Chat,
   chat,
@@ -41,8 +41,10 @@ import { generateHashedPassword } from "./utils";
 let dbInstance: ReturnType<typeof drizzle> | null = null;
 let clientInstance: ReturnType<typeof postgres> | null = null;
 
+const PUBLIC_SCHEMA_OPT = "options=-c%20search_path%3Dpublic";
+
 function getDb() {
-  const url = process.env.POSTGRES_URL;
+  let url = process.env.POSTGRES_URL;
   if (!url) {
     throw new ChatbotError(
       "bad_request:api",
@@ -50,6 +52,9 @@ function getDb() {
     );
   }
   if (!dbInstance) {
+    if (!url.includes("search_path")) {
+      url = url.includes("?") ? `${url}&${PUBLIC_SCHEMA_OPT}` : `${url}?${PUBLIC_SCHEMA_OPT}`;
+    }
     clientInstance = postgres(url, { max: 1 });
     dbInstance = drizzle(clientInstance);
   }
@@ -115,8 +120,35 @@ export async function saveChat({
       title,
       visibility,
     });
-  } catch (_error) {
-    throw new ChatbotError("bad_request:database", "Failed to save chat");
+  } catch (error: unknown) {
+    const err = error as { code?: string; constraint_name?: string };
+    if (err.code === "23505") {
+      const existing = await getChatById({ id });
+      if (existing?.userId === userId) {
+        return existing;
+      }
+    }
+    const isUserFk =
+      err.code === "23503" &&
+      (err.constraint_name === "Chat_userId_User_id_fk" ||
+        (error instanceof Error &&
+          error.message.includes("Chat_userId_User_id_fk")));
+    if (isUserFk) {
+      throw new ChatbotError(
+        "unauthorized:auth",
+        "A tua sessão já não é válida (utilizador inexistente na base de dados). Inicia sessão novamente."
+      );
+    }
+    const detail =
+      error instanceof Error ? error.message : String(error);
+    const isDev = process.env.NODE_ENV === "development";
+    if (isDev) {
+      console.error("[saveChat] Erro na base de dados:", error);
+    }
+    throw new ChatbotError(
+      "bad_request:database",
+      isDev ? `Failed to save chat: ${detail}` : "Failed to save chat"
+    );
   }
 }
 
@@ -247,6 +279,10 @@ export async function getChatsByUserId({
 }
 
 export async function getChatById({ id }: { id: string }) {
+  if (!isUUID(id)) {
+    return null;
+  }
+
   try {
     const [selectedChat] = await getDb()
       .select()
@@ -257,8 +293,10 @@ export async function getChatById({ id }: { id: string }) {
     }
 
     return selectedChat;
-  } catch (_error) {
-    throw new ChatbotError("bad_request:database", "Failed to get chat by id");
+  } catch (error) {
+    const cause =
+      error instanceof Error ? error.message : String(error);
+    throw new ChatbotError("bad_request:database", cause);
   }
 }
 
