@@ -1,7 +1,7 @@
 "use client";
 
 import type { UseChatHelpers } from "@ai-sdk/react";
-import type { UIMessage } from "ai";
+import type { UIMessage, UIMessagePart } from "ai";
 import equal from "fast-deep-equal";
 import { CheckIcon } from "lucide-react";
 import {
@@ -32,7 +32,12 @@ import {
   DEFAULT_CHAT_MODEL,
   modelsByProvider,
 } from "@/lib/ai/models";
-import type { Attachment, ChatMessage } from "@/lib/types";
+import type {
+  Attachment,
+  ChatMessage,
+  ChatTools,
+  CustomUIDataTypes,
+} from "@/lib/types";
 import { cn } from "@/lib/utils";
 import {
   PromptInput,
@@ -147,30 +152,39 @@ function PureMultimodalInput({
   const submitForm = useCallback(() => {
     window.history.pushState({}, "", `/chat/${chatId}`);
 
-    const attachmentParts = attachments.flatMap((attachment) => {
+    type DocumentPart = {
+      type: "document";
+      name: string;
+      text: string;
+    };
+    type FilePart = {
+      type: "file";
+      url: string;
+      name: string;
+      mediaType: string;
+    };
+    const attachmentParts: Array<DocumentPart | FilePart> = [];
+    for (const attachment of attachments) {
       if (attachment.extractedText != null) {
-        return [
-          {
-            type: "document" as const,
-            name: attachment.name,
-            text: attachment.extractedText,
-          },
-        ];
-      }
-      return [
-        {
-          type: "file" as const,
+        attachmentParts.push({
+          type: "document",
+          name: attachment.name,
+          text: attachment.extractedText,
+        });
+      } else {
+        attachmentParts.push({
+          type: "file",
           url: attachment.url,
           name: attachment.name,
           mediaType: attachment.contentType,
-        },
-      ];
-    });
+        });
+      }
+    }
 
     sendMessage({
       role: "user",
       parts: [
-        ...attachmentParts,
+        ...(attachmentParts as UIMessagePart<CustomUIDataTypes, ChatTools>[]),
         {
           type: "text",
           text: input.trim() || "(sem texto adicional)",
@@ -216,9 +230,7 @@ function PureMultimodalInput({
           url,
           name: pathname ?? data.pathname ?? file.name,
           contentType: contentType ?? file.type,
-          ...(typeof extractedText === "string"
-            ? { extractedText }
-            : {}),
+          ...(typeof extractedText === "string" ? { extractedText } : {}),
         };
       }
       const { error } = await response.json();
@@ -416,9 +428,9 @@ function PureMultimodalInput({
               className="size-8 rounded-full bg-primary text-primary-foreground transition-colors duration-200 hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
               data-testid="send-button"
               disabled={
-              (attachments.length === 0 && !input.trim()) ||
-              uploadQueue.length > 0
-            }
+                (attachments.length === 0 && !input.trim()) ||
+                uploadQueue.length > 0
+              }
               status={status}
             >
               <ArrowUpIcon size={14} />

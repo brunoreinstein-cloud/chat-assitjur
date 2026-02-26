@@ -6,7 +6,6 @@ import { auth } from "@/app/(auth)/auth";
 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png"] as const;
 const ACCEPTED_PDF_TYPE = "application/pdf" as const;
-const ACCEPTED_TYPES = [...ACCEPTED_IMAGE_TYPES, ACCEPTED_PDF_TYPE];
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_PDF_TEXT_LENGTH = 300_000; // ~300k caracteres
 
@@ -18,8 +17,9 @@ const FileSchema = z.object({
     })
     .refine(
       (file) =>
-        ACCEPTED_IMAGE_TYPES.includes(file.type as (typeof ACCEPTED_IMAGE_TYPES)[number]) ||
-        file.type === ACCEPTED_PDF_TYPE,
+        ACCEPTED_IMAGE_TYPES.includes(
+          file.type as (typeof ACCEPTED_IMAGE_TYPES)[number]
+        ) || file.type === ACCEPTED_PDF_TYPE,
       {
         message: "Tipos aceitos: JPEG, PNG ou PDF",
       }
@@ -27,12 +27,17 @@ const FileSchema = z.object({
 });
 
 async function extractTextFromPdf(buffer: ArrayBuffer): Promise<string> {
-  const pdfParse = (await import("pdf-parse")).default;
-  const data = await pdfParse(Buffer.from(buffer));
-  const text = typeof data?.text === "string" ? data.text : "";
-  return text.length > MAX_PDF_TEXT_LENGTH
-    ? `${text.slice(0, MAX_PDF_TEXT_LENGTH)}\n\n[... texto truncado ...]`
-    : text;
+  const { PDFParse } = await import("pdf-parse");
+  const parser = new PDFParse({ data: buffer });
+  try {
+    const result = await parser.getText();
+    const text = typeof result?.text === "string" ? result.text : "";
+    return text.length > MAX_PDF_TEXT_LENGTH
+      ? `${text.slice(0, MAX_PDF_TEXT_LENGTH)}\n\n[... texto truncado ...]`
+      : text;
+  } finally {
+    await parser.destroy();
+  }
 }
 
 export async function POST(request: Request) {
@@ -62,9 +67,7 @@ export async function POST(request: Request) {
 
     const parsed = FileSchema.safeParse({ file });
     if (!parsed.success) {
-      const message = parsed.error.errors
-        .map((e) => e.message)
-        .join(". ");
+      const message = parsed.error.errors.map((e) => e.message).join(". ");
       return NextResponse.json({ error: message }, { status: 400 });
     }
 
@@ -79,7 +82,10 @@ export async function POST(request: Request) {
       } catch (err) {
         console.error("PDF parse error:", err);
         return NextResponse.json(
-          { error: "Não foi possível extrair o texto do PDF. Verifique se o arquivo não está corrompido ou protegido." },
+          {
+            error:
+              "Não foi possível extrair o texto do PDF. Verifique se o arquivo não está corrompido ou protegido.",
+          },
           { status: 422 }
         );
       }

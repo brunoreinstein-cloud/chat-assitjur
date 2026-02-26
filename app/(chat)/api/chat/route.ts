@@ -43,26 +43,29 @@ export const maxDuration = 60;
 /** Converte partes do tipo "document" (PDF) em partes "text" para o modelo. */
 function normalizeMessageParts(messages: ChatMessage[]): ChatMessage[] {
   return messages.map((msg) => {
-    if (!msg.parts?.length) return msg;
-    const normalizedParts = msg.parts.flatMap(
-      (part: { type?: string; text?: string; name?: string; url?: string; mediaType?: string }) => {
-        if (
-          part.type === "document" &&
-          typeof part.text === "string" &&
-          part.name
-        ) {
-          return [
-            {
-              type: "text" as const,
-              text: `[Documento: ${part.name}]\n\n${part.text}`,
-            },
-          ];
-        }
-        return [part];
+    if (!msg.parts?.length) {
+      return msg;
+    }
+    const normalizedParts = msg.parts.flatMap((part) => {
+      const p = part as {
+        type?: string;
+        text?: string;
+        name?: string;
+        url?: string;
+        mediaType?: string;
+      };
+      if (p.type === "document" && typeof p.text === "string" && p.name) {
+        return [
+          {
+            type: "text" as const,
+            text: `[Documento: ${p.name}]\n\n${p.text}`,
+          },
+        ];
       }
-    );
-    return { ...msg, parts: normalizedParts };
-  });
+      return [part];
+    });
+    return { ...msg, parts: normalizedParts } as ChatMessage;
+  }) as ChatMessage[];
 }
 
 function getStreamContext() {
@@ -133,7 +136,9 @@ export async function POST(request: Request) {
         title: "New chat",
         visibility: selectedVisibilityType,
       });
-      titlePromise = generateTitleFromUserMessage({ message });
+      titlePromise = generateTitleFromUserMessage({
+        message: normalizeMessageParts([message as ChatMessage])[0],
+      });
     }
 
     const uiMessages = isToolApprovalFlow
