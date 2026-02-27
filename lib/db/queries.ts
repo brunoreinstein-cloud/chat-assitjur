@@ -53,7 +53,9 @@ function getDb() {
   }
   if (!dbInstance) {
     if (!url.includes("search_path")) {
-      url = url.includes("?") ? `${url}&${PUBLIC_SCHEMA_OPT}` : `${url}?${PUBLIC_SCHEMA_OPT}`;
+      url = url.includes("?")
+        ? `${url}&${PUBLIC_SCHEMA_OPT}`
+        : `${url}?${PUBLIC_SCHEMA_OPT}`;
     }
     clientInstance = postgres(url, {
       max: 1,
@@ -142,8 +144,7 @@ export async function saveChat({
         "A tua sessão já não é válida (utilizador inexistente na base de dados). Inicia sessão novamente."
       );
     }
-    const detail =
-      error instanceof Error ? error.message : String(error);
+    const detail = error instanceof Error ? error.message : String(error);
     const isDev = process.env.NODE_ENV === "development";
     if (isDev) {
       console.error("[saveChat] Erro na base de dados:", error);
@@ -274,9 +275,10 @@ export async function getChatsByUserId({
       hasMore,
     };
   } catch (error) {
-    if (error instanceof ChatbotError) throw error;
-    const cause =
-      error instanceof Error ? error.message : String(error);
+    if (error instanceof ChatbotError) {
+      throw error;
+    }
+    const cause = error instanceof Error ? error.message : String(error);
     throw new ChatbotError("bad_request:database", cause);
   }
 }
@@ -297,8 +299,7 @@ export async function getChatById({ id }: { id: string }) {
 
     return selectedChat;
   } catch (error) {
-    const cause =
-      error instanceof Error ? error.message : String(error);
+    const cause = error instanceof Error ? error.message : String(error);
     throw new ChatbotError("bad_request:database", cause);
   }
 }

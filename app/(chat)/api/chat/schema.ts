@@ -51,9 +51,12 @@ export const postRequestBodySchema = z
     /** Optional IDs of knowledge base documents to inject as context for this request. */
     knowledgeDocumentIds: z.array(z.string().uuid()).max(20).optional(),
   })
-  .refine((data) => data.message !== undefined || (data.messages?.length ?? 0) > 0, {
-    message: "É necessário enviar 'message' ou 'messages' (array não vazio).",
-    path: ["message"],
-  });
+  .refine(
+    (data) => data.message !== undefined || (data.messages?.length ?? 0) > 0,
+    {
+      message: "É necessário enviar 'message' ou 'messages' (array não vazio).",
+      path: ["message"],
+    }
+  );
 
 export type PostRequestBody = z.infer<typeof postRequestBodySchema>;

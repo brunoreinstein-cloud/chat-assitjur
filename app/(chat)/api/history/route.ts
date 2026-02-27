@@ -11,11 +11,7 @@ export async function GET(request: NextRequest) {
   const startingAfter = searchParams.get("starting_after");
   const endingBefore = searchParams.get("ending_before");
 
-  if (
-    !Number.isFinite(limit) ||
-    limit < 1 ||
-    limit > 100
-  ) {
+  if (!Number.isFinite(limit) || limit < 1 || limit > 100) {
     return new ChatbotError(
       "bad_request:api",
       "limit must be an integer between 1 and 100"

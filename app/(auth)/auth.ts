@@ -63,7 +63,10 @@ export const {
           }
 
           return { ...user, type: "regular" };
-        } catch {
+        } catch (err) {
+          if (process.env.NODE_ENV === "development") {
+            console.error("[auth] authorize (credentials) failed:", err);
+          }
           return null;
         }
       },
@@ -75,7 +78,10 @@ export const {
         try {
           const [guestUser] = await createGuestUser();
           return { ...guestUser, type: "guest" };
-        } catch {
+        } catch (err) {
+          if (process.env.NODE_ENV === "development") {
+            console.error("[auth] authorize (guest) failed:", err);
+          }
           return null;
         }
       },

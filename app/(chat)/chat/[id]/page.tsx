@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 
@@ -14,20 +14,21 @@ import { convertToUIMessages, isUUID } from "@/lib/utils";
 function DatabaseUnavailable() {
   return (
     <div className="flex h-dvh flex-col items-center justify-center gap-4 p-6 text-center">
-      <h1 className="text-xl font-semibold">
-        Base de dados indisponível
-      </h1>
+      <h1 className="text-xl font-semibold">Base de dados indisponível</h1>
       <p className="max-w-md text-muted-foreground">
         Não foi possível ligar à base de dados. Verifique se a variável{" "}
         <code className="rounded bg-muted px-1.5 py-0.5 text-sm">
           POSTGRES_URL
         </code>{" "}
-        está definida no <code className="rounded bg-muted px-1.5 py-0.5 text-sm">.env.local</code> e
-        se o PostgreSQL está a correr.
+        está definida no{" "}
+        <code className="rounded bg-muted px-1.5 py-0.5 text-sm">
+          .env.local
+        </code>{" "}
+        e se o PostgreSQL está a correr.
       </p>
       <Link
-        href="/"
         className="text-primary underline underline-offset-4 hover:no-underline"
+        href="/"
       >
         Voltar ao início
       </Link>

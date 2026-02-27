@@ -26,16 +26,17 @@
     "supabase:api-keys": "supabase projects api-keys -o env",
     "supabase:env": "tsx scripts/supabase-env.ts",
     "supabase:setup": "pnpm run supabase:config-push",
-    "vercel:link": "vercel link",
-    "vercel:pull": "vercel pull",
-    "vercel:env": "vercel env pull .env.local",
-    "vercel:env:prod": "vercel env pull .env.local --environment=production",
-    "vercel:deploy": "vercel",
-    "vercel:deploy:prod": "vercel --prod",
-    "vercel:open": "vercel open",
+    "vercel:link": "npx vercel link",
+    "vercel:pull": "npx vercel pull",
+    "vercel:env": "npx vercel env pull .env.local",
+    "vercel:env:prod": "npx vercel env pull .env.local --environment=production",
+    "vercel:deploy": "npx vercel",
+    "vercel:deploy:prod": "npx vercel --prod",
+    "vercel:open": "npx vercel open",
     "skills:check": "npx skills check",
     "skills:list": "npx skills list",
-    "vercel:logs": "vercel logs",
+    "vercel:logs": "npx vercel logs",
+    "predeploy": "tsx scripts/pre-deploy.ts",
     "analyze": "tsx lib/db/migrate && cross-env ANALYZE=true next build --webpack",
     "test": "export PLAYWRIGHT=True && pnpm exec playwright test"
   },
@@ -144,8 +145,7 @@
     "tailwindcss": "^4.1.13",
     "tsx": "^4.19.1",
     "typescript": "^5.6.3",
-    "ultracite": "^7.0.11",
-    "vercel": "^50.23.2"
+    "ultracite": "^7.0.11"
   },
-  "packageManager": "pnpm@9.12.3"
+  "packageManager": "pnpm@10.0.0"
 }

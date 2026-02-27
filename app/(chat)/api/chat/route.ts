@@ -9,6 +9,7 @@ import {
 } from "ai";
 import { after } from "next/server";
 import { createResumableStreamContext } from "resumable-stream";
+import { ZodError } from "zod";
 import { auth, type UserType } from "@/app/(auth)/auth";
 import { AGENTE_REVISOR_DEFESAS_INSTRUCTIONS } from "@/lib/ai/agent-revisor-defesas";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
@@ -37,7 +38,6 @@ import type { ChatMessage } from "@/lib/types";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
 import { generateTitleFromUserMessage } from "../../actions";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
-import { ZodError } from "zod";
 
 export const maxDuration = 60;
 
@@ -94,7 +94,11 @@ export async function POST(request: Request) {
         const first = error.issues[0];
         const path = first.path.join(".");
         cause = path ? `${path}: ${first.message}` : first.message;
-        console.error("[POST /api/chat] Validação falhou:", cause, error.issues);
+        console.error(
+          "[POST /api/chat] Validação falhou:",
+          cause,
+          error.issues
+        );
       } else {
         cause = error.message;
         console.error("[POST /api/chat] Erro ao processar corpo:", cause);
@@ -125,7 +129,9 @@ export async function POST(request: Request) {
     if (message?.role === "user" && message.parts) {
       const hasContent = message.parts.some((p) => {
         const part = p as { type?: string; text?: string };
-        if (part.type === "text") return (part.text?.trim().length ?? 0) > 0;
+        if (part.type === "text") {
+          return (part.text?.trim().length ?? 0) > 0;
+        }
         return part.type === "file" || part.type === "document";
       });
       if (!hasContent) {
@@ -133,7 +139,8 @@ export async function POST(request: Request) {
           {
             code: "bad_request:api",
             message: "Corpo do pedido inválido.",
-            cause: "A mensagem não pode estar vazia. Escreve texto ou anexa um ficheiro.",
+            cause:
+              "A mensagem não pode estar vazia. Escreve texto ou anexa um ficheiro.",
           },
           { status: 400 }
         );

@@ -3,8 +3,8 @@
  * Uso: pnpm db:tables
  */
 import { config } from "dotenv";
-import { drizzle } from "drizzle-orm/postgres-js";
 import { sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
 config({ path: ".env" });
@@ -41,7 +41,7 @@ async function listTables() {
     `);
 
     const tables = (rows as unknown as { table_name: string }[]).map(
-      (r) => r.table_name,
+      (r) => r.table_name
     );
     if (tables.length === 0) {
       console.log("⚠️  Nenhuma tabela no schema public.");

@@ -17,6 +17,7 @@
       "**/*.jsx",
       "!node_modules",
       "!.next",
+      "!.agents",
       "!ai-sdk",
       "!components/ui",
       "!lib/utils.ts",

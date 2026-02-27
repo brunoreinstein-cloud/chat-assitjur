@@ -7,8 +7,12 @@ function redirectToConfigRequired(request: NextRequest) {
 }
 
 function shouldShowConfigRequired(pathname: string): boolean {
-  if (pathname === "/config-required") return false;
-  if (!process.env.VERCEL) return false;
+  if (pathname === "/config-required") {
+    return false;
+  }
+  if (!process.env.VERCEL) {
+    return false;
+  }
   return !process.env.POSTGRES_URL || !process.env.AUTH_SECRET;
 }
 

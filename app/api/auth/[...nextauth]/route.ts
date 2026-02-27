@@ -1,14 +1,29 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { GET as AuthGET, POST as AuthPOST, auth } from "@/app/(auth)/auth";
 
-const authErrorResponse = (error: unknown) =>
-  NextResponse.json(
+function isCredentialsSignin(error: unknown): boolean {
+  const e = error as { type?: string };
+  return e?.type === "CredentialsSignin";
+}
+
+const authErrorResponse = (error: unknown) => {
+  if (isCredentialsSignin(error)) {
+    return NextResponse.json(
+      {
+        error: "CredentialsSignin",
+        message: "Credenciais inválidas. Verifica o email e a palavra-passe.",
+      },
+      { status: 401 }
+    );
+  }
+  return NextResponse.json(
     {
       error: "AuthError",
       message: error instanceof Error ? error.message : "Authentication failed",
     },
     { status: 500 }
   );
+};
 
 const sessionJsonHeaders = {
   "Content-Type": "application/json",

@@ -168,8 +168,7 @@ export function Chat({
         ) {
           setShowCreditCardAlert(true);
         } else {
-          const description =
-            unwrapped.cause ?? unwrapped.message;
+          const description = unwrapped.cause ?? unwrapped.message;
           toast({
             type: "error",
             description,

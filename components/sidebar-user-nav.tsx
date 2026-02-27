@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/sidebar";
 import { guestRegex } from "@/lib/constants";
 import { LoaderIcon } from "./icons";
-import { toast } from "./toast";
 
 export function SidebarUserNav({ user }: { user: User }) {
   const router = useRouter();
@@ -82,11 +81,16 @@ export function SidebarUserNav({ user }: { user: User }) {
             <DropdownMenuSeparator />
             {isGuest ? (
               <>
-                <DropdownMenuItem asChild data-testid="user-nav-item-guest-restart">
+                <DropdownMenuItem
+                  asChild
+                  data-testid="user-nav-item-guest-restart"
+                >
                   <button
                     className="w-full cursor-pointer"
                     onClick={async () => {
-                      if (status === "loading") return;
+                      if (status === "loading") {
+                        return;
+                      }
                       await signOut({ redirect: false });
                       globalThis.window.location.href = "/api/auth/guest";
                     }}
@@ -99,7 +103,9 @@ export function SidebarUserNav({ user }: { user: User }) {
                   <button
                     className="w-full cursor-pointer"
                     onClick={() => {
-                      if (status === "loading") return;
+                      if (status === "loading") {
+                        return;
+                      }
                       router.push("/login");
                     }}
                     type="button"
@@ -113,7 +119,9 @@ export function SidebarUserNav({ user }: { user: User }) {
                 <button
                   className="w-full cursor-pointer"
                   onClick={() => {
-                    if (status === "loading") return;
+                    if (status === "loading") {
+                      return;
+                    }
                     signOut({ redirectTo: "/" });
                   }}
                   type="button"

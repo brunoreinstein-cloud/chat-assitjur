@@ -5,8 +5,7 @@ import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
-const SUPABASE_BUCKET =
-  process.env.SUPABASE_STORAGE_BUCKET ?? "chat-files";
+const SUPABASE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET ?? "chat-files";
 
 const isDev = process.env.NODE_ENV === "development";
 const hasBlobToken = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
@@ -45,7 +44,9 @@ async function uploadFile(
   contentType: string
 ): Promise<{ url: string; pathname: string } | null> {
   const supabase = getSupabaseServerClient();
-  if (!supabase) return null;
+  if (!supabase) {
+    return null;
+  }
 
   const safeName = filename.replaceAll(/[^a-zA-Z0-9._-]/g, "_");
   const path = `${userId}/${Date.now()}-${safeName}`;
@@ -57,7 +58,9 @@ async function uploadFile(
       upsert: false,
     });
 
-  if (error) return null;
+  if (error) {
+    return null;
+  }
 
   const {
     data: { publicUrl },
@@ -122,7 +125,12 @@ export async function POST(request: Request) {
         // Continua com texto vazio: o ficheiro é enviado e o chat pode usá-lo sem texto extraído
       }
 
-      const uploadResult = await uploadFile(session.user.id, filename, fileBuffer, file.type);
+      const uploadResult = await uploadFile(
+        session.user.id,
+        filename,
+        fileBuffer,
+        file.type
+      );
       if (uploadResult) {
         return NextResponse.json({
           url: uploadResult.url,
@@ -159,7 +167,12 @@ export async function POST(request: Request) {
       }
     }
 
-    const uploadResult = await uploadFile(session.user.id, filename, fileBuffer, file.type);
+    const uploadResult = await uploadFile(
+      session.user.id,
+      filename,
+      fileBuffer,
+      file.type
+    );
     if (uploadResult) {
       return NextResponse.json({
         url: uploadResult.url,
