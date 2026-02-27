@@ -3,6 +3,11 @@ import { getToken } from "next-auth/jwt";
 import { signIn } from "@/app/(auth)/auth";
 import { isDevelopmentEnvironment } from "@/lib/constants";
 
+function isCredentialsSignin(error: unknown): boolean {
+  const e = error as { type?: string; code?: string };
+  return e?.type === "CredentialsSignin" || e?.code === "credentials";
+}
+
 export async function GET(request: Request) {
   if (!process.env.AUTH_SECRET) {
     return NextResponse.json(
@@ -40,7 +45,17 @@ export async function GET(request: Request) {
     }
 
     return signIn("guest", { redirect: true, redirectTo: redirectUrl });
-  } catch {
+  } catch (error) {
+    if (isCredentialsSignin(error)) {
+      return NextResponse.json(
+        {
+          error: "GuestSignInFailed",
+          message:
+            "Não foi possível criar sessão de visitante. Verifica na Vercel: POSTGRES_URL com porta 6543 (Supabase), migrações aplicadas (pnpm run db:migrate) e base de dados acessível.",
+        },
+        { status: 503 }
+      );
+    }
     return NextResponse.json(
       {
         error: "Guest sign-in failed",

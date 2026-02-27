@@ -92,7 +92,7 @@ export function SidebarUserNav({ user }: { user: User }) {
                         return;
                       }
                       await signOut({ redirect: false });
-                      globalThis.window.location.href = "/api/auth/guest";
+                      globalThis.window.location.href = "/api/auth/guest?redirectUrl=/chat";
                     }}
                     type="button"
                   >
