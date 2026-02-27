@@ -37,6 +37,19 @@ export const {
   signOut,
 } = NextAuth({
   ...authConfig,
+  logger: {
+    error(code, ...message) {
+      const err = code as Error & { type?: string };
+      if (err?.type === "CredentialsSignin") return;
+      console.error("[auth][error]", code, ...message);
+    },
+    warn(code, ...message) {
+      console.warn("[auth][warn]", code, ...message);
+    },
+    debug(code, ...message) {
+      console.debug("[auth][debug]", code, ...message);
+    },
+  },
   providers: [
     Credentials({
       credentials: {},
