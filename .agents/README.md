@@ -15,6 +15,7 @@ Este projeto usa **Agent Skills** do ecossistema [skills.sh](https://skills.sh) 
 | `supabase-postgres-best-practices` | Dev | supabase/agent-skills | Postgres/Supabase: performance, índices, RLS, transações, schema. |
 | `ai-sdk` | IA | vercel/ai | Vercel AI SDK: generateText, streamText, useChat, tools, embeddings, providers. |
 | `systematic-debugging` | Dev | obra/superpowers | Debug sistemático (hipóteses, reprodução, isolamento). |
+| `revisor-defesas-context` | IA / domínio | (interno) | Contexto e checklist do Revisor de Defesas Trabalhistas; uso ao alterar prompts ou fluxo do revisor. |
 
 ## Comandos úteis
 

@@ -12,7 +12,8 @@
   <a href="#features"><strong>Features</strong></a> ·
   <a href="#model-providers"><strong>Model Providers</strong></a> ·
   <a href="#deploy-your-own"><strong>Deploy Your Own</strong></a> ·
-  <a href="#running-locally"><strong>Running locally</strong></a>
+  <a href="#running-locally"><strong>Running locally</strong></a> ·
+  <a href="#agent-skills"><strong>Agent Skills</strong></a>
 </p>
 <br/>
 
@@ -68,3 +69,11 @@ pnpm dev
 ```
 
 Your app template should now be running on [localhost:3000](http://localhost:3000).
+
+## Agent Skills
+
+This project uses [Agent Skills](https://skills.sh) from `.agents/skills/` to extend AI coding agents (Cursor, Codex, etc.) with Next.js, React, AI SDK, Supabase, and debugging know-how.
+
+- **List installed skills:** `pnpm run skills:list` or `npx skills list`
+- **Check for updates:** `pnpm run skills:check` or `npx skills update`
+- **Full overview:** [.agents/README.md](.agents/README.md)

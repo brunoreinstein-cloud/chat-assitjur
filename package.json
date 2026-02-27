@@ -33,6 +33,8 @@
     "vercel:deploy": "vercel",
     "vercel:deploy:prod": "vercel --prod",
     "vercel:open": "vercel open",
+    "skills:check": "npx skills check",
+    "skills:list": "npx skills list",
     "vercel:logs": "vercel logs",
     "analyze": "tsx lib/db/migrate && cross-env ANALYZE=true next build --webpack",
     "test": "export PLAYWRIGHT=True && pnpm exec playwright test"

@@ -1,0 +1,28 @@
+# Verifica se há atualizações disponíveis para as Agent Skills (skills.sh).
+# Opcional: falha o job se existirem atualizações (remover continue-on-error).
+name: Skills check
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Semanal (segunda-feira 09:00 UTC)
+    - cron: "0 9 * * 1"
+jobs:
+  skills-check:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.3
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install
+      - name: Check for skill updates
+        run: pnpm run skills:check
+        continue-on-error: true

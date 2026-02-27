@@ -8,7 +8,7 @@ As skills físicas vivem em `.agents/skills/`. Este documento agrupa-as por **ca
 skills (físico: .agents/skills/)
 ├── core/          → find-skills, skill-creator
 ├── dev/           → next-*, vercel-react-*, web-design-*, supabase-*, systematic-debugging
-├── ai/             → ai-sdk
+├── ai/             → ai-sdk, revisor-defesas-context
 ├── product/       → (nenhuma instalada; opcional: copywriting, marketing-psychology)
 └── ops/            → (nenhuma instalada; opcional: docker-expert, security)
 ```
@@ -38,6 +38,7 @@ skills (físico: .agents/skills/)
 | Skill | Quando usar |
 |-------|-------------|
 | **ai-sdk** | AI SDK (generateText, streamText, useChat), tools, embeddings, providers, chatbots, RAG. |
+| **revisor-defesas-context** | Alterar prompts, fluxo ou documentação do Agente Revisor de Defesas Trabalhistas; checklist e jurisprudência. |
 
 ### Product (opcional, não instaladas)
 

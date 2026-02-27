@@ -55,7 +55,10 @@ function getDb() {
     if (!url.includes("search_path")) {
       url = url.includes("?") ? `${url}&${PUBLIC_SCHEMA_OPT}` : `${url}?${PUBLIC_SCHEMA_OPT}`;
     }
-    clientInstance = postgres(url, { max: 1 });
+    clientInstance = postgres(url, {
+      max: 1,
+      connect_timeout: 10,
+    });
     dbInstance = drizzle(clientInstance);
   }
   return dbInstance;
