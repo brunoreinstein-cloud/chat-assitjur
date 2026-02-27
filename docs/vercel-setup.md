@@ -52,6 +52,8 @@ Se usares **Vercel Postgres**, no dashboard pode existir a opção "Run migratio
 
 Num workflow (GitHub Actions, etc.), após o deploy ou num job separado, corre `pnpm run db:migrate` com `POSTGRES_URL` definida (por exemplo com secret).
 
+**Nota:** A base de produção começa **vazia** (sem utilizadores). Os utilizadores criados em desenvolvimento ficam só na base local. Em produção, é preciso registar um novo utilizador (página Registo) ou usar "Continuar como visitante" para criar um guest nessa base.
+
 ---
 
 ## 3. Revisão pré-deploy
@@ -96,13 +98,18 @@ O projeto usa **Next.js 16** com Turbopack e a convenção **proxy** (em vez de 
 
 ### CredentialsSignin (login / guest)
 
+**É um erro de autenticação, não de configuração.** O Auth.js lança `CredentialsSignin` quando o login é tentado mas as credenciais não batem com o que está na base de dados (ou o `authorize` falha por outro motivo).
+
 Se nos logs aparecer **`[auth][error] CredentialsSignin`**:
 
-- **O que é:** O Auth.js lança este erro quando o provider Credentials devolve `null` no `authorize` (credenciais inválidas ou exceção dentro do `authorize`).
 - **Causas possíveis:**
-  1. **Email ou palavra-passe errados** – comportamento esperado; a API passa a responder com **401** em vez de 500.
-  2. **Base de dados inacessível** – `POSTGRES_URL` com porta errada (usa **6543** no Supabase), migrações por aplicar ou rede. O `authorize` chama `getUser()` / `createGuestUser()`; se a DB falhar, o erro é capturado e o Auth.js lança CredentialsSignin.
-- **O que fazer:** Confirma `POSTGRES_URL` (porta 6543), corre as migrações e testa com credenciais válidas. Em desenvolvimento, o servidor regista no console o erro real do `authorize` para facilitar o diagnóstico.
+  1. **Base de produção vazia** – A base local tem utilizadores criados em desenvolvimento; a base da Vercel (Supabase em produção) começa **vazia** e nunca recebeu esses utilizadores. Tentar fazer login com um email/palavra-passe criados só em local falha.
+  2. **Email ou palavra-passe errados** – O utilizador existe na base mas a palavra-passe não coincide. A API responde com **401**.
+  3. **Base de dados inacessível** – `POSTGRES_URL` com porta errada (usa **6543** no Supabase), migrações por aplicar ou rede; o `authorize` falha e o Auth.js lança CredentialsSignin.
+- **O que fazer:**
+  - **Produção nova:** Regista um utilizador em produção (página **Registo** da app) ou usa “Continuar como visitante” (cria um guest na base de produção). Não uses credenciais que só existem na base local.
+  - Confirma `POSTGRES_URL` (porta 6543) e que as migrações foram aplicadas à base de produção.
+  - Em desenvolvimento, o servidor regista no console o erro real do `authorize` para diagnóstico.
 
 ---
 

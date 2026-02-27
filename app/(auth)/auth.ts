@@ -38,9 +38,14 @@ export const {
 } = NextAuth({
   ...authConfig,
   logger: {
-    error(code, ...message) {
-      const err = code as Error & { type?: string };
-      if (err?.type === "CredentialsSignin") return;
+    error(code: unknown, ...message: unknown[]) {
+      const err = code as { type?: string; code?: string } | null;
+      const firstMsg = message[0] as { type?: string } | null;
+      const isCredentialsSignin =
+        err?.type === "CredentialsSignin" ||
+        err?.code === "credentials" ||
+        firstMsg?.type === "CredentialsSignin";
+      if (isCredentialsSignin) return;
       console.error("[auth][error]", code, ...message);
     },
     warn(code, ...message) {

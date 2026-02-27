@@ -133,6 +133,12 @@ Comandos: `npx skills list` | `npx skills find [query]` | `npx skills update`.
 
 ---
 
+## Documentação do produto (Revisor de Defesas)
+
+- **[docs/PROJETO-REVISOR-DEFESAS.md](docs/PROJETO-REVISOR-DEFESAS.md)** — Documentação completa do Agente Revisor: o que é, stack, arquitetura do agente, fluxo (GATE-1 → FASE A → GATE 0.5 → FASE B), API, base de conhecimento, formato dos 3 DOCX, UX/UI, env e comandos.
+
+---
+
 ## Referências rápidas
 
 - [AI SDK](https://sdk.vercel.ai/docs/introduction)
