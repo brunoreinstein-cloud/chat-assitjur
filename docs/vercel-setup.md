@@ -94,7 +94,13 @@ O projeto usa **Next.js 16** com Turbopack e a convenção **proxy** (em vez de 
 | **AI Gateway / provider** | Se o chat usar um modelo e a API key (ou OIDC na Vercel) falhar ou expirar, a rota `/api/chat` pode devolver 500. Confirma AI Gateway e variáveis na Vercel. |
 | **Timeout ou memória** | A rota do chat tem `maxDuration = 60`. Pedidos muito longos ou uso excessivo de memória podem ser terminados pela Vercel com 500. |
 
-**Como diagnosticar:** Vercel → projeto → **Deployments** → escolhe o deployment → **Logs** (aba Runtime). Aí vês o erro exato (ex.: conexão recusada ao Postgres, "relation does not exist", mensagem do provider de IA).
+**Como diagnosticar o 500:**
+
+1. Vercel → teu projeto → **Deployments** → clica no deployment em uso → **Logs** (aba **Runtime**).
+2. Reproduz o 500 na app (abre a página ou ação que falha) e olha para os logs que aparecem nesse momento.
+3. Procura a linha com o erro (stack trace ou mensagem). Exemplos: conexão recusada ao Postgres, `relation "X" does not exist`, `AUTH_SECRET is not set`, erro do provider de IA.
+
+Se não aparecer nada nos Runtime Logs, abre **Functions** no mesmo deployment e inspeciona a função associada à URL que devolve 500; ou usa **Vercel → Logs** (stream em tempo real) enquanto reproduzes o erro.
 
 ### CredentialsSignin (login / guest)
 
@@ -111,13 +117,33 @@ Se nos logs aparecer **`[auth][error] CredentialsSignin`**:
   - Confirma `POSTGRES_URL` (porta 6543) e que as migrações foram aplicadas à base de produção.
   - Em desenvolvimento, o servidor regista no console o erro real do `authorize` para diagnóstico.
 
+**Próximos passos quando vês CredentialsSignin em produção:**
+
+1. Confirma se em produção já existe um utilizador na base (ou se usas guest). No **SQL Editor do Supabase** (Dashboard → SQL Editor), por exemplo: `SELECT id, email FROM "User" LIMIT 100;` — se a tabela estiver vazia, não há utilizadores.
+2. Se não houver utilizadores: regista um novo na app em produção (página **Registo**) ou usa **"Continuar como visitante"** e volta a tentar.
+3. Se já houver utilizadores: confirma que o email/palavra-passe que estás a usar são os dessa base (não os de desenvolvimento). Alternativa: usar Drizzle Studio com `POSTGRES_URL` de produção (`pnpm run vercel:env:prod` e depois `pnpm run db:studio`) para inspecionar a tabela `User`.
+
 ---
 
 | Problema | Solução |
 |----------|---------|
 | Redirecionamento para `/config-required` | Falta `AUTH_SECRET` ou `POSTGRES_URL`. Configura em Settings → Environment Variables e faz redeploy. |
 | Aviso "vercel" em dependencies | O pacote `vercel` foi removido das dependências; os scripts usam `npx vercel`. |
+| Aviso "Failed to create bin... supabase" | O CLI Supabase não é dependência do projeto; os scripts (`supabase:link`, etc.) usam `npx supabase`. O build na Vercel não instala o CLI, pelo que este aviso não deve aparecer. |
 | Aviso `baseline-browser-mapping` desatualizado | Opcional: `pnpm add -D baseline-browser-mapping@latest`. |
+| **TimeoutNegativeWarning** (`-XXX is a negative number`, timeout set to 1) | O Auth.js (ou um middleware) agenda um refresh da sessão com um atraso `expires - now` em ms. Se a sessão já expirou ou o relógio do servidor está atrasado em relação à data de expiração (ex.: timezone da DB diferente da Vercel), o atraso fica negativo e o Node corrige para 1 ms. Pode aparecer junto de **CredentialsSignin**. Verifica timezone da base (secção abaixo) e garante que em produção o utilizador está a usar credenciais válidas na base de produção. |
+
+### Timezone diferente entre base de dados (Supabase / Neon) e Vercel
+
+Se datas/horas gravadas ou exibidas estiverem desfasadas (ex.: criação de chat, mensagens), pode ser diferença de timezone entre o Postgres (Supabase, Neon) e o servidor Vercel.
+
+**Como verificar no SQL Editor (Supabase ou Neon):**
+
+```sql
+SELECT NOW(), CURRENT_TIMESTAMP, timezone('America/Sao_Paulo', NOW());
+```
+
+Se `NOW()` retornar horário diferente do que o servidor Vercel usa (ou do que esperas na UI), a causa é essa. O Postgres usa o timezone da instância; a Vercel corre em UTC. Para consistência, guarda sempre em UTC na base e converte para o fuso do utilizador na apresentação, ou alinha o timezone da base (conforme a oferta do Neon).
 
 ---
 

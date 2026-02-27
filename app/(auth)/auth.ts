@@ -45,7 +45,9 @@ export const {
         err?.type === "CredentialsSignin" ||
         err?.code === "credentials" ||
         firstMsg?.type === "CredentialsSignin";
-      if (isCredentialsSignin) return;
+      if (isCredentialsSignin) {
+        return;
+      }
       console.error("[auth][error]", code, ...message);
     },
     warn(code, ...message) {

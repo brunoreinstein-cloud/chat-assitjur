@@ -80,7 +80,7 @@ export default function RootLayout({
           enableSystem
         >
           <Toaster position="top-center" />
-          <SessionProvider>{children}</SessionProvider>
+          <SessionProvider refetchInterval={5 * 60}>{children}</SessionProvider>
         </ThemeProvider>
       </body>
     </html>
