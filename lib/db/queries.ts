@@ -69,10 +69,12 @@ function getDb() {
 export async function getUser(email: string): Promise<User[]> {
   try {
     return await getDb().select().from(user).where(eq(user.email, email));
-  } catch (_error) {
+  } catch (err) {
+    const detail =
+      err instanceof Error ? err.message : "Unknown database error";
     throw new ChatbotError(
       "bad_request:database",
-      "Failed to get user by email"
+      `Failed to get user by email: ${detail}`
     );
   }
 }
@@ -84,8 +86,12 @@ export async function createUser(email: string, password: string) {
     return await getDb()
       .insert(user)
       .values({ email, password: hashedPassword });
-  } catch (_error) {
-    throw new ChatbotError("bad_request:database", "Failed to create user");
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : "Unknown database error";
+    throw new ChatbotError(
+      "bad_request:database",
+      `Failed to create user: ${detail}`
+    );
   }
 }
 
@@ -98,10 +104,12 @@ export async function createGuestUser() {
       id: user.id,
       email: user.email,
     });
-  } catch (_error) {
+  } catch (err) {
+    const detail =
+      err instanceof Error ? err.message : "Unknown database error";
     throw new ChatbotError(
       "bad_request:database",
-      "Failed to create guest user"
+      `Failed to create guest user: ${detail}`
     );
   }
 }

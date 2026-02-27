@@ -1,0 +1,11 @@
+Contestação – Processo nº 0000123-45.2025.5.02.0XXX
+
+Empresa XYZ Ltda. contesta os pedidos:
+
+1. Horas extras – IMPUGNADO. Jornada registrada em ponto eletrônico; não há sobrejornada.
+2. Verbas rescisórias – IMPUGNADO. Pagamento em dia.
+3. FGTS – IMPUGNADO. Depósitos em ordem.
+4. Férias – IMPUGNADO. Concedidas e pagas.
+5. 13º salário – NÃO IMPUGNADO (omissão da ré).
+
+Conclusão: pedidos 1 a 4 impugnados; pedido 5 não impugnado (🔴).

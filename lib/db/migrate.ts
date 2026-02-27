@@ -7,7 +7,11 @@ config({ path: ".env" });
 config({ path: ".env.local" });
 
 const runMigrate = async () => {
-  if (process.env.VERCEL) {
+  // Só saltar na Vercel durante o build (pnpm build). Em local, mesmo com VERCEL no .env.local, correr migrações.
+  const isVercelBuild =
+    process.env.VERCEL === "1" &&
+    process.env.npm_lifecycle_event === "build";
+  if (isVercelBuild) {
     console.log(
       "⏭️  Vercel build: skipping migrations (run them separately or in CI)"
     );

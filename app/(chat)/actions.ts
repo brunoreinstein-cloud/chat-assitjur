@@ -2,6 +2,7 @@
 
 import { generateText, type UIMessage } from "ai";
 import { cookies } from "next/headers";
+import { signIn } from "@/app/(auth)/auth";
 import type { VisibilityType } from "@/components/visibility-selector";
 import { titlePrompt } from "@/lib/ai/prompts";
 import { getTitleModel } from "@/lib/ai/providers";
@@ -11,6 +12,11 @@ import {
   updateChatVisibilityById,
 } from "@/lib/db/queries";
 import { getTextFromMessage } from "@/lib/utils";
+
+/** Aciona o sign-in como visitante (guest). Deve ser usado via form POST para o cookie de sessão ser definido antes do redirect. */
+export async function signInAsGuest() {
+  await signIn("guest", { redirect: true, redirectTo: "/chat" });
+}
 
 export async function saveChatModelAsCookie(model: string) {
   const cookieStore = await cookies();

@@ -39,35 +39,67 @@ import { convertToUIMessages, generateUUID } from "@/lib/utils";
 import { generateTitleFromUserMessage } from "../../actions";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
-/** Converte partes do tipo "document" (PDF) em partes "text" para o modelo. */
+type DocumentPartLike = {
+  type: "document";
+  name?: string;
+  text?: string;
+  documentType?: "pi" | "contestacao";
+};
+
+const DOC_TYPE_ORDER: Record<string, number> = {
+  pi: 0,
+  contestacao: 1,
+  "": 2,
+};
+
+/** Converte partes do tipo "document" (PDF/DOCX) em partes "text" para o modelo. Ordena PI antes de Contestação. */
 function normalizeMessageParts(messages: ChatMessage[]): ChatMessage[] {
   return messages.map((msg) => {
     if (!msg.parts?.length) {
       return msg;
     }
-    const normalizedParts = msg.parts.flatMap((part) => {
-      const p = part as {
-        type?: string;
-        text?: string;
-        name?: string;
-        url?: string;
-        mediaType?: string;
-      };
+    const documentParts = msg.parts.filter(
+      (part) => (part as { type?: string }).type === "document"
+    ) as unknown as DocumentPartLike[];
+    const otherParts = msg.parts.filter(
+      (part) => (part as { type?: string }).type !== "document"
+    );
+
+    const sortedDocs = [...documentParts].sort((a, b) => {
+      const orderA = DOC_TYPE_ORDER[a.documentType ?? ""] ?? 2;
+      const orderB = DOC_TYPE_ORDER[b.documentType ?? ""] ?? 2;
+      return orderA - orderB;
+    });
+
+    const docTextParts = sortedDocs.flatMap((p) => {
+      if (typeof p.text !== "string" || !p.name) {
+        return [];
+      }
+      const label =
+        p.documentType === "pi"
+          ? "Petição Inicial"
+          : p.documentType === "contestacao"
+            ? "Contestação"
+            : "Documento";
+      return [
+        {
+          type: "text" as const,
+          text: `[${label}: ${p.name}]\n\n${p.text}`,
+        },
+      ];
+    });
+
+    const normalizedOther = otherParts.flatMap((part) => {
+      const p = part as { type?: string; text?: string };
       if (p.type === "text" && (p.text?.trim().length ?? 0) === 0) {
         return [];
       }
-      if (p.type === "document" && typeof p.text === "string" && p.name) {
-        return [
-          {
-            type: "text" as const,
-            text: `[Documento: ${p.name}]\n\n${p.text}`,
-          },
-        ];
-      }
       return [part];
     });
+
+    const normalizedParts = [...docTextParts, ...normalizedOther];
     return { ...msg, parts: normalizedParts } as ChatMessage;
   }) as ChatMessage[];
 }
@@ -362,6 +394,18 @@ export async function POST(request: Request) {
       )
     ) {
       return new ChatbotError("bad_request:activate_gateway").toResponse();
+    }
+
+    // API overload (ex.: Anthropic 529)
+    const status =
+      error instanceof Error && "status" in error
+        ? (error as { status?: number }).status
+        : undefined;
+    if (status === 529) {
+      return new ChatbotError(
+        "offline:chat",
+        "Serviço de IA temporariamente sobrecarregado. Tente novamente em instantes."
+      ).toResponse();
     }
 
     console.error("Unhandled error in chat API:", error, { vercelId });

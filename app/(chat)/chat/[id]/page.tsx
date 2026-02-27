@@ -51,6 +51,11 @@ async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
     redirect("/chat");
   }
 
+  const session = await auth();
+  if (!session) {
+    redirect("/chat");
+  }
+
   let chat: Awaited<ReturnType<typeof getChatById>>;
   try {
     chat = await getChatById({ id });
@@ -63,12 +68,6 @@ async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
 
   if (!chat) {
     redirect("/chat");
-  }
-
-  const session = await auth();
-
-  if (!session) {
-    redirect("/api/auth/guest?redirectUrl=/chat");
   }
 
   if (chat.visibility === "private") {

@@ -486,6 +486,9 @@ export const PromptInput = ({
   const filesRef = useRef(files);
   filesRef.current = files;
 
+  // Ignore blob conversion results if user submitted again before conversion finished
+  const submitIdRef = useRef(0);
+
   const openFileDialogLocal = useCallback(() => {
     inputRef.current?.click();
   }, []);
@@ -736,9 +739,13 @@ export const PromptInput = ({
       form.reset();
     }
 
+    submitIdRef.current += 1;
+    const currentSubmitId = submitIdRef.current;
+    const snapshotFiles = files;
+
     // Convert blob URLs to data URLs asynchronously
     Promise.all(
-      files.map(async ({ id, ...item }) => {
+      snapshotFiles.map(async ({ id, ...item }) => {
         if (item.url?.startsWith("blob:")) {
           const dataUrl = await convertBlobUrlToDataUrl(item.url);
           // If conversion failed, keep the original blob URL
@@ -751,6 +758,9 @@ export const PromptInput = ({
       })
     )
       .then((convertedFiles: FileUIPart[]) => {
+        if (submitIdRef.current !== currentSubmitId) {
+          return;
+        }
         try {
           const result = onSubmit({ text, files: convertedFiles }, event);
 

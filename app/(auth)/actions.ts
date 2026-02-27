@@ -67,16 +67,41 @@ export const register = async (
       return { status: "user_exists" } as RegisterActionState;
     }
     await createUser(validatedData.email, validatedData.password);
-    await signIn("credentials", {
+
+    const signInResult = await signIn("credentials", {
       email: validatedData.email,
       password: validatedData.password,
       redirect: false,
     });
 
+    const ok =
+      signInResult === undefined ||
+      (typeof signInResult === "object" &&
+        signInResult !== null &&
+        "ok" in signInResult &&
+        (signInResult as { ok?: boolean }).ok !== false);
+    if (!ok) {
+      if (process.env.NODE_ENV === "development") {
+        // biome-ignore lint/suspicious/noConsole: diagnóstico em dev
+        console.error("[register] signIn retornou falha:", signInResult);
+      }
+      return { status: "failed" } as RegisterActionState;
+    }
+
     return { status: "success" };
   } catch (error) {
     if (error instanceof z.ZodError) {
       return { status: "invalid_data" };
+    }
+
+    if (process.env.NODE_ENV === "development") {
+      // biome-ignore lint/suspicious/noConsole: diagnóstico em dev
+      console.error("[register] erro ao criar conta:", error);
+    }
+
+    const err = error as { code?: string } | undefined;
+    if (err?.code === "23505") {
+      return { status: "user_exists" } as RegisterActionState;
     }
 
     return { status: "failed" };

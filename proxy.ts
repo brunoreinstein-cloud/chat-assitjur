@@ -52,7 +52,15 @@ export async function proxy(request: NextRequest) {
     });
 
     if (!token) {
-      const redirectUrl = encodeURIComponent(request.url);
+      // Não redirecionar no proxy para /chat: deixa a página fazer um único redirect
+      // ao guest. Evita loop (proxy → guest → /chat → proxy → guest).
+      const isChat = pathname === "/chat" || pathname.startsWith("/chat/");
+      if (isChat) {
+        return NextResponse.next();
+      }
+      // Usar apenas path para evitar problemas de cookie com URL absoluta no redirect
+      const path = request.nextUrl.pathname + (request.nextUrl.search || "");
+      const redirectUrl = encodeURIComponent(path || "/chat");
 
       return NextResponse.redirect(
         new URL(`/api/auth/guest?redirectUrl=${redirectUrl}`, request.url)
@@ -79,7 +87,8 @@ export default proxy;
 export const config = {
   matcher: [
     "/",
-    "/chat/:id",
+    "/chat",
+    "/chat/:path*",
     "/api/:path*",
     "/login",
     "/register",

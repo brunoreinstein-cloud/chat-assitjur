@@ -50,10 +50,15 @@ export type ChatMessage = UIMessage<
   ChatTools
 >;
 
+/** Rótulo opcional para documentos (PI/Contestação) no Revisor de Defesas */
+export type DocumentTypeLabel = "pi" | "contestacao";
+
 export type Attachment = {
   name: string;
   url: string;
   contentType: string;
-  /** Texto extraído de PDF; presente quando contentType === "application/pdf" */
+  /** Texto extraído de PDF ou DOCX; presente quando o backend devolve extractedText */
   extractedText?: string;
+  /** Tipo de documento para o Revisor: Petição Inicial ou Contestação */
+  documentType?: DocumentTypeLabel;
 };

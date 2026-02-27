@@ -14,6 +14,7 @@ Sugestões de especialista para alinhar a interface ao fluxo do Revisor (GATE-1 
 - **Sidebar:** Nome "Revisor de Defesas" em vez de "Chatbot".
 - **Metadata:** Título e descrição da aplicação focados no Revisor.
 - **Remoção:** Botão "Deploy with Vercel" do header.
+- **Upload de documentos:** Aceita JPEG, PNG, PDF e DOCX; texto extraído de PDF e DOCX no backend (`pdf-parse`, `mammoth`) e enviado como parte `document` no contexto do chat.
 
 ---
 
@@ -21,7 +22,7 @@ Sugestões de especialista para alinhar a interface ao fluxo do Revisor (GATE-1 
 
 ### Documentos (PI e Contestação)
 
-- **Suporte a PDF (e opcionalmente DOCX):** Hoje o upload aceita só JPEG/PNG. Para o Revisor, permitir PDF (e DOCX) e extrair texto no backend (ex.: `pdf-parse`, `mammoth`) para injetar no contexto. Ajustar `api/files/upload` e o `<input type="file" accept="...">` no cliente.
+- **Upload:** JPEG, PNG, PDF e DOCX já suportados; extração de texto no backend (`pdf-parse` para PDF, `mammoth` para DOCX); texto injetado como parte `document`. Ver `api/files/upload` e `accept` no cliente.
 - **Rótulos por tipo de documento:** Se houver múltiplos anexos, permitir marcar "Petição Inicial" vs "Contestação" (dropdown ou chips) para o agente montar o contexto na ordem correta.
 - **Dica visual:** Abaixo do input, texto curto: "Anexe PDF da PI e da Contestação ou cole o texto abaixo."
 
@@ -32,7 +33,7 @@ Sugestões de especialista para alinhar a interface ao fluxo do Revisor (GATE-1 
 
 ### Acessibilidade e clareza
 
-- **Tooltip no ícone de anexo:** "Anexar documentos (imagens; em breve: PDF)".
+- **Tooltip no ícone de anexo:** "Anexar documentos (imagens, PDF, DOCX)".
 - **Título da página do chat:** Manter `<title>` como "Revisor de Defesas Trabalhistas" (já feito no layout raiz); em `/chat/[id]` pode acrescentar "Chat" ou o número do processo se vier no futuro.
 
 ### Base de conhecimento
@@ -49,7 +50,6 @@ Sugestões de especialista para alinhar a interface ao fluxo do Revisor (GATE-1 
 
 ## Hierarquia de prioridade
 
-1. **Alto:** Suporte a PDF (e extração de texto) para PI e Contestação.
-2. **Médio:** Indicador de etapa (FASE A / FASE B) e botões CONFIRMAR/CORRIGIR no chat.
-3. **Médio:** Rótulos "Petição Inicial" / "Contestação" em anexos.
-4. **Baixo:** Template bancodetese, badge "Base: N itens", refinamentos de artefatos.
+1. **Médio:** Indicador de etapa (FASE A / FASE B) e botões CONFIRMAR/CORRIGIR no chat.
+2. **Médio:** Rótulos "Petição Inicial" / "Contestação" em anexos.
+3. **Baixo:** Template bancodetese, badge "Base: N itens", refinamentos de artefatos.

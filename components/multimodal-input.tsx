@@ -73,6 +73,7 @@ function PureMultimodalInput({
   selectedVisibilityType,
   selectedModelId,
   onModelChange,
+  inputRef: inputRefProp,
 }: {
   chatId: string;
   input: string;
@@ -88,8 +89,10 @@ function PureMultimodalInput({
   selectedVisibilityType: VisibilityType;
   selectedModelId: string;
   onModelChange?: (modelId: string) => void;
+  /** Ref opcional para o textarea (ex.: foco ao clicar CORRIGIR no banner do Revisor) */
+  inputRef?: React.RefObject<HTMLTextAreaElement | null>;
 }) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const { width } = useWindowSize();
 
   const adjustHeight = useCallback(() => {
@@ -156,6 +159,7 @@ function PureMultimodalInput({
       type: "document";
       name: string;
       text: string;
+      documentType?: "pi" | "contestacao";
     };
     type FilePart = {
       type: "file";
@@ -170,6 +174,9 @@ function PureMultimodalInput({
           type: "document",
           name: attachment.name,
           text: attachment.extractedText,
+          ...(attachment.documentType
+            ? { documentType: attachment.documentType }
+            : {}),
         });
       } else {
         attachmentParts.push({
@@ -338,7 +345,7 @@ function PureMultimodalInput({
         )}
 
       <input
-        accept="image/jpeg,image/png,application/pdf"
+        accept="image/jpeg,image/png,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         className="pointer-events-none fixed -top-4 -left-4 size-0.5 opacity-0"
         multiple
         onChange={handleFileChange}
@@ -370,6 +377,19 @@ function PureMultimodalInput({
               <PreviewAttachment
                 attachment={attachment}
                 key={attachment.url}
+                onDocumentTypeChange={
+                  attachment.extractedText != null
+                    ? (documentType) => {
+                        setAttachments((currentAttachments) =>
+                          currentAttachments.map((a) =>
+                            a.url === attachment.url
+                              ? { ...a, documentType }
+                              : a
+                          )
+                        );
+                      }
+                    : undefined
+                }
                 onRemove={() => {
                   setAttachments((currentAttachments) =>
                     currentAttachments.filter((a) => a.url !== attachment.url)
@@ -403,7 +423,14 @@ function PureMultimodalInput({
             minHeight={44}
             onChange={handleInput}
             placeholder="Cole o texto da Petição Inicial e da Contestação, ou descreva o caso e anexe documentos..."
-            ref={textareaRef}
+            ref={(el) => {
+              textareaRef.current = el;
+              if (inputRefProp) {
+                (
+                  inputRefProp as React.MutableRefObject<HTMLTextAreaElement | null>
+                ).current = el;
+              }
+            }}
             rows={1}
             value={input}
           />
@@ -438,6 +465,9 @@ function PureMultimodalInput({
           )}
         </PromptInputToolbar>
       </PromptInput>
+      <p className="text-muted-foreground text-xs">
+        Anexe PDF da PI e da Contestação ou cole o texto abaixo.
+      </p>
     </div>
   );
 }
@@ -486,6 +516,8 @@ function PureAttachmentsButton({
         event.preventDefault();
         fileInputRef.current?.click();
       }}
+      title="Anexar documentos (imagens, PDF, DOCX)"
+      type="button"
       variant="ghost"
     >
       <PaperclipIcon size={14} style={{ width: 14, height: 14 }} />

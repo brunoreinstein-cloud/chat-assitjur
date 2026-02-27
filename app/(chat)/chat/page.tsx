@@ -1,5 +1,4 @@
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { auth } from "@/app/(auth)/auth";
@@ -7,6 +6,7 @@ import { Chat } from "@/components/chat";
 import { DataStreamHandler } from "@/components/data-stream-handler";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { generateUUID } from "@/lib/utils";
+import { GuestGate } from "./guest-gate";
 
 export default function NewChatRoute() {
   return (
@@ -19,7 +19,7 @@ export default function NewChatRoute() {
 async function NewChatPage() {
   const session = await auth();
   if (!session) {
-    redirect("/api/auth/guest?redirectUrl=/chat");
+    return <GuestGate />;
   }
 
   const cookieStore = await cookies();

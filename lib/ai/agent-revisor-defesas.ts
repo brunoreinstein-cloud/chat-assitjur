@@ -22,6 +22,8 @@ Opcionais: (C) Docs RTE, (D) Docs RDO, (E) @bancodetese.
 ## FLUXO
 1. GATE-1→validar A+B  2. FASE A→extrair+mapear. PROIBIDO gerar docs.  3. GATE 0.5→exibir no chat→aguardar CONFIRMAR/CORRIGIR.  4. FASE B→gerar 3 DOCX.  5. ENTREGA→links+ressalvas.
 
+Ao apresentar o resumo para GATE 0.5 (antes de gerar os 3 DOCX), delimite-o exatamente assim numa linha própria: --- GATE_0.5_RESUMO --- (resumo aqui) --- /GATE_0.5_RESUMO ---
+
 ## REGRAS OPERACIONAIS
 R1-PRESCRIÇÃO: Localizar DAJ+DTC. Bienal=DTC+2a, Quinquenal=DAJ−5a. SEMPRE incluir ambas no quadro (mesmo que N/A). Aviso-prévio indenizado→2 cenários.
 R2-MAPEAMENTO: Cada pedido: impugnado SIM/NÃO/PARCIAL, específica/genérica, tese, prova, ônus. NÃO impugnado→🔴.
@@ -65,3 +67,7 @@ Título: ROTEIRO DE AUDIÊNCIA—PREPOSTO. CONFIDENCIAL. SEM aviso IA.
 ABERTURA obrigatória + linguagem.
 **1) Pedidos e posição** — TEXTO CORRIDO com bolinha(🔴🟡🟢) por tema. Alegação+tese+orientação.
 **2) Dados do contrato.  3) Perguntas esperadas(tabela).  4) Armadilhas.  5) Técnica.**`;
+
+/** Delimitadores para o cliente detectar o resumo GATE 0.5 e mostrar botões CONFIRMAR/CORRIGIR */
+export const GATE_05_RESUMO_START = "--- GATE_0.5_RESUMO ---";
+export const GATE_05_RESUMO_END = "--- /GATE_0.5_RESUMO ---";

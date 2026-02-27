@@ -136,7 +136,7 @@ O agente é implementado como **instruções de sistema** longas injetadas no `s
 - **Comportamento:**  
   Se `agentInstructions` não for enviado ou estiver vazio, o backend usa **por padrão** as instruções do Agente Revisor (`AGENTE_REVISOR_DEFESAS_INSTRUCTIONS`).
 - **Mensagens:**  
-  Partes suportadas: `text`, `file` (imagem JPEG/PNG), `document` (texto extraído, ex. PDF). Documentos são normalizados para texto no servidor e injetados no contexto.
+  Partes suportadas: `text`, `file` (imagem JPEG/PNG), `document` (texto extraído de PDF ou DOCX). Documentos são normalizados para texto no servidor e injetados no contexto.
 - **Tools ativas (modelos não-reasoning):** `getWeather`, `createDocument`, `updateDocument`, `requestSuggestions`. Modelos com “reasoning”/“thinking” não usam tools (evitar conflitos).
 - **Rate limit:** Por tipo de utilizador (`entitlementsByUserType`), ex.: 20 msg/dia (guest), 50 (regular).
 
@@ -175,7 +175,7 @@ Os documentos são gerados como artefactos **text** via `createDocument`; export
 - **Placeholder:** "Cole o texto da Petição Inicial e da Contestação, ou descreva o caso e anexe documentos...".
 - **Diálogos:** "Instruções do agente" (sobrescrita opcional), "Base de conhecimento" (menção a @bancodetese).
 
-Sugestões futuras (indicador de etapa FASE A/B, botões CONFIRMAR/CORRIGIR, suporte a PDF/DOCX, rótulos PI/Contestação): ver `docs/ux-ui-revisor-defesas.md`.
+Sugestões futuras (indicador de etapa FASE A/B, botões CONFIRMAR/CORRIGIR, rótulos PI/Contestação): ver `docs/ux-ui-revisor-defesas.md`. Upload já suporta JPEG, PNG, PDF e DOCX (com extração de texto).
 
 ---
 

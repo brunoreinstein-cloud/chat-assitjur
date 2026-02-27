@@ -3,6 +3,7 @@ import type { NextAuthConfig } from "next-auth";
 const THIRTY_DAYS_SECONDS = 30 * 24 * 60 * 60;
 
 export const authConfig = {
+  trustHost: true,
   pages: {
     signIn: "/login",
     newUser: "/chat",

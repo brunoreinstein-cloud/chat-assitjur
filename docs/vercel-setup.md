@@ -56,6 +56,27 @@ Num workflow (GitHub Actions, etc.), após o deploy ou num job separado, corre `
 
 ---
 
+## 2.1. Acesso em desenvolvimento local (/chat e guest)
+
+Para aceder ao chat em local sem erros 500 ou redirects que falham:
+
+1. **Servidor a correr:** `pnpm dev` (app em **http://localhost:3300**).
+2. **URL no browser:** Usa **http://localhost:3300** (evita **http://127.0.0.1:3300** para o cookie de sessão coincidir com `AUTH_URL`).
+3. **.env.local:** Define `AUTH_URL=http://localhost:3300` (ver `.env.example`). Sem isto, a rota `/api/auth/guest` pode devolver 500.
+4. **Base de dados:** `POSTGRES_URL` definida e migrações aplicadas (`pnpm db:migrate`). O guest cria um utilizador na BD.
+
+Ao abrir **http://localhost:3300/chat** sem sessão, a página redireciona automaticamente para guest e depois de volta ao chat. Se continuar a não conseguir aceder, verifica o terminal do `pnpm dev` por erros `[guest] sign-in failed:`.
+
+### Erro "getaddrinfo ENOENT" ou "Failed to get user by email"
+
+- **getaddrinfo ENOENT** ao correr `pnpm db:migrate` ou ao usar o chat/registo: o sistema não consegue resolver o host da `POSTGRES_URL` (ex.: `db.xxx.supabase.co`). Verifica:
+  1. Ligação à Internet e DNS a funcionar.
+  2. `POSTGRES_URL` em `.env.local` sem typos; no Supabase usar a connection string do pooler (porta **6543**).
+  3. Se estiveres atrás de proxy/VPN, testar noutra rede ou desativar temporariamente.
+- **Migrações a saltar:** Antes a variável `VERCEL` no `.env.local` (ex.: após `vercel env pull`) fazia `pnpm db:migrate` saltar. Isso foi corrigido: em local as migrações correm; só saltam no build na Vercel. Volta a correr `pnpm db:migrate` e confirma que não há erro de rede.
+
+---
+
 ## 3. Revisão pré-deploy
 
 Antes de fazer deploy, corre a revisão automática (com `.env.local` preenchido ou após `pnpm run vercel:env:prod`):
@@ -122,6 +143,22 @@ Se nos logs aparecer **`[auth][error] CredentialsSignin`**:
 1. Confirma se em produção já existe um utilizador na base (ou se usas guest). No **SQL Editor do Supabase** (Dashboard → SQL Editor), por exemplo: `SELECT id, email FROM "User" LIMIT 100;` — se a tabela estiver vazia, não há utilizadores.
 2. Se não houver utilizadores: regista um novo na app em produção (página **Registo**) ou usa **"Continuar como visitante"** e volta a tentar.
 3. Se já houver utilizadores: confirma que o email/palavra-passe que estás a usar são os dessa base (não os de desenvolvimento). Alternativa: usar Drizzle Studio com `POSTGRES_URL` de produção (`pnpm run vercel:env:prod` e depois `pnpm run db:studio`) para inspecionar a tabela `User`.
+
+### Falha ao enviar o ficheiro (upload)
+
+**Mensagem:** "Configure Supabase Storage (NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) ou BLOB_READ_WRITE_TOKEN no .env.local."
+
+O upload tenta primeiro **Supabase Storage** e, se falhar, **Vercel Blob**. O erro aparece quando ambos falham.
+
+**O que fazer:**
+
+1. **Configurar uma das opções (local: `.env.local`; Vercel: Environment Variables):**
+   - **Supabase Storage:** define `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_ROLE_KEY`. Cria o bucket **chat-files** no projeto: Supabase Dashboard → **Storage** → **New bucket** → nome `chat-files`, público. Ou envia a config do projeto: `pnpm run supabase:config-push` (aplica o bucket definido em `supabase/config.toml`).
+   - **Vercel Blob (alternativa):** define `BLOB_READ_WRITE_TOKEN` (Vercel → Storage → Blob → criar e copiar o token).
+
+2. **Se já tens as variáveis Supabase:** o bucket pode não existir. Cria o bucket `chat-files` em Storage (público) ou corre `pnpm run supabase:config-push`. Reinicia o servidor de desenvolvimento após alterar `.env.local`.
+
+3. **Na Vercel:** garante que `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` estão definidas no ambiente (Production/Preview) e faz redeploy.
 
 ---
 

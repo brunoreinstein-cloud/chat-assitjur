@@ -77,7 +77,8 @@ export default function Page() {
             className="mt-4 w-full"
             onClick={async () => {
               await signOut({ redirect: false });
-              globalThis.window.location.href = "/api/auth/guest?redirectUrl=/chat";
+              globalThis.window.location.href =
+                "/api/auth/guest?redirectUrl=/chat";
             }}
             type="button"
             variant="outline"

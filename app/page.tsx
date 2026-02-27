@@ -11,7 +11,7 @@ export default function HomePage() {
             Revisor de Defesas Trabalhistas
           </span>
           <nav className="flex items-center gap-2">
-            <Button asChild variant="ghost" size="sm">
+            <Button asChild size="sm" variant="ghost">
               <Link href="/login">Entrar</Link>
             </Button>
             <Button asChild size="sm">

@@ -12,11 +12,13 @@ const filePartSchema = z.object({
   url: z.string().url(),
 });
 
-/** Parte com texto extraído de PDF (PI, Contestação, etc.). Texto vazio é aceite (ex.: ficheiro sem extração). */
+/** Parte com texto extraído de PDF/DOCX (PI, Contestação, etc.). Texto vazio é aceite (ex.: ficheiro sem extração). */
 const documentPartSchema = z.object({
   type: z.enum(["document"]),
   name: z.string().min(1).max(200),
   text: z.string().max(500_000),
+  /** Rótulo para o Revisor: "pi" = Petição Inicial, "contestacao" = Contestação */
+  documentType: z.enum(["pi", "contestacao"]).optional(),
 });
 
 const partSchema = z.union([

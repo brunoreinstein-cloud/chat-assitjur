@@ -28,6 +28,7 @@ import { Artifact } from "./artifact";
 import { useDataStream } from "./data-stream-provider";
 import { Messages } from "./messages";
 import { MultimodalInput } from "./multimodal-input";
+import { RevisorPhaseBanner } from "./revisor-phase-banner";
 import { getChatHistoryPaginationKey } from "./sidebar-history";
 import { toast } from "./toast";
 import type { VisibilityType } from "./visibility-selector";
@@ -208,6 +209,7 @@ export function Chat({
 
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const isArtifactVisible = useArtifactSelector((state) => state.isVisible);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   useAutoResume({
     autoResume,
@@ -242,12 +244,24 @@ export function Chat({
           votes={votes}
         />
 
+        {!isReadonly && (
+          <RevisorPhaseBanner
+            inputRef={inputRef}
+            isReadonly={isReadonly}
+            messages={messages}
+            sendMessage={sendMessage}
+            setInput={setInput}
+            status={status}
+          />
+        )}
+
         <div className="sticky bottom-0 z-1 mx-auto flex w-full max-w-4xl gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
           {!isReadonly && (
             <MultimodalInput
               attachments={attachments}
               chatId={id}
               input={input}
+              inputRef={inputRef}
               messages={messages}
               onModelChange={setCurrentModelId}
               selectedModelId={currentModelId}
