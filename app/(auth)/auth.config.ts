@@ -5,7 +5,7 @@ const THIRTY_DAYS_SECONDS = 30 * 24 * 60 * 60;
 export const authConfig = {
   pages: {
     signIn: "/login",
-    newUser: "/",
+    newUser: "/chat",
   },
   session: {
     maxAge: THIRTY_DAYS_SECONDS,

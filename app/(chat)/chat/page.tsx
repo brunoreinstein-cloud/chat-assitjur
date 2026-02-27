@@ -1,11 +1,14 @@
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
+
+import { auth } from "@/app/(auth)/auth";
 import { Chat } from "@/components/chat";
 import { DataStreamHandler } from "@/components/data-stream-handler";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { generateUUID } from "@/lib/utils";
 
-export default function Page() {
+export default function NewChatRoute() {
   return (
     <Suspense fallback={<div className="flex h-dvh" />}>
       <NewChatPage />
@@ -14,6 +17,11 @@ export default function Page() {
 }
 
 async function NewChatPage() {
+  const session = await auth();
+  if (!session) {
+    redirect("/api/auth/guest?redirectUrl=/chat");
+  }
+
   const cookieStore = await cookies();
   const modelIdFromCookie = cookieStore.get("chat-model");
   const id = generateUUID();

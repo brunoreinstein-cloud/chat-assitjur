@@ -48,7 +48,7 @@ async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
   if (id === "new" || !isUUID(id)) {
-    redirect("/");
+    redirect("/chat");
   }
 
   let chat: Awaited<ReturnType<typeof getChatById>>;
@@ -62,13 +62,13 @@ async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   }
 
   if (!chat) {
-    redirect("/");
+    redirect("/chat");
   }
 
   const session = await auth();
 
   if (!session) {
-    redirect("/api/auth/guest");
+    redirect("/api/auth/guest?redirectUrl=/chat");
   }
 
   if (chat.visibility === "private") {

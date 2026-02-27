@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const redirectUrl = searchParams.get("redirectUrl") || "/";
+  const redirectUrl = searchParams.get("redirectUrl") || "/chat";
 
   try {
     const token = await getToken({
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
     });
 
     if (token) {
-      return NextResponse.redirect(new URL("/", request.url));
+      return NextResponse.redirect(new URL(redirectUrl, request.url));
     }
 
     return signIn("guest", { redirect: true, redirectTo: redirectUrl });

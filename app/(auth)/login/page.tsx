@@ -31,7 +31,8 @@ export default function Page() {
     if (state.status === "failed") {
       toast({
         type: "error",
-        description: "Credenciais inválidas!",
+        description:
+          "Credenciais inválidas. Se ainda não tem conta, cadastre-se primeiro.",
       });
     } else if (state.status === "invalid_data") {
       toast({
@@ -42,6 +43,7 @@ export default function Page() {
       setIsSuccessful(true);
       updateSession();
       router.refresh();
+      router.push("/chat");
     }
   }, [state.status]);
 
@@ -56,7 +58,7 @@ export default function Page() {
         <div className="flex flex-col items-center justify-center gap-2 px-4 text-center sm:px-16">
           <h3 className="font-semibold text-xl dark:text-zinc-50">Entrar</h3>
           <p className="text-gray-500 text-sm dark:text-zinc-400">
-            Use seu e-mail e senha para entrar
+            Use seu e-mail e senha. Primeira vez? Cadastre-se abaixo.
           </p>
         </div>
         <AuthForm action={handleSubmit} defaultEmail={email}>
