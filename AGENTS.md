@@ -111,6 +111,8 @@ pnpm run vercel:env   # puxar env da Vercel
 pnpm test             # Playwright E2E (PLAYWRIGHT=True)
 ```
 
+Deploy na Vercel: [docs/vercel-setup.md](docs/vercel-setup.md) (checklist, env, migrações) e [docs/vercel-cli.md](docs/vercel-cli.md).
+
 ---
 
 ## O que agentes devem fazer

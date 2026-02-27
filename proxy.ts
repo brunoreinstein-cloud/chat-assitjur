@@ -13,10 +13,10 @@ function shouldShowConfigRequired(pathname: string): boolean {
 }
 
 /**
- * Middleware: redirecionamento para /config-required na Vercel quando faltam
+ * Proxy (Next.js 16): redirecionamento para /config-required na Vercel quando faltam
  * AUTH_SECRET ou POSTGRES_URL; auth de visitantes (guest) e proteção de rotas.
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (shouldShowConfigRequired(pathname)) {
@@ -70,7 +70,7 @@ export async function middleware(request: NextRequest) {
   }
 }
 
-export default middleware;
+export default proxy;
 
 export const config = {
   matcher: [
