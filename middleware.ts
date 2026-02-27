@@ -2,30 +2,30 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { guestRegex, isDevelopmentEnvironment } from "./lib/constants";
 
-export async function proxy(request: NextRequest) {
+function redirectToConfigRequired(request: NextRequest) {
+  return NextResponse.rewrite(new URL("/config-required", request.url));
+}
+
+function shouldShowConfigRequired(pathname: string): boolean {
+  if (pathname === "/config-required") return false;
+  if (!process.env.VERCEL) return false;
+  return !process.env.POSTGRES_URL || !process.env.AUTH_SECRET;
+}
+
+/**
+ * Middleware: redirecionamento para /config-required na Vercel quando faltam
+ * AUTH_SECRET ou POSTGRES_URL; auth de visitantes (guest) e proteção de rotas.
+ */
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  /*
-   * Na Vercel, sem POSTGRES_URL ou AUTH_SECRET, mostrar página de configuração
-   * em vez de deixar a app devolver 500.
-   */
-  if (
-    process.env.VERCEL &&
-    (!process.env.POSTGRES_URL || !process.env.AUTH_SECRET) &&
-    pathname !== "/config-required"
-  ) {
-    return NextResponse.rewrite(new URL("/config-required", request.url));
+  if (shouldShowConfigRequired(pathname)) {
+    return redirectToConfigRequired(request);
   }
-
-  /*
-   * Não chamar getToken sem AUTH_SECRET (ex.: Edge pode não ter a variável).
-   * Redirecionar para config-required em vez de causar 500.
-   */
   if (!process.env.AUTH_SECRET && pathname !== "/config-required") {
-    if (process.env.VERCEL) {
-      return NextResponse.rewrite(new URL("/config-required", request.url));
-    }
-    return NextResponse.next();
+    return process.env.VERCEL
+      ? redirectToConfigRequired(request)
+      : NextResponse.next();
   }
 
   /*
@@ -64,13 +64,13 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   } catch {
     if (process.env.VERCEL && pathname !== "/config-required") {
-      return NextResponse.rewrite(new URL("/config-required", request.url));
+      return redirectToConfigRequired(request);
     }
     return NextResponse.next();
   }
 }
 
-export default proxy;
+export default middleware;
 
 export const config = {
   matcher: [
