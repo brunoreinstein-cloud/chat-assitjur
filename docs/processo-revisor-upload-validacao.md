@@ -108,7 +108,7 @@ Se o upload falhar, a interface mostra uma mensagem de erro (toast). Causas comu
 | Sintoma | Causa provável | O que fazer |
 | ------- | -------------- | ----------- |
 | «Não autorizado» | Sessão inexistente ou expirada | Inicie sessão e tente novamente. |
-| «O arquivo deve ter no máximo 20MB» | Ficheiro demasiado grande (validação no servidor) | Use um ficheiro &lt; 20MB ou divida o conteúdo. |
+| «O arquivo deve ter no máximo 100 MB» | Ficheiro demasiado grande (validação no servidor) | Use um ficheiro &lt; 100 MB ou divida o conteúdo. |
 | «Ficheiro demasiado grande...» (413) | Body do request &gt; 4,5 MB (limite Vercel) | Ficheiros &gt; 4,5 MB usam **upload direto** cliente → Vercel Blob (automático se `BLOB_READ_WRITE_TOKEN` estiver configurado). Caso contrário, use um ficheiro &lt; 4,5 MB. |
 | «Tipos aceitos: JPEG, PNG, PDF, DOC ou DOCX» | Tipo de ficheiro não suportado (ou MIME incorreto) | Envie apenas JPEG, PNG, PDF, DOC ou DOCX. O servidor aceita também por extensão quando o browser envia tipo vazio (ex.: em produção). |
 | «Falha ao enviar o ficheiro para o Storage» / «Bucket not found» | Supabase Storage não configurado ou bucket em falta | Defina `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` no `.env.local` e crie o bucket (ex.: `chat-files`) em Supabase Dashboard → Storage, ou execute `pnpm run supabase:config-push`. |

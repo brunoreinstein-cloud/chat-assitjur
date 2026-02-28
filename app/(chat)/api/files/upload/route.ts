@@ -23,7 +23,7 @@ const ACCEPTED_DOC_TYPE = "application/msword" as const;
 const ACCEPTED_DOCX_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document" as const;
 const OCTET_STREAM = "application/octet-stream";
-const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
 /** Extensões aceites para fallback quando o browser envia type vazio ou octet-stream (comum em produção). */
 const ACCEPTED_EXTENSIONS = /\.(docx?|pdf|jpe?g|png)$/i;
@@ -109,7 +109,7 @@ const FileSchema = z.object({
   file: z
     .instanceof(Blob)
     .refine((file) => file.size <= MAX_FILE_SIZE, {
-      message: "O arquivo deve ter no máximo 20MB",
+      message: "O arquivo deve ter no máximo 100 MB",
     })
     .refine(isAcceptedFileType, {
       message: "Tipos aceitos: JPEG, PNG, PDF, DOC ou DOCX",
@@ -545,7 +545,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "Erro ao processar o upload. Verifique o tamanho e o tipo do ficheiro (JPEG, PNG, PDF, DOC ou DOCX até 20MB).",
+          "Erro ao processar o upload. Verifique o tamanho e o tipo do ficheiro (JPEG, PNG, PDF, DOC ou DOCX até 100 MB).",
         ...(detail ? { detail } : {}),
       },
       { status: 500 }
