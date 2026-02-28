@@ -54,6 +54,38 @@ export const fetcher = async (url: string) => {
   return response.json();
 };
 
+const DOCUMENT_FETCH_MAX_RETRIES = 4;
+const DOCUMENT_FETCH_INITIAL_MS = 300;
+
+/**
+ * Fetcher para GET /api/document com retry em 404 (documento pode ainda não estar na BD após criação pela tool).
+ */
+export const documentFetcher = async (url: string): Promise<unknown> => {
+  const isDocumentGet =
+    url.includes("/api/document") &&
+    url.includes("id=") &&
+    !url.includes("timestamp=");
+  let lastResponse: Response | null = null;
+
+  for (let attempt = 0; attempt < (isDocumentGet ? DOCUMENT_FETCH_MAX_RETRIES : 1); attempt++) {
+    lastResponse = await fetch(url);
+    if (lastResponse.ok) {
+      return lastResponse.json();
+    }
+    if (lastResponse.status !== 404 || !isDocumentGet) {
+      const { code, cause } = await parseErrorBody(lastResponse);
+      throw new ChatbotError(code as ErrorCode, cause);
+    }
+    if (attempt < DOCUMENT_FETCH_MAX_RETRIES - 1) {
+      const delayMs = DOCUMENT_FETCH_INITIAL_MS * 2 ** attempt;
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+
+  const { code, cause } = await parseErrorBody(lastResponse!);
+  throw new ChatbotError(code as ErrorCode, cause);
+};
+
 export async function fetchWithErrorHandlers(
   input: RequestInfo | URL,
   init?: RequestInit,

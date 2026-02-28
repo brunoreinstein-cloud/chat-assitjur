@@ -19,7 +19,7 @@ import { textArtifact } from "@/artifacts/text/client";
 import { useArtifact } from "@/hooks/use-artifact";
 import type { Document, Vote } from "@/lib/db/schema";
 import type { Attachment, ChatMessage } from "@/lib/types";
-import { fetcher } from "@/lib/utils";
+import { documentFetcher } from "@/lib/utils";
 import { ArtifactActions } from "./artifact-actions";
 import { ArtifactCloseButton } from "./artifact-close-button";
 import { ArtifactMessages } from "./artifact-messages";
@@ -104,7 +104,7 @@ function PureArtifact({
     artifact.documentId !== "init" && artifact.status !== "streaming"
       ? `/api/document?id=${artifact.documentId}`
       : null,
-    fetcher
+    documentFetcher
   );
 
   const [mode, setMode] = useState<"edit" | "diff">("edit");
@@ -444,14 +444,14 @@ function PureArtifact({
             }
           >
             <div className="flex min-h-0 flex-1 flex-col">
-              <div className="flex shrink-0 flex-row items-start justify-between gap-2 border-b border-border p-3">
+              <div className="flex shrink-0 flex-row items-start justify-between gap-3 border-b border-border px-4 py-3">
                 <div className="flex min-w-0 flex-1 flex-row items-start gap-3">
                   <ArtifactCloseButton />
 
                   <div className="min-w-0 flex-1">
-                    <div className="truncate font-medium" title={artifact.title}>
+                    <h2 className="line-clamp-2 break-words font-medium leading-tight" title={artifact.title}>
                       {artifact.title}
-                    </div>
+                    </h2>
 
                     {isContentDirty ? (
                       <div className="text-muted-foreground text-sm">
@@ -484,7 +484,7 @@ function PureArtifact({
                 />
               </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-background dark:bg-muted">
+              <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/40">
               <artifactDefinition.content
                 content={
                   isCurrentVersion

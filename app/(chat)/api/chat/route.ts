@@ -32,14 +32,21 @@ import {
   updateChatTitleById,
   updateMessage,
 } from "@/lib/db/queries";
-import type { DBMessage } from "@/lib/db/schema";
 import { ChatbotError } from "@/lib/errors";
 import type { ChatMessage } from "@/lib/types";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
 import { generateTitleFromUserMessage } from "../../actions";
 import { type PostRequestBody, postRequestBodySchema } from "./schema";
 
+/** Limite de execução da rota (segundos). A duração total do pedido é dominada pelo streaming do modelo; aumentar em vercel.json se precisar de respostas muito longas. */
 export const maxDuration = 120;
+
+const isDev = process.env.NODE_ENV === "development";
+function logTiming(label: string, ms: number): void {
+  if (isDev) {
+    console.info(`[chat-timing] ${label}: ${Math.round(ms)}ms`);
+  }
+}
 
 type DocumentPartLike = {
   type: "document";
@@ -58,6 +65,9 @@ const DOC_TYPE_ORDER: Record<string, number> = {
 const MAX_CHARS_PER_DOCUMENT = 35_000;
 /** Máximo total de caracteres de documentos numa única mensagem. */
 const MAX_TOTAL_DOC_CHARS = 100_000;
+
+/** Últimas N mensagens a carregar para contexto (reduz BD e tamanho do prompt; a qualidade mantém-se com contexto recente). */
+const CHAT_MESSAGES_LIMIT = 80;
 
 /** Converte partes do tipo "document" (PDF/DOCX) em partes "text" para o modelo. Ordena PI antes de Contestação. Trunca texto para não exceder o limite do modelo. */
 function normalizeMessageParts(messages: ChatMessage[]): ChatMessage[] {
@@ -169,6 +179,8 @@ export async function POST(request: Request) {
     );
   }
 
+  const requestStart = Date.now();
+
   try {
     const {
       id,
@@ -201,35 +213,53 @@ export async function POST(request: Request) {
       }
     }
 
+    const t0 = Date.now();
     const session = await auth();
+    logTiming("auth", Date.now() - t0);
 
     if (!session?.user) {
       return new ChatbotError("unauthorized:chat").toResponse();
     }
 
     const userType: UserType = session.user.type;
+    const isToolApprovalFlow = Boolean(messages);
 
-    const messageCount = await getMessageCountByUserId({
-      id: session.user.id,
-      differenceInHours: 24,
-    });
+    const t1 = Date.now();
+    const [messageCount, chat, messagesFromDb, knowledgeDocsResult] =
+      await Promise.all([
+        getMessageCountByUserId({
+          id: session.user.id,
+          differenceInHours: 24,
+        }),
+        getChatById({ id }),
+        getMessagesByChatId({ id, limit: CHAT_MESSAGES_LIMIT }),
+        knowledgeDocumentIds?.length && session.user.id
+          ? getKnowledgeDocumentsByIds({
+              ids: knowledgeDocumentIds,
+              userId: session.user.id,
+            })
+          : Promise.resolve([] as Awaited<
+              ReturnType<typeof getKnowledgeDocumentsByIds>
+            >),
+      ]);
+    logTiming("getMessageCount + getChat + getMessages + knowledge (paralelo)", Date.now() - t1);
 
-    if (messageCount > entitlementsByUserType[userType].maxMessagesPerDay) {
+    if (
+      process.env.NODE_ENV !== "development" &&
+      messageCount > entitlementsByUserType[userType].maxMessagesPerDay
+    ) {
       return new ChatbotError("rate_limit:chat").toResponse();
     }
 
-    const isToolApprovalFlow = Boolean(messages);
-
-    const chat = await getChatById({ id });
-    let messagesFromDb: DBMessage[] = [];
     let titlePromise: Promise<string> | null = null;
 
     if (chat) {
       if (chat.userId !== session.user.id) {
         return new ChatbotError("forbidden:chat").toResponse();
       }
-      if (!isToolApprovalFlow) {
-        messagesFromDb = await getMessagesByChatId({ id });
+      // messagesFromDb já vem do Promise.all (últimas CHAT_MESSAGES_LIMIT mensagens quando chat existe)
+      if (isToolApprovalFlow) {
+        // No tool-approval flow o cliente envia as mensagens; não usamos as da BD
       }
     } else if (message?.role === "user") {
       await saveChat({
@@ -243,9 +273,11 @@ export async function POST(request: Request) {
       });
     }
 
+    const effectiveMessagesFromDb = chat && !isToolApprovalFlow ? messagesFromDb : [];
+
     const uiMessages = isToolApprovalFlow
       ? (messages as ChatMessage[])
-      : [...convertToUIMessages(messagesFromDb), message as ChatMessage];
+      : [...convertToUIMessages(effectiveMessagesFromDb), message as ChatMessage];
 
     const { longitude, latitude, city, country } = geolocation(request);
 
@@ -256,18 +288,15 @@ export async function POST(request: Request) {
       country,
     };
 
-    let knowledgeContext: string | undefined;
-    if (knowledgeDocumentIds?.length && session.user.id) {
-      const knowledgeDocs = await getKnowledgeDocumentsByIds({
-        ids: knowledgeDocumentIds,
-        userId: session.user.id,
-      });
-      knowledgeContext = knowledgeDocs
-        .map((doc) => `--- ${doc.title} ---\n${doc.content}`)
-        .join("\n\n");
-    }
+    const knowledgeContext =
+      knowledgeDocsResult.length > 0
+        ? knowledgeDocsResult
+            .map((doc) => `--- ${doc.title} ---\n${doc.content}`)
+            .join("\n\n")
+        : undefined;
 
     if (message?.role === "user") {
+      const t4 = Date.now();
       await saveMessages({
         messages: [
           {
@@ -280,18 +309,25 @@ export async function POST(request: Request) {
           },
         ],
       });
+      logTiming("saveMessages(user)", Date.now() - t4);
     }
 
     const isReasoningModel =
       selectedChatModel.includes("reasoning") ||
       selectedChatModel.includes("thinking");
 
+    const t5 = Date.now();
     const normalizedMessages = normalizeMessageParts(uiMessages);
     const modelMessages = await convertToModelMessages(normalizedMessages);
+    logTiming("normalizeMessageParts + convertToModelMessages", Date.now() - t5);
+
+    const preStreamEnd = Date.now();
+    logTiming("preStream (total antes do stream)", preStreamEnd - requestStart);
 
     const stream = createUIMessageStream({
       originalMessages: isToolApprovalFlow ? uiMessages : undefined,
       execute: async ({ writer: dataStream }) => {
+        logTiming("execute started (modelo + tools a correr)", Date.now() - requestStart);
         const effectiveAgentInstructions =
           agentInstructions?.trim() || AGENTE_REVISOR_DEFESAS_INSTRUCTIONS;
 
@@ -342,7 +378,10 @@ export async function POST(request: Request) {
       },
       generateId: generateUUID,
       onFinish: async ({ messages: finishedMessages }) => {
+        const onFinishStart = Date.now();
+        logTiming("onFinish (stream terminou) total request", onFinishStart - requestStart);
         if (isToolApprovalFlow) {
+          const tSaveTool = Date.now();
           for (const finishedMsg of finishedMessages) {
             const existingMsg = uiMessages.find((m) => m.id === finishedMsg.id);
             if (existingMsg) {
@@ -365,7 +404,9 @@ export async function POST(request: Request) {
               });
             }
           }
+          logTiming("saveMessages(tool-flow) em onFinish", Date.now() - tSaveTool);
         } else if (finishedMessages.length > 0) {
+          const tSave = Date.now();
           await saveMessages({
             messages: finishedMessages.map((currentMessage) => ({
               id: currentMessage.id,
@@ -376,13 +417,23 @@ export async function POST(request: Request) {
               chatId: id,
             })),
           });
+          logTiming("saveMessages(assistant) em onFinish", Date.now() - tSave);
         }
+        logTiming("onFinish completo", Date.now() - onFinishStart);
       },
       onError: (error: unknown) => {
         const fallback =
           "Ocorreu um erro ao processar o pedido. Tente novamente.";
         const err =
           error instanceof Error ? error : new Error(String(error));
+        const isInsufficientFunds = /insufficient\s+funds/i.test(err.message);
+        if (isInsufficientFunds) {
+          const hint =
+            "A conta Vercel não tem créditos para o AI Gateway. Adicione créditos em Vercel Dashboard → AI (top-up) ou use uma chave de API direta do fornecedor (ex.: ANTHROPIC_API_KEY) em desenvolvimento. Ver docs/vercel-setup.md.";
+          return process.env.NODE_ENV === "development"
+            ? `${hint} (dev: ${err.message})`
+            : hint;
+        }
         if (process.env.NODE_ENV === "development") {
           return `${fallback} (dev: ${err.message})`;
         }

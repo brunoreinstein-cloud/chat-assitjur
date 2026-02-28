@@ -2,6 +2,7 @@ import { auth } from "@/app/(auth)/auth";
 import { getChatById, getVotesByChatId, voteMessage } from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
 
+/** GET: lista votos do chat. Resposta em cache 2s para reduzir refetch; lentidão ~2s pode ser cold start ou auth(). */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const chatId = searchParams.get("chatId");
@@ -31,7 +32,12 @@ export async function GET(request: Request) {
 
   const votes = await getVotesByChatId({ id: chatId });
 
-  return Response.json(votes, { status: 200 });
+  return Response.json(votes, {
+    status: 200,
+    headers: {
+      "Cache-Control": "private, max-age=2",
+    },
+  });
 }
 
 export async function PATCH(request: Request) {

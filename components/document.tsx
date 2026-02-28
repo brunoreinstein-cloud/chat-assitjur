@@ -37,7 +37,7 @@ function PureDocumentToolResult({
 
   return (
     <button
-      className="flex w-fit cursor-pointer flex-row items-start gap-3 rounded-xl border bg-background px-3 py-2"
+      className="flex max-w-full cursor-pointer flex-row items-start gap-3 rounded-xl border bg-background px-3 py-2"
       onClick={(event) => {
         if (isReadonly) {
           toast.error(
@@ -76,8 +76,9 @@ function PureDocumentToolResult({
           <MessageIcon />
         ) : null}
       </div>
-      <div className="text-left">
-        {`${getActionText(type, "past")} "${result.title}"`}
+      <div className="min-w-0 flex-1 truncate text-left" title={result.title}>
+        <span className="font-medium text-muted-foreground">{getActionText(type, "past")}</span>
+        <span className="ml-1 truncate"> {result.title}</span>
       </div>
     </button>
   );

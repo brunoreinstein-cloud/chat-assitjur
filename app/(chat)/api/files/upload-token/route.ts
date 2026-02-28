@@ -33,10 +33,13 @@ export async function GET(): Promise<NextResponse> {
     );
   }
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    const isDev = process.env.NODE_ENV === "development";
+    const hint = isDev
+      ? "Em desenvolvimento: adicione BLOB_READ_WRITE_TOKEN ao .env.local. Obtenha o token em Vercel → Storage → Blob (ou use um ficheiro com menos de 4,5 MB)."
+      : "Defina BLOB_READ_WRITE_TOKEN no projeto (Vercel → Storage → Blob) ou use um ficheiro com menos de 4,5 MB.";
     return NextResponse.json(
       {
-        error:
-          "Upload de ficheiros grandes não está configurado. Defina BLOB_READ_WRITE_TOKEN no projeto (Vercel → Storage → Blob) ou use um ficheiro com menos de 4,5 MB.",
+        error: `Upload de ficheiros grandes não está configurado. ${hint}`,
       },
       { status: 501 }
     );
@@ -55,10 +58,13 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    const isDev = process.env.NODE_ENV === "development";
+    const hint = isDev
+      ? "Em desenvolvimento: adicione BLOB_READ_WRITE_TOKEN ao .env.local (Vercel → Storage → Blob)."
+      : "Use um ficheiro com menos de 4,5 MB.";
     return NextResponse.json(
       {
-        error:
-          "Upload de ficheiros grandes não disponível. Use um ficheiro com menos de 4,5 MB.",
+        error: `Upload de ficheiros grandes não disponível. ${hint}`,
       },
       { status: 501 }
     );

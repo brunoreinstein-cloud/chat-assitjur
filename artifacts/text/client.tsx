@@ -1,6 +1,8 @@
+import { Download, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { Artifact } from "@/components/create-artifact";
 import { DiffView } from "@/components/diffview";
+import { DocumentPageLayout } from "@/components/document-page-layout";
 import { DocumentSkeleton } from "@/components/document-skeleton";
 import {
   ClockRewind,
@@ -65,49 +67,70 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
     metadata,
   }) => {
     if (isLoading) {
-      return <DocumentSkeleton artifactKind="text" />;
+      return (
+        <DocumentPageLayout>
+          <DocumentSkeleton artifactKind="text" />
+        </DocumentPageLayout>
+      );
     }
 
     if (mode === "diff") {
       const oldContent = getDocumentContentById(currentVersionIndex - 1);
       const newContent = getDocumentContentById(currentVersionIndex);
 
-      return <DiffView newContent={newContent} oldContent={oldContent} />;
+      return (
+        <DocumentPageLayout>
+          <DiffView newContent={newContent} oldContent={oldContent} />
+        </DocumentPageLayout>
+      );
     }
 
     const hasContent = typeof content === "string" && content.trim().length > 0;
 
     if (!hasContent) {
       return (
-        <div
-          aria-live="polite"
-          className="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center text-muted-foreground"
-        >
-          <p className="text-sm">
-            O conteúdo do documento será exibido aqui.
-          </p>
-          <p className="text-xs">
-            Peça ao assistente para gerar ou atualizar o documento.
-          </p>
-        </div>
+        <DocumentPageLayout>
+          <div
+            aria-live="polite"
+            className="flex min-h-80 flex-col items-center justify-center gap-4 rounded-lg border border-dashed border-border bg-muted/30 px-6 py-16 text-center"
+          >
+            <div className="rounded-full bg-muted p-4">
+              <FileText
+                className="size-8 text-muted-foreground"
+                aria-hidden
+              />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-foreground">
+                Nenhum conteúdo ainda
+              </p>
+              <p className="max-w-sm text-xs text-muted-foreground">
+                O conteúdo do documento será exibido aqui. Peça ao assistente
+                para gerar ou atualizar o documento (ex.: gerar os 3 DOCX na
+                FASE B).
+              </p>
+            </div>
+          </div>
+        </DocumentPageLayout>
       );
     }
 
     return (
-      <div className="flex flex-row px-4 py-8 md:p-20">
-        <Editor
-          content={content}
-          currentVersionIndex={currentVersionIndex}
-          isCurrentVersion={isCurrentVersion}
-          onSaveContent={onSaveContent}
-          status={status}
-          suggestions={metadata ? metadata.suggestions : []}
-        />
-
-        {metadata?.suggestions && metadata.suggestions.length > 0 ? (
-          <div className="h-dvh w-12 shrink-0 md:hidden" />
-        ) : null}
-      </div>
+      <DocumentPageLayout>
+        <div className="flex flex-row">
+          <Editor
+            content={content}
+            currentVersionIndex={currentVersionIndex}
+            isCurrentVersion={isCurrentVersion}
+            onSaveContent={onSaveContent}
+            status={status}
+            suggestions={metadata ? metadata.suggestions : []}
+          />
+          {metadata?.suggestions && metadata.suggestions.length > 0 ? (
+            <div className="h-dvh w-12 shrink-0 md:hidden" />
+          ) : null}
+        </div>
+      </DocumentPageLayout>
     );
   },
   actions: [
@@ -159,6 +182,42 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
       onClick: ({ content }) => {
         navigator.clipboard.writeText(content);
         toast.success("Copied to clipboard!");
+      },
+    },
+    {
+      icon: <Download size={18} />,
+      label: "DOCX",
+      description: "Descarregar como DOCX",
+      onClick: ({ documentId }) => {
+        void (async () => {
+          try {
+            const res = await fetch(
+              `/api/document/export?id=${encodeURIComponent(documentId)}`,
+              { credentials: "include" }
+            );
+            if (!res.ok) {
+              const data = await res.json().catch(() => ({}));
+              const msg =
+                (data as { message?: string }).message ??
+                "Falha ao exportar DOCX.";
+              toast.error(msg);
+              return;
+            }
+            const blob = await res.blob();
+            const disposition = res.headers.get("Content-Disposition");
+            const filenameMatch = disposition?.match(/filename="?([^";\n]+)"?/);
+            const filename = filenameMatch?.[1] ?? "documento.docx";
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+            toast.success("DOCX descarregado.");
+          } catch {
+            toast.error("Falha ao descarregar DOCX.");
+          }
+        })();
       },
     },
   ],

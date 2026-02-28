@@ -163,7 +163,7 @@ O agente é implementado como **instruções de sistema** longas injetadas no `s
 - **Formato:** Arial 12pt, títulos 14pt negrito; tabelas com bordas limpas.
 - **Siglas nos DOCX:** Sempre por extenso (Reclamante, Reclamado, Data Ajuizamento, Data Término Contrato). Uso de RTE, RDO, DAJ, DTC apenas interno (instruções).
 
-Os documentos são gerados como artefactos **text** via `createDocument`; export para DOCX fica a cargo do utilizador ou de fluxo futuro.
+Os documentos são gerados como artefactos **text** via `createDocument`. O utilizador pode **descarregar cada documento como ficheiro .docx** através do botão «Descarregar DOCX» (ou «DOCX») na barra de ações do artefacto; a rota `GET /api/document/export?id=<documentId>` devolve o conteúdo em formato Word (DOCX). O nome do ficheiro é derivado do título do documento (sanitizado, máx. 120 caracteres).
 
 ---
 
@@ -233,6 +233,7 @@ Deploy: ver `docs/vercel-setup.md` e `docs/vercel-cli.md`.
 
 ## 12. Referências rápidas
 
+- **Spec produto (AI Drive Jurídico):** `docs/SPEC-AI-DRIVE-JURIDICO.md` — visão, capacidades, roadmap e métricas da plataforma jurídica.
 - **Instruções do agente:** `lib/ai/agent-revisor-defesas.ts`
 - **Checklist revisor:** `.agents/skills/revisor-defesas-context/SKILL.md`
 - **Guia para agentes de IA:** `AGENTS.md`

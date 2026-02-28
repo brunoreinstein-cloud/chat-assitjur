@@ -338,13 +338,30 @@ export async function updateMessage({
   }
 }
 
-export async function getMessagesByChatId({ id }: { id: string }) {
+/**
+ * Mensagens do chat por ordem cronológica.
+ * Se limit for definido, devolve apenas as últimas N mensagens (reduz carga e contexto).
+ */
+export async function getMessagesByChatId({
+  id,
+  limit,
+}: {
+  id: string;
+  limit?: number;
+}) {
   try {
-    return await getDb()
+    const base = getDb()
       .select()
       .from(message)
-      .where(eq(message.chatId, id))
-      .orderBy(asc(message.createdAt));
+      .where(eq(message.chatId, id));
+
+    if (limit !== undefined && limit > 0) {
+      const rows = await base
+        .orderBy(desc(message.createdAt))
+        .limit(limit);
+      return rows.reverse();
+    }
+    return await base.orderBy(asc(message.createdAt));
   } catch (_error) {
     throw new ChatbotError(
       "bad_request:database",

@@ -160,15 +160,38 @@ O upload tenta primeiro **Supabase Storage** e, se falhar, **Vercel Blob**. O er
 
 3. **Na Vercel:** garante que `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` estão definidas no ambiente (Production/Preview) e faz redeploy.
 
+**Mensagem em modo dev:** "Upload de ficheiros grandes não está configurado. Em desenvolvimento: adicione BLOB_READ_WRITE_TOKEN ao .env.local…"
+
+Para testar **ficheiros maiores que 4,5 MB** em desenvolvimento é obrigatório definir `BLOB_READ_WRITE_TOKEN` no `.env.local` (o upload direto cliente → Blob não usa Supabase para ficheiros grandes). Passos:
+
+1. Vercel Dashboard → teu projeto (ou qualquer projeto) → **Storage** → **Blob** → criar um store ou usar existente.
+2. Copiar o token (ex.: `vercel_blob_rw_...`) e em `.env.local` adicionar: `BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...`
+3. Reiniciar o servidor: `pnpm dev`. Alternativa: usar um ficheiro com menos de 4,5 MB (vai por `POST /api/files/upload` e pode usar só Supabase).
+
 ---
 
 | Problema | Solução |
 |----------|---------|
+| **Insufficient funds** (chat / AI) | Conta Vercel sem créditos para AI Gateway. Vercel Dashboard → AI → Top up. Ver secção acima. |
 | Redirecionamento para `/config-required` | Falta `AUTH_SECRET` ou `POSTGRES_URL`. Configura em Settings → Environment Variables e faz redeploy. |
 | Aviso "vercel" em dependencies | O pacote `vercel` foi removido das dependências; os scripts usam `npx vercel`. |
 | Aviso "Failed to create bin... supabase" | O CLI Supabase não é dependência do projeto; os scripts (`supabase:link`, etc.) usam `npx supabase`. O build na Vercel não instala o CLI, pelo que este aviso não deve aparecer. |
 | Aviso `baseline-browser-mapping` desatualizado | O projeto já usa `baseline-browser-mapping@^2.10.0` (latest). O aviso refere-se aos dados internos do pacote (idade > 2 meses) e não quebra o build; `BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true` está nos scripts. Pode ignorar até o maintainer publicar dados novos. |
 | **TimeoutNegativeWarning** (`-XXX is a negative number`, timeout set to 1) | O Auth.js (ou um middleware) agenda um refresh da sessão com um atraso `expires - now` em ms. Se a sessão já expirou ou o relógio do servidor está atrasado em relação à data de expiração (ex.: timezone da DB diferente da Vercel), o atraso fica negativo e o Node corrige para 1 ms. Pode aparecer junto de **CredentialsSignin**. Verifica timezone da base (secção abaixo) e garante que em produção o utilizador está a usar credenciais válidas na base de produção. |
+
+### "Insufficient funds" (AI Gateway sem créditos)
+
+**Mensagem:** "Ocorreu um erro ao processar o pedido..." com **(dev: Insufficient funds. Please add credits...)** ou em produção uma mensagem sobre créditos.
+
+O chat usa **Vercel AI Gateway** (`@ai-sdk/gateway`). Quando a conta/equipa Vercel fica sem créditos para AI, o Gateway rejeita os pedidos.
+
+**O que fazer:**
+
+1. **Adicionar créditos na Vercel (recomendado para produção):**  
+   Vercel Dashboard → **AI** (ou o link indicado no erro) → **Top up** / adicionar créditos. Assim o AI Gateway volta a funcionar sem alterar código.
+
+2. **Em desenvolvimento, usar chave do fornecedor:**  
+   Se quiseres evitar consumir créditos Vercel em local, podes usar uma API key direta do fornecedor (ex.: Anthropic). No `.env.example` está referido `ANTHROPIC_API_KEY` como alternativa; o projeto usa atualmente só o Gateway. Para passar a usar o provider direto em dev seria necessário alterar `lib/ai/providers.ts` para, quando `ANTHROPIC_API_KEY` estiver definida e não estiver na Vercel, usar `createAnthropic()` em vez de `gateway.languageModel(...)`. Enquanto não houver essa lógica, a solução imediata é **adicionar créditos** na Vercel.
 
 ### Timezone diferente entre base de dados (Supabase / Neon) e Vercel
 
@@ -181,6 +204,31 @@ SELECT NOW(), CURRENT_TIMESTAMP, timezone('America/Sao_Paulo', NOW());
 ```
 
 Se `NOW()` retornar horário diferente do que o servidor Vercel usa (ou do que esperas na UI), a causa é essa. O Postgres usa o timezone da instância; a Vercel corre em UTC. Para consistência, guarda sempre em UTC na base e converte para o fuso do utilizador na apresentação, ou alinha o timezone da base (conforme a oferta do Neon).
+
+### Performance do chat – onde está o tempo (desenvolvimento)
+
+Em modo desenvolvimento, a rota `POST /api/chat` regista no terminal linhas `[chat-timing]` para cada fase:
+
+| Label | O que mede |
+|-------|------------|
+| `auth` | Tempo de `auth()` (sessão). |
+| `getMessageCountByUserId` | Verificação de rate limit (24 h). |
+| `getChatById + getMessagesByChatId` | Carregar chat e histórico de mensagens. |
+| `getKnowledgeDocumentsByIds` | Carregar documentos da base de conhecimento (só se `knowledgeDocumentIds` enviados). |
+| `saveMessages(user)` | Guardar a mensagem do utilizador na BD. |
+| `normalizeMessageParts + convertToModelMessages` | Normalizar partes (truncar docs) e converter para formato do modelo. |
+| `preStream (total antes do stream)` | Tempo total desde o início do pedido até à criação do stream (soma das fases acima). |
+| `execute started` | Quando o callback do stream começou (o modelo e as tools começam aqui). |
+| `onFinish (stream terminou) total request` | Tempo total do pedido até ao fim do stream (a maior parte costuma ser **modelo + tools**). |
+| `saveMessages(assistant)` / `saveMessages(tool-flow)` | Tempo a guardar as mensagens do assistente em `onFinish`. |
+| `onFinish completo` | Tempo total dentro de `onFinish`. |
+
+A diferença **total request − preStream** é o tempo em que o stream esteve ativo (geração do modelo, chamadas a tools e envio de dados ao cliente). Se `POST /api/chat` aparecer em 6+ minutos no log do Next, confirma no terminal os valores de `preStream` e `onFinish total request`: se `preStream` for baixo (ex.: &lt; 2 s), quase todo o tempo está no modelo e nas tools.
+
+**Otimizações aplicadas (sem perda de qualidade):**
+
+- **Queries em paralelo:** `getMessageCountByUserId`, `getChatById`, `getMessagesByChatId` e `getKnowledgeDocumentsByIds` correm em `Promise.all`, reduzindo o tempo total da fase de pré-stream.
+- **Limite de mensagens para contexto:** A API carrega apenas as últimas **80 mensagens** do chat para construir o contexto do modelo (`CHAT_MESSAGES_LIMIT` em `app/(chat)/api/chat/route.ts`). A UI da página do chat continua a carregar todas as mensagens para exibição; só o contexto enviado ao modelo é limitado, mantendo a qualidade com o contexto recente.
 
 ---
 
