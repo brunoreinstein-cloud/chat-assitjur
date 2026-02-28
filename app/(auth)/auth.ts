@@ -9,129 +9,129 @@ import { authConfig } from "./auth.config";
 export type UserType = "guest" | "regular";
 
 declare module "next-auth" {
-	interface Session extends DefaultSession {
-		user: {
-			id: string;
-			type: UserType;
-		} & DefaultSession["user"];
-	}
+  interface Session extends DefaultSession {
+    user: {
+      id: string;
+      type: UserType;
+    } & DefaultSession["user"];
+  }
 
-	interface User {
-		id?: string;
-		email?: string | null;
-		type: UserType;
-	}
+  interface User {
+    id?: string;
+    email?: string | null;
+    type: UserType;
+  }
 }
 
 declare module "next-auth/jwt" {
-	interface JWT extends DefaultJWT {
-		id: string;
-		type: UserType;
-	}
+  interface JWT extends DefaultJWT {
+    id: string;
+    type: UserType;
+  }
 }
 
 export const {
-	handlers: { GET, POST },
-	auth,
-	signIn,
-	signOut,
+  handlers: { GET, POST },
+  auth,
+  signIn,
+  signOut,
 } = NextAuth({
-	...authConfig,
-	logger: {
-		error(code: unknown, ...message: unknown[]) {
-			const err = code as { type?: string; code?: string } | null;
-			const firstMsg = message[0] as { type?: string } | null;
-			const isCredentialsSignin =
-				err?.type === "CredentialsSignin" ||
-				err?.code === "credentials" ||
-				firstMsg?.type === "CredentialsSignin";
-			if (isCredentialsSignin) {
-				return;
-			}
-			console.error("[auth][error]", code, ...message);
-		},
-		warn(code, ...message) {
-			console.warn("[auth][warn]", code, ...message);
-		},
-		debug(code, ...message) {
-			console.debug("[auth][debug]", code, ...message);
-		},
-	},
-	providers: [
-		Credentials({
-			credentials: {},
-			async authorize({
-				email,
-				password,
-			}: {
-				email?: string;
-				password?: string;
-			}) {
-				if (!email || typeof password !== "string") {
-					return null;
-				}
-				try {
-					const users = await getUser(email);
+  ...authConfig,
+  logger: {
+    error(code: unknown, ...message: unknown[]) {
+      const err = code as { type?: string; code?: string } | null;
+      const firstMsg = message[0] as { type?: string } | null;
+      const isCredentialsSignin =
+        err?.type === "CredentialsSignin" ||
+        err?.code === "credentials" ||
+        firstMsg?.type === "CredentialsSignin";
+      if (isCredentialsSignin) {
+        return;
+      }
+      console.error("[auth][error]", code, ...message);
+    },
+    warn(code, ...message) {
+      console.warn("[auth][warn]", code, ...message);
+    },
+    debug(code, ...message) {
+      console.debug("[auth][debug]", code, ...message);
+    },
+  },
+  providers: [
+    Credentials({
+      credentials: {},
+      async authorize({
+        email,
+        password,
+      }: {
+        email?: string;
+        password?: string;
+      }) {
+        if (!email || typeof password !== "string") {
+          return null;
+        }
+        try {
+          const users = await getUser(email);
 
-					if (users.length === 0) {
-						await compare(password, DUMMY_PASSWORD);
-						return null;
-					}
+          if (users.length === 0) {
+            await compare(password, DUMMY_PASSWORD);
+            return null;
+          }
 
-					const [user] = users;
+          const [user] = users;
 
-					if (!user.password) {
-						await compare(password, DUMMY_PASSWORD);
-						return null;
-					}
+          if (!user.password) {
+            await compare(password, DUMMY_PASSWORD);
+            return null;
+          }
 
-					const passwordsMatch = await compare(password, user.password);
+          const passwordsMatch = await compare(password, user.password);
 
-					if (!passwordsMatch) {
-						return null;
-					}
+          if (!passwordsMatch) {
+            return null;
+          }
 
-					return { ...user, type: "regular" };
-				} catch (err) {
-					if (process.env.NODE_ENV === "development") {
-						console.error("[auth] authorize (credentials) failed:", err);
-					}
-					return null;
-				}
-			},
-		}),
-		Credentials({
-			id: "guest",
-			credentials: {},
-			async authorize() {
-				try {
-					const [guestUser] = await createGuestUser();
-					return { ...guestUser, type: "guest" };
-				} catch (err) {
-					if (process.env.NODE_ENV === "development") {
-						console.error("[auth] authorize (guest) failed:", err);
-					}
-					return null;
-				}
-			},
-		}),
-	],
-	callbacks: {
-		jwt({ token, user }) {
-			if (user) {
-				token.id = user.id as string;
-				token.type = user.type;
-			}
+          return { ...user, type: "regular" };
+        } catch (err) {
+          if (process.env.NODE_ENV === "development") {
+            console.error("[auth] authorize (credentials) failed:", err);
+          }
+          return null;
+        }
+      },
+    }),
+    Credentials({
+      id: "guest",
+      credentials: {},
+      async authorize() {
+        try {
+          const [guestUser] = await createGuestUser();
+          return { ...guestUser, type: "guest" };
+        } catch (err) {
+          if (process.env.NODE_ENV === "development") {
+            console.error("[auth] authorize (guest) failed:", err);
+          }
+          return null;
+        }
+      },
+    }),
+  ],
+  callbacks: {
+    jwt({ token, user }) {
+      if (user) {
+        token.id = user.id as string;
+        token.type = user.type;
+      }
 
-			return token;
-		},
-		session({ session, token }) {
-			if (session.user) {
-				session.user.id = token.id;
-				session.user.type = token.type;
-			}
+      return token;
+    },
+    session({ session, token }) {
+      if (session.user) {
+        session.user.id = token.id;
+        session.user.type = token.type;
+      }
 
-			return session;
-		},
-	},
+      return session;
+    },
+  },
 });

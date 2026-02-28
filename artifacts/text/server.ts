@@ -12,83 +12,83 @@ Não inventes factos. Não alteres a hierarquia nem o formato do modelo.
 Responde APENAS com o conteúdo do documento, sem introduções.`;
 
 export const textDocumentHandler = createDocumentHandler<"text">({
-	kind: "text",
-	onCreateDocument: async ({ title, dataStream }) => {
-		let draftContent = "";
+  kind: "text",
+  onCreateDocument: async ({ title, dataStream }) => {
+    let draftContent = "";
 
-		const modeloType = getModeloRevisorFromTitle(title);
-		const template = modeloType ? await loadModeloRevisor(modeloType) : null;
+    const modeloType = getModeloRevisorFromTitle(title);
+    const template = modeloType ? await loadModeloRevisor(modeloType) : null;
 
-		const useTemplate = Boolean(template?.trim());
-		const system = useTemplate
-			? `${SYSTEM_TEMPLATE_REVISOR}\n\n--- MODELO A SEGUIR ---\n\n${template}\n\n--- FIM DO MODELO ---`
-			: "Write about the given topic. Markdown is supported. Use headings wherever appropriate.";
+    const useTemplate = Boolean(template?.trim());
+    const system = useTemplate
+      ? `${SYSTEM_TEMPLATE_REVISOR}\n\n--- MODELO A SEGUIR ---\n\n${template}\n\n--- FIM DO MODELO ---`
+      : "Write about the given topic. Markdown is supported. Use headings wherever appropriate.";
 
-		const { fullStream } = streamText({
-			model: getArtifactModel(),
-			maxOutputTokens: 8192,
-			system,
-			experimental_transform: smoothStream({ chunking: "word" }),
-			prompt: useTemplate
-				? `Preenche o documento conforme o modelo acima, para o caso indicado no título: "${title}".`
-				: title,
-		});
+    const { fullStream } = streamText({
+      model: getArtifactModel(),
+      maxOutputTokens: 8192,
+      system,
+      experimental_transform: smoothStream({ chunking: "word" }),
+      prompt: useTemplate
+        ? `Preenche o documento conforme o modelo acima, para o caso indicado no título: "${title}".`
+        : title,
+    });
 
-		for await (const delta of fullStream) {
-			const { type } = delta;
+    for await (const delta of fullStream) {
+      const { type } = delta;
 
-			if (type === "text-delta") {
-				const { text } = delta;
+      if (type === "text-delta") {
+        const { text } = delta;
 
-				draftContent += text;
+        draftContent += text;
 
-				dataStream.write({
-					type: "data-textDelta",
-					data: text,
-					transient: true,
-				});
-			}
-		}
+        dataStream.write({
+          type: "data-textDelta",
+          data: text,
+          transient: true,
+        });
+      }
+    }
 
-		return draftContent;
-	},
-	onUpdateDocument: async ({ document, description, dataStream }) => {
-		let draftContent = "";
+    return draftContent;
+  },
+  onUpdateDocument: async ({ document, description, dataStream }) => {
+    let draftContent = "";
 
-		const { fullStream } = streamText({
-			model: getArtifactModel(),
-			maxOutputTokens: 8192,
-			system: updateDocumentPrompt(document.content, "text"),
-			experimental_transform: smoothStream({ chunking: "word" }),
-			prompt: description,
-			providerOptions: {
-				openai: {
-					prediction: {
-						type: "content",
-						content: document.content,
-					},
-				},
-			},
-		});
+    const { fullStream } = streamText({
+      model: getArtifactModel(),
+      maxOutputTokens: 8192,
+      system: updateDocumentPrompt(document.content, "text"),
+      experimental_transform: smoothStream({ chunking: "word" }),
+      prompt: description,
+      providerOptions: {
+        openai: {
+          prediction: {
+            type: "content",
+            content: document.content,
+          },
+        },
+      },
+    });
 
-		for await (const delta of fullStream) {
-			const { type } = delta;
+    for await (const delta of fullStream) {
+      const { type } = delta;
 
-			if (type === "text-delta") {
-				const { text } = delta;
+      if (type === "text-delta") {
+        const { text } = delta;
 
-				draftContent += text;
+        draftContent += text;
 
-				dataStream.write({
-					type: "data-textDelta",
-					data: text,
-					transient: true,
-				});
-			}
-		}
+        dataStream.write({
+          type: "data-textDelta",
+          data: text,
+          transient: true,
+        });
+      }
+    }
 
-		return draftContent;
-	},
+    return draftContent;
+  },
 });
 
 /**
@@ -96,33 +96,33 @@ export const textDocumentHandler = createDocumentHandler<"text">({
  * Usado pela ferramenta createRevisorDefesaDocuments para gerar os 3 DOCX em paralelo.
  */
 export async function generateRevisorDocumentContent(
-	title: string,
+  title: string
 ): Promise<string> {
-	let draftContent = "";
+  let draftContent = "";
 
-	const modeloType = getModeloRevisorFromTitle(title);
-	const template = modeloType ? await loadModeloRevisor(modeloType) : null;
+  const modeloType = getModeloRevisorFromTitle(title);
+  const template = modeloType ? await loadModeloRevisor(modeloType) : null;
 
-	const useTemplate = Boolean(template?.trim());
-	const system = useTemplate
-		? `${SYSTEM_TEMPLATE_REVISOR}\n\n--- MODELO A SEGUIR ---\n\n${template}\n\n--- FIM DO MODELO ---`
-		: "Write about the given topic. Markdown is supported. Use headings wherever appropriate.";
+  const useTemplate = Boolean(template?.trim());
+  const system = useTemplate
+    ? `${SYSTEM_TEMPLATE_REVISOR}\n\n--- MODELO A SEGUIR ---\n\n${template}\n\n--- FIM DO MODELO ---`
+    : "Write about the given topic. Markdown is supported. Use headings wherever appropriate.";
 
-	const { fullStream } = streamText({
-		model: getArtifactModel(),
-		maxOutputTokens: 8192,
-		system,
-		experimental_transform: smoothStream({ chunking: "word" }),
-		prompt: useTemplate
-			? `Preenche o documento conforme o modelo acima, para o caso indicado no título: "${title}".`
-			: title,
-	});
+  const { fullStream } = streamText({
+    model: getArtifactModel(),
+    maxOutputTokens: 8192,
+    system,
+    experimental_transform: smoothStream({ chunking: "word" }),
+    prompt: useTemplate
+      ? `Preenche o documento conforme o modelo acima, para o caso indicado no título: "${title}".`
+      : title,
+  });
 
-	for await (const delta of fullStream) {
-		if (delta.type === "text-delta") {
-			draftContent += delta.text;
-		}
-	}
+  for await (const delta of fullStream) {
+    if (delta.type === "text-delta") {
+      draftContent += delta.text;
+    }
+  }
 
-	return draftContent;
+  return draftContent;
 }

@@ -11,8 +11,8 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
  * Usa a chave anon; RLS aplica-se. Só existe se as variáveis estiverem definidas.
  */
 export function getSupabaseBrowserClient() {
-	if (!supabaseUrl || !supabaseAnonKey) {
-		return null;
-	}
-	return createClient<Database>(supabaseUrl, supabaseAnonKey);
+  if (!(supabaseUrl && supabaseAnonKey)) {
+    return null;
+  }
+  return createClient<Database>(supabaseUrl, supabaseAnonKey);
 }

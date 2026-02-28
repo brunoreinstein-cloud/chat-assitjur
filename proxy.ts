@@ -3,17 +3,17 @@ import { getToken } from "next-auth/jwt";
 import { guestRegex, isDevelopmentEnvironment } from "./lib/constants";
 
 function redirectToConfigRequired(request: NextRequest) {
-	return NextResponse.rewrite(new URL("/config-required", request.url));
+  return NextResponse.rewrite(new URL("/config-required", request.url));
 }
 
 function shouldShowConfigRequired(pathname: string): boolean {
-	if (pathname === "/config-required") {
-		return false;
-	}
-	if (!process.env.VERCEL) {
-		return false;
-	}
-	return !process.env.POSTGRES_URL || !process.env.AUTH_SECRET;
+  if (pathname === "/config-required") {
+    return false;
+  }
+  if (!process.env.VERCEL) {
+    return false;
+  }
+  return !(process.env.POSTGRES_URL && process.env.AUTH_SECRET);
 }
 
 /**
@@ -21,77 +21,77 @@ function shouldShowConfigRequired(pathname: string): boolean {
  * AUTH_SECRET ou POSTGRES_URL; auth de visitantes (guest) e proteção de rotas.
  */
 export async function proxy(request: NextRequest) {
-	const { pathname } = request.nextUrl;
+  const { pathname } = request.nextUrl;
 
-	if (shouldShowConfigRequired(pathname)) {
-		return redirectToConfigRequired(request);
-	}
-	if (!process.env.AUTH_SECRET && pathname !== "/config-required") {
-		return process.env.VERCEL
-			? redirectToConfigRequired(request)
-			: NextResponse.next();
-	}
+  if (shouldShowConfigRequired(pathname)) {
+    return redirectToConfigRequired(request);
+  }
+  if (!process.env.AUTH_SECRET && pathname !== "/config-required") {
+    return process.env.VERCEL
+      ? redirectToConfigRequired(request)
+      : NextResponse.next();
+  }
 
-	/*
-	 * Playwright starts the dev server and requires a 200 status to
-	 * begin the tests, so this ensures that the tests can start
-	 */
-	if (pathname.startsWith("/ping")) {
-		return new Response("pong", { status: 200 });
-	}
+  /*
+   * Playwright starts the dev server and requires a 200 status to
+   * begin the tests, so this ensures that the tests can start
+   */
+  if (pathname.startsWith("/ping")) {
+    return new Response("pong", { status: 200 });
+  }
 
-	if (pathname.startsWith("/api/auth")) {
-		return NextResponse.next();
-	}
+  if (pathname.startsWith("/api/auth")) {
+    return NextResponse.next();
+  }
 
-	try {
-		const token = await getToken({
-			req: request,
-			secret: process.env.AUTH_SECRET,
-			secureCookie: !isDevelopmentEnvironment,
-		});
+  try {
+    const token = await getToken({
+      req: request,
+      secret: process.env.AUTH_SECRET,
+      secureCookie: !isDevelopmentEnvironment,
+    });
 
-		if (!token) {
-			// Não redirecionar no proxy para /chat: deixa a página fazer um único redirect
-			// ao guest. Evita loop (proxy → guest → /chat → proxy → guest).
-			const isChat = pathname === "/chat" || pathname.startsWith("/chat/");
-			if (isChat) {
-				return NextResponse.next();
-			}
-			// Usar apenas path para evitar problemas de cookie com URL absoluta no redirect
-			const path = request.nextUrl.pathname + (request.nextUrl.search || "");
-			const redirectUrl = encodeURIComponent(path || "/chat");
+    if (!token) {
+      // Não redirecionar no proxy para /chat: deixa a página fazer um único redirect
+      // ao guest. Evita loop (proxy → guest → /chat → proxy → guest).
+      const isChat = pathname === "/chat" || pathname.startsWith("/chat/");
+      if (isChat) {
+        return NextResponse.next();
+      }
+      // Usar apenas path para evitar problemas de cookie com URL absoluta no redirect
+      const path = request.nextUrl.pathname + (request.nextUrl.search || "");
+      const redirectUrl = encodeURIComponent(path || "/chat");
 
-			return NextResponse.redirect(
-				new URL(`/api/auth/guest?redirectUrl=${redirectUrl}`, request.url),
-			);
-		}
+      return NextResponse.redirect(
+        new URL(`/api/auth/guest?redirectUrl=${redirectUrl}`, request.url)
+      );
+    }
 
-		const isGuest = guestRegex.test(token?.email ?? "");
+    const isGuest = guestRegex.test(token?.email ?? "");
 
-		if (token && !isGuest && ["/login", "/register"].includes(pathname)) {
-			return NextResponse.redirect(new URL("/", request.url));
-		}
+    if (token && !isGuest && ["/login", "/register"].includes(pathname)) {
+      return NextResponse.redirect(new URL("/", request.url));
+    }
 
-		return NextResponse.next();
-	} catch {
-		if (process.env.VERCEL && pathname !== "/config-required") {
-			return redirectToConfigRequired(request);
-		}
-		return NextResponse.next();
-	}
+    return NextResponse.next();
+  } catch {
+    if (process.env.VERCEL && pathname !== "/config-required") {
+      return redirectToConfigRequired(request);
+    }
+    return NextResponse.next();
+  }
 }
 
 export default proxy;
 
 export const config = {
-	matcher: [
-		"/",
-		"/chat",
-		"/chat/:path*",
-		"/api/:path*",
-		"/login",
-		"/register",
-		"/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)",
-	],
+  matcher: [
+    "/",
+    "/chat",
+    "/chat/:path*",
+    "/api/:path*",
+    "/login",
+    "/register",
+    "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)",
+  ],
 };

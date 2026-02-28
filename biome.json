@@ -1,32 +1,35 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.4.4/schema.json",
-	"files": {
-		"includes": [
-			"**",
-			"!!.pnpm-store",
-			"!!**/.pnpm-store",
-			"!!.next",
-			"!!**/.next",
-			"!!.agents",
-			"!!.vercel",
-			"!!.vscode","!!vercel.json"
-		]
-	},
-	"css": {
-		"parser": {
-			"tailwindDirectives": true
-		}
-	},
-	"overrides": [
-		{
-			"includes": ["components/ui/carousel.tsx"],
-			"linter": {
-				"rules": {
-					"a11y": {
-						"useSemanticElements": "off"
-					}
-				}
-			}
-		}
-	]
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "extends": ["ultracite/biome/core"],
+  "files": {
+    "includes": [
+      "!!.pnpm-store",
+      "!!**/.pnpm-store",
+      "!!.next",
+      "!!**/.next",
+      "!!.agents",
+      "!!.vercel",
+      "!!.vscode",
+      "!!vercel.json"
+    ]
+  },
+  "css": { "parser": { "tailwindDirectives": true } },
+  "linter": {
+    "rules": {
+      "performance": {
+        "useTopLevelRegex": "off",
+        "noNamespaceImport": "off"
+      },
+      "style": { "noNestedTernary": "off" },
+      "complexity": { "noExcessiveCognitiveComplexity": "off" },
+      "correctness": { "useImageSize": "off" },
+      "a11y": { "noNoninteractiveElementInteractions": "off" }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["components/ui/carousel.tsx"],
+      "linter": { "rules": { "a11y": { "useSemanticElements": "off" } } }
+    }
+  ]
 }

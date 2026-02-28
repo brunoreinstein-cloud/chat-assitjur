@@ -5,90 +5,90 @@ import type { Suggestion } from "@/lib/db/schema";
 import type { ChatMessage, CustomUIDataTypes } from "@/lib/types";
 import type { UIArtifact } from "./artifact";
 
-export type ArtifactActionContext<M = unknown> = {
-	content: string;
-	documentId: string;
-	handleVersionChange: (type: "next" | "prev" | "toggle" | "latest") => void;
-	currentVersionIndex: number;
-	isCurrentVersion: boolean;
-	mode: "edit" | "diff";
-	metadata: M;
-	setMetadata: Dispatch<SetStateAction<M>>;
-};
+export interface ArtifactActionContext<M = unknown> {
+  content: string;
+  documentId: string;
+  handleVersionChange: (type: "next" | "prev" | "toggle" | "latest") => void;
+  currentVersionIndex: number;
+  isCurrentVersion: boolean;
+  mode: "edit" | "diff";
+  metadata: M;
+  setMetadata: Dispatch<SetStateAction<M>>;
+}
 
-type ArtifactAction<M = unknown> = {
-	icon: ReactNode;
-	label?: string;
-	description: string;
-	onClick: (context: ArtifactActionContext<M>) => Promise<void> | void;
-	isDisabled?: (context: ArtifactActionContext<M>) => boolean;
-};
+interface ArtifactAction<M = unknown> {
+  icon: ReactNode;
+  label?: string;
+  description: string;
+  onClick: (context: ArtifactActionContext<M>) => Promise<void> | void;
+  isDisabled?: (context: ArtifactActionContext<M>) => boolean;
+}
 
-export type ArtifactToolbarContext = {
-	sendMessage: UseChatHelpers<ChatMessage>["sendMessage"];
-};
+export interface ArtifactToolbarContext {
+  sendMessage: UseChatHelpers<ChatMessage>["sendMessage"];
+}
 
-export type ArtifactToolbarItem = {
-	description: string;
-	icon: ReactNode;
-	onClick: (context: ArtifactToolbarContext) => void;
-};
+export interface ArtifactToolbarItem {
+  description: string;
+  icon: ReactNode;
+  onClick: (context: ArtifactToolbarContext) => void;
+}
 
-type ArtifactContent<M = unknown> = {
-	title: string;
-	content: string;
-	mode: "edit" | "diff";
-	isCurrentVersion: boolean;
-	currentVersionIndex: number;
-	status: "streaming" | "idle";
-	suggestions: Suggestion[];
-	onSaveContent: (updatedContent: string, debounce: boolean) => void;
-	isInline: boolean;
-	getDocumentContentById: (index: number) => string;
-	isLoading: boolean;
-	metadata: M;
-	setMetadata: Dispatch<SetStateAction<M>>;
-};
+interface ArtifactContent<M = unknown> {
+  title: string;
+  content: string;
+  mode: "edit" | "diff";
+  isCurrentVersion: boolean;
+  currentVersionIndex: number;
+  status: "streaming" | "idle";
+  suggestions: Suggestion[];
+  onSaveContent: (updatedContent: string, debounce: boolean) => void;
+  isInline: boolean;
+  getDocumentContentById: (index: number) => string;
+  isLoading: boolean;
+  metadata: M;
+  setMetadata: Dispatch<SetStateAction<M>>;
+}
 
-type InitializeParameters<M = unknown> = {
-	documentId: string;
-	setMetadata: Dispatch<SetStateAction<M>>;
-};
+interface InitializeParameters<M = unknown> {
+  documentId: string;
+  setMetadata: Dispatch<SetStateAction<M>>;
+}
 
-type ArtifactConfig<T extends string, M = unknown> = {
-	kind: T;
-	description: string;
-	content: ComponentType<ArtifactContent<M>>;
-	actions: ArtifactAction<M>[];
-	toolbar: ArtifactToolbarItem[];
-	initialize?: (parameters: InitializeParameters<M>) => void;
-	onStreamPart: (args: {
-		setMetadata: Dispatch<SetStateAction<M>>;
-		setArtifact: Dispatch<SetStateAction<UIArtifact>>;
-		streamPart: DataUIPart<CustomUIDataTypes>;
-	}) => void;
-};
+interface ArtifactConfig<T extends string, M = unknown> {
+  kind: T;
+  description: string;
+  content: ComponentType<ArtifactContent<M>>;
+  actions: ArtifactAction<M>[];
+  toolbar: ArtifactToolbarItem[];
+  initialize?: (parameters: InitializeParameters<M>) => void;
+  onStreamPart: (args: {
+    setMetadata: Dispatch<SetStateAction<M>>;
+    setArtifact: Dispatch<SetStateAction<UIArtifact>>;
+    streamPart: DataUIPart<CustomUIDataTypes>;
+  }) => void;
+}
 
 export class Artifact<T extends string, M = unknown> {
-	readonly kind: T;
-	readonly description: string;
-	readonly content: ComponentType<ArtifactContent<M>>;
-	readonly actions: ArtifactAction<M>[];
-	readonly toolbar: ArtifactToolbarItem[];
-	readonly initialize?: (parameters: InitializeParameters) => void;
-	readonly onStreamPart: (args: {
-		setMetadata: Dispatch<SetStateAction<M>>;
-		setArtifact: Dispatch<SetStateAction<UIArtifact>>;
-		streamPart: DataUIPart<CustomUIDataTypes>;
-	}) => void;
+  readonly kind: T;
+  readonly description: string;
+  readonly content: ComponentType<ArtifactContent<M>>;
+  readonly actions: ArtifactAction<M>[];
+  readonly toolbar: ArtifactToolbarItem[];
+  readonly initialize?: (parameters: InitializeParameters) => void;
+  readonly onStreamPart: (args: {
+    setMetadata: Dispatch<SetStateAction<M>>;
+    setArtifact: Dispatch<SetStateAction<UIArtifact>>;
+    streamPart: DataUIPart<CustomUIDataTypes>;
+  }) => void;
 
-	constructor(config: ArtifactConfig<T, M>) {
-		this.kind = config.kind;
-		this.description = config.description;
-		this.content = config.content;
-		this.actions = config.actions || [];
-		this.toolbar = config.toolbar || [];
-		this.initialize = config.initialize || (async () => ({}));
-		this.onStreamPart = config.onStreamPart;
-	}
+  constructor(config: ArtifactConfig<T, M>) {
+    this.kind = config.kind;
+    this.description = config.description;
+    this.content = config.content;
+    this.actions = config.actions || [];
+    this.toolbar = config.toolbar || [];
+    this.initialize = config.initialize || (async () => ({}));
+    this.onStreamPart = config.onStreamPart;
+  }
 }
