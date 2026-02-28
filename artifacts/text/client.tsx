@@ -75,6 +75,24 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
       return <DiffView newContent={newContent} oldContent={oldContent} />;
     }
 
+    const hasContent = typeof content === "string" && content.trim().length > 0;
+
+    if (!hasContent) {
+      return (
+        <div
+          aria-live="polite"
+          className="flex flex-col items-center justify-center gap-2 px-6 py-16 text-center text-muted-foreground"
+        >
+          <p className="text-sm">
+            O conteúdo do documento será exibido aqui.
+          </p>
+          <p className="text-xs">
+            Peça ao assistente para gerar ou atualizar o documento.
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="flex flex-row px-4 py-8 md:p-20">
         <Editor

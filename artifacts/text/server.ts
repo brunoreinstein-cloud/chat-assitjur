@@ -1,19 +1,41 @@
 import { smoothStream, streamText } from "ai";
+import {
+  getModeloRevisorFromTitle,
+  loadModeloRevisor,
+} from "@/lib/ai/modelos";
 import { updateDocumentPrompt } from "@/lib/ai/prompts";
 import { getArtifactModel } from "@/lib/ai/providers";
 import { createDocumentHandler } from "@/lib/artifacts/server";
+
+const SYSTEM_TEMPLATE_REVISOR = `És um assistente que preenche documentos do Revisor de Defesas Trabalhistas.
+DEVES seguir à risca a estrutura do modelo abaixo. Mantém títulos, secções, tabelas e placeholders [entre colchetes].
+Substitui os placeholders pelos dados apropriados ao caso (processo, partes, datas, temas, etc.) quando os tiveres.
+Se não tiveres dados para um campo, mantém o placeholder ou indica [a preencher].
+Não inventes factos. Não alteres a hierarquia nem o formato do modelo.
+Responde APENAS com o conteúdo do documento, sem introduções.`;
 
 export const textDocumentHandler = createDocumentHandler<"text">({
   kind: "text",
   onCreateDocument: async ({ title, dataStream }) => {
     let draftContent = "";
 
+    const modeloType = getModeloRevisorFromTitle(title);
+    const template = modeloType
+      ? await loadModeloRevisor(modeloType)
+      : null;
+
+    const useTemplate = Boolean(template?.trim());
+    const system = useTemplate
+      ? `${SYSTEM_TEMPLATE_REVISOR}\n\n--- MODELO A SEGUIR ---\n\n${template}\n\n--- FIM DO MODELO ---`
+      : "Write about the given topic. Markdown is supported. Use headings wherever appropriate.";
+
     const { fullStream } = streamText({
       model: getArtifactModel(),
-      system:
-        "Write about the given topic. Markdown is supported. Use headings wherever appropriate.",
+      system,
       experimental_transform: smoothStream({ chunking: "word" }),
-      prompt: title,
+      prompt: useTemplate
+        ? `Preenche o documento conforme o modelo acima, para o caso indicado no título: "${title}".`
+        : title,
     });
 
     for await (const delta of fullStream) {

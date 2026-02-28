@@ -1,0 +1,137 @@
+ROTEIRO DE AUDIÊNCIA — PREPOSTO
+
+DOCUMENTO CONFIDENCIAL
+
+Processo nº
+
+0000000-00.2026.5.00.0000
+
+Vara
+
+[Vara e Comarca]
+
+Reclamante
+
+[Nome completo] | [Função]
+
+Reclamada
+
+[Razão social]
+
+Advogados Reclamante
+
+[Nome — OAB/UF 000.000]
+
+Advogados Reclamada
+
+[Nome — OAB/UF 000.000] | [Escritório]
+
+Admissão
+
+[DD/MM/AAAA]
+
+Término do contrato
+
+[DD/MM/AAAA]
+
+Modalidade de rescisão
+
+[Tipo — fundamento legal]
+
+Audiência
+
+[Tipo] — [DD/MM/AAAA] às [HH:MM]
+
+
+
+
+
+O preposto não é testemunha. Representa a empresa e pode — e deve — estudar fatos, rotinas e documentos. "Não sei" em ponto fático essencial fragiliza a defesa e pode equivaler a confissão. Preparação não é problema; improviso e desconhecimento, sim.
+
+EVITAR
+
+USAR
+
+"Não sei / não lembro"
+
+"Não posso afirmar; o que posso afirmar é ___"
+
+"Acho que..."
+
+"Consta no documento ___ que ___"
+
+"Sempre / nunca"
+
+"Pelo procedimento padrão: ___"
+
+
+
+
+
+1) PEDIDOS E POSIÇÃO DA EMPRESA
+
+🔴 [Tema — alta criticidade]
+
+[Alegação + posição da empresa + orientação de resposta. 3-5 linhas.]
+
+
+
+🟡 [Tema — média criticidade]
+
+[Alegação + posição + orientação. 2-4 linhas.]
+
+
+
+🟢 [Tema — baixa criticidade]
+
+[Alegação + posição + orientação. 1-2 linhas.]
+
+
+
+2) DADOS DO CONTRATO A DOMINAR
+
+Admissão: [data]  |  Função: [cargo]
+
+Jornada: [escala/controle]  |  Término: [data — modalidade]
+
+
+
+3) PERGUNTAS ESPERADAS
+
+Pergunta provável
+
+Orientação (fatos/docs)
+
+[Pergunta 1]
+
+[Orientação ancorada em fato/documento.]
+
+[Pergunta 2]
+
+[Orientação.]
+
+[Pergunta 3]
+
+[Orientação.]
+
+
+
+
+
+4) ARMADILHAS
+
+"[Pergunta capciosa]"
+
+→ "[Frase segura.]"
+
+
+
+"[Outra pergunta capciosa]"
+
+→ "[Frase segura.]"
+
+
+
+5) TÉCNICA DE DEPOIMENTO
+
+Ouvir a pergunta inteira. Pausar antes de responder. Curto com fato. Ancorar em documento. Sempre "Excelência".

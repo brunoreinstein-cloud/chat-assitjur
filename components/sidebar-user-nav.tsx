@@ -91,6 +91,7 @@ export function SidebarUserNav({ user }: { user: User }) {
                       if (status === "loading") {
                         return;
                       }
+                      await fetch("/api/history", { method: "DELETE" });
                       await signOut({ redirect: false });
                       globalThis.window.location.href =
                         "/api/auth/guest?redirectUrl=/chat";
@@ -103,10 +104,11 @@ export function SidebarUserNav({ user }: { user: User }) {
                 <DropdownMenuItem asChild data-testid="user-nav-item-auth">
                   <button
                     className="w-full cursor-pointer"
-                    onClick={() => {
+                    onClick={async () => {
                       if (status === "loading") {
                         return;
                       }
+                      await fetch("/api/history", { method: "DELETE" });
                       router.push("/login");
                     }}
                     type="button"

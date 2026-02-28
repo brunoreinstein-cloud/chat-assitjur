@@ -29,6 +29,13 @@ import { useSidebar } from "./ui/sidebar";
 import { VersionFooter } from "./version-footer";
 import type { VisibilityType } from "./visibility-selector";
 
+/** Largura mínima do painel da conversa (documento à direita). */
+const CONVERSATION_PANEL_MIN = 360;
+/** Largura máxima do painel da conversa. */
+const CONVERSATION_PANEL_MAX = 520;
+/** Percentagem do viewport para o painel da conversa (resto = documento). */
+const CONVERSATION_PANEL_RATIO = 0.42;
+
 export const artifactDefinitions = [
   textArtifact,
   codeArtifact,
@@ -244,6 +251,18 @@ function PureArtifact({
 
   const { width: windowWidth, height: windowHeight } = useWindowSize();
   const isMobile = windowWidth ? windowWidth < 768 : false;
+  const safeWidth = Math.max(windowWidth ?? 0, 1024);
+  const conversationPanelWidth =
+    safeWidth > 0
+      ? Math.min(
+          CONVERSATION_PANEL_MAX,
+          Math.max(
+            CONVERSATION_PANEL_MIN,
+            Math.round(safeWidth * CONVERSATION_PANEL_RATIO)
+          )
+        )
+      : CONVERSATION_PANEL_MAX;
+  const artifactPanelWidth = Math.max(320, safeWidth - conversationPanelWidth);
 
   const artifactDefinition = artifactDefinitions.find(
     (definition) => definition.kind === artifact.kind
@@ -300,7 +319,7 @@ function PureArtifact({
                   damping: 30,
                 },
               }}
-              className="relative h-dvh w-[400px] shrink-0 bg-muted dark:bg-background"
+              className="relative flex h-dvh min-w-0 shrink-0 flex-col bg-muted dark:bg-background"
               exit={{
                 opacity: 0,
                 x: 0,
@@ -308,19 +327,21 @@ function PureArtifact({
                 transition: { duration: 0 },
               }}
               initial={{ opacity: 0, x: 10, scale: 1 }}
+              style={{ width: conversationPanelWidth }}
             >
               <AnimatePresence>
                 {!isCurrentVersion && (
                   <motion.div
                     animate={{ opacity: 1 }}
-                    className="absolute top-0 left-0 z-50 h-dvh w-[400px] bg-zinc-900/50"
+                    className="absolute top-0 left-0 z-50 h-dvh bg-zinc-900/50"
                     exit={{ opacity: 0 }}
                     initial={{ opacity: 0 }}
+                    style={{ width: conversationPanelWidth }}
                   />
                 )}
               </AnimatePresence>
 
-              <div className="flex h-full flex-col items-center justify-between">
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                 <ArtifactMessages
                   addToolApprovalResponse={addToolApprovalResponse}
                   artifactStatus={artifact.status}
@@ -374,12 +395,13 @@ function PureArtifact({
                   }
                 : {
                     opacity: 1,
-                    x: 400,
+                    x: conversationPanelWidth,
                     y: 0,
                     height: windowHeight,
-                    width: windowWidth
-                      ? windowWidth - 400
-                      : "calc(100dvw-400px)",
+                    width:
+                      windowWidth && windowWidth > conversationPanelWidth
+                        ? artifactPanelWidth
+                        : `calc(100dvw - ${conversationPanelWidth}px)`,
                     borderRadius: 0,
                     transition: {
                       delay: 0,
@@ -390,7 +412,7 @@ function PureArtifact({
                     },
                   }
             }
-            className="fixed flex h-dvh flex-col overflow-y-scroll border-zinc-200 bg-background md:border-l dark:border-zinc-700 dark:bg-muted"
+            className="fixed flex h-dvh flex-col overflow-hidden border-zinc-200 bg-background md:border-l dark:border-zinc-700 dark:bg-muted"
             exit={{
               opacity: 0,
               scale: 0.5,
@@ -421,45 +443,48 @@ function PureArtifact({
                   }
             }
           >
-            <div className="flex flex-row items-start justify-between p-2">
-              <div className="flex flex-row items-start gap-4">
-                <ArtifactCloseButton />
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="flex shrink-0 flex-row items-start justify-between gap-2 border-b border-border p-3">
+                <div className="flex min-w-0 flex-1 flex-row items-start gap-3">
+                  <ArtifactCloseButton />
 
-                <div className="flex flex-col">
-                  <div className="font-medium">{artifact.title}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium" title={artifact.title}>
+                      {artifact.title}
+                    </div>
 
-                  {isContentDirty ? (
-                    <div className="text-muted-foreground text-sm">
-                      Saving changes...
-                    </div>
-                  ) : document ? (
-                    <div className="text-muted-foreground text-sm">
-                      {`Updated ${formatDistance(
-                        new Date(document.createdAt),
-                        new Date(),
-                        {
-                          addSuffix: true,
-                        }
-                      )}`}
-                    </div>
-                  ) : (
-                    <div className="mt-2 h-3 w-32 animate-pulse rounded-md bg-muted-foreground/20" />
-                  )}
+                    {isContentDirty ? (
+                      <div className="text-muted-foreground text-sm">
+                        Saving changes…
+                      </div>
+                    ) : document ? (
+                      <div className="text-muted-foreground text-sm">
+                        {`Updated ${formatDistance(
+                          new Date(document.createdAt),
+                          new Date(),
+                          {
+                            addSuffix: true,
+                          }
+                        )}`}
+                      </div>
+                    ) : (
+                      <div className="mt-2 h-3 w-32 animate-pulse rounded-md bg-muted-foreground/20" />
+                    )}
+                  </div>
                 </div>
+
+                <ArtifactActions
+                  artifact={artifact}
+                  currentVersionIndex={currentVersionIndex}
+                  handleVersionChange={handleVersionChange}
+                  isCurrentVersion={isCurrentVersion}
+                  metadata={metadata}
+                  mode={mode}
+                  setMetadata={setMetadata}
+                />
               </div>
 
-              <ArtifactActions
-                artifact={artifact}
-                currentVersionIndex={currentVersionIndex}
-                handleVersionChange={handleVersionChange}
-                isCurrentVersion={isCurrentVersion}
-                metadata={metadata}
-                mode={mode}
-                setMetadata={setMetadata}
-              />
-            </div>
-
-            <div className="h-full max-w-full! items-center overflow-y-scroll bg-background dark:bg-muted">
+              <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-background dark:bg-muted">
               <artifactDefinition.content
                 content={
                   isCurrentVersion
@@ -493,17 +518,18 @@ function PureArtifact({
                   />
                 )}
               </AnimatePresence>
-            </div>
+              </div>
 
-            <AnimatePresence>
-              {!isCurrentVersion && (
-                <VersionFooter
-                  currentVersionIndex={currentVersionIndex}
-                  documents={documents}
-                  handleVersionChange={handleVersionChange}
-                />
-              )}
-            </AnimatePresence>
+                <AnimatePresence>
+                {!isCurrentVersion && (
+                  <VersionFooter
+                    currentVersionIndex={currentVersionIndex}
+                    documents={documents}
+                    handleVersionChange={handleVersionChange}
+                  />
+                )}
+              </AnimatePresence>
+            </div>
           </motion.div>
         </motion.div>
       )}

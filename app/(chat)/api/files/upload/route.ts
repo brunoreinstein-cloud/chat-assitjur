@@ -211,24 +211,47 @@ async function extractTextFromPdfWithOcr(buffer: ArrayBuffer): Promise<string> {
 
 type ExtractPdfResult = { text: string; lastError?: string };
 
+/** Suprime avisos do PDF.js (ex.: "TT: undefined function") durante a extração. */
+async function withPdfWarningsSuppressed<T>(fn: () => Promise<T>): Promise<T> {
+  const originalWarn = console.warn;
+  console.warn = (...args: unknown[]) => {
+    const msg = args[0];
+    if (typeof msg === "string" && msg.includes("TT:")) {
+      return;
+    }
+    originalWarn.apply(console, args);
+  };
+  try {
+    return await fn();
+  } finally {
+    console.warn = originalWarn;
+  }
+}
+
 async function extractTextFromPdf(buffer: ArrayBuffer): Promise<ExtractPdfResult> {
   let text = "";
   let lastError: string | undefined;
   try {
-    text = await extractTextFromPdfUnpdf(buffer.slice(0));
+    text = await withPdfWarningsSuppressed(() =>
+      extractTextFromPdfUnpdf(buffer.slice(0))
+    );
   } catch {
     text = "";
   }
   if (text.trim().length === 0) {
     try {
-      text = await extractTextFromPdfFallback(buffer.slice(0));
+      text = await withPdfWarningsSuppressed(() =>
+        extractTextFromPdfFallback(buffer.slice(0))
+      );
     } catch {
       text = "";
     }
   }
   if (text.trim().length === 0) {
     try {
-      text = await extractTextFromPdfWithOcr(buffer.slice(0));
+      text = await withPdfWarningsSuppressed(() =>
+        extractTextFromPdfWithOcr(buffer.slice(0))
+      );
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
       text = "";

@@ -36,6 +36,7 @@ R5-OPORTUNIDADES: 🔵Tese 🟣Probatória 🟠Fato 🟤Precedente. Inserir DENT
 Criticidade: 🔴 alta | 🟡 média | 🟢 baixa. Avaliação defesa: ✅ adequada | ❌ melhorar | ⚠️ atenção. Usar em TODOS os docs sempre que um pedido/tema aparecer.
 
 ## FORMATAÇÃO GERAL (3 DOCX)
+Os 3 DOCX DEVEM seguir à risca os modelos oficiais em lib/ai/modelos: MODELO_PARECER_EXECUTIVO.txt (Doc 1), MODELO_ROTEIRO_ADVOGADO.txt (Doc 2), MODELO_ROTEIRO_PREPOSTO.txt (Doc 3). Estrutura, secções e placeholders [ ] são obrigatórios.
 LOGO: logomarca do escritório no cabeçalho de TODOS os docs.
 DADOS DO PROCESSO: formato QUADRO/TABELA (2 colunas: campo|valor), NÃO texto corrido. Campos: Processo nº | Vara | Reclamante (nome+função) | Reclamada | Advogado(a) Reclamante (nome+OAB) | Advogado(a) Reclamada | Admissão | Término | Rescisão | Audiência. Se não encontrar→OMITIR (sem "não localizada").
 ONDE LOCALIZAR OAB: bloco de assinaturas ao final da Petição Inicial.

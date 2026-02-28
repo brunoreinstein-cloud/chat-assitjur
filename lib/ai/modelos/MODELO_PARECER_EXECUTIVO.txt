@@ -1,0 +1,227 @@
+PARECER EXECUTIVO — CONTESTAÇÃO TRABALHISTA
+
+Relatório gerado por IA. Revisão humana necessária e obrigatória.
+
+Processo nº
+
+0000000-00.2026.5.00.0000
+
+Vara
+
+[Vara e Comarca]
+
+Reclamante
+
+[Nome completo] | [Função]
+
+Reclamada
+
+[Razão social]
+
+Advogados Reclamante
+
+[Nome — OAB/UF 000.000]
+
+Advogados Reclamada
+
+[Nome — OAB/UF 000.000] | [Escritório]
+
+Admissão
+
+[DD/MM/AAAA]
+
+Término do contrato
+
+[DD/MM/AAAA]
+
+Modalidade de rescisão
+
+[Tipo — fundamento legal]
+
+Audiência
+
+[Tipo] — [DD/MM/AAAA] às [HH:MM]
+
+
+
+
+
+1) CONTEXTO ESSENCIAL
+
+Questão central: [Síntese do conflito em 3-5 linhas.]
+
+Linha defensiva: [Síntese da estratégia da contestação em 3-5 linhas.]
+
+
+
+2) PRESCRIÇÃO
+
+Tipo
+
+Corte temporal
+
+Arguida?
+
+Status
+
+Observação
+
+Bienal
+
+[DD/MM/AAAA]
+
+[Sim/Não]
+
+[✅/❌/N/A]
+
+[Explicação objetiva.]
+
+Quinquenal
+
+[DD/MM/AAAA]
+
+[Sim/Não]
+
+[✅/❌/N/A]
+
+[Explicação objetiva.]
+
+
+
+
+
+3) QUADRO RESUMO DE PEDIDOS
+
+Visão panorâmica: criticidade, impugnação e detalhamento da defesa por pedido.
+
+#
+
+Pedido
+
+Crit.
+
+Impug.?
+
+Detalhe?
+
+Observação
+
+1
+
+[Pedido]
+
+🔴
+
+SIM
+
+✅
+
+[Nota]
+
+2
+
+[Pedido]
+
+🟡
+
+SIM
+
+⚠️
+
+[Nota]
+
+3
+
+[Pedido]
+
+🔴
+
+PARCIAL
+
+❌
+
+[Nota]
+
+
+
+
+
+4) ANÁLISE TEMÁTICA — CONFRONTO PEDIDO × DEFESA
+
+⚠️  [Tema — criticidade alta, defesa com problema]
+
+Pedido/alegação do reclamante: [1-2 linhas.]
+
+Tese da defesa: [Específica/Genérica. Fundamento. 1-2 linhas.]
+
+Ônus da prova: [Quem e por quê.]
+
+Ajuste recomendado: [Correção direta e objetiva.]
+
+[🟣/🔵/🟠/🟤] Oportunidade: [descrição objetiva.]
+
+
+
+✅  [Tema — defesa adequada]
+
+Pedido/alegação do reclamante: [1-2 linhas.]
+
+Tese da defesa: [Específica. Bem fundamentada.]
+
+Ônus da prova: [Indicação.]
+
+Status: [Adequada. Observações pontuais.]
+
+
+
+❌  [Tema — precisa melhorar]
+
+Pedido/alegação do reclamante: [Alegação.]
+
+Tese da defesa: [Genérica/ausente.]
+
+Ônus da prova: [Indicação.]
+
+Ajuste recomendado: [Correção necessária.]
+
+[🟣/🔵] Oportunidade: [descrição.]
+
+
+
+Pedidos não impugnados: [lista] ou NENHUM.
+
+
+
+5) DEFESAS PROCESSUAIS OBRIGATÓRIAS
+
+Defesa
+
+Status
+
+Observação
+
+Prescrição bienal
+
+[✅/❌/N/A]
+
+[Nota]
+
+Prescrição quinquenal
+
+[✅/❌/N/A]
+
+[Nota]
+
+[Outra defesa]
+
+[Status]
+
+[Nota]
+
+
+
+
+
+6) QUADRO DE TESES
+
+Somente gerado quando @bancodetese for fornecido.
