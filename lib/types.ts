@@ -50,6 +50,8 @@ export interface CustomUIDataTypes {
   clear: null;
   finish: null;
   "chat-title": string;
+  /** Index signature required by AI SDK UIDataTypes */
+  [key: string]: string | Suggestion | ArtifactKind | null | undefined;
 }
 
 export type ChatMessage = UIMessage<

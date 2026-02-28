@@ -23,6 +23,7 @@ import { documentFetcher } from "@/lib/utils";
 import { ArtifactActions } from "./artifact-actions";
 import { ArtifactCloseButton } from "./artifact-close-button";
 import { ArtifactMessages } from "./artifact-messages";
+import type { Artifact as ArtifactClass } from "./create-artifact";
 import { MultimodalInput } from "./multimodal-input";
 import { Toolbar } from "./toolbar";
 import { useSidebar } from "./ui/sidebar";
@@ -272,6 +273,12 @@ function PureArtifact({
     throw new Error("Artifact definition not found!");
   }
 
+  const definitionWithUnknownMeta = artifactDefinition as ArtifactClass<
+    ArtifactKind,
+    unknown
+  >;
+  const ArtifactContentComponent = definitionWithUnknownMeta.content;
+
   useEffect(() => {
     if (artifact.documentId !== "init" && artifactDefinition.initialize) {
       artifactDefinition.initialize({
@@ -488,7 +495,7 @@ function PureArtifact({
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/40">
-                <artifactDefinition.content
+                <ArtifactContentComponent
                   content={
                     isCurrentVersion
                       ? artifact.content

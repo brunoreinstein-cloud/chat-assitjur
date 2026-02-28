@@ -16,7 +16,7 @@ export interface ArtifactActionContext<M = unknown> {
   setMetadata: Dispatch<SetStateAction<M>>;
 }
 
-interface ArtifactAction<M = unknown> {
+export interface ArtifactAction<M = unknown> {
   icon: ReactNode;
   label?: string;
   description: string;

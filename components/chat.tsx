@@ -25,7 +25,7 @@ import { ChatbotError } from "@/lib/errors";
 import type { Attachment, ChatMessage } from "@/lib/types";
 import { fetcher, fetchWithErrorHandlers, generateUUID } from "@/lib/utils";
 import { Artifact } from "./artifact";
-import { useDataStream } from "./data-stream-provider";
+import { type DataStreamState, useDataStream } from "./data-stream-provider";
 import { Messages } from "./messages";
 import { MultimodalInput } from "./multimodal-input";
 import { RevisorPhaseBanner } from "./revisor-phase-banner";
@@ -153,7 +153,9 @@ export function Chat({
       },
     }),
     onData: (dataPart) => {
-      setDataStream((ds) => (ds ? [...ds, dataPart] : []));
+      setDataStream(
+        (ds) => (ds ? [...ds, dataPart] : []) as unknown as DataStreamState
+      );
     },
     onFinish: () => {
       mutate(unstable_serialize(getChatHistoryPaginationKey));
