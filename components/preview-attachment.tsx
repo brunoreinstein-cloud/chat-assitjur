@@ -83,12 +83,16 @@ const DOC_MIME = "application/msword";
 const DOCX_MIME =
 	"application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
+/** Texto mostrado no overlay durante upload/processamento. Se não for passado, usa o padrão. */
+const DEFAULT_UPLOADING_LABEL = "A processar documento…";
+
 export const PreviewAttachment = ({
 	attachment,
 	isUploading = false,
 	onDocumentTypeChange,
 	onPastedText,
 	onRemove,
+	uploadingLabel = DEFAULT_UPLOADING_LABEL,
 }: {
 	attachment: Attachment;
 	isUploading?: boolean;
@@ -97,6 +101,8 @@ export const PreviewAttachment = ({
 	/** Quando definido e extração falhou, permite colar texto; ao confirmar, o anexo passa a ter extractedText */
 	onPastedText?: (text: string) => void;
 	onRemove?: () => void;
+	/** Texto no overlay durante upload/processamento (ex.: "A processar documento…") */
+	uploadingLabel?: string;
 }) => {
 	const {
 		name,
@@ -153,12 +159,17 @@ export const PreviewAttachment = ({
 				)}
 
 				{isUploading && (
-					<div
-						className="absolute inset-0 flex items-center justify-center bg-black/50"
+					<output
+						aria-busy="true"
+						aria-label={uploadingLabel}
+						className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-black/50 px-1 py-2"
 						data-testid="input-attachment-loader"
 					>
 						<Loader size={16} />
-					</div>
+						<span className="text-center text-[10px] font-medium text-white drop-shadow-sm">
+							{uploadingLabel}
+						</span>
+					</output>
 				)}
 
 				{onRemove && !isUploading && (

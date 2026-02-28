@@ -49,16 +49,17 @@ export const createRevisorDefesaDocuments = ({
 			const ids = [generateUUID(), generateUUID(), generateUUID()];
 			const userId = session?.user?.id;
 
-			// Gera os 3 conteúdos em paralelo (principal ganho de tempo)
-			const contents = await Promise.all(
-				titles.map((title) => generateRevisorDocumentContent(title)),
+			// Inicia as 3 gerações em paralelo; cada doc é enviado ao cliente assim que fica pronto (na ordem),
+			// reduzindo o tempo até o primeiro documento aparecer em produção.
+			const contentPromises = titles.map((title) =>
+				generateRevisorDocumentContent(title),
 			);
 
-			// Envia para o cliente na ordem e persiste (comportamento igual a 3x createDocument)
 			for (let i = 0; i < 3; i++) {
+				const content = (await contentPromises[i]) ?? "";
+
 				const id = ids[i];
 				const title = titles[i];
-				const content = contents[i] ?? "";
 
 				dataStream.write({
 					type: "data-kind",
@@ -81,7 +82,6 @@ export const createRevisorDefesaDocuments = ({
 					transient: true,
 				});
 
-				// Stream do conteúdo em chunks para o UI atualizar progressivamente
 				for (let offset = 0; offset < content.length; offset += CHUNK_SIZE) {
 					const chunk = content.slice(offset, offset + CHUNK_SIZE);
 					dataStream.write({

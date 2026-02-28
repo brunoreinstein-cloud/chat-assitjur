@@ -645,6 +645,7 @@ function PureMultimodalInput({
 									}}
 									isUploading={true}
 									key={filename}
+									uploadingLabel="A enviar e a processar documento…"
 								/>
 							))}
 						</ul>

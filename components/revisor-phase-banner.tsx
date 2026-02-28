@@ -104,7 +104,7 @@ export function RevisorPhaseBanner({
 				aria-live="polite"
 				className="border-border bg-muted/50 text-muted-foreground mx-2 mb-1 block rounded-md border px-3 py-2 text-center text-sm md:mx-4"
 			>
-				FASE B — Gerando documentos.
+				FASE B — Gerando os 3 documentos. O primeiro aparecerá em breve.
 			</output>
 		);
 	}
