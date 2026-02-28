@@ -294,7 +294,7 @@ async function extractTextFromPdf(buffer: ArrayBuffer): Promise<ExtractPdfResult
 async function extractTextFromDoc(buffer: ArrayBuffer): Promise<string> {
   const mod = await import("word-extractor");
   const WordExtractor =
-    (mod as { default?: typeof import("word-extractor") }).default ?? mod;
+    ((mod as { default?: typeof import("word-extractor") }).default ?? mod) as typeof import("word-extractor");
   const extractor = new WordExtractor();
   const doc = await extractor.extract(Buffer.from(buffer));
   const text = doc.getBody() ?? "";

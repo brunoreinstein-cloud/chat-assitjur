@@ -329,8 +329,25 @@ function PureMultimodalInput({
       try {
         for (const file of files) {
           const attachment = await uploadFile(file);
-          if (attachment !== undefined) {
-            setAttachments((current) => [...current, attachment]);
+          if (
+            attachment !== undefined &&
+            typeof attachment.url === "string"
+          ) {
+            const a: Attachment = {
+              name: attachment.name,
+              url: attachment.url,
+              contentType: attachment.contentType,
+              ...(attachment.extractedText !== undefined && {
+                extractedText: attachment.extractedText,
+              }),
+              ...(attachment.documentType !== undefined && {
+                documentType: attachment.documentType,
+              }),
+              ...(attachment.extractionFailed === true && {
+                extractionFailed: true,
+              }),
+            };
+            setAttachments((current) => [...current, a]);
           }
           setUploadQueue((prev) => prev.filter((n) => n !== file.name));
         }
