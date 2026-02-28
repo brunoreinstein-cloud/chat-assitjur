@@ -72,13 +72,13 @@ const PureSpreadsheetEditor = ({ content, saveContent }: SheetEditorProps) => {
 
 	const initialRows = useMemo(() => {
 		return parseData.map((row, rowIndex) => {
-			const rowData: any = {
+			const rowData: Record<string, string | number> = {
 				id: rowIndex,
 				rowNumber: rowIndex + 1,
 			};
 
 			columns.slice(1).forEach((col, colIndex) => {
-				rowData[col.key] = row[colIndex] || "";
+				rowData[col.key] = (row[colIndex] as string) || "";
 			});
 
 			return rowData;
@@ -91,11 +91,11 @@ const PureSpreadsheetEditor = ({ content, saveContent }: SheetEditorProps) => {
 		setLocalRows(initialRows);
 	}, [initialRows]);
 
-	const generateCsv = (data: any[][]) => {
+	const generateCsv = (data: (string | number)[][]) => {
 		return unparse(data);
 	};
 
-	const handleRowsChange = (newRows: any[]) => {
+	const handleRowsChange = (newRows: Record<string, string | number>[]) => {
 		setLocalRows(newRows);
 
 		const updatedData = newRows.map((row) => {

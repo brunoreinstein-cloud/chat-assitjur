@@ -88,7 +88,10 @@ export const documentFetcher = async (url: string): Promise<unknown> => {
 		}
 	}
 
-	const { code, cause } = await parseErrorBody(lastResponse!);
+	if (!lastResponse) {
+		throw new ChatbotError("UNKNOWN" as ErrorCode, "No response received");
+	}
+	const { code, cause } = await parseErrorBody(lastResponse);
 	throw new ChatbotError(code as ErrorCode, cause);
 };
 

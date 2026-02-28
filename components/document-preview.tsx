@@ -24,8 +24,11 @@ import { Editor } from "./text-editor";
 
 type DocumentPreviewProps = {
 	isReadonly: boolean;
-	result?: any;
-	args?: any;
+	result?: { id?: string; kind?: string; title?: string } & Record<
+		string,
+		unknown
+	>;
+	args?: Record<string, unknown>;
 };
 
 export function DocumentPreview({
@@ -151,7 +154,10 @@ const PureHitboxLayer = ({
 	setArtifact,
 }: {
 	hitboxRef: React.RefObject<HTMLDivElement>;
-	result: any;
+	result: { id?: string; kind?: string; title?: string } & Record<
+		string,
+		unknown
+	>;
 	setArtifact: (
 		updaterFn: UIArtifact | ((currentArtifact: UIArtifact) => UIArtifact),
 	) => void;

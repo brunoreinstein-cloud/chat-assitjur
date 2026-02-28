@@ -12,8 +12,8 @@ type ArtifactActionsProps = {
 	currentVersionIndex: number;
 	isCurrentVersion: boolean;
 	mode: "edit" | "diff";
-	metadata: any;
-	setMetadata: Dispatch<SetStateAction<any>>;
+	metadata: unknown;
+	setMetadata: Dispatch<SetStateAction<unknown>>;
 };
 
 function PureArtifactActions({

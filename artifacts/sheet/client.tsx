@@ -10,7 +10,7 @@ import {
 } from "@/components/icons";
 import { SpreadsheetEditor } from "@/components/sheet-editor";
 
-type Metadata = any;
+type Metadata = Record<string, unknown> | null;
 
 export const sheetArtifact = new Artifact<"sheet", Metadata>({
 	kind: "sheet",

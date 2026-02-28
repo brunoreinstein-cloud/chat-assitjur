@@ -16,5 +16,17 @@
 		"parser": {
 			"tailwindDirectives": true
 		}
-	}
+	},
+	"overrides": [
+		{
+			"includes": ["components/ui/carousel.tsx"],
+			"linter": {
+				"rules": {
+					"a11y": {
+						"useSemanticElements": "off"
+					}
+				}
+			}
+		}
+	]
 }
