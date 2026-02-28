@@ -207,7 +207,47 @@ export function Chat({
     fetcher
   );
 
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const DRAFT_ATTACHMENTS_KEY = `chat-draft-attachments-${id}`;
+
+  const [attachments, setAttachments] = useState<Attachment[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = sessionStorage.getItem(DRAFT_ATTACHMENTS_KEY);
+      return raw ? (JSON.parse(raw) as Attachment[]) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const prevChatIdRef = useRef<string>(id);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(DRAFT_ATTACHMENTS_KEY);
+      const stored = raw ? (JSON.parse(raw) as Attachment[]) : [];
+      setAttachments(stored);
+    } catch {
+      setAttachments([]);
+    }
+  }, [id, DRAFT_ATTACHMENTS_KEY]);
+
+  useEffect(() => {
+    if (prevChatIdRef.current !== id) {
+      prevChatIdRef.current = id;
+      return;
+    }
+    try {
+      const key = `chat-draft-attachments-${id}`;
+      if (attachments.length > 0) {
+        sessionStorage.setItem(key, JSON.stringify(attachments));
+      } else {
+        sessionStorage.removeItem(key);
+      }
+    } catch {
+      // Ignora falhas de quota ou sessão
+    }
+  }, [attachments, id]);
+
   const isArtifactVisible = useArtifactSelector((state) => state.isVisible);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -262,6 +302,7 @@ export function Chat({
               chatId={id}
               input={input}
               inputRef={inputRef}
+              knowledgeDocumentIds={knowledgeDocumentIds}
               messages={messages}
               onModelChange={setCurrentModelId}
               selectedModelId={currentModelId}

@@ -63,7 +63,10 @@ export const {
       async authorize({
         email,
         password,
-      }: { email?: string; password?: string }) {
+      }: {
+        email?: string;
+        password?: string;
+      }) {
         if (!email) {
           return null;
         }

@@ -87,7 +87,8 @@ export async function createUser(email: string, password: string) {
       .insert(user)
       .values({ email, password: hashedPassword });
   } catch (err) {
-    const detail = err instanceof Error ? err.message : "Unknown database error";
+    const detail =
+      err instanceof Error ? err.message : "Unknown database error";
     throw new ChatbotError(
       "bad_request:database",
       `Failed to create user: ${detail}`

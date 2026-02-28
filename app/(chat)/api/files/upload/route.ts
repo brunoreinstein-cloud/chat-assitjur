@@ -17,16 +17,62 @@ function buildDataUrl(buffer: ArrayBuffer, contentType: string): string {
 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png"] as const;
 const ACCEPTED_PDF_TYPE = "application/pdf" as const;
+/** Word 97-2003 (.doc) */
+const ACCEPTED_DOC_TYPE = "application/msword" as const;
+/** Word Open XML (.docx) */
 const ACCEPTED_DOCX_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document" as const;
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 const MAX_EXTRACTED_TEXT_LENGTH = 300_000; // ~300k caracteres
+/** Máximo de páginas a processar por OCR (PDFs digitalizados); evita timeout. */
+const MAX_OCR_PAGES = 15;
+
+/** Amostra do início do texto para classificação (evita analisar o doc inteiro). */
+const CLASSIFY_SAMPLE_LENGTH = 4000;
+
+/**
+ * Classifica o tipo de documento (PI ou Contestação) por padrões no texto.
+ * Usa apenas o início do documento; retorna undefined se não houver indício claro.
+ */
+function classifyDocumentType(text: string): "pi" | "contestacao" | undefined {
+  const sample = text.slice(0, CLASSIFY_SAMPLE_LENGTH).toUpperCase();
+  const piMarkers = [
+    /\bPETI[CÇ][AÃ]O\s+INICIAL\b/,
+    /\bRECLAMANTE\s*[:\s]/,
+    /\bRECLAMA[CÇ][AÃ]O\s+TRABALHISTA\b/,
+    /\bEXCELENT[IÍ]SSIMO\s*\(?\s*A?\s*\)?\s*SENHOR\s*\(?\s*A?\s*\)?\s*JUIZ/,
+    /\bDOS\s+FATOS\b/,
+    /\bAJUIZAMENTO\b/,
+  ];
+  const contestacaoMarkers = [
+    /\bCONTESTA[CÇ][AÃ]O\b/,
+    /\bAPRESENTAR\s+CONTESTA[CÇ][AÃ]O\b/,
+    /\bIMPUGNA\b/,
+    /\bIMPUGNA[CÇ][AÃ]O\b/,
+    /\bRECLAMADO\s*[:\s]/,
+    /\bDEFESA\s+(?:DO\s+)?RECLAMADO\b/,
+    /\bCONTESTA[CÇ][AÃ]O\s+AO[S]?\s+PEDIDOS?\b/,
+  ];
+  let piScore = 0;
+  let contestacaoScore = 0;
+  for (const re of piMarkers) {
+    if (re.test(sample)) piScore += 1;
+  }
+  for (const re of contestacaoMarkers) {
+    if (re.test(sample)) contestacaoScore += 1;
+  }
+  if (contestacaoScore > piScore) return "contestacao";
+  if (piScore > contestacaoScore) return "pi";
+  if (contestacaoScore > 0) return "contestacao";
+  if (piScore > 0) return "pi";
+  return undefined;
+}
 
 const FileSchema = z.object({
   file: z
     .instanceof(Blob)
     .refine((file) => file.size <= MAX_FILE_SIZE, {
-      message: "O arquivo deve ter no máximo 5MB",
+      message: "O arquivo deve ter no máximo 20MB",
     })
     .refine(
       (file) =>
@@ -34,9 +80,10 @@ const FileSchema = z.object({
           file.type as (typeof ACCEPTED_IMAGE_TYPES)[number]
         ) ||
         file.type === ACCEPTED_PDF_TYPE ||
+        file.type === ACCEPTED_DOC_TYPE ||
         file.type === ACCEPTED_DOCX_TYPE,
       {
-        message: "Tipos aceitos: JPEG, PNG, PDF ou DOCX",
+        message: "Tipos aceitos: JPEG, PNG, PDF, DOC ou DOCX",
       }
     ),
 });
@@ -80,18 +127,129 @@ async function uploadFile(
   return { ok: true, url: publicUrl, pathname: path };
 }
 
-async function extractTextFromPdf(buffer: ArrayBuffer): Promise<string> {
-  const { PDFParse } = await import("pdf-parse");
-  const parser = new PDFParse({ data: buffer });
-  try {
-    const result = await parser.getText();
-    const text = typeof result?.text === "string" ? result.text : "";
-    return text.length > MAX_EXTRACTED_TEXT_LENGTH
-      ? `${text.slice(0, MAX_EXTRACTED_TEXT_LENGTH)}\n\n[... texto truncado ...]`
-      : text;
-  } finally {
-    await parser.destroy();
+/**
+ * Extração principal com unpdf (mergePages). Funciona bem para a maioria dos PDFs com camada de texto.
+ */
+async function extractTextFromPdfUnpdf(buffer: ArrayBuffer): Promise<string> {
+  const { extractText, getDocumentProxy } = await import("unpdf");
+  const data = new Uint8Array(buffer);
+  const pdf = await getDocumentProxy(data);
+  const result = await extractText(pdf, { mergePages: true });
+  return typeof result.text === "string" ? result.text : "";
+}
+
+/**
+ * Fallback: extração página a página com getPage + getTextContent.
+ * Pode obter texto em PDFs onde extractText do unpdf devolve vazio (ex.: encoding não padrão).
+ */
+async function extractTextFromPdfFallback(buffer: ArrayBuffer): Promise<string> {
+  const { getDocumentProxy } = await import("unpdf");
+  const pdf = await getDocumentProxy(new Uint8Array(buffer));
+  const numPages = (pdf as { numPages: number }).numPages;
+  if (numPages <= 0) return "";
+  const parts: string[] = [];
+  for (let i = 1; i <= numPages; i += 1) {
+    const page = await (pdf as { getPage: (n: number) => Promise<{ getTextContent: () => Promise<{ items: Array<{ str?: string }> }> }> }).getPage(i);
+    const content = await page.getTextContent();
+    const pageText = (content.items as Array<{ str?: string }>)
+      .map((item) => item.str ?? "")
+      .join(" ");
+    parts.push(pageText);
   }
+  return parts.join("\n\n");
+}
+
+/**
+ * OCR para PDFs digitalizados (sem camada de texto).
+ * Renderiza cada página como imagem (unpdf + canvas) e extrai texto com Tesseract.js.
+ * Chamado automaticamente quando a extração da camada de texto devolve vazio.
+ */
+async function extractTextFromPdfWithOcr(buffer: ArrayBuffer): Promise<string> {
+  const { getDocumentProxy, renderPageAsImage } = await import("unpdf");
+  const data = new Uint8Array(buffer);
+  const pdf = await getDocumentProxy(data);
+  const numPages = (pdf as { numPages: number }).numPages;
+  const pagesToProcess = Math.min(numPages, MAX_OCR_PAGES);
+  if (pagesToProcess <= 0) return "";
+
+  const Tesseract = await import("tesseract.js");
+  const worker = await Tesseract.createWorker(["por", "eng"], 1, {
+    logger: () => {},
+  });
+  await worker.setParameters({
+    tessedit_pageseg_mode: Tesseract.PSM?.AUTO ?? "3",
+  });
+  const parts: string[] = [];
+
+  try {
+    for (let i = 1; i <= pagesToProcess; i += 1) {
+      try {
+        const imageBuffer = await renderPageAsImage(data, i, {
+          canvasImport: () => import("@napi-rs/canvas"),
+          scale: 3,
+        });
+        if (!imageBuffer || imageBuffer.byteLength < 100) {
+          continue;
+        }
+        const result = await worker.recognize(Buffer.from(imageBuffer));
+        const pageText =
+          typeof result?.data?.text === "string" ? result.data.text : "";
+        parts.push(pageText);
+      } catch {
+        // Ignora falha numa página e continua com as restantes
+      }
+    }
+  } finally {
+    await worker.terminate();
+  }
+
+  const text = parts.join("\n\n");
+  return text.length > MAX_EXTRACTED_TEXT_LENGTH
+    ? `${text.slice(0, MAX_EXTRACTED_TEXT_LENGTH)}\n\n[... texto truncado ...]`
+    : text;
+}
+
+type ExtractPdfResult = { text: string; lastError?: string };
+
+async function extractTextFromPdf(buffer: ArrayBuffer): Promise<ExtractPdfResult> {
+  let text = "";
+  let lastError: string | undefined;
+  try {
+    text = await extractTextFromPdfUnpdf(buffer.slice(0));
+  } catch {
+    text = "";
+  }
+  if (text.trim().length === 0) {
+    try {
+      text = await extractTextFromPdfFallback(buffer.slice(0));
+    } catch {
+      text = "";
+    }
+  }
+  if (text.trim().length === 0) {
+    try {
+      text = await extractTextFromPdfWithOcr(buffer.slice(0));
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
+      text = "";
+    }
+  }
+  if (text.length > MAX_EXTRACTED_TEXT_LENGTH) {
+    text = `${text.slice(0, MAX_EXTRACTED_TEXT_LENGTH)}\n\n[... texto truncado ...]`;
+  }
+  return { text, lastError };
+}
+
+async function extractTextFromDoc(buffer: ArrayBuffer): Promise<string> {
+  const mod = await import("word-extractor");
+  const WordExtractor =
+    (mod as { default?: typeof import("word-extractor") }).default ?? mod;
+  const extractor = new WordExtractor();
+  const doc = await extractor.extract(Buffer.from(buffer));
+  const text = doc.getBody() ?? "";
+  return text.length > MAX_EXTRACTED_TEXT_LENGTH
+    ? `${text.slice(0, MAX_EXTRACTED_TEXT_LENGTH)}\n\n[... texto truncado ...]`
+    : text;
 }
 
 async function extractTextFromDocx(buffer: ArrayBuffer): Promise<string> {
@@ -117,13 +275,21 @@ function respondUploadSuccess(
   uploadResult: { url: string; pathname: string },
   contentType: string,
   _filename: string,
-  extractedText?: string
+  extractedText?: string,
+  extractionFailed?: boolean,
+  documentType?: "pi" | "contestacao",
+  extractionDetail?: string
 ): NextResponse {
   const body = {
     url: uploadResult.url,
     pathname: uploadResult.pathname,
     contentType,
     ...(typeof extractedText === "string" ? { extractedText } : {}),
+    ...(extractionFailed === true ? { extractionFailed: true } : {}),
+    ...(documentType ? { documentType } : {}),
+    ...(typeof extractionDetail === "string" && extractionDetail.length > 0
+      ? { extractionDetail }
+      : {}),
   };
   return NextResponse.json(body);
 }
@@ -133,7 +299,10 @@ async function persistAndRespond(
   filename: string,
   fileBuffer: ArrayBuffer,
   contentType: string,
-  extractedText?: string
+  extractedText?: string,
+  extractionFailed?: boolean,
+  documentType?: "pi" | "contestacao",
+  extractionDetail?: string
 ): Promise<NextResponse> {
   const uploadResult = await uploadFile(
     userId,
@@ -146,7 +315,10 @@ async function persistAndRespond(
       uploadResult,
       contentType,
       filename,
-      extractedText
+      extractedText,
+      extractionFailed,
+      documentType,
+      extractionDetail
     );
   }
   if (uploadResult.reason === "storage_error") {
@@ -163,7 +335,10 @@ async function persistAndRespond(
       { url: data.url, pathname: data.pathname ?? filename },
       contentType,
       filename,
-      extractedText
+      extractedText,
+      extractionFailed,
+      documentType,
+      extractionDetail
     );
   } catch {
     if (isDev && !hasBlobToken) {
@@ -172,7 +347,10 @@ async function persistAndRespond(
         { url: dataUrl, pathname: `dev/${filename}` },
         contentType,
         filename,
-        extractedText
+        extractedText,
+        extractionFailed,
+        documentType,
+        extractionDetail
       );
     }
     return NextResponse.json(
@@ -216,35 +394,61 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: message }, { status: 400 });
     }
 
-    const filename = (formData.get("file") as File).name;
+    const filename =
+      (file instanceof File ? file.name : undefined) ?? "documento";
     const fileBuffer = await file.arrayBuffer();
+    // Cópia para o Storage: a extração (unpdf/PDF.js) pode transferir o buffer e deixá-lo detached.
+    const bufferForStorage = fileBuffer.slice(0);
     const contentType = file.type;
     const isPdf = contentType === ACCEPTED_PDF_TYPE;
+    const isDoc = contentType === ACCEPTED_DOC_TYPE;
     const isDocx = contentType === ACCEPTED_DOCX_TYPE;
 
     let extractedText: string | undefined;
-    if (isPdf || isDocx) {
+    let extractionFailed = false;
+    let extractionDetail: string | undefined;
+    let documentType: "pi" | "contestacao" | undefined;
+    if (isPdf || isDoc || isDocx) {
       try {
-        extractedText = isPdf
-          ? await extractTextFromPdf(fileBuffer)
-          : await extractTextFromDocx(fileBuffer);
+        if (isPdf) {
+          const result = await extractTextFromPdf(fileBuffer);
+          extractedText = result.text;
+          extractionDetail = result.lastError;
+        } else if (isDoc) {
+          extractedText = await extractTextFromDoc(fileBuffer);
+        } else {
+          extractedText = await extractTextFromDocx(fileBuffer);
+        }
+        if (
+          typeof extractedText === "string" &&
+          extractedText.trim().length === 0
+        ) {
+          extractionFailed = true;
+        } else if (typeof extractedText === "string") {
+          documentType = classifyDocumentType(extractedText);
+        }
       } catch {
-        // Continua com texto vazio; o ficheiro é enviado e o chat pode usá-lo sem texto extraído
+        extractionFailed = true;
       }
     }
 
     return persistAndRespond(
       session.user.id,
       filename,
-      fileBuffer,
+      bufferForStorage,
       contentType,
-      extractedText
+      extractedText,
+      extractionFailed,
+      documentType,
+      extractionDetail
     );
-  } catch {
+  } catch (err) {
+    const detail = isDev && err instanceof Error ? err.message : undefined;
     return NextResponse.json(
       {
         error:
-          "Erro ao processar o upload. Verifique o tamanho e o tipo do ficheiro (JPEG, PNG, PDF ou DOCX até 5MB).",
+          "Erro ao processar o upload. Verifique o tamanho e o tipo do ficheiro (JPEG, PNG, PDF, DOC ou DOCX até 20MB).",
+        ...(detail ? { detail } : {}),
       },
       { status: 500 }
     );

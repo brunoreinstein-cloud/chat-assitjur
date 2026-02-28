@@ -74,6 +74,7 @@ function PureMultimodalInput({
   selectedModelId,
   onModelChange,
   inputRef: inputRefProp,
+  knowledgeDocumentIds = [],
 }: {
   chatId: string;
   input: string;
@@ -91,6 +92,8 @@ function PureMultimodalInput({
   onModelChange?: (modelId: string) => void;
   /** Ref opcional para o textarea (ex.: foco ao clicar CORRIGIR no banner do Revisor) */
   inputRef?: React.RefObject<HTMLTextAreaElement | null>;
+  /** IDs da base de conhecimento selecionados (para o checklist Revisor) */
+  knowledgeDocumentIds?: string[];
 }) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const { width } = useWindowSize();
@@ -153,6 +156,22 @@ function PureMultimodalInput({
   const [uploadQueue, setUploadQueue] = useState<string[]>([]);
 
   const submitForm = useCallback(() => {
+    const isDocumentType = (ct: string | undefined) =>
+      ct === "application/pdf" ||
+      ct === "application/msword" ||
+      ct ===
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+    const docsWithoutText = attachments.filter(
+      (a) => isDocumentType(a.contentType) && a.extractedText == null
+    );
+    if (docsWithoutText.length > 0) {
+      toast.error(
+        `${docsWithoutText.length} documento(s) sem texto. Cole o texto no cartão do documento ou remova-os para enviar.`
+      );
+      return;
+    }
+
     window.history.pushState({}, "", `/chat/${chatId}`);
 
     type DocumentPart = {
@@ -178,7 +197,7 @@ function PureMultimodalInput({
             ? { documentType: attachment.documentType }
             : {}),
         });
-      } else {
+      } else if (attachment.contentType?.startsWith("image/")) {
         attachmentParts.push({
           type: "file",
           url: attachment.url,
@@ -231,47 +250,130 @@ function PureMultimodalInput({
 
       if (response.ok) {
         const data = await response.json();
-        const { url, pathname, contentType, extractedText } = data;
+        const {
+          url,
+          pathname,
+          contentType,
+          extractedText,
+          extractionFailed,
+          extractionDetail,
+          documentType,
+        } = data as {
+          url?: string;
+          pathname?: string;
+          contentType?: string;
+          extractedText?: string;
+          extractionFailed?: boolean;
+          extractionDetail?: string;
+          documentType?: "pi" | "contestacao";
+        };
 
+        if (extractionFailed === true) {
+          const reason =
+            typeof extractionDetail === "string" && extractionDetail.length > 0
+              ? ` Motivo: ${extractionDetail}`
+              : "";
+          toast.warning(
+            `Não foi possível extrair o texto deste ficheiro. Pode colar o texto no cartão do documento abaixo.${reason}`
+          );
+        }
+
+        const docType =
+          documentType === "pi" || documentType === "contestacao"
+            ? documentType
+            : undefined;
         return {
           url,
           name: pathname ?? data.pathname ?? file.name,
           contentType: contentType ?? file.type,
           ...(typeof extractedText === "string" ? { extractedText } : {}),
+          ...(extractionFailed === true ? { extractionFailed: true } : {}),
+          ...(docType ? { documentType: docType } : {}),
         };
       }
-      const { error } = await response.json();
-      toast.error(error);
+
+      let errorMessage = "Falha ao enviar o arquivo. Tente novamente.";
+      try {
+        const data = (await response.json()) as {
+          error?: string;
+          detail?: string;
+        };
+        if (typeof data?.error === "string" && data.error.length > 0) {
+          errorMessage = data.error;
+          if (typeof data?.detail === "string" && data.detail.length > 0) {
+            errorMessage += ` (${data.detail})`;
+          }
+        }
+      } catch {
+        // Resposta não é JSON (ex.: página de erro)
+      }
+      toast.error(errorMessage);
+      return undefined;
     } catch (_error) {
-      toast.error("Falha ao enviar o arquivo. Tente novamente!");
+      toast.error(
+        "Falha ao enviar o arquivo. Verifique a ligação e tente novamente."
+      );
+      return undefined;
     }
   }, []);
 
-  const handleFileChange = useCallback(
-    async (event: ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(event.target.files || []);
-
-      setUploadQueue(files.map((file) => file.name));
-
+  const processFiles = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) return;
+      setUploadQueue((prev) => [...prev, ...files.map((f) => f.name)]);
       try {
-        const uploadPromises = files.map((file) => uploadFile(file));
-        const uploadedAttachments = await Promise.all(uploadPromises);
-        const successfullyUploadedAttachments = uploadedAttachments.filter(
-          (attachment) => attachment !== undefined
-        );
-
-        setAttachments((currentAttachments) => [
-          ...currentAttachments,
-          ...successfullyUploadedAttachments,
-        ]);
-      } catch (error) {
-        console.error("Error uploading files!", error);
+        for (const file of files) {
+          const attachment = await uploadFile(file);
+          if (attachment !== undefined) {
+            setAttachments((current) => [...current, attachment]);
+          }
+          setUploadQueue((prev) => prev.filter((n) => n !== file.name));
+        }
       } finally {
         setUploadQueue([]);
       }
     },
     [setAttachments, uploadFile]
   );
+
+  const handleFileChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(event.target.files ?? []);
+      void processFiles(files);
+      event.target.value = "";
+    },
+    [processFiles]
+  );
+
+  const handleDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+      const items = event.dataTransfer.files;
+      if (!items?.length) return;
+      const files = Array.from(items).filter(
+        (f) =>
+          f.type.startsWith("image/") ||
+          f.type === "application/pdf" ||
+          f.type === "application/msword" ||
+          f.type ===
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      );
+      if (files.length > 0) void processFiles(files);
+    },
+    [processFiles]
+  );
+
+  const handleDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const removeAllAttachments = useCallback(() => {
+    setAttachments([]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }, [setAttachments]);
 
   const handlePaste = useCallback(
     async (event: ClipboardEvent) => {
@@ -345,7 +447,7 @@ function PureMultimodalInput({
         )}
 
       <input
-        accept="image/jpeg,image/png,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        accept="image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         className="pointer-events-none fixed -top-4 -left-4 size-0.5 opacity-0"
         multiple
         onChange={handleFileChange}
@@ -356,6 +458,8 @@ function PureMultimodalInput({
 
       <PromptInput
         className="rounded-xl border border-border bg-background p-3 shadow-xs transition-all duration-200 focus-within:border-border hover:border-muted-foreground/50"
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
         onSubmit={(event) => {
           event.preventDefault();
           if (!input.trim() && attachments.length === 0) {
@@ -363,17 +467,48 @@ function PureMultimodalInput({
           }
           if (status !== "ready") {
             toast.error("Aguarde o modelo terminar a resposta!");
-          } else {
-            submitForm();
+            return;
           }
+          submitForm();
         }}
       >
         {(attachments.length > 0 || uploadQueue.length > 0) && (
-          <div
-            className="flex flex-row items-end gap-2 overflow-x-scroll"
-            data-testid="attachments-preview"
-          >
-            {attachments.map((attachment) => (
+          <div className="flex flex-col gap-1">
+            {attachments.length >= 2 && (
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {attachments.length >= 4 && (
+                  <span
+                    aria-live="polite"
+                    className="text-muted-foreground text-xs"
+                  >
+                    {attachments.length} anexos
+                    {attachments.some((a) => a.extractionFailed) &&
+                      ` (${attachments.filter((a) => a.extractionFailed).length} sem texto)`}
+                  </span>
+                )}
+                <Button
+                  aria-label="Remover todos os anexos"
+                  className="h-6 text-muted-foreground text-xs"
+                  onClick={removeAllAttachments}
+                  type="button"
+                  variant="ghost"
+                >
+                  Remover todos os anexos
+                </Button>
+              </div>
+            )}
+            <div
+              aria-label={`Lista de anexos: ${attachments.length} documento(s)`}
+              className="flex flex-row items-end gap-2 overflow-x-auto overflow-y-hidden py-0.5"
+              data-testid="attachments-preview"
+              role="list"
+            >
+              {attachments.map((attachment) => (
+              <div
+                className="min-w-[120px] shrink-0"
+                key={attachment.url}
+                role="listitem"
+              >
               <PreviewAttachment
                 attachment={attachment}
                 key={attachment.url}
@@ -390,6 +525,23 @@ function PureMultimodalInput({
                       }
                     : undefined
                 }
+                onPastedText={
+                  attachment.extractionFailed === true
+                    ? (text) => {
+                        setAttachments((currentAttachments) =>
+                          currentAttachments.map((a) =>
+                            a.url === attachment.url
+                              ? {
+                                  ...a,
+                                  extractedText: text,
+                                  extractionFailed: false,
+                                }
+                              : a
+                          )
+                        );
+                      }
+                    : undefined
+                }
                 onRemove={() => {
                   setAttachments((currentAttachments) =>
                     currentAttachments.filter((a) => a.url !== attachment.url)
@@ -399,19 +551,21 @@ function PureMultimodalInput({
                   }
                 }}
               />
+              </div>
             ))}
 
-            {uploadQueue.map((filename) => (
-              <PreviewAttachment
-                attachment={{
-                  url: "",
-                  name: filename,
-                  contentType: "",
-                }}
-                isUploading={true}
-                key={filename}
-              />
-            ))}
+              {uploadQueue.map((filename) => (
+                <PreviewAttachment
+                  attachment={{
+                    url: "",
+                    name: filename,
+                    contentType: "",
+                  }}
+                  isUploading={true}
+                  key={filename}
+                />
+              ))}
+            </div>
           </div>
         )}
         <div className="flex flex-row items-start gap-1 sm:gap-2">
@@ -465,9 +619,13 @@ function PureMultimodalInput({
           )}
         </PromptInputToolbar>
       </PromptInput>
-      <p className="text-muted-foreground text-xs">
-        Anexe PDF da PI e da Contestação ou cole o texto abaixo.
-      </p>
+      {messages.length === 0 && (
+        <p className="text-muted-foreground text-xs" id="revisor-input-hint">
+          Anexe a Petição Inicial e a Contestação (PDF, DOC ou DOCX) e
+          identifique cada uma no menu. Ou cole o texto abaixo. Pode arrastar
+          ficheiros para a caixa de mensagem.
+        </p>
+      )}
     </div>
   );
 }
@@ -488,6 +646,16 @@ export const MultimodalInput = memo(
       return false;
     }
     if (prevProps.selectedModelId !== nextProps.selectedModelId) {
+      return false;
+    }
+    if (
+      (prevProps.messages?.length ?? 0) !== (nextProps.messages?.length ?? 0)
+    ) {
+      return false;
+    }
+    if (
+      !equal(prevProps.knowledgeDocumentIds, nextProps.knowledgeDocumentIds)
+    ) {
       return false;
     }
 

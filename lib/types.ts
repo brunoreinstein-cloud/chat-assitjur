@@ -61,4 +61,6 @@ export type Attachment = {
   extractedText?: string;
   /** Tipo de documento para o Revisor: Petição Inicial ou Contestação */
   documentType?: DocumentTypeLabel;
+  /** true quando o backend não conseguiu extrair texto do PDF/DOCX; utilizador deve colar o texto */
+  extractionFailed?: boolean;
 };

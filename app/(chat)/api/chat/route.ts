@@ -54,7 +54,12 @@ const DOC_TYPE_ORDER: Record<string, number> = {
   "": 2,
 };
 
-/** Converte partes do tipo "document" (PDF/DOCX) em partes "text" para o modelo. Ordena PI antes de Contestação. */
+/** Máximo de caracteres por documento no prompt (evita "prompt is too long" ~200k tokens). */
+const MAX_CHARS_PER_DOCUMENT = 35_000;
+/** Máximo total de caracteres de documentos numa única mensagem. */
+const MAX_TOTAL_DOC_CHARS = 100_000;
+
+/** Converte partes do tipo "document" (PDF/DOCX) em partes "text" para o modelo. Ordena PI antes de Contestação. Trunca texto para não exceder o limite do modelo. */
 function normalizeMessageParts(messages: ChatMessage[]): ChatMessage[] {
   return messages.map((msg) => {
     if (!msg.parts?.length) {
@@ -73,10 +78,27 @@ function normalizeMessageParts(messages: ChatMessage[]): ChatMessage[] {
       return orderA - orderB;
     });
 
+    let totalDocChars = 0;
     const docTextParts = sortedDocs.flatMap((p) => {
       if (typeof p.text !== "string" || !p.name) {
         return [];
       }
+      const remaining = Math.max(
+        0,
+        MAX_TOTAL_DOC_CHARS - totalDocChars
+      );
+      if (remaining <= 0) {
+        return [];
+      }
+      const maxForThis = Math.min(
+        MAX_CHARS_PER_DOCUMENT,
+        remaining
+      );
+      const truncated =
+        p.text.length > maxForThis
+          ? `${p.text.slice(0, maxForThis)}\n\n[... texto truncado para caber no limite do modelo ...]`
+          : p.text;
+      totalDocChars += truncated.length;
       const label =
         p.documentType === "pi"
           ? "Petição Inicial"
@@ -86,7 +108,7 @@ function normalizeMessageParts(messages: ChatMessage[]): ChatMessage[] {
       return [
         {
           type: "text" as const,
-          text: `[${label}: ${p.name}]\n\n${p.text}`,
+          text: `[${label}: ${p.name}]\n\n${truncated}`,
         },
       ];
     });
@@ -356,7 +378,13 @@ export async function POST(request: Request) {
           });
         }
       },
-      onError: () => "Oops, an error occurred!",
+      onError: (error: unknown) => {
+        const fallback = "Ocorreu um erro ao processar o pedido. Tente novamente.";
+        if (process.env.NODE_ENV === "development" && error instanceof Error) {
+          return `${fallback} (dev: ${error.message})`;
+        }
+        return fallback;
+      },
     });
 
     return createUIMessageStreamResponse({

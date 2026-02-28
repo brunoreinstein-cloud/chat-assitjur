@@ -7,6 +7,14 @@ const withBundleAnalyzer = require("@next/bundle-analyzer")({
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  experimental: {
+    proxyClientMaxBodySize: "22mb",
+    serverActions: {
+      bodySizeLimit: "21mb",
+    },
+  },
+  // OCR (PDF digitalizado): evita bundle de tesseract.js e @napi-rs/canvas
+  serverExternalPackages: ["tesseract.js", "@napi-rs/canvas"],
   // Raiz absoluta evita aviso de múltiplos lockfiles e funciona na Vercel
   turbopack: { root: path.resolve(process.cwd()) },
   images: {

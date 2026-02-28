@@ -2,6 +2,8 @@
 
 Sugestões de especialista para alinhar a interface ao fluxo do Revisor (GATE-1 → FASE A → GATE 0.5 → FASE B → ENTREGA).
 
+**Processo completo (upload → validação → execução em sequência):** ver [Processo do Revisor — Upload, Validação e Execução](processo-revisor-upload-validacao.md).
+
 ---
 
 ## Implementado
@@ -14,7 +16,30 @@ Sugestões de especialista para alinhar a interface ao fluxo do Revisor (GATE-1 
 - **Sidebar:** Nome "Revisor de Defesas" em vez de "Chatbot".
 - **Metadata:** Título e descrição da aplicação focados no Revisor.
 - **Remoção:** Botão "Deploy with Vercel" do header.
-- **Upload de documentos:** Aceita JPEG, PNG, PDF e DOCX; texto extraído de PDF e DOCX no backend (`pdf-parse`, `mammoth`) e enviado como parte `document` no contexto do chat.
+- **Upload de documentos:** Aceita JPEG, PNG, PDF, DOC e DOCX; texto extraído no backend (`unpdf` para PDF, `word-extractor` para DOC, `mammoth` para DOCX) e enviado como parte `document` no contexto do chat.
+- **Rótulos PI/Contestação:** Para anexos com texto extraído, o utilizador pode marcar "Petição Inicial" ou "Contestação" no seletor (dropdown) em cada anexo.
+
+---
+
+## Simplificação do processo (upload → validação → execução)
+
+Objetivo: o advogado **sobe todos os arquivos**, a interface **valida se tem as informações necessárias** e só então permite **rodar os prompts em sequência** sem idas e voltas.
+
+### Validação pré-envio (recomendado)
+
+- **Regra:** Para o fluxo do Revisor, são obrigatórios (A) Petição Inicial e (B) Contestação. Validar antes de enviar a primeira mensagem de auditoria.
+- **Comportamento sugerido:** Ao submeter, se houver anexos com texto extraído (PDF/DOCX) mas faltar pelo menos um marcado como "Petição Inicial" e um como "Contestação", exibir mensagem de erro **inline** (ex.: "Para auditar a contestação, identifique qual anexo é a Petição Inicial e qual é a Contestação.") e não enviar, ou exibir confirmação ("Ainda não há PI e Contestação identificados. Enviar mesmo assim? O agente pedirá o que faltar.").
+- **Alternativa mais rígida:** Exigir que existam exactamente um anexo tipo PI e um tipo Contestação (com texto extraído) para o botão "Enviar" estar activo; caso contrário, botão desactivado e tooltip/aria-describedby explicando o que falta.
+- **Acessibilidade (Web Interface Guidelines):** Erros inline junto ao controlo (área de anexos); mensagem de erro com próximo passo; não bloquear paste; botão de submit mantém estado claro (desactivado + motivo, ou activo com aviso).
+
+### Checklist visível "Antes de executar"
+
+- Exibir mini-checklist acima ou abaixo do input, apenas quando o chat estiver vazio ou sem mensagens do agente: "Petição Inicial ✓ / ✗", "Contestação ✓ / ✗", opcionalmente "Base de conhecimento (bancodetese) ✓ / ✗".
+- Atualizar os ✓/✗ em tempo real conforme o utilizador anexa e marca os tipos. Assim o advogado vê de relance se pode "auditar" ou se falta algo.
+
+### Fluxo único "Enviar tudo de uma vez"
+
+- (Futuro) Opção de modo "Preparar auditoria": passo 1 — anexar PI; passo 2 — anexar Contestação; passo 3 — opcionais; com validação em cada passo e um único botão "Auditar contestação" no final, que só fica activo quando PI + Contestação estiverem satisfeitos. Reduz ambiguidade e evita envio prematuro.
 
 ---
 
@@ -22,9 +47,9 @@ Sugestões de especialista para alinhar a interface ao fluxo do Revisor (GATE-1 
 
 ### Documentos (PI e Contestação)
 
-- **Upload:** JPEG, PNG, PDF e DOCX já suportados; extração de texto no backend (`pdf-parse` para PDF, `mammoth` para DOCX); texto injetado como parte `document`. Ver `api/files/upload` e `accept` no cliente.
-- **Rótulos por tipo de documento:** Se houver múltiplos anexos, permitir marcar "Petição Inicial" vs "Contestação" (dropdown ou chips) para o agente montar o contexto na ordem correta.
-- **Dica visual:** Abaixo do input, texto curto: "Anexe PDF da PI e da Contestação ou cole o texto abaixo."
+- **Upload:** JPEG, PNG, PDF, DOC e DOCX já suportados; extração de texto no backend (`unpdf` para PDF, `word-extractor` para DOC, `mammoth` para DOCX); texto injetado como parte `document`. Ver `api/files/upload` e `accept` no cliente.
+- **Rótulos por tipo de documento:** Já existente para PDF/DOC/DOCX (dropdown por anexo). Melhoria: destacar anexos ainda "Selecionar tipo" quando há mais de um documento, para incentivar a identificação.
+- **Dica visual:** Abaixo do input, texto curto: "Anexe a Petição Inicial e a Contestação (PDF, DOC ou DOCX) e identifique cada uma no menu. Ou cole o texto abaixo."
 
 ### Fluxo e confirmação (GATE 0.5)
 
@@ -33,7 +58,7 @@ Sugestões de especialista para alinhar a interface ao fluxo do Revisor (GATE-1 
 
 ### Acessibilidade e clareza
 
-- **Tooltip no ícone de anexo:** "Anexar documentos (imagens, PDF, DOCX)".
+- **Tooltip no ícone de anexo:** "Anexar documentos (imagens, PDF, DOC, DOCX)".
 - **Título da página do chat:** Manter `<title>` como "Revisor de Defesas Trabalhistas" (já feito no layout raiz); em `/chat/[id]` pode acrescentar "Chat" ou o número do processo se vier no futuro.
 
 ### Base de conhecimento
@@ -50,6 +75,7 @@ Sugestões de especialista para alinhar a interface ao fluxo do Revisor (GATE-1 
 
 ## Hierarquia de prioridade
 
-1. **Médio:** Indicador de etapa (FASE A / FASE B) e botões CONFIRMAR/CORRIGIR no chat.
-2. **Médio:** Rótulos "Petição Inicial" / "Contestação" em anexos.
-3. **Baixo:** Template bancodetese, badge "Base: N itens", refinamentos de artefatos.
+1. **Alto:** Validação pré-envio (PI + Contestação identificados) e feedback inline; checklist "Antes de executar" visível quando aplicável.
+2. **Médio:** Indicador de etapa (FASE A / FASE B) e botões CONFIRMAR/CORRIGIR no chat.
+3. **Médio:** Reforçar rótulos PI/Contestação (dica abaixo do input, destaque para anexos sem tipo).
+4. **Baixo:** Template bancodetese, badge "Base: N itens", refinamentos de artefatos, fluxo "Preparar auditoria" em passos.

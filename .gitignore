@@ -37,6 +37,9 @@ yarn-error.log*
 .vercel
 .env*.local
 
+# Tesseract OCR language data (download separately if needed)
+*.traineddata
+
 # Playwright
 /test-results/
 /playwright-report/
