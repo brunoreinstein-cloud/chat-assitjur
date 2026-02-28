@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/app/(auth)/auth";
 
+export const runtime = "nodejs";
+
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png"] as const;
 const ACCEPTED_PDF_TYPE = "application/pdf" as const;
 const ACCEPTED_DOC_TYPE = "application/msword" as const;
@@ -11,12 +13,13 @@ const ACCEPTED_DOCX_TYPE =
 const ACCEPTED_EXTENSIONS = /\.(docx?|pdf|jpe?g|png)$/i;
 
 function isAcceptedType(pathname: string): boolean {
-  const lower = pathname.toLowerCase();
+  const base = pathname.split("?").at(0)?.split("#").at(0) ?? pathname;
+  const lower = base.toLowerCase();
   if (lower.endsWith(".pdf")) return true;
   if (lower.endsWith(".doc") || lower.endsWith(".docx")) return true;
   if (lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png"))
     return true;
-  return ACCEPTED_EXTENSIONS.test(pathname);
+  return ACCEPTED_EXTENSIONS.test(base);
 }
 
 /**
@@ -73,10 +76,12 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
+  const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
   try {
     const jsonResponse = await handleUpload({
       body,
       request,
+      token: blobToken,
       onBeforeGenerateToken: async (pathname) => {
         if (!isAcceptedType(pathname)) {
           throw new Error("Tipos aceites: JPEG, PNG, PDF, DOC ou DOCX");
