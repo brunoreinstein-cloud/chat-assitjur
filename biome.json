@@ -9,7 +9,7 @@
 			"!!**/.next",
 			"!!.agents",
 			"!!.vercel",
-			"!!.vscode"
+			"!!.vscode","!!vercel.json"
 		]
 	},
 	"css": {
