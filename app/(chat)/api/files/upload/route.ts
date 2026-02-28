@@ -5,6 +5,9 @@ import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
+/** PDFs enormes (muitas páginas ou OCR) podem demorar; permite até 5 min na Vercel (Pro). */
+export const maxDuration = 300;
+
 const SUPABASE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET ?? "chat-files";
 
 const isDev = process.env.NODE_ENV === "development";
@@ -37,9 +40,9 @@ export function contentTypeFromFilename(filename: string): string {
   if (lower.endsWith(".png")) return "image/png";
   return OCTET_STREAM;
 }
-const MAX_EXTRACTED_TEXT_LENGTH = 300_000; // ~300k caracteres
-/** Máximo de páginas a processar por OCR (PDFs digitalizados); evita timeout. */
-const MAX_OCR_PAGES = 15;
+const MAX_EXTRACTED_TEXT_LENGTH = 600_000; // ~600k caracteres (PI + Contestação grandes)
+/** Máximo de páginas a processar por OCR (PDFs digitalizados). PDFs enormes: pode demorar; maxDuration na rota permite até 5 min. */
+const MAX_OCR_PAGES = 50;
 
 /** Amostra do início do texto para classificação (evita analisar o doc inteiro). */
 const CLASSIFY_SAMPLE_LENGTH = 4000;
@@ -388,6 +391,44 @@ function respondUploadSuccess(
   return NextResponse.json(body);
 }
 
+/**
+ * Envia o ficheiro para o storage (Supabase, Blob ou data URL em dev).
+ * Usado para correr em paralelo com a extração de texto e reduzir tempo total.
+ */
+async function uploadToStorage(
+  userId: string,
+  filename: string,
+  fileBuffer: ArrayBuffer,
+  contentType: string
+): Promise<{ url: string; pathname: string }> {
+  const uploadResult = await uploadFile(
+    userId,
+    filename,
+    fileBuffer,
+    contentType
+  );
+  if (uploadResult.ok) {
+    return { url: uploadResult.url, pathname: uploadResult.pathname };
+  }
+  if (uploadResult.reason === "storage_error") {
+    throw new Error(
+      `Falha ao enviar o ficheiro para o Storage.${storageErrorHint(uploadResult.message)}`
+    );
+  }
+  try {
+    const data = await put(filename, fileBuffer, { access: "public" });
+    return { url: data.url, pathname: data.pathname ?? filename };
+  } catch {
+    if (isDev && !hasBlobToken) {
+      const dataUrl = buildDataUrl(fileBuffer, contentType);
+      return { url: dataUrl, pathname: `dev/${filename}` };
+    }
+    throw new Error(
+      "Falha ao enviar o ficheiro. Configure Supabase Storage (NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) ou BLOB_READ_WRITE_TOKEN no .env.local."
+    );
+  }
+}
+
 export async function persistAndRespond(
   userId: string,
   filename: string,
@@ -398,13 +439,13 @@ export async function persistAndRespond(
   documentType?: "pi" | "contestacao",
   extractionDetail?: string
 ): Promise<NextResponse> {
-  const uploadResult = await uploadFile(
-    userId,
-    filename,
-    fileBuffer,
-    contentType
-  );
-  if (uploadResult.ok) {
+  try {
+    const uploadResult = await uploadToStorage(
+      userId,
+      filename,
+      fileBuffer,
+      contentType
+    );
     return respondUploadSuccess(
       uploadResult,
       contentType,
@@ -414,46 +455,9 @@ export async function persistAndRespond(
       documentType,
       extractionDetail
     );
-  }
-  if (uploadResult.reason === "storage_error") {
-    return NextResponse.json(
-      {
-        error: `Falha ao enviar o ficheiro para o Storage.${storageErrorHint(uploadResult.message)}`,
-      },
-      { status: 500 }
-    );
-  }
-  try {
-    const data = await put(filename, fileBuffer, { access: "public" });
-    return respondUploadSuccess(
-      { url: data.url, pathname: data.pathname ?? filename },
-      contentType,
-      filename,
-      extractedText,
-      extractionFailed,
-      documentType,
-      extractionDetail
-    );
-  } catch {
-    if (isDev && !hasBlobToken) {
-      const dataUrl = buildDataUrl(fileBuffer, contentType);
-      return respondUploadSuccess(
-        { url: dataUrl, pathname: `dev/${filename}` },
-        contentType,
-        filename,
-        extractedText,
-        extractionFailed,
-        documentType,
-        extractionDetail
-      );
-    }
-    return NextResponse.json(
-      {
-        error:
-          "Falha ao enviar o ficheiro. Configure Supabase Storage (NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) ou BLOB_READ_WRITE_TOKEN no .env.local.",
-      },
-      { status: 500 }
-    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Falha ao enviar o ficheiro.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -502,50 +506,47 @@ export async function POST(request: Request) {
     const isDoc = contentType === ACCEPTED_DOC_TYPE;
     const isDocx = contentType === ACCEPTED_DOCX_TYPE;
 
-    let extractedText: string | undefined;
-    let extractionFailed = false;
-    let extractionDetail: string | undefined;
-    let documentType: "pi" | "contestacao" | undefined;
-    if (isPdf || isDoc || isDocx) {
-      try {
-        if (isPdf) {
-          const result = await extractTextFromPdf(fileBuffer);
-          extractedText = result.text;
-          extractionDetail = result.lastError;
-        } else if (isDoc) {
-          extractedText = await extractTextFromDoc(fileBuffer);
-        } else {
-          extractedText = await extractTextFromDocx(fileBuffer);
-        }
-        if (
-          typeof extractedText === "string" &&
-          extractedText.trim().length === 0
-        ) {
-          extractionFailed = true;
-        } else if (typeof extractedText === "string") {
-          documentType = classifyDocumentType(extractedText);
-        }
-      } catch {
-        extractionFailed = true;
-      }
-    }
+    // Upload e extração em paralelo: o tempo total é o máximo dos dois, não a soma.
+    const extractionPromise =
+      isPdf || isDoc || isDocx
+        ? runExtractionAndClassification(fileBuffer, contentType)
+        : Promise.resolve({
+            extractedText: undefined,
+            extractionFailed: false,
+            documentType: undefined as "pi" | "contestacao" | undefined,
+            extractionDetail: undefined,
+          });
 
-    return persistAndRespond(
+    const uploadPromise = uploadToStorage(
       session.user.id,
       filename,
       bufferForStorage,
+      contentType
+    );
+
+    const [uploadResult, extraction] = await Promise.all([
+      uploadPromise,
+      extractionPromise,
+    ]);
+
+    return respondUploadSuccess(
+      uploadResult,
       contentType,
-      extractedText,
-      extractionFailed,
-      documentType,
-      extractionDetail
+      filename,
+      extraction.extractedText,
+      extraction.extractionFailed,
+      extraction.documentType,
+      extraction.extractionDetail
     );
   } catch (err) {
+    const message =
+      err instanceof Error && err.message.length > 0
+        ? err.message
+        : "Erro ao processar o upload. Verifique o tamanho e o tipo do ficheiro (JPEG, PNG, PDF, DOC ou DOCX até 100 MB).";
     const detail = isDev && err instanceof Error ? err.message : undefined;
     return NextResponse.json(
       {
-        error:
-          "Erro ao processar o upload. Verifique o tamanho e o tipo do ficheiro (JPEG, PNG, PDF, DOC ou DOCX até 100 MB).",
+        error: message,
         ...(detail ? { detail } : {}),
       },
       { status: 500 }

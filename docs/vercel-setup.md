@@ -167,7 +167,7 @@ O upload tenta primeiro **Supabase Storage** e, se falhar, **Vercel Blob**. O er
 | Redirecionamento para `/config-required` | Falta `AUTH_SECRET` ou `POSTGRES_URL`. Configura em Settings → Environment Variables e faz redeploy. |
 | Aviso "vercel" em dependencies | O pacote `vercel` foi removido das dependências; os scripts usam `npx vercel`. |
 | Aviso "Failed to create bin... supabase" | O CLI Supabase não é dependência do projeto; os scripts (`supabase:link`, etc.) usam `npx supabase`. O build na Vercel não instala o CLI, pelo que este aviso não deve aparecer. |
-| Aviso `baseline-browser-mapping` desatualizado | Opcional: `pnpm add -D baseline-browser-mapping@latest`. |
+| Aviso `baseline-browser-mapping` desatualizado | O projeto já usa `baseline-browser-mapping@^2.10.0` (latest). O aviso refere-se aos dados internos do pacote (idade > 2 meses) e não quebra o build; `BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true` está nos scripts. Pode ignorar até o maintainer publicar dados novos. |
 | **TimeoutNegativeWarning** (`-XXX is a negative number`, timeout set to 1) | O Auth.js (ou um middleware) agenda um refresh da sessão com um atraso `expires - now` em ms. Se a sessão já expirou ou o relógio do servidor está atrasado em relação à data de expiração (ex.: timezone da DB diferente da Vercel), o atraso fica negativo e o Node corrige para 1 ms. Pode aparecer junto de **CredentialsSignin**. Verifica timezone da base (secção abaixo) e garante que em produção o utilizador está a usar credenciais válidas na base de produção. |
 
 ### Timezone diferente entre base de dados (Supabase / Neon) e Vercel

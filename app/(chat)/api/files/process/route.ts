@@ -7,8 +7,13 @@ import {
   runExtractionAndClassification,
 } from "@/app/(chat)/api/files/upload/route";
 
+/** Permite tempo suficiente para descarregar e processar PDFs muito grandes (até 100 MB). */
+export const maxDuration = 300;
+
 const OCTET_STREAM = "application/octet-stream";
 const MAX_BLOB_FETCH_SIZE = 100 * 1024 * 1024; // 100 MB
+/** Timeout do fetch ao Blob: PDFs enormes podem demorar a transferir. */
+const BLOB_FETCH_TIMEOUT_MS = 180_000; // 3 min
 
 /** Sufixo do host Vercel Blob (evitar SSRF). */
 const BLOB_HOST_SUFFIX = "blob.vercel-storage.com";
@@ -95,7 +100,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     res = await fetch(urlString, {
       method: "GET",
       headers: { Accept: "*/*" },
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(BLOB_FETCH_TIMEOUT_MS),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Falha ao obter o ficheiro";
