@@ -286,6 +286,18 @@ function PureMultimodalInput({
 
     try {
       if (file.size > BODY_SIZE_LIMIT_BYTES) {
+        const tokenCheckRes = await fetch("/api/files/upload-token", {
+          method: "GET",
+        });
+        if (!tokenCheckRes.ok) {
+          const errData = await tokenCheckRes.json().catch(() => ({}));
+          const msg =
+            typeof (errData as { error?: string }).error === "string"
+              ? (errData as { error: string }).error
+              : "Upload de ficheiros grandes não disponível. Use um ficheiro com menos de 4,5 MB.";
+          toast.error(msg);
+          return undefined;
+        }
         try {
           const blob = await uploadToBlob(file.name, file, {
             access: "public",

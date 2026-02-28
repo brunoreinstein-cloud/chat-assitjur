@@ -20,7 +20,31 @@ function isAcceptedType(pathname: string): boolean {
 }
 
 /**
- * Gera token para upload direto cliente → Vercel Blob (ficheiros > 4,5 MB).
+ * GET: Verifica se o upload direto está disponível (auth + BLOB_READ_WRITE_TOKEN).
+ * O cliente pode chamar antes de uploadToBlob para mostrar mensagem clara em caso de falha.
+ */
+export async function GET(): Promise<NextResponse> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json(
+      { error: "Não autorizado. Inicie sessão para enviar ficheiros grandes." },
+      { status: 401 }
+    );
+  }
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    return NextResponse.json(
+      {
+        error:
+          "Upload de ficheiros grandes não está configurado. Defina BLOB_READ_WRITE_TOKEN no projeto (Vercel → Storage → Blob) ou use um ficheiro com menos de 4,5 MB.",
+      },
+      { status: 501 }
+    );
+  }
+  return NextResponse.json({ ready: true });
+}
+
+/**
+ * POST: Gera token para upload direto cliente → Vercel Blob (ficheiros > 4,5 MB).
  * O corpo do pedido é JSON (sem ficheiro), por isso não está sujeito ao limite de 4,5 MB.
  */
 export async function POST(request: Request): Promise<NextResponse> {
