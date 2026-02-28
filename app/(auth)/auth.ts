@@ -67,7 +67,7 @@ export const {
         email?: string;
         password?: string;
       }) {
-        if (!email) {
+        if (!email || typeof password !== "string") {
           return null;
         }
         try {
