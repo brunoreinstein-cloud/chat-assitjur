@@ -28,7 +28,7 @@ const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 /** Extensões aceites para fallback quando o browser envia type vazio ou octet-stream (comum em produção). */
 const ACCEPTED_EXTENSIONS = /\.(docx?|pdf|jpe?g|png)$/i;
 
-function contentTypeFromFilename(filename: string): string {
+export function contentTypeFromFilename(filename: string): string {
   const lower = filename.toLowerCase();
   if (lower.endsWith(".doc")) return ACCEPTED_DOC_TYPE;
   if (lower.endsWith(".docx")) return ACCEPTED_DOCX_TYPE;
@@ -322,6 +322,49 @@ function storageErrorHint(message?: string): string {
     : ` Supabase: ${message ?? ""}`;
 }
 
+/** Usado por upload (FormData) e por process (após fetch do Blob). */
+export async function runExtractionAndClassification(
+  fileBuffer: ArrayBuffer,
+  contentType: string
+): Promise<{
+  extractedText?: string;
+  extractionFailed: boolean;
+  documentType?: "pi" | "contestacao";
+  extractionDetail?: string;
+}> {
+  const isPdf = contentType === ACCEPTED_PDF_TYPE;
+  const isDoc = contentType === ACCEPTED_DOC_TYPE;
+  const isDocx = contentType === ACCEPTED_DOCX_TYPE;
+  let extractedText: string | undefined;
+  let extractionFailed = false;
+  let extractionDetail: string | undefined;
+  let documentType: "pi" | "contestacao" | undefined;
+  if (isPdf || isDoc || isDocx) {
+    try {
+      if (isPdf) {
+        const result = await extractTextFromPdf(fileBuffer);
+        extractedText = result.text;
+        extractionDetail = result.lastError;
+      } else if (isDoc) {
+        extractedText = await extractTextFromDoc(fileBuffer);
+      } else {
+        extractedText = await extractTextFromDocx(fileBuffer);
+      }
+      if (
+        typeof extractedText === "string" &&
+        extractedText.trim().length === 0
+      ) {
+        extractionFailed = true;
+      } else if (typeof extractedText === "string") {
+        documentType = classifyDocumentType(extractedText);
+      }
+    } catch {
+      extractionFailed = true;
+    }
+  }
+  return { extractedText, extractionFailed, documentType, extractionDetail };
+}
+
 function respondUploadSuccess(
   uploadResult: { url: string; pathname: string },
   contentType: string,
@@ -345,7 +388,7 @@ function respondUploadSuccess(
   return NextResponse.json(body);
 }
 
-async function persistAndRespond(
+export async function persistAndRespond(
   userId: string,
   filename: string,
   fileBuffer: ArrayBuffer,

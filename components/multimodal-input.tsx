@@ -2,6 +2,7 @@
 
 import type { UseChatHelpers } from "@ai-sdk/react";
 import type { UIMessage, UIMessagePart } from "ai";
+import { upload as uploadToBlob } from "@vercel/blob/client";
 import equal from "fast-deep-equal";
 import { CheckIcon } from "lucide-react";
 import {
@@ -238,64 +239,107 @@ function PureMultimodalInput({
     resetHeight,
   ]);
 
+  /** Limite do body em produção (Vercel). Ficheiros maiores usam upload direto para Blob. */
+  const BODY_SIZE_LIMIT_BYTES = 4.5 * 1024 * 1024;
+
   const uploadFile = useCallback(async (file: File) => {
-    const formData = new FormData();
-    formData.append("file", file);
+    const buildAttachmentFromResponse = (data: {
+      url?: string;
+      pathname?: string;
+      contentType?: string;
+      extractedText?: string;
+      extractionFailed?: boolean;
+      extractionDetail?: string;
+      documentType?: "pi" | "contestacao";
+    }) => {
+      const {
+        url,
+        pathname,
+        contentType,
+        extractedText,
+        extractionFailed,
+        extractionDetail,
+        documentType,
+      } = data;
+      if (extractionFailed === true) {
+        const reason =
+          typeof extractionDetail === "string" && extractionDetail.length > 0
+            ? ` Motivo: ${extractionDetail}`
+            : "";
+        toast.warning(
+          `Não foi possível extrair o texto deste ficheiro. Pode colar o texto no cartão do documento abaixo.${reason}`
+        );
+      }
+      const docType =
+        documentType === "pi" || documentType === "contestacao"
+          ? documentType
+          : undefined;
+      return {
+        url,
+        name: pathname ?? file.name,
+        contentType: contentType ?? file.type,
+        ...(typeof extractedText === "string" ? { extractedText } : {}),
+        ...(extractionFailed === true ? { extractionFailed: true } : {}),
+        ...(docType ? { documentType: docType } : {}),
+      };
+    };
 
     try {
+      if (file.size > BODY_SIZE_LIMIT_BYTES) {
+        try {
+          const blob = await uploadToBlob(file.name, file, {
+            access: "public",
+            handleUploadUrl: "/api/files/upload-token",
+          });
+          const processRes = await fetch("/api/files/process", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              url: blob.url,
+              pathname: blob.pathname,
+              contentType: file.type || "application/octet-stream",
+              filename: file.name,
+            }),
+          });
+          if (!processRes.ok) {
+            const errData = await processRes.json().catch(() => ({}));
+            const msg =
+              typeof (errData as { error?: string }).error === "string"
+                ? (errData as { error: string }).error
+                : "Falha ao processar o ficheiro após o upload.";
+            toast.error(msg);
+            return undefined;
+          }
+          const data = (await processRes.json()) as Parameters<typeof buildAttachmentFromResponse>[0];
+          return buildAttachmentFromResponse(data);
+        } catch (directError) {
+          const msg =
+            directError instanceof Error
+              ? directError.message
+              : "Upload de ficheiros grandes não disponível.";
+          toast.error(
+            `${msg} Use um ficheiro com menos de 4,5 MB ou tente novamente.`
+          );
+          return undefined;
+        }
+      }
+
+      const formData = new FormData();
+      formData.append("file", file);
       const response = await fetch("/api/files/upload", {
         method: "POST",
         body: formData,
       });
 
       if (response.ok) {
-        const data = await response.json();
-        const {
-          url,
-          pathname,
-          contentType,
-          extractedText,
-          extractionFailed,
-          extractionDetail,
-          documentType,
-        } = data as {
-          url?: string;
-          pathname?: string;
-          contentType?: string;
-          extractedText?: string;
-          extractionFailed?: boolean;
-          extractionDetail?: string;
-          documentType?: "pi" | "contestacao";
-        };
-
-        if (extractionFailed === true) {
-          const reason =
-            typeof extractionDetail === "string" && extractionDetail.length > 0
-              ? ` Motivo: ${extractionDetail}`
-              : "";
-          toast.warning(
-            `Não foi possível extrair o texto deste ficheiro. Pode colar o texto no cartão do documento abaixo.${reason}`
-          );
-        }
-
-        const docType =
-          documentType === "pi" || documentType === "contestacao"
-            ? documentType
-            : undefined;
-        return {
-          url,
-          name: pathname ?? data.pathname ?? file.name,
-          contentType: contentType ?? file.type,
-          ...(typeof extractedText === "string" ? { extractedText } : {}),
-          ...(extractionFailed === true ? { extractionFailed: true } : {}),
-          ...(docType ? { documentType: docType } : {}),
-        };
+        const data = (await response.json()) as Parameters<typeof buildAttachmentFromResponse>[0];
+        return buildAttachmentFromResponse(data);
       }
 
       let errorMessage = "Falha ao enviar o arquivo. Tente novamente.";
       if (response.status === 413) {
         errorMessage =
-          "Ficheiro demasiado grande. Em produção o limite é 4,5 MB. Use um ficheiro menor.";
+          "Ficheiro demasiado grande. Em produção o limite é 4,5 MB. Use um ficheiro com menos de 4,5 MB.";
       } else {
         try {
           const data = (await response.json()) as {

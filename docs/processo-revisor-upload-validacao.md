@@ -109,13 +109,15 @@ Se o upload falhar, a interface mostra uma mensagem de erro (toast). Causas comu
 | ------- | -------------- | ----------- |
 | «Não autorizado» | Sessão inexistente ou expirada | Inicie sessão e tente novamente. |
 | «O arquivo deve ter no máximo 20MB» | Ficheiro demasiado grande (validação no servidor) | Use um ficheiro &lt; 20MB ou divida o conteúdo. |
-| «Ficheiro demasiado grande. Em produção o limite é 4,5 MB» | **Limite da Vercel:** o body do request não pode exceder 4,5 MB em produção | Use um ficheiro &lt; 4,5 MB. Para ficheiros maiores, seria necessário implementar upload direto do cliente para Blob/Storage (ver [Vercel – Bypass body size limit](https://vercel.com/guides/how-to-bypass-vercel-body-size-limit-serverless-functions)). |
+| «Ficheiro demasiado grande...» (413) | Body do request &gt; 4,5 MB (limite Vercel) | Ficheiros &gt; 4,5 MB usam **upload direto** cliente → Vercel Blob (automático se `BLOB_READ_WRITE_TOKEN` estiver configurado). Caso contrário, use um ficheiro &lt; 4,5 MB. |
 | «Tipos aceitos: JPEG, PNG, PDF, DOC ou DOCX» | Tipo de ficheiro não suportado (ou MIME incorreto) | Envie apenas JPEG, PNG, PDF, DOC ou DOCX. O servidor aceita também por extensão quando o browser envia tipo vazio (ex.: em produção). |
 | «Falha ao enviar o ficheiro para o Storage» / «Bucket not found» | Supabase Storage não configurado ou bucket em falta | Defina `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` no `.env.local` e crie o bucket (ex.: `chat-files`) em Supabase Dashboard → Storage, ou execute `pnpm run supabase:config-push`. |
 | «Configure Supabase Storage... ou BLOB_READ_WRITE_TOKEN» | Nem Supabase nem Vercel Blob configurados | Configure Supabase (ver acima) ou defina `BLOB_READ_WRITE_TOKEN` para usar Vercel Blob. |
 | Botão de anexos desativado | O chat está a enviar ou a receber resposta | Aguarde o estado «pronto» (resposta do modelo terminada) para anexar. |
 
-**Em produção (Word não envia):** alguns browsers ou ambientes enviam ficheiros .doc/.docx com tipo MIME vazio ou `application/octet-stream`. O servidor passou a aceitar estes ficheiros pela extensão do nome (`.doc`, `.docx`) e a inferir o tipo para extração e storage. Se continuar a falhar, verifique o tamanho (≤ 4,5 MB em produção).
+**Ficheiros maiores que 4,5 MB:** o cliente detecta o tamanho e, quando o ficheiro excede 4,5 MB, usa **upload direto** para Vercel Blob (o ficheiro vai do browser para o Blob sem passar pelo servidor). Em seguida o servidor processa o ficheiro no Blob (extração de texto, classificação PI/Contestação) e persiste uma cópia no Supabase. É necessário `BLOB_READ_WRITE_TOKEN` configurado; rotas: `POST /api/files/upload-token` (gera token) e `POST /api/files/process` (processa após upload). Ver [Vercel – Upload directly to the source](https://vercel.com/guides/how-to-bypass-vercel-body-size-limit-serverless-functions#upload-directly-to-the-source).
+
+**Em produção (Word não envia):** alguns browsers ou ambientes enviam ficheiros .doc/.docx com tipo MIME vazio ou `application/octet-stream`. O servidor passou a aceitar estes ficheiros pela extensão do nome (`.doc`, `.docx`) e a inferir o tipo para extração e storage. Se continuar a falhar, verifique o tamanho (≤ 4,5 MB se não usar upload direto).
 
 **Em desenvolvimento:** se o servidor devolver um campo `detail` no erro, a mensagem do toast inclui esse pormenor para facilitar o debug.
 
@@ -130,3 +132,4 @@ Se o upload falhar, a interface mostra uma mensagem de erro (toast). Causas comu
 - UX/UI e sugestões: `docs/ux-ui-revisor-defesas.md`
 - Checklist desenvolvimento: `.agents/skills/revisor-defesas-context/SKILL.md`
 - API de upload: `app/(chat)/api/files/upload/route.ts`
+- Upload direto (ficheiros &gt; 4,5 MB): `app/(chat)/api/files/upload-token/route.ts`, `app/(chat)/api/files/process/route.ts`
