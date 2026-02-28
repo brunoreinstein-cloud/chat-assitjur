@@ -293,19 +293,24 @@ function PureMultimodalInput({
       }
 
       let errorMessage = "Falha ao enviar o arquivo. Tente novamente.";
-      try {
-        const data = (await response.json()) as {
-          error?: string;
-          detail?: string;
-        };
-        if (typeof data?.error === "string" && data.error.length > 0) {
-          errorMessage = data.error;
-          if (typeof data?.detail === "string" && data.detail.length > 0) {
-            errorMessage += ` (${data.detail})`;
+      if (response.status === 413) {
+        errorMessage =
+          "Ficheiro demasiado grande. Em produção o limite é 4,5 MB. Use um ficheiro menor.";
+      } else {
+        try {
+          const data = (await response.json()) as {
+            error?: string;
+            detail?: string;
+          };
+          if (typeof data?.error === "string" && data.error.length > 0) {
+            errorMessage = data.error;
+            if (typeof data?.detail === "string" && data.detail.length > 0) {
+              errorMessage += ` (${data.detail})`;
+            }
           }
+        } catch {
+          // Resposta não é JSON (ex.: página de erro)
         }
-      } catch {
-        // Resposta não é JSON (ex.: página de erro)
       }
       toast.error(errorMessage);
       return undefined;

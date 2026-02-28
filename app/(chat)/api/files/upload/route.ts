@@ -22,7 +22,21 @@ const ACCEPTED_DOC_TYPE = "application/msword" as const;
 /** Word Open XML (.docx) */
 const ACCEPTED_DOCX_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document" as const;
+const OCTET_STREAM = "application/octet-stream";
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+
+/** Extensões aceites para fallback quando o browser envia type vazio ou octet-stream (comum em produção). */
+const ACCEPTED_EXTENSIONS = /\.(docx?|pdf|jpe?g|png)$/i;
+
+function contentTypeFromFilename(filename: string): string {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith(".doc")) return ACCEPTED_DOC_TYPE;
+  if (lower.endsWith(".docx")) return ACCEPTED_DOCX_TYPE;
+  if (lower.endsWith(".pdf")) return ACCEPTED_PDF_TYPE;
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".png")) return "image/png";
+  return OCTET_STREAM;
+}
 const MAX_EXTRACTED_TEXT_LENGTH = 300_000; // ~300k caracteres
 /** Máximo de páginas a processar por OCR (PDFs digitalizados); evita timeout. */
 const MAX_OCR_PAGES = 15;
@@ -68,24 +82,38 @@ function classifyDocumentType(text: string): "pi" | "contestacao" | undefined {
   return undefined;
 }
 
+function isAcceptedFileType(file: Blob): boolean {
+  const type = file.type;
+  if (
+    ACCEPTED_IMAGE_TYPES.includes(
+      type as (typeof ACCEPTED_IMAGE_TYPES)[number]
+    ) ||
+    type === ACCEPTED_PDF_TYPE ||
+    type === ACCEPTED_DOC_TYPE ||
+    type === ACCEPTED_DOCX_TYPE
+  ) {
+    return true;
+  }
+  // Em produção o browser pode enviar type vazio ou application/octet-stream para Word/PDF
+  if (
+    (type === "" || type === OCTET_STREAM) &&
+    file instanceof File &&
+    ACCEPTED_EXTENSIONS.test(file.name)
+  ) {
+    return true;
+  }
+  return false;
+}
+
 const FileSchema = z.object({
   file: z
     .instanceof(Blob)
     .refine((file) => file.size <= MAX_FILE_SIZE, {
       message: "O arquivo deve ter no máximo 20MB",
     })
-    .refine(
-      (file) =>
-        ACCEPTED_IMAGE_TYPES.includes(
-          file.type as (typeof ACCEPTED_IMAGE_TYPES)[number]
-        ) ||
-        file.type === ACCEPTED_PDF_TYPE ||
-        file.type === ACCEPTED_DOC_TYPE ||
-        file.type === ACCEPTED_DOCX_TYPE,
-      {
-        message: "Tipos aceitos: JPEG, PNG, PDF, DOC ou DOCX",
-      }
-    ),
+    .refine(isAcceptedFileType, {
+      message: "Tipos aceitos: JPEG, PNG, PDF, DOC ou DOCX",
+    }),
 });
 
 type UploadResult =
@@ -422,7 +450,11 @@ export async function POST(request: Request) {
     const fileBuffer = await file.arrayBuffer();
     // Cópia para o Storage: a extração (unpdf/PDF.js) pode transferir o buffer e deixá-lo detached.
     const bufferForStorage = fileBuffer.slice(0);
-    const contentType = file.type;
+    const rawType = file.type;
+    const contentType =
+      rawType === "" || rawType === OCTET_STREAM
+        ? contentTypeFromFilename(filename)
+        : rawType;
     const isPdf = contentType === ACCEPTED_PDF_TYPE;
     const isDoc = contentType === ACCEPTED_DOC_TYPE;
     const isDocx = contentType === ACCEPTED_DOCX_TYPE;

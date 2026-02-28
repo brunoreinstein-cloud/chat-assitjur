@@ -108,11 +108,14 @@ Se o upload falhar, a interface mostra uma mensagem de erro (toast). Causas comu
 | Sintoma | Causa provável | O que fazer |
 | ------- | -------------- | ----------- |
 | «Não autorizado» | Sessão inexistente ou expirada | Inicie sessão e tente novamente. |
-| «O arquivo deve ter no máximo 20MB» | Ficheiro demasiado grande | Use um ficheiro &lt; 20MB ou divida o conteúdo. |
-| «Tipos aceitos: JPEG, PNG, PDF, DOC ou DOCX» | Tipo de ficheiro não suportado | Envie apenas JPEG, PNG, PDF, DOC ou DOCX. |
+| «O arquivo deve ter no máximo 20MB» | Ficheiro demasiado grande (validação no servidor) | Use um ficheiro &lt; 20MB ou divida o conteúdo. |
+| «Ficheiro demasiado grande. Em produção o limite é 4,5 MB» | **Limite da Vercel:** o body do request não pode exceder 4,5 MB em produção | Use um ficheiro &lt; 4,5 MB. Para ficheiros maiores, seria necessário implementar upload direto do cliente para Blob/Storage (ver [Vercel – Bypass body size limit](https://vercel.com/guides/how-to-bypass-vercel-body-size-limit-serverless-functions)). |
+| «Tipos aceitos: JPEG, PNG, PDF, DOC ou DOCX» | Tipo de ficheiro não suportado (ou MIME incorreto) | Envie apenas JPEG, PNG, PDF, DOC ou DOCX. O servidor aceita também por extensão quando o browser envia tipo vazio (ex.: em produção). |
 | «Falha ao enviar o ficheiro para o Storage» / «Bucket not found» | Supabase Storage não configurado ou bucket em falta | Defina `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` no `.env.local` e crie o bucket (ex.: `chat-files`) em Supabase Dashboard → Storage, ou execute `pnpm run supabase:config-push`. |
 | «Configure Supabase Storage... ou BLOB_READ_WRITE_TOKEN» | Nem Supabase nem Vercel Blob configurados | Configure Supabase (ver acima) ou defina `BLOB_READ_WRITE_TOKEN` para usar Vercel Blob. |
 | Botão de anexos desativado | O chat está a enviar ou a receber resposta | Aguarde o estado «pronto» (resposta do modelo terminada) para anexar. |
+
+**Em produção (Word não envia):** alguns browsers ou ambientes enviam ficheiros .doc/.docx com tipo MIME vazio ou `application/octet-stream`. O servidor passou a aceitar estes ficheiros pela extensão do nome (`.doc`, `.docx`) e a inferir o tipo para extração e storage. Se continuar a falhar, verifique o tamanho (≤ 4,5 MB em produção).
 
 **Em desenvolvimento:** se o servidor devolver um campo `detail` no erro, a mensagem do toast inclui esse pormenor para facilitar o debug.
 
