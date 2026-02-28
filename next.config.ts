@@ -8,13 +8,13 @@ const withBundleAnalyzer = require("@next/bundle-analyzer")({
 const nextConfig: NextConfig = {
   cacheComponents: true,
   experimental: {
-    outputFileTracingIncludes: {
-      "/api/chat": ["./lib/ai/modelos/*.txt"],
-    },
     proxyClientMaxBodySize: "22mb",
     serverActions: {
       bodySizeLimit: "21mb",
     },
+  },
+  outputFileTracingIncludes: {
+    "/api/chat": ["./lib/ai/modelos/*.txt"],
   },
   // OCR (PDF digitalizado): evita bundle de tesseract.js e @napi-rs/canvas
   serverExternalPackages: ["tesseract.js", "@napi-rs/canvas"],
