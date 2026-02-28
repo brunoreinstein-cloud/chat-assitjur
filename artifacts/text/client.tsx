@@ -95,10 +95,7 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
             className="flex min-h-80 flex-col items-center justify-center gap-4 rounded-lg border border-dashed border-border bg-muted/30 px-6 py-16 text-center"
           >
             <div className="rounded-full bg-muted p-4">
-              <FileText
-                className="size-8 text-muted-foreground"
-                aria-hidden
-              />
+              <FileText aria-hidden className="size-8 text-muted-foreground" />
             </div>
             <div className="space-y-1">
               <p className="text-sm font-medium text-foreground">
@@ -189,7 +186,7 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
       label: "DOCX",
       description: "Descarregar como DOCX",
       onClick: ({ documentId }) => {
-        void (async () => {
+        (async () => {
           try {
             const res = await fetch(
               `/api/document/export?id=${encodeURIComponent(documentId)}`,

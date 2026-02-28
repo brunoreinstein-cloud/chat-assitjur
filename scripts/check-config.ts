@@ -11,7 +11,7 @@ config({ path: ".env.local" });
 
 const required = ["AUTH_SECRET", "POSTGRES_URL"] as const;
 const forChat = ["AI_GATEWAY_API_KEY"] as const;
-const forUpload = [
+const _forUpload = [
   "BLOB_READ_WRITE_TOKEN",
   "NEXT_PUBLIC_SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
@@ -63,8 +63,10 @@ function main(): void {
   }
   check("Opcionais", optional, false);
 
-  if (process.env.POSTGRES_URL?.includes("supabase.co") &&
-      process.env.POSTGRES_URL?.includes(":5432")) {
+  if (
+    process.env.POSTGRES_URL?.includes("supabase.co") &&
+    process.env.POSTGRES_URL?.includes(":5432")
+  ) {
     console.error(
       "\n❌ POSTGRES_URL: com Supabase usa o pooler (porta 6543), não 5432."
     );

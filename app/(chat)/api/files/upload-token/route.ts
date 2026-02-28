@@ -1,4 +1,4 @@
-import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
+import { type HandleUploadBody, handleUpload } from "@vercel/blob/client";
 import { NextResponse } from "next/server";
 
 import { auth } from "@/app/(auth)/auth";
@@ -13,10 +13,19 @@ const ACCEPTED_EXTENSIONS = /\.(docx?|pdf|jpe?g|png)$/i;
 function isAcceptedType(pathname: string): boolean {
   const base = pathname.split("?").at(0)?.split("#").at(0) ?? pathname;
   const lower = base.toLowerCase();
-  if (lower.endsWith(".pdf")) return true;
-  if (lower.endsWith(".doc") || lower.endsWith(".docx")) return true;
-  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png"))
+  if (lower.endsWith(".pdf")) {
     return true;
+  }
+  if (lower.endsWith(".doc") || lower.endsWith(".docx")) {
+    return true;
+  }
+  if (
+    lower.endsWith(".jpg") ||
+    lower.endsWith(".jpeg") ||
+    lower.endsWith(".png")
+  ) {
+    return true;
+  }
   return ACCEPTED_EXTENSIONS.test(base);
 }
 
@@ -90,11 +99,13 @@ export async function POST(request: Request): Promise<NextResponse> {
         if (!isAcceptedType(pathname)) {
           throw new Error("Tipos aceites: JPEG, PNG, PDF, DOC ou DOCX");
         }
-        const baseName = pathname.includes("/") ? pathname.split("/").at(-1) ?? pathname : pathname;
+        const baseName = pathname.includes("/")
+          ? (pathname.split("/").at(-1) ?? pathname)
+          : pathname;
         const safeName = baseName.replaceAll(/[^a-zA-Z0-9._-]/g, "_");
         const userId = session.user.id;
         const serverPathname = `${userId}/${Date.now()}-${safeName}`;
-        return {
+        const result = {
           allowedContentTypes: [
             ...ACCEPTED_IMAGE_TYPES,
             ACCEPTED_PDF_TYPE,
@@ -105,6 +116,7 @@ export async function POST(request: Request): Promise<NextResponse> {
           pathname: serverPathname,
           tokenPayload: JSON.stringify({ userId }),
         };
+        return await Promise.resolve(result);
       },
       onUploadCompleted: async () => {
         // Opcional: notificação após upload. O processamento é feito em /api/files/process.
@@ -112,7 +124,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     });
     return NextResponse.json(jsonResponse);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro ao gerar token";
+    const message =
+      error instanceof Error ? error.message : "Erro ao gerar token";
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

@@ -15,17 +15,25 @@ const PARECER_KEYS = [
 
 const MODELOS_DIR = path.join(process.cwd(), "lib", "ai", "modelos");
 
-export type ModeloRevisor = "roteiro_advogado" | "roteiro_preposto" | "parecer_executivo" | null;
+export type ModeloRevisor =
+  | "roteiro_advogado"
+  | "roteiro_preposto"
+  | "parecer_executivo"
+  | null;
 
 /**
  * Indica qual modelo de documento do Revisor (se algum) deve ser usado para o título dado.
  */
 export function getModeloRevisorFromTitle(title: string): ModeloRevisor {
   const upper = title.toUpperCase();
-  if (ROTEIRO_ADVOGADO_KEYS.some((k) => upper.includes(k.replaceAll(" ", "_")))) {
+  if (
+    ROTEIRO_ADVOGADO_KEYS.some((k) => upper.includes(k.replaceAll(" ", "_")))
+  ) {
     return "roteiro_advogado";
   }
-  if (ROTEIRO_PREPOSTO_KEYS.some((k) => upper.includes(k.replaceAll(" ", "_")))) {
+  if (
+    ROTEIRO_PREPOSTO_KEYS.some((k) => upper.includes(k.replaceAll(" ", "_")))
+  ) {
     return "roteiro_preposto";
   }
   if (PARECER_KEYS.some((k) => upper.includes(k.replaceAll(" ", "_")))) {

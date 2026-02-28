@@ -64,7 +64,6 @@ export async function POST(request: Request) {
     if (isDevelopmentEnvironment) {
       const err = error as Error | undefined;
       const msg = err?.message ?? String(error);
-      // biome-ignore lint/suspicious/noConsole: diagnóstico em dev
       console.error("[guest] sign-in failed:", msg, error);
     }
     if (isCredentialsSignin(error)) {

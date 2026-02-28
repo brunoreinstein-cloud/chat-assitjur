@@ -82,7 +82,6 @@ export const register = async (
         (signInResult as { ok?: boolean }).ok !== false);
     if (!ok) {
       if (process.env.NODE_ENV === "development") {
-        // biome-ignore lint/suspicious/noConsole: diagnóstico em dev
         console.error("[register] signIn retornou falha:", signInResult);
       }
       return { status: "failed" } as RegisterActionState;
@@ -95,7 +94,6 @@ export const register = async (
     }
 
     if (process.env.NODE_ENV === "development") {
-      // biome-ignore lint/suspicious/noConsole: diagnóstico em dev
       console.error("[register] erro ao criar conta:", error);
     }
 

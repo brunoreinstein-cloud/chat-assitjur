@@ -1,8 +1,5 @@
 import { smoothStream, streamText } from "ai";
-import {
-  getModeloRevisorFromTitle,
-  loadModeloRevisor,
-} from "@/lib/ai/modelos";
+import { getModeloRevisorFromTitle, loadModeloRevisor } from "@/lib/ai/modelos";
 import { updateDocumentPrompt } from "@/lib/ai/prompts";
 import { getArtifactModel } from "@/lib/ai/providers";
 import { createDocumentHandler } from "@/lib/artifacts/server";
@@ -20,9 +17,7 @@ export const textDocumentHandler = createDocumentHandler<"text">({
     let draftContent = "";
 
     const modeloType = getModeloRevisorFromTitle(title);
-    const template = modeloType
-      ? await loadModeloRevisor(modeloType)
-      : null;
+    const template = modeloType ? await loadModeloRevisor(modeloType) : null;
 
     const useTemplate = Boolean(template?.trim());
     const system = useTemplate
@@ -31,6 +26,7 @@ export const textDocumentHandler = createDocumentHandler<"text">({
 
     const { fullStream } = streamText({
       model: getArtifactModel(),
+      maxOutputTokens: 8192,
       system,
       experimental_transform: smoothStream({ chunking: "word" }),
       prompt: useTemplate
@@ -61,6 +57,7 @@ export const textDocumentHandler = createDocumentHandler<"text">({
 
     const { fullStream } = streamText({
       model: getArtifactModel(),
+      maxOutputTokens: 8192,
       system: updateDocumentPrompt(document.content, "text"),
       experimental_transform: smoothStream({ chunking: "word" }),
       prompt: description,

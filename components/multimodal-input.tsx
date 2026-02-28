@@ -1,8 +1,8 @@
 "use client";
 
 import type { UseChatHelpers } from "@ai-sdk/react";
-import type { UIMessage, UIMessagePart } from "ai";
 import { upload as uploadToBlob } from "@vercel/blob/client";
+import type { UIMessage, UIMessagePart } from "ai";
 import equal from "fast-deep-equal";
 import { CheckIcon } from "lucide-react";
 import {
@@ -75,7 +75,7 @@ function PureMultimodalInput({
   selectedModelId,
   onModelChange,
   inputRef: inputRefProp,
-  knowledgeDocumentIds = [],
+  knowledgeDocumentIds: _knowledgeDocumentIds = [], // reservado para checklist Revisor
 }: {
   chatId: string;
   input: string;
@@ -322,7 +322,9 @@ function PureMultimodalInput({
             toast.error(msg);
             return undefined;
           }
-          const data = (await processRes.json()) as Parameters<typeof buildAttachmentFromResponse>[0];
+          const data = (await processRes.json()) as Parameters<
+            typeof buildAttachmentFromResponse
+          >[0];
           return buildAttachmentFromResponse(data);
         } catch (directError) {
           const msg =
@@ -344,7 +346,9 @@ function PureMultimodalInput({
       });
 
       if (response.ok) {
-        const data = (await response.json()) as Parameters<typeof buildAttachmentFromResponse>[0];
+        const data = (await response.json()) as Parameters<
+          typeof buildAttachmentFromResponse
+        >[0];
         return buildAttachmentFromResponse(data);
       }
 
@@ -380,15 +384,14 @@ function PureMultimodalInput({
 
   const processFiles = useCallback(
     async (files: File[]) => {
-      if (files.length === 0) return;
+      if (files.length === 0) {
+        return;
+      }
       setUploadQueue((prev) => [...prev, ...files.map((f) => f.name)]);
       try {
         for (const file of files) {
           const attachment = await uploadFile(file);
-          if (
-            attachment !== undefined &&
-            typeof attachment.url === "string"
-          ) {
+          if (attachment !== undefined && typeof attachment.url === "string") {
             const a: Attachment = {
               name: attachment.name,
               url: attachment.url,
@@ -417,7 +420,7 @@ function PureMultimodalInput({
   const handleFileChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(event.target.files ?? []);
-      void processFiles(files);
+      processFiles(files);
       event.target.value = "";
     },
     [processFiles]
@@ -427,7 +430,9 @@ function PureMultimodalInput({
     (event: React.DragEvent) => {
       event.preventDefault();
       const items = event.dataTransfer.files;
-      if (!items?.length) return;
+      if (!items?.length) {
+        return;
+      }
       const files = Array.from(items).filter(
         (f) =>
           f.type.startsWith("image/") ||
@@ -436,7 +441,9 @@ function PureMultimodalInput({
           f.type ===
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
       );
-      if (files.length > 0) void processFiles(files);
+      if (files.length > 0) {
+        processFiles(files);
+      }
     },
     [processFiles]
   );
@@ -575,62 +582,59 @@ function PureMultimodalInput({
                 </Button>
               </div>
             )}
-            <div
+            <ul
               aria-label={`Lista de anexos: ${attachments.length} documento(s)`}
               className="flex flex-row items-end gap-2 overflow-x-auto overflow-y-hidden py-0.5"
               data-testid="attachments-preview"
-              role="list"
             >
               {attachments.map((attachment) => (
-              <div
-                className="min-w-[120px] shrink-0"
-                key={attachment.url}
-                role="listitem"
-              >
-              <PreviewAttachment
-                attachment={attachment}
-                key={attachment.url}
-                onDocumentTypeChange={
-                  attachment.extractedText != null
-                    ? (documentType) => {
-                        setAttachments((currentAttachments) =>
-                          currentAttachments.map((a) =>
-                            a.url === attachment.url
-                              ? { ...a, documentType }
-                              : a
-                          )
-                        );
+                <li className="min-w-[120px] shrink-0" key={attachment.url}>
+                  <PreviewAttachment
+                    attachment={attachment}
+                    key={attachment.url}
+                    onDocumentTypeChange={
+                      attachment.extractedText != null
+                        ? (documentType) => {
+                            setAttachments((currentAttachments) =>
+                              currentAttachments.map((a) =>
+                                a.url === attachment.url
+                                  ? { ...a, documentType }
+                                  : a
+                              )
+                            );
+                          }
+                        : undefined
+                    }
+                    onPastedText={
+                      attachment.extractionFailed === true
+                        ? (text) => {
+                            setAttachments((currentAttachments) =>
+                              currentAttachments.map((a) =>
+                                a.url === attachment.url
+                                  ? {
+                                      ...a,
+                                      extractedText: text,
+                                      extractionFailed: false,
+                                    }
+                                  : a
+                              )
+                            );
+                          }
+                        : undefined
+                    }
+                    onRemove={() => {
+                      setAttachments((currentAttachments) =>
+                        currentAttachments.filter(
+                          (a) => a.url !== attachment.url
+                        )
+                      );
+                      if (fileInputRef.current) {
+                        fileInputRef.current.value = "";
                       }
-                    : undefined
-                }
-                onPastedText={
-                  attachment.extractionFailed === true
-                    ? (text) => {
-                        setAttachments((currentAttachments) =>
-                          currentAttachments.map((a) =>
-                            a.url === attachment.url
-                              ? {
-                                  ...a,
-                                  extractedText: text,
-                                  extractionFailed: false,
-                                }
-                              : a
-                          )
-                        );
-                      }
-                    : undefined
-                }
-                onRemove={() => {
-                  setAttachments((currentAttachments) =>
-                    currentAttachments.filter((a) => a.url !== attachment.url)
-                  );
-                  if (fileInputRef.current) {
-                    fileInputRef.current.value = "";
-                  }
-                }}
-              />
-              </div>
-            ))}
+                    }}
+                  />
+                </li>
+              ))}
 
               {uploadQueue.map((filename) => (
                 <PreviewAttachment
@@ -643,7 +647,7 @@ function PureMultimodalInput({
                   key={filename}
                 />
               ))}
-            </div>
+            </ul>
           </div>
         )}
         <div className="flex flex-row items-start gap-1 sm:gap-2">

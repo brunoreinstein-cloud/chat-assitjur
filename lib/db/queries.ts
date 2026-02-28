@@ -350,15 +350,10 @@ export async function getMessagesByChatId({
   limit?: number;
 }) {
   try {
-    const base = getDb()
-      .select()
-      .from(message)
-      .where(eq(message.chatId, id));
+    const base = getDb().select().from(message).where(eq(message.chatId, id));
 
     if (limit !== undefined && limit > 0) {
-      const rows = await base
-        .orderBy(desc(message.createdAt))
-        .limit(limit);
+      const rows = await base.orderBy(desc(message.createdAt)).limit(limit);
       return rows.reverse();
     }
     return await base.orderBy(asc(message.createdAt));

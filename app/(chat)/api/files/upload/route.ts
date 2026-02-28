@@ -33,11 +33,21 @@ const ACCEPTED_EXTENSIONS = /\.(docx?|pdf|jpe?g|png)$/i;
 
 export function contentTypeFromFilename(filename: string): string {
   const lower = filename.toLowerCase();
-  if (lower.endsWith(".doc")) return ACCEPTED_DOC_TYPE;
-  if (lower.endsWith(".docx")) return ACCEPTED_DOCX_TYPE;
-  if (lower.endsWith(".pdf")) return ACCEPTED_PDF_TYPE;
-  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
-  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".doc")) {
+    return ACCEPTED_DOC_TYPE;
+  }
+  if (lower.endsWith(".docx")) {
+    return ACCEPTED_DOCX_TYPE;
+  }
+  if (lower.endsWith(".pdf")) {
+    return ACCEPTED_PDF_TYPE;
+  }
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
+    return "image/jpeg";
+  }
+  if (lower.endsWith(".png")) {
+    return "image/png";
+  }
   return OCTET_STREAM;
 }
 const MAX_EXTRACTED_TEXT_LENGTH = 600_000; // ~600k caracteres (PI + Contestação grandes)
@@ -73,15 +83,27 @@ function classifyDocumentType(text: string): "pi" | "contestacao" | undefined {
   let piScore = 0;
   let contestacaoScore = 0;
   for (const re of piMarkers) {
-    if (re.test(sample)) piScore += 1;
+    if (re.test(sample)) {
+      piScore += 1;
+    }
   }
   for (const re of contestacaoMarkers) {
-    if (re.test(sample)) contestacaoScore += 1;
+    if (re.test(sample)) {
+      contestacaoScore += 1;
+    }
   }
-  if (contestacaoScore > piScore) return "contestacao";
-  if (piScore > contestacaoScore) return "pi";
-  if (contestacaoScore > 0) return "contestacao";
-  if (piScore > 0) return "pi";
+  if (contestacaoScore > piScore) {
+    return "contestacao";
+  }
+  if (piScore > contestacaoScore) {
+    return "pi";
+  }
+  if (contestacaoScore > 0) {
+    return "contestacao";
+  }
+  if (piScore > 0) {
+    return "pi";
+  }
   return undefined;
 }
 
@@ -173,14 +195,24 @@ async function extractTextFromPdfUnpdf(buffer: ArrayBuffer): Promise<string> {
  * Fallback: extração página a página com getPage + getTextContent.
  * Pode obter texto em PDFs onde extractText do unpdf devolve vazio (ex.: encoding não padrão).
  */
-async function extractTextFromPdfFallback(buffer: ArrayBuffer): Promise<string> {
+async function extractTextFromPdfFallback(
+  buffer: ArrayBuffer
+): Promise<string> {
   const { getDocumentProxy } = await import("unpdf");
   const pdf = await getDocumentProxy(new Uint8Array(buffer));
   const numPages = (pdf as { numPages: number }).numPages;
-  if (numPages <= 0) return "";
+  if (numPages <= 0) {
+    return "";
+  }
   const parts: string[] = [];
   for (let i = 1; i <= numPages; i += 1) {
-    const page = await (pdf as { getPage: (n: number) => Promise<{ getTextContent: () => Promise<{ items: Array<{ str?: string }> }> }> }).getPage(i);
+    const page = await (
+      pdf as {
+        getPage: (n: number) => Promise<{
+          getTextContent: () => Promise<{ items: Array<{ str?: string }> }>;
+        }>;
+      }
+    ).getPage(i);
     const content = await page.getTextContent();
     const pageText = (content.items as Array<{ str?: string }>)
       .map((item) => item.str ?? "")
@@ -201,11 +233,15 @@ async function extractTextFromPdfWithOcr(buffer: ArrayBuffer): Promise<string> {
   const pdf = await getDocumentProxy(data);
   const numPages = (pdf as { numPages: number }).numPages;
   const pagesToProcess = Math.min(numPages, MAX_OCR_PAGES);
-  if (pagesToProcess <= 0) return "";
+  if (pagesToProcess <= 0) {
+    return "";
+  }
 
   const Tesseract = await import("tesseract.js");
   const worker = await Tesseract.createWorker(["por", "eng"], 1, {
-    logger: () => {},
+    logger: () => {
+      /* silenciar logs do Tesseract */
+    },
   });
   await worker.setParameters({
     tessedit_pageseg_mode: Tesseract.PSM?.AUTO ?? "3",
@@ -259,7 +295,9 @@ async function withPdfWarningsSuppressed<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-async function extractTextFromPdf(buffer: ArrayBuffer): Promise<ExtractPdfResult> {
+async function extractTextFromPdf(
+  buffer: ArrayBuffer
+): Promise<ExtractPdfResult> {
   let text = "";
   let lastError: string | undefined;
   try {
@@ -296,8 +334,8 @@ async function extractTextFromPdf(buffer: ArrayBuffer): Promise<ExtractPdfResult
 
 async function extractTextFromDoc(buffer: ArrayBuffer): Promise<string> {
   const mod = await import("word-extractor");
-  const WordExtractor =
-    ((mod as { default?: typeof import("word-extractor") }).default ?? mod) as typeof import("word-extractor");
+  const WordExtractor = ((mod as { default?: typeof import("word-extractor") })
+    .default ?? mod) as typeof import("word-extractor");
   const extractor = new WordExtractor();
   const doc = await extractor.extract(Buffer.from(buffer));
   const text = doc.getBody() ?? "";
@@ -456,7 +494,8 @@ export async function persistAndRespond(
       extractionDetail
     );
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Falha ao enviar o ficheiro.";
+    const message =
+      err instanceof Error ? err.message : "Falha ao enviar o ficheiro.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

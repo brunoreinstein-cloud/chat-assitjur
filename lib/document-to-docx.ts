@@ -43,7 +43,11 @@ function contentToParagraphs(content: string): FileChild[] {
 
     // Parágrafo com possíveis segmentos **negrito**
     const runs = parseBoldSegments(trimmed);
-    if (runs.length === 1 && typeof runs[0] === "string" && !runs[0].includes("**")) {
+    if (
+      runs.length === 1 &&
+      typeof runs[0] === "string" &&
+      !runs[0].includes("**")
+    ) {
       paragraphs.push(new Paragraph(trimmed));
       continue;
     }
@@ -71,7 +75,9 @@ function parseBoldSegments(line: string): BoldSegment[] {
   while (remaining.length > 0) {
     const open = remaining.indexOf("**");
     if (open === -1) {
-      if (remaining.length > 0) result.push(remaining);
+      if (remaining.length > 0) {
+        result.push(remaining);
+      }
       break;
     }
     if (open > 0) {
@@ -80,7 +86,7 @@ function parseBoldSegments(line: string): BoldSegment[] {
     remaining = remaining.slice(open + 2);
     const close = remaining.indexOf("**");
     if (close === -1) {
-      result.push("**" + remaining);
+      result.push(`**${remaining}`);
       break;
     }
     result.push({ text: remaining.slice(0, close) });
@@ -94,7 +100,10 @@ function parseBoldSegments(line: string): BoldSegment[] {
  * Gera um buffer DOCX a partir do título e do conteúdo em texto.
  * Usado para exportar artefactos de documento (ex.: Revisor) como ficheiro Word.
  */
-export async function createDocxBuffer(title: string, content: string): Promise<Buffer> {
+export async function createDocxBuffer(
+  _title: string,
+  content: string
+): Promise<Buffer> {
   const children = contentToParagraphs(content ?? "");
   const doc = new Document({
     sections: [
@@ -105,7 +114,7 @@ export async function createDocxBuffer(title: string, content: string): Promise<
     ],
   });
 
-  return Packer.toBuffer(doc);
+  return await Packer.toBuffer(doc);
 }
 
 /**

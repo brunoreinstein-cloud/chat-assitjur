@@ -11,6 +11,7 @@ export const sheetDocumentHandler = createDocumentHandler<"sheet">({
 
     const { fullStream } = streamObject({
       model: getArtifactModel(),
+      maxOutputTokens: 8192,
       system: sheetPrompt,
       prompt: title,
       schema: z.object({
@@ -50,6 +51,7 @@ export const sheetDocumentHandler = createDocumentHandler<"sheet">({
 
     const { fullStream } = streamObject({
       model: getArtifactModel(),
+      maxOutputTokens: 8192,
       system: updateDocumentPrompt(document.content, "sheet"),
       prompt: description,
       schema: z.object({

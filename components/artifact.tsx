@@ -104,7 +104,7 @@ function PureArtifact({
     artifact.documentId !== "init" && artifact.status !== "streaming"
       ? `/api/document?id=${artifact.documentId}`
       : null,
-    documentFetcher
+    { fetcher: (url) => documentFetcher(url) as Promise<Document[]> }
   );
 
   const [mode, setMode] = useState<"edit" | "diff">("edit");
@@ -449,7 +449,10 @@ function PureArtifact({
                   <ArtifactCloseButton />
 
                   <div className="min-w-0 flex-1">
-                    <h2 className="line-clamp-2 break-words font-medium leading-tight" title={artifact.title}>
+                    <h2
+                      className="line-clamp-2 break-words font-medium leading-tight"
+                      title={artifact.title}
+                    >
                       {artifact.title}
                     </h2>
 
@@ -485,42 +488,42 @@ function PureArtifact({
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/40">
-              <artifactDefinition.content
-                content={
-                  isCurrentVersion
-                    ? artifact.content
-                    : getDocumentContentById(currentVersionIndex)
-                }
-                currentVersionIndex={currentVersionIndex}
-                getDocumentContentById={getDocumentContentById}
-                isCurrentVersion={isCurrentVersion}
-                isInline={false}
-                isLoading={isDocumentsFetching && !artifact.content}
-                metadata={metadata}
-                mode={mode}
-                onSaveContent={saveContent}
-                setMetadata={setMetadata}
-                status={artifact.status}
-                suggestions={[]}
-                title={artifact.title}
-              />
-
-              <AnimatePresence>
-                {isCurrentVersion && (
-                  <Toolbar
-                    artifactKind={artifact.kind}
-                    isToolbarVisible={isToolbarVisible}
-                    sendMessage={sendMessage}
-                    setIsToolbarVisible={setIsToolbarVisible}
-                    setMessages={setMessages}
-                    status={status}
-                    stop={stop}
-                  />
-                )}
-              </AnimatePresence>
-              </div>
+                <artifactDefinition.content
+                  content={
+                    isCurrentVersion
+                      ? artifact.content
+                      : getDocumentContentById(currentVersionIndex)
+                  }
+                  currentVersionIndex={currentVersionIndex}
+                  getDocumentContentById={getDocumentContentById}
+                  isCurrentVersion={isCurrentVersion}
+                  isInline={false}
+                  isLoading={isDocumentsFetching && !artifact.content}
+                  metadata={metadata}
+                  mode={mode}
+                  onSaveContent={saveContent}
+                  setMetadata={setMetadata}
+                  status={artifact.status}
+                  suggestions={[]}
+                  title={artifact.title}
+                />
 
                 <AnimatePresence>
+                  {isCurrentVersion && (
+                    <Toolbar
+                      artifactKind={artifact.kind}
+                      isToolbarVisible={isToolbarVisible}
+                      sendMessage={sendMessage}
+                      setIsToolbarVisible={setIsToolbarVisible}
+                      setMessages={setMessages}
+                      status={status}
+                      stop={stop}
+                    />
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <AnimatePresence>
                 {!isCurrentVersion && (
                   <VersionFooter
                     currentVersionIndex={currentVersionIndex}

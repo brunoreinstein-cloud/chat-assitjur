@@ -101,7 +101,8 @@ Não hardcodar segredos; usar sempre variáveis de ambiente.
 ```bash
 pnpm install
 pnpm dev              # dev em http://localhost:3300 (--turbo)
-pnpm build            # tsx lib/db/migrate && next build
+pnpm run prebuild     # lint + test:unit (corre antes do build)
+pnpm build            # prebuild → migrate → next build
 pnpm db:migrate       # aplicar migrações
 pnpm db:studio        # Drizzle Studio
 pnpm db:push          # drizzle-kit push
@@ -109,6 +110,7 @@ pnpm run format       # Ultracite fix
 pnpm run lint         # Ultracite check
 pnpm run vercel:env   # puxar env da Vercel
 pnpm test             # Playwright E2E (PLAYWRIGHT=True)
+pnpm run test:unit    # Vitest (unitários)
 ```
 
 Deploy na Vercel: [docs/vercel-setup.md](docs/vercel-setup.md) (checklist, env, migrações) e [docs/vercel-cli.md](docs/vercel-cli.md).
@@ -137,6 +139,8 @@ Comandos: `npx skills list` | `npx skills find [query]` | `npx skills update`.
 
 - **[docs/PROJETO-REVISOR-DEFESAS.md](docs/PROJETO-REVISOR-DEFESAS.md)** — Documentação completa do Agente Revisor: o que é, stack, arquitetura do agente, fluxo (GATE-1 → FASE A → GATE 0.5 → FASE B), API, base de conhecimento, formato dos 3 DOCX, UX/UI, env e comandos.
 - **[docs/SPEC-AI-DRIVE-JURIDICO.md](docs/SPEC-AI-DRIVE-JURIDICO.md)** — Spec completa do produto "AI Drive Jurídico": visão, personas, domínios jurídicos, capacidades, arquitetura, segurança, UX, roadmap e métricas.
+- **[docs/PLANO-PROXIMOS-PASSOS.md](docs/PLANO-PROXIMOS-PASSOS.md)** — Plano de próximos passos: tarefas imediatas (ex.: prebuild), curto prazo, índice do roadmap e onde a documentação descreve "próximos passos". Atualizar este ficheiro quando mudarem prioridades.
+- **[docs/OTIMIZACAO-CUSTO-TOKENS-LLM.md](docs/OTIMIZACAO-CUSTO-TOKENS-LLM.md)** — Revisão e otimização de custo de tokens e uso de LLM: onde se consome, limites atuais, checklist e ações recomendadas.
 
 ---
 

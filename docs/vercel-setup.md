@@ -91,7 +91,12 @@ Valida variáveis obrigatórias, porta da `POSTGRES_URL` (6543 no Supabase), lig
 
 ## 4. Build e deploy
 
-- **Deploy contínuo:** push para a branch ligada (ex.: `main`) dispara o build na Vercel.
+Antes do build de produção, o projeto corre **testes e revisões** (evitar bugs e código que não passa no lint):
+
+- **Prebuild:** `pnpm run prebuild` — corre **lint** (Ultracite) e **testes unitários** (Vitest). É executado automaticamente quando corres `pnpm run build`.
+- **Build:** `pnpm run build` — prebuild → migrações (em local) → `next build`. Na Vercel as migrações são ignoradas (`VERCEL=1`).
+
+- **Deploy contínuo:** push para a branch ligada (ex.: `main`) dispara o build na Vercel (que inclui prebuild).
 - **CLI:** `pnpm run vercel:deploy` (preview) ou `pnpm run vercel:deploy:prod` (produção).
 
 O projeto usa **Next.js 16** com Turbopack e a convenção **proxy** (em vez de `middleware`). O `packageManager` está definido como `pnpm@10.0.0` para coincidir com o lockfile na Vercel.

@@ -210,7 +210,9 @@ export function Chat({
   const DRAFT_ATTACHMENTS_KEY = `chat-draft-attachments-${id}`;
 
   const [attachments, setAttachments] = useState<Attachment[]>(() => {
-    if (typeof window === "undefined") return [];
+    if (typeof window === "undefined") {
+      return [];
+    }
     try {
       const raw = sessionStorage.getItem(DRAFT_ATTACHMENTS_KEY);
       return raw ? (JSON.parse(raw) as Attachment[]) : [];
@@ -229,7 +231,7 @@ export function Chat({
     } catch {
       setAttachments([]);
     }
-  }, [id, DRAFT_ATTACHMENTS_KEY]);
+  }, [DRAFT_ATTACHMENTS_KEY]);
 
   useEffect(() => {
     if (prevChatIdRef.current !== id) {

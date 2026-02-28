@@ -170,7 +170,7 @@ export const PreviewAttachment = ({
             type="button"
             variant="destructive"
           >
-            <CrossSmallIcon size={8} aria-hidden />
+            <CrossSmallIcon aria-hidden size={8} />
           </Button>
         )}
 

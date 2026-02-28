@@ -38,7 +38,7 @@ describe("Cenário A — Gate-1 feliz (parâmetros da API)", () => {
     );
     const routeCode = readFileSync(routePath, "utf-8");
     expect(routeCode).toContain("temperature: 0.2");
-    expect(routeCode).toContain("maxTokens: 8192");
+    expect(routeCode).toContain("maxOutputTokens: 8192");
   });
 
   it("system prompt completo inclui instruções do revisor quando usadas", () => {

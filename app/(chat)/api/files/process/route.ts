@@ -21,11 +21,11 @@ const BLOB_HOST_SUFFIX = "blob.vercel-storage.com";
 function isAllowedBlobUrl(urlString: string): boolean {
   try {
     const u = new URL(urlString);
-    if (u.protocol !== "https:") return false;
+    if (u.protocol !== "https:") {
+      return false;
+    }
     const host = u.hostname.toLowerCase();
-    return (
-      host === BLOB_HOST_SUFFIX || host.endsWith(`.${BLOB_HOST_SUFFIX}`)
-    );
+    return host === BLOB_HOST_SUFFIX || host.endsWith(`.${BLOB_HOST_SUFFIX}`);
   } catch {
     return false;
   }
@@ -88,10 +88,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
-  if (
-    contentType === "" ||
-    contentType === OCTET_STREAM
-  ) {
+  if (contentType === "" || contentType === OCTET_STREAM) {
     contentType = contentTypeFromFilename(filenameStr);
   }
 
@@ -103,7 +100,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       signal: AbortSignal.timeout(BLOB_FETCH_TIMEOUT_MS),
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Falha ao obter o ficheiro";
+    const message =
+      err instanceof Error ? err.message : "Falha ao obter o ficheiro";
     return NextResponse.json(
       { error: `Não foi possível obter o ficheiro: ${message}` },
       { status: 502 }
@@ -140,12 +138,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
-  const {
-    extractedText,
-    extractionFailed,
-    documentType,
-    extractionDetail,
-  } = await runExtractionAndClassification(buffer, contentType);
+  const { extractedText, extractionFailed, documentType, extractionDetail } =
+    await runExtractionAndClassification(buffer, contentType);
 
   return persistAndRespond(
     session.user.id,

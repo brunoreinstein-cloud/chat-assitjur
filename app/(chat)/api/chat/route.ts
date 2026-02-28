@@ -69,6 +69,9 @@ const MAX_TOTAL_DOC_CHARS = 100_000;
 /** Últimas N mensagens a carregar para contexto (reduz BD e tamanho do prompt; a qualidade mantém-se com contexto recente). */
 const CHAT_MESSAGES_LIMIT = 80;
 
+/** Máximo de caracteres da base de conhecimento no system prompt (reduz custo de tokens). */
+const MAX_KNOWLEDGE_CONTEXT_CHARS = 50_000;
+
 /** Converte partes do tipo "document" (PDF/DOCX) em partes "text" para o modelo. Ordena PI antes de Contestação. Trunca texto para não exceder o limite do modelo. */
 function normalizeMessageParts(messages: ChatMessage[]): ChatMessage[] {
   return messages.map((msg) => {
@@ -93,17 +96,11 @@ function normalizeMessageParts(messages: ChatMessage[]): ChatMessage[] {
       if (typeof p.text !== "string" || !p.name) {
         return [];
       }
-      const remaining = Math.max(
-        0,
-        MAX_TOTAL_DOC_CHARS - totalDocChars
-      );
+      const remaining = Math.max(0, MAX_TOTAL_DOC_CHARS - totalDocChars);
       if (remaining <= 0) {
         return [];
       }
-      const maxForThis = Math.min(
-        MAX_CHARS_PER_DOCUMENT,
-        remaining
-      );
+      const maxForThis = Math.min(MAX_CHARS_PER_DOCUMENT, remaining);
       const truncated =
         p.text.length > maxForThis
           ? `${p.text.slice(0, maxForThis)}\n\n[... texto truncado para caber no limite do modelo ...]`
@@ -238,11 +235,14 @@ export async function POST(request: Request) {
               ids: knowledgeDocumentIds,
               userId: session.user.id,
             })
-          : Promise.resolve([] as Awaited<
-              ReturnType<typeof getKnowledgeDocumentsByIds>
-            >),
+          : Promise.resolve(
+              [] as Awaited<ReturnType<typeof getKnowledgeDocumentsByIds>>
+            ),
       ]);
-    logTiming("getMessageCount + getChat + getMessages + knowledge (paralelo)", Date.now() - t1);
+    logTiming(
+      "getMessageCount + getChat + getMessages + knowledge (paralelo)",
+      Date.now() - t1
+    );
 
     if (
       process.env.NODE_ENV !== "development" &&
@@ -273,11 +273,15 @@ export async function POST(request: Request) {
       });
     }
 
-    const effectiveMessagesFromDb = chat && !isToolApprovalFlow ? messagesFromDb : [];
+    const effectiveMessagesFromDb =
+      chat && !isToolApprovalFlow ? messagesFromDb : [];
 
     const uiMessages = isToolApprovalFlow
       ? (messages as ChatMessage[])
-      : [...convertToUIMessages(effectiveMessagesFromDb), message as ChatMessage];
+      : [
+          ...convertToUIMessages(effectiveMessagesFromDb),
+          message as ChatMessage,
+        ];
 
     const { longitude, latitude, city, country } = geolocation(request);
 
@@ -288,12 +292,16 @@ export async function POST(request: Request) {
       country,
     };
 
-    const knowledgeContext =
+    const rawKnowledgeContext =
       knowledgeDocsResult.length > 0
         ? knowledgeDocsResult
             .map((doc) => `--- ${doc.title} ---\n${doc.content}`)
             .join("\n\n")
-        : undefined;
+        : "";
+    const knowledgeContext =
+      rawKnowledgeContext.length > MAX_KNOWLEDGE_CONTEXT_CHARS
+        ? `${rawKnowledgeContext.slice(0, MAX_KNOWLEDGE_CONTEXT_CHARS)}\n\n[... base de conhecimento truncada para caber no limite ...]`
+        : rawKnowledgeContext || undefined;
 
     if (message?.role === "user") {
       const t4 = Date.now();
@@ -319,7 +327,10 @@ export async function POST(request: Request) {
     const t5 = Date.now();
     const normalizedMessages = normalizeMessageParts(uiMessages);
     const modelMessages = await convertToModelMessages(normalizedMessages);
-    logTiming("normalizeMessageParts + convertToModelMessages", Date.now() - t5);
+    logTiming(
+      "normalizeMessageParts + convertToModelMessages",
+      Date.now() - t5
+    );
 
     const preStreamEnd = Date.now();
     logTiming("preStream (total antes do stream)", preStreamEnd - requestStart);
@@ -327,12 +338,17 @@ export async function POST(request: Request) {
     const stream = createUIMessageStream({
       originalMessages: isToolApprovalFlow ? uiMessages : undefined,
       execute: async ({ writer: dataStream }) => {
-        logTiming("execute started (modelo + tools a correr)", Date.now() - requestStart);
+        logTiming(
+          "execute started (modelo + tools a correr)",
+          Date.now() - requestStart
+        );
         const effectiveAgentInstructions =
           agentInstructions?.trim() || AGENTE_REVISOR_DEFESAS_INSTRUCTIONS;
 
         const result = streamText({
           model: getLanguageModel(selectedChatModel),
+          temperature: 0.2,
+          maxOutputTokens: 8192,
           system: systemPrompt({
             selectedChatModel,
             requestHints,
@@ -379,7 +395,10 @@ export async function POST(request: Request) {
       generateId: generateUUID,
       onFinish: async ({ messages: finishedMessages }) => {
         const onFinishStart = Date.now();
-        logTiming("onFinish (stream terminou) total request", onFinishStart - requestStart);
+        logTiming(
+          "onFinish (stream terminou) total request",
+          onFinishStart - requestStart
+        );
         if (isToolApprovalFlow) {
           const tSaveTool = Date.now();
           for (const finishedMsg of finishedMessages) {
@@ -404,7 +423,10 @@ export async function POST(request: Request) {
               });
             }
           }
-          logTiming("saveMessages(tool-flow) em onFinish", Date.now() - tSaveTool);
+          logTiming(
+            "saveMessages(tool-flow) em onFinish",
+            Date.now() - tSaveTool
+          );
         } else if (finishedMessages.length > 0) {
           const tSave = Date.now();
           await saveMessages({
@@ -424,8 +446,7 @@ export async function POST(request: Request) {
       onError: (error: unknown) => {
         const fallback =
           "Ocorreu um erro ao processar o pedido. Tente novamente.";
-        const err =
-          error instanceof Error ? error : new Error(String(error));
+        const err = error instanceof Error ? error : new Error(String(error));
         const isInsufficientFunds = /insufficient\s+funds/i.test(err.message);
         if (isInsufficientFunds) {
           const hint =

@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "cross-env BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true next dev --turbo -p 3300",
-    "build": "tsx lib/db/migrate && cross-env BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true next build",
+    "prebuild": "pnpm run lint && pnpm run test:unit",
+    "build": "pnpm run prebuild && tsx lib/db/migrate && cross-env BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true next build",
     "start": "next start",
     "lint": "ultracite check",
     "format": "ultracite fix",

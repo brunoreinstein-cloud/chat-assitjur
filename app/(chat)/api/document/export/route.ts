@@ -1,7 +1,7 @@
 import { auth } from "@/app/(auth)/auth";
-import { ChatbotError } from "@/lib/errors";
-import { createDocxBuffer, sanitizeDocxFilename } from "@/lib/document-to-docx";
 import { getDocumentById } from "@/lib/db/queries";
+import { createDocxBuffer, sanitizeDocxFilename } from "@/lib/document-to-docx";
+import { ChatbotError } from "@/lib/errors";
 
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";

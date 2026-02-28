@@ -23,15 +23,23 @@ export async function saveChatModelAsCookie(model: string) {
   cookieStore.set("chat-model", model);
 }
 
+/** Máximo de caracteres da primeira mensagem usados para gerar o título (reduz custo de tokens). */
+const MAX_TITLE_PROMPT_CHARS = 500;
+
 export async function generateTitleFromUserMessage({
   message,
 }: {
   message: UIMessage;
 }) {
+  const fullText = getTextFromMessage(message);
+  const prompt =
+    fullText.length > MAX_TITLE_PROMPT_CHARS
+      ? `${fullText.slice(0, MAX_TITLE_PROMPT_CHARS)}...`
+      : fullText;
   const { text } = await generateText({
     model: getTitleModel(),
     system: titlePrompt,
-    prompt: getTextFromMessage(message),
+    prompt,
   });
   return text
     .replace(/^[#*"\s]+/, "")

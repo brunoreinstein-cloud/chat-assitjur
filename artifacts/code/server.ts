@@ -11,6 +11,7 @@ export const codeDocumentHandler = createDocumentHandler<"code">({
 
     const { fullStream } = streamObject({
       model: getArtifactModel(),
+      maxOutputTokens: 8192,
       system: codePrompt,
       prompt: title,
       schema: z.object({
@@ -44,6 +45,7 @@ export const codeDocumentHandler = createDocumentHandler<"code">({
 
     const { fullStream } = streamObject({
       model: getArtifactModel(),
+      maxOutputTokens: 8192,
       system: updateDocumentPrompt(document.content, "code"),
       prompt: description,
       schema: z.object({

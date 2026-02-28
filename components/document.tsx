@@ -77,7 +77,9 @@ function PureDocumentToolResult({
         ) : null}
       </div>
       <div className="min-w-0 flex-1 truncate text-left" title={result.title}>
-        <span className="font-medium text-muted-foreground">{getActionText(type, "past")}</span>
+        <span className="font-medium text-muted-foreground">
+          {getActionText(type, "past")}
+        </span>
         <span className="ml-1 truncate"> {result.title}</span>
       </div>
     </button>

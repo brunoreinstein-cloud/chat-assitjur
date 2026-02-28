@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
  * Diagnóstico: indica se BLOB_READ_WRITE_TOKEN está definido em produção.
  * Não requer auth. Abre em produção: https://teu-dominio.vercel.app/api/files/blob-status
  */
-export async function GET(): Promise<NextResponse> {
+export function GET(): NextResponse {
   const configured = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
   return NextResponse.json({
     blobConfigured: configured,
