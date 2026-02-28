@@ -12,13 +12,13 @@ const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
  * Só existe se as variáveis estiverem definidas.
  */
 export function getSupabaseServerClient() {
-  if (!supabaseUrl || !supabaseServiceRoleKey) {
-    return null;
-  }
-  return createClient<Database>(supabaseUrl, supabaseServiceRoleKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
+	if (!supabaseUrl || !supabaseServiceRoleKey) {
+		return null;
+	}
+	return createClient<Database>(supabaseUrl, supabaseServiceRoleKey, {
+		auth: {
+			autoRefreshToken: false,
+			persistSession: false,
+		},
+	});
 }

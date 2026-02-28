@@ -8,14 +8,14 @@ import useSWR, { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
 import { ChatHeader } from "@/components/chat-header";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useArtifactSelector } from "@/hooks/use-artifact";
 import { useAutoResume } from "@/hooks/use-auto-resume";
@@ -34,340 +34,340 @@ import { toast } from "./toast";
 import type { VisibilityType } from "./visibility-selector";
 
 export function Chat({
-  id,
-  initialMessages,
-  initialChatModel,
-  initialVisibilityType,
-  isReadonly,
-  autoResume,
+	id,
+	initialMessages,
+	initialChatModel,
+	initialVisibilityType,
+	isReadonly,
+	autoResume,
 }: {
-  id: string;
-  initialMessages: ChatMessage[];
-  initialChatModel: string;
-  initialVisibilityType: VisibilityType;
-  isReadonly: boolean;
-  autoResume: boolean;
+	id: string;
+	initialMessages: ChatMessage[];
+	initialChatModel: string;
+	initialVisibilityType: VisibilityType;
+	isReadonly: boolean;
+	autoResume: boolean;
 }) {
-  const router = useRouter();
+	const router = useRouter();
 
-  const { visibilityType } = useChatVisibility({
-    chatId: id,
-    initialVisibilityType,
-  });
+	const { visibilityType } = useChatVisibility({
+		chatId: id,
+		initialVisibilityType,
+	});
 
-  const { mutate } = useSWRConfig();
+	const { mutate } = useSWRConfig();
 
-  // Handle browser back/forward navigation
-  useEffect(() => {
-    const handlePopState = () => {
-      // When user navigates back/forward, refresh to sync with URL
-      router.refresh();
-    };
+	// Handle browser back/forward navigation
+	useEffect(() => {
+		const handlePopState = () => {
+			// When user navigates back/forward, refresh to sync with URL
+			router.refresh();
+		};
 
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, [router]);
-  const { setDataStream } = useDataStream();
+		window.addEventListener("popstate", handlePopState);
+		return () => window.removeEventListener("popstate", handlePopState);
+	}, [router]);
+	const { setDataStream } = useDataStream();
 
-  const [input, setInput] = useState<string>("");
-  const [showCreditCardAlert, setShowCreditCardAlert] = useState(false);
-  const [currentModelId, setCurrentModelId] = useState(initialChatModel);
-  const [agentInstructions, setAgentInstructions] = useState<string>("");
-  const [knowledgeDocumentIds, setKnowledgeDocumentIds] = useState<string[]>(
-    []
-  );
-  const currentModelIdRef = useRef(currentModelId);
-  const agentInstructionsRef = useRef(agentInstructions);
-  const knowledgeDocumentIdsRef = useRef(knowledgeDocumentIds);
+	const [input, setInput] = useState<string>("");
+	const [showCreditCardAlert, setShowCreditCardAlert] = useState(false);
+	const [currentModelId, setCurrentModelId] = useState(initialChatModel);
+	const [agentInstructions, setAgentInstructions] = useState<string>("");
+	const [knowledgeDocumentIds, setKnowledgeDocumentIds] = useState<string[]>(
+		[],
+	);
+	const currentModelIdRef = useRef(currentModelId);
+	const agentInstructionsRef = useRef(agentInstructions);
+	const knowledgeDocumentIdsRef = useRef(knowledgeDocumentIds);
 
-  useEffect(() => {
-    currentModelIdRef.current = currentModelId;
-  }, [currentModelId]);
+	useEffect(() => {
+		currentModelIdRef.current = currentModelId;
+	}, [currentModelId]);
 
-  useEffect(() => {
-    agentInstructionsRef.current = agentInstructions;
-  }, [agentInstructions]);
+	useEffect(() => {
+		agentInstructionsRef.current = agentInstructions;
+	}, [agentInstructions]);
 
-  useEffect(() => {
-    knowledgeDocumentIdsRef.current = knowledgeDocumentIds;
-  }, [knowledgeDocumentIds]);
+	useEffect(() => {
+		knowledgeDocumentIdsRef.current = knowledgeDocumentIds;
+	}, [knowledgeDocumentIds]);
 
-  const {
-    messages,
-    setMessages,
-    sendMessage,
-    status,
-    stop,
-    regenerate,
-    resumeStream,
-    addToolApprovalResponse,
-  } = useChat<ChatMessage>({
-    id,
-    messages: initialMessages,
-    generateId: generateUUID,
-    sendAutomaticallyWhen: ({ messages: currentMessages }) => {
-      const lastMessage = currentMessages.at(-1);
-      const shouldContinue =
-        lastMessage?.parts?.some(
-          (part) =>
-            "state" in part &&
-            part.state === "approval-responded" &&
-            "approval" in part &&
-            (part.approval as { approved?: boolean })?.approved === true
-        ) ?? false;
-      return shouldContinue;
-    },
-    transport: new DefaultChatTransport({
-      api: "/api/chat",
-      fetch: fetchWithErrorHandlers,
-      prepareSendMessagesRequest(request) {
-        const lastMessage = request.messages.at(-1);
-        const isToolApprovalContinuation =
-          lastMessage?.role !== "user" ||
-          request.messages.some((msg) =>
-            msg.parts?.some((part) => {
-              const state = (part as { state?: string }).state;
-              return (
-                state === "approval-responded" || state === "output-denied"
-              );
-            })
-          );
+	const {
+		messages,
+		setMessages,
+		sendMessage,
+		status,
+		stop,
+		regenerate,
+		resumeStream,
+		addToolApprovalResponse,
+	} = useChat<ChatMessage>({
+		id,
+		messages: initialMessages,
+		generateId: generateUUID,
+		sendAutomaticallyWhen: ({ messages: currentMessages }) => {
+			const lastMessage = currentMessages.at(-1);
+			const shouldContinue =
+				lastMessage?.parts?.some(
+					(part) =>
+						"state" in part &&
+						part.state === "approval-responded" &&
+						"approval" in part &&
+						(part.approval as { approved?: boolean })?.approved === true,
+				) ?? false;
+			return shouldContinue;
+		},
+		transport: new DefaultChatTransport({
+			api: "/api/chat",
+			fetch: fetchWithErrorHandlers,
+			prepareSendMessagesRequest(request) {
+				const lastMessage = request.messages.at(-1);
+				const isToolApprovalContinuation =
+					lastMessage?.role !== "user" ||
+					request.messages.some((msg) =>
+						msg.parts?.some((part) => {
+							const state = (part as { state?: string }).state;
+							return (
+								state === "approval-responded" || state === "output-denied"
+							);
+						}),
+					);
 
-        return {
-          body: {
-            id: request.id,
-            ...(isToolApprovalContinuation
-              ? { messages: request.messages }
-              : { message: lastMessage }),
-            selectedChatModel: currentModelIdRef.current,
-            selectedVisibilityType: visibilityType,
-            ...(agentInstructionsRef.current?.trim()
-              ? { agentInstructions: agentInstructionsRef.current.trim() }
-              : {}),
-            ...(knowledgeDocumentIdsRef.current.length > 0
-              ? { knowledgeDocumentIds: knowledgeDocumentIdsRef.current }
-              : {}),
-            ...request.body,
-          },
-        };
-      },
-    }),
-    onData: (dataPart) => {
-      setDataStream((ds) => (ds ? [...ds, dataPart] : []));
-    },
-    onFinish: () => {
-      mutate(unstable_serialize(getChatHistoryPaginationKey));
-    },
-    onError: (error: unknown) => {
-      const unwrapped =
-        error instanceof Error && error.cause instanceof ChatbotError
-          ? error.cause
-          : error;
-      if (unwrapped instanceof ChatbotError) {
-        if (
-          unwrapped.message?.includes("AI Gateway requires a valid credit card")
-        ) {
-          setShowCreditCardAlert(true);
-        } else {
-          const description = unwrapped.cause ?? unwrapped.message;
-          toast({
-            type: "error",
-            description,
-          });
-        }
-      } else {
-        const message =
-          unwrapped instanceof Error
-            ? unwrapped.message
-            : "Algo correu mal. Tente novamente.";
-        toast({ type: "error", description: message });
-      }
-    },
-  });
+				return {
+					body: {
+						id: request.id,
+						...(isToolApprovalContinuation
+							? { messages: request.messages }
+							: { message: lastMessage }),
+						selectedChatModel: currentModelIdRef.current,
+						selectedVisibilityType: visibilityType,
+						...(agentInstructionsRef.current?.trim()
+							? { agentInstructions: agentInstructionsRef.current.trim() }
+							: {}),
+						...(knowledgeDocumentIdsRef.current.length > 0
+							? { knowledgeDocumentIds: knowledgeDocumentIdsRef.current }
+							: {}),
+						...request.body,
+					},
+				};
+			},
+		}),
+		onData: (dataPart) => {
+			setDataStream((ds) => (ds ? [...ds, dataPart] : []));
+		},
+		onFinish: () => {
+			mutate(unstable_serialize(getChatHistoryPaginationKey));
+		},
+		onError: (error: unknown) => {
+			const unwrapped =
+				error instanceof Error && error.cause instanceof ChatbotError
+					? error.cause
+					: error;
+			if (unwrapped instanceof ChatbotError) {
+				if (
+					unwrapped.message?.includes("AI Gateway requires a valid credit card")
+				) {
+					setShowCreditCardAlert(true);
+				} else {
+					const description = unwrapped.cause ?? unwrapped.message;
+					toast({
+						type: "error",
+						description,
+					});
+				}
+			} else {
+				const message =
+					unwrapped instanceof Error
+						? unwrapped.message
+						: "Algo correu mal. Tente novamente.";
+				toast({ type: "error", description: message });
+			}
+		},
+	});
 
-  const searchParams = useSearchParams();
-  const query = searchParams.get("query");
+	const searchParams = useSearchParams();
+	const query = searchParams.get("query");
 
-  const [hasAppendedQuery, setHasAppendedQuery] = useState(false);
+	const [hasAppendedQuery, setHasAppendedQuery] = useState(false);
 
-  useEffect(() => {
-    if (query && !hasAppendedQuery) {
-      sendMessage({
-        role: "user" as const,
-        parts: [{ type: "text", text: query }],
-      });
+	useEffect(() => {
+		if (query && !hasAppendedQuery) {
+			sendMessage({
+				role: "user" as const,
+				parts: [{ type: "text", text: query }],
+			});
 
-      setHasAppendedQuery(true);
-      window.history.replaceState({}, "", `/chat/${id}`);
-    }
-  }, [query, sendMessage, hasAppendedQuery, id]);
+			setHasAppendedQuery(true);
+			window.history.replaceState({}, "", `/chat/${id}`);
+		}
+	}, [query, sendMessage, hasAppendedQuery, id]);
 
-  const { data: votes } = useSWR<Vote[]>(
-    messages.length >= 2 ? `/api/vote?chatId=${id}` : null,
-    fetcher
-  );
+	const { data: votes } = useSWR<Vote[]>(
+		messages.length >= 2 ? `/api/vote?chatId=${id}` : null,
+		fetcher,
+	);
 
-  const DRAFT_ATTACHMENTS_KEY = `chat-draft-attachments-${id}`;
+	const DRAFT_ATTACHMENTS_KEY = `chat-draft-attachments-${id}`;
 
-  const [attachments, setAttachments] = useState<Attachment[]>(() => {
-    if (typeof window === "undefined") {
-      return [];
-    }
-    try {
-      const raw = sessionStorage.getItem(DRAFT_ATTACHMENTS_KEY);
-      return raw ? (JSON.parse(raw) as Attachment[]) : [];
-    } catch {
-      return [];
-    }
-  });
+	const [attachments, setAttachments] = useState<Attachment[]>(() => {
+		if (typeof window === "undefined") {
+			return [];
+		}
+		try {
+			const raw = sessionStorage.getItem(DRAFT_ATTACHMENTS_KEY);
+			return raw ? (JSON.parse(raw) as Attachment[]) : [];
+		} catch {
+			return [];
+		}
+	});
 
-  const prevChatIdRef = useRef<string>(id);
+	const prevChatIdRef = useRef<string>(id);
 
-  useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem(DRAFT_ATTACHMENTS_KEY);
-      const stored = raw ? (JSON.parse(raw) as Attachment[]) : [];
-      setAttachments(stored);
-    } catch {
-      setAttachments([]);
-    }
-  }, [DRAFT_ATTACHMENTS_KEY]);
+	useEffect(() => {
+		try {
+			const raw = sessionStorage.getItem(DRAFT_ATTACHMENTS_KEY);
+			const stored = raw ? (JSON.parse(raw) as Attachment[]) : [];
+			setAttachments(stored);
+		} catch {
+			setAttachments([]);
+		}
+	}, [DRAFT_ATTACHMENTS_KEY]);
 
-  useEffect(() => {
-    if (prevChatIdRef.current !== id) {
-      prevChatIdRef.current = id;
-      return;
-    }
-    try {
-      const key = `chat-draft-attachments-${id}`;
-      if (attachments.length > 0) {
-        sessionStorage.setItem(key, JSON.stringify(attachments));
-      } else {
-        sessionStorage.removeItem(key);
-      }
-    } catch {
-      // Ignora falhas de quota ou sessão
-    }
-  }, [attachments, id]);
+	useEffect(() => {
+		if (prevChatIdRef.current !== id) {
+			prevChatIdRef.current = id;
+			return;
+		}
+		try {
+			const key = `chat-draft-attachments-${id}`;
+			if (attachments.length > 0) {
+				sessionStorage.setItem(key, JSON.stringify(attachments));
+			} else {
+				sessionStorage.removeItem(key);
+			}
+		} catch {
+			// Ignora falhas de quota ou sessão
+		}
+	}, [attachments, id]);
 
-  const isArtifactVisible = useArtifactSelector((state) => state.isVisible);
-  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+	const isArtifactVisible = useArtifactSelector((state) => state.isVisible);
+	const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
-  useAutoResume({
-    autoResume,
-    initialMessages,
-    resumeStream,
-    setMessages,
-  });
+	useAutoResume({
+		autoResume,
+		initialMessages,
+		resumeStream,
+		setMessages,
+	});
 
-  return (
-    <>
-      <div className="overscroll-behavior-contain flex h-dvh min-w-0 touch-pan-y flex-col bg-background">
-        <ChatHeader
-          agentInstructions={agentInstructions}
-          chatId={id}
-          isReadonly={isReadonly}
-          knowledgeDocumentIds={knowledgeDocumentIds}
-          selectedVisibilityType={initialVisibilityType}
-          setAgentInstructions={setAgentInstructions}
-          setKnowledgeDocumentIds={setKnowledgeDocumentIds}
-        />
+	return (
+		<>
+			<div className="overscroll-behavior-contain flex h-dvh min-w-0 touch-pan-y flex-col bg-background">
+				<ChatHeader
+					agentInstructions={agentInstructions}
+					chatId={id}
+					isReadonly={isReadonly}
+					knowledgeDocumentIds={knowledgeDocumentIds}
+					selectedVisibilityType={initialVisibilityType}
+					setAgentInstructions={setAgentInstructions}
+					setKnowledgeDocumentIds={setKnowledgeDocumentIds}
+				/>
 
-        <Messages
-          addToolApprovalResponse={addToolApprovalResponse}
-          chatId={id}
-          isArtifactVisible={isArtifactVisible}
-          isReadonly={isReadonly}
-          messages={messages}
-          regenerate={regenerate}
-          selectedModelId={initialChatModel}
-          setMessages={setMessages}
-          status={status}
-          votes={votes}
-        />
+				<Messages
+					addToolApprovalResponse={addToolApprovalResponse}
+					chatId={id}
+					isArtifactVisible={isArtifactVisible}
+					isReadonly={isReadonly}
+					messages={messages}
+					regenerate={regenerate}
+					selectedModelId={initialChatModel}
+					setMessages={setMessages}
+					status={status}
+					votes={votes}
+				/>
 
-        {!isReadonly && (
-          <RevisorPhaseBanner
-            inputRef={inputRef}
-            isReadonly={isReadonly}
-            messages={messages}
-            sendMessage={sendMessage}
-            setInput={setInput}
-            status={status}
-          />
-        )}
+				{!isReadonly && (
+					<RevisorPhaseBanner
+						inputRef={inputRef}
+						isReadonly={isReadonly}
+						messages={messages}
+						sendMessage={sendMessage}
+						setInput={setInput}
+						status={status}
+					/>
+				)}
 
-        <div className="sticky bottom-0 z-1 mx-auto flex w-full max-w-4xl gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
-          {!isReadonly && (
-            <MultimodalInput
-              attachments={attachments}
-              chatId={id}
-              input={input}
-              inputRef={inputRef}
-              knowledgeDocumentIds={knowledgeDocumentIds}
-              messages={messages}
-              onModelChange={setCurrentModelId}
-              selectedModelId={currentModelId}
-              selectedVisibilityType={visibilityType}
-              sendMessage={sendMessage}
-              setAttachments={setAttachments}
-              setInput={setInput}
-              setMessages={setMessages}
-              status={status}
-              stop={stop}
-            />
-          )}
-        </div>
-      </div>
+				<div className="sticky bottom-0 z-1 mx-auto flex w-full max-w-4xl gap-2 border-t-0 bg-background px-2 pb-3 md:px-4 md:pb-4">
+					{!isReadonly && (
+						<MultimodalInput
+							attachments={attachments}
+							chatId={id}
+							input={input}
+							inputRef={inputRef}
+							knowledgeDocumentIds={knowledgeDocumentIds}
+							messages={messages}
+							onModelChange={setCurrentModelId}
+							selectedModelId={currentModelId}
+							selectedVisibilityType={visibilityType}
+							sendMessage={sendMessage}
+							setAttachments={setAttachments}
+							setInput={setInput}
+							setMessages={setMessages}
+							status={status}
+							stop={stop}
+						/>
+					)}
+				</div>
+			</div>
 
-      <Artifact
-        addToolApprovalResponse={addToolApprovalResponse}
-        attachments={attachments}
-        chatId={id}
-        input={input}
-        isReadonly={isReadonly}
-        messages={messages}
-        regenerate={regenerate}
-        selectedModelId={currentModelId}
-        selectedVisibilityType={visibilityType}
-        sendMessage={sendMessage}
-        setAttachments={setAttachments}
-        setInput={setInput}
-        setMessages={setMessages}
-        status={status}
-        stop={stop}
-        votes={votes}
-      />
+			<Artifact
+				addToolApprovalResponse={addToolApprovalResponse}
+				attachments={attachments}
+				chatId={id}
+				input={input}
+				isReadonly={isReadonly}
+				messages={messages}
+				regenerate={regenerate}
+				selectedModelId={currentModelId}
+				selectedVisibilityType={visibilityType}
+				sendMessage={sendMessage}
+				setAttachments={setAttachments}
+				setInput={setInput}
+				setMessages={setMessages}
+				status={status}
+				stop={stop}
+				votes={votes}
+			/>
 
-      <AlertDialog
-        onOpenChange={setShowCreditCardAlert}
-        open={showCreditCardAlert}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Activate AI Gateway</AlertDialogTitle>
-            <AlertDialogDescription>
-              This application requires{" "}
-              {process.env.NODE_ENV === "production" ? "the owner" : "you"} to
-              activate Vercel AI Gateway.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                window.open(
-                  "https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai%3Fmodal%3Dadd-credit-card",
-                  "_blank"
-                );
-                window.location.href = "/";
-              }}
-            >
-              Activate
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
-  );
+			<AlertDialog
+				onOpenChange={setShowCreditCardAlert}
+				open={showCreditCardAlert}
+			>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Activate AI Gateway</AlertDialogTitle>
+						<AlertDialogDescription>
+							This application requires{" "}
+							{process.env.NODE_ENV === "production" ? "the owner" : "you"} to
+							activate Vercel AI Gateway.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Cancel</AlertDialogCancel>
+						<AlertDialogAction
+							onClick={() => {
+								window.open(
+									"https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai%3Fmodal%3Dadd-credit-card",
+									"_blank",
+								);
+								window.location.href = "/";
+							}}
+						>
+							Activate
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
+		</>
+	);
 }
