@@ -3,8 +3,6 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/app/(auth)/auth";
 
-export const runtime = "nodejs";
-
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png"] as const;
 const ACCEPTED_PDF_TYPE = "application/pdf" as const;
 const ACCEPTED_DOC_TYPE = "application/msword" as const;
