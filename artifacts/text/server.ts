@@ -90,3 +90,39 @@ export const textDocumentHandler = createDocumentHandler<"text">({
 		return draftContent;
 	},
 });
+
+/**
+ * Gera o conteúdo de um documento do Revisor sem fazer stream para o cliente.
+ * Usado pela ferramenta createRevisorDefesaDocuments para gerar os 3 DOCX em paralelo.
+ */
+export async function generateRevisorDocumentContent(
+	title: string,
+): Promise<string> {
+	let draftContent = "";
+
+	const modeloType = getModeloRevisorFromTitle(title);
+	const template = modeloType ? await loadModeloRevisor(modeloType) : null;
+
+	const useTemplate = Boolean(template?.trim());
+	const system = useTemplate
+		? `${SYSTEM_TEMPLATE_REVISOR}\n\n--- MODELO A SEGUIR ---\n\n${template}\n\n--- FIM DO MODELO ---`
+		: "Write about the given topic. Markdown is supported. Use headings wherever appropriate.";
+
+	const { fullStream } = streamText({
+		model: getArtifactModel(),
+		maxOutputTokens: 8192,
+		system,
+		experimental_transform: smoothStream({ chunking: "word" }),
+		prompt: useTemplate
+			? `Preenche o documento conforme o modelo acima, para o caso indicado no título: "${title}".`
+			: title,
+	});
+
+	for await (const delta of fullStream) {
+		if (delta.type === "text-delta") {
+			draftContent += delta.text;
+		}
+	}
+
+	return draftContent;
+}

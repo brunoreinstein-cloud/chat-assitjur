@@ -16,6 +16,7 @@ import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
 import { createDocument } from "@/lib/ai/tools/create-document";
+import { createRevisorDefesaDocuments } from "@/lib/ai/tools/create-revisor-defesa-documents";
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
 import { updateDocument } from "@/lib/ai/tools/update-document";
@@ -362,6 +363,7 @@ export async function POST(request: Request) {
 						: [
 								"getWeather",
 								"createDocument",
+								"createRevisorDefesaDocuments",
 								"updateDocument",
 								"requestSuggestions",
 							],
@@ -375,6 +377,10 @@ export async function POST(request: Request) {
 					tools: {
 						getWeather,
 						createDocument: createDocument({ session, dataStream }),
+						createRevisorDefesaDocuments: createRevisorDefesaDocuments({
+							session,
+							dataStream,
+						}),
 						updateDocument: updateDocument({ session, dataStream }),
 						requestSuggestions: requestSuggestions({ session, dataStream }),
 					},
