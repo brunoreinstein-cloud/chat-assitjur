@@ -379,9 +379,15 @@ export async function POST(request: Request) {
         }
       },
       onError: (error: unknown) => {
-        const fallback = "Ocorreu um erro ao processar o pedido. Tente novamente.";
-        if (process.env.NODE_ENV === "development" && error instanceof Error) {
-          return `${fallback} (dev: ${error.message})`;
+        const fallback =
+          "Ocorreu um erro ao processar o pedido. Tente novamente.";
+        const err =
+          error instanceof Error ? error : new Error(String(error));
+        if (process.env.NODE_ENV === "development") {
+          return `${fallback} (dev: ${err.message})`;
+        }
+        if (process.env.NODE_ENV === "production") {
+          console.error("[chat] onError (produção):", err.message, err.stack);
         }
         return fallback;
       },

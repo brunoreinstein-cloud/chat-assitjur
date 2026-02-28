@@ -101,7 +101,37 @@ Detalhes de UX/UI e priorização estão em `docs/ux-ui-revisor-defesas.md`.
 
 ---
 
-## 7. Resolução de problemas — Upload
+## 7. Velocidade do upload
+
+O tempo total de upload depende do tamanho do ficheiro, da rede e do processamento no servidor (extração de texto em PDF/DOC/DOCX). Seguem as otimizações aplicadas e dicas para o utilizador.
+
+### O que já está otimizado
+
+- **Upload e extração em paralelo (ficheiros &lt; 4,5 MB):** No `POST /api/files/upload`, o envio do ficheiro para o storage (Supabase ou Vercel Blob) e a extração de texto (PDF/DOC/DOCX) correm em paralelo. O tempo total é o **máximo** dos dois, e não a soma, o que reduz a latência sentida especialmente em documentos grandes.
+- **Upload direto para ficheiros &gt; 4,5 MB:** O browser envia o ficheiro diretamente para o Vercel Blob (sem passar pelo body da função serverless), evitando o limite de 4,5 MB e reduzindo carga no servidor. O processamento (extração e persistência em Supabase) ocorre depois, em `/api/files/process`.
+- **Múltiplos ficheiros:** Vários anexos (ex.: colar várias imagens) são enviados em paralelo (`Promise.all`), não em sequência.
+- **PDFs de tamanho enorme (até 100 MB):** As rotas de upload e de processamento estão preparadas para PDFs muito grandes:
+  - **Tempo de execução:** `maxDuration = 300` (5 min) nas rotas `/api/files/upload` e `/api/files/process`, para permitir extração de PDFs com muitas páginas ou OCR (na Vercel Pro o limite pode ser até 800 s).
+  - **Descarregamento do Blob:** O fetch ao Vercel Blob em `/api/files/process` usa um timeout de 3 minutos (`BLOB_FETCH_TIMEOUT_MS`), para que ficheiros grandes não falhem por timeout durante a transferência.
+  - **OCR (PDFs digitalizados):** Até 50 páginas são processadas por OCR (antes 15); o texto extraído é truncado a ~600k caracteres para manter a resposta utilizável.
+  - **Texto extraído:** Limite de caracteres aumentado para ~600k por documento (PI ou Contestação), suficiente para peças muito longas.
+  - **Requisito:** Para PDFs &gt; 4,5 MB é obrigatório ter `BLOB_READ_WRITE_TOKEN` configurado (upload direto). O tamanho máximo aceite é 100 MB.
+
+### Como o utilizador pode “acelerar”
+
+- **Ficheiros &lt; 4,5 MB:** Já beneficiam do paralelismo upload + extração; não é necessário alterar nada.
+- **Ficheiros grandes:** Garantir que `BLOB_READ_WRITE_TOKEN` está configurado para usar upload direto; caso contrário o body pode falhar (413) ou o upload ser rejeitado.
+- **Reduzir tamanho quando possível:** PDFs com muitas páginas ou imagens pesadas aumentam o tempo de envio e de extração. Comprimir ou reduzir resolução (em imagens) antes de anexar pode ajudar.
+- **Rede:** Uploads em redes lentas ou instáveis demoram mais; o tempo é dominado pelo envio dos bytes. Em redes rápidas, o paralelismo no servidor é o que mais reduz o tempo até a resposta.
+
+### Possíveis melhorias futuras
+
+- **Streaming no processamento de ficheiros grandes:** Em `/api/files/process`, o servidor faz `fetch(blobUrl)` e depois `arrayBuffer()`, o que carrega o ficheiro todo em memória (até 100 MB). Para ficheiros ainda maiores, poderia avaliar streaming ou processamento em background (ex.: Trigger.dev) para evitar timeout e pico de memória.
+- **Compressão no cliente:** Para imagens (JPEG/PNG), compressão no browser antes do envio reduz tamanho e tempo de upload; exigiria uma biblioteca de compressão e decisão de qualidade.
+
+---
+
+## 8. Resolução de problemas — Upload
 
 Se o upload falhar, a interface mostra uma mensagem de erro (toast). Causas comuns:
 
@@ -121,13 +151,15 @@ Se o upload falhar, a interface mostra uma mensagem de erro (toast). Causas comu
 
 **Por que continua a dar erro em produção?** A mensagem «Upload de ficheiros grandes não está configurado» significa que a variável `BLOB_READ_WRITE_TOKEN` **não está disponível** na função serverless em runtime. Confirme: (1) **Vercel** → **Settings** → **Environment Variables**: existe `BLOB_READ_WRITE_TOKEN` (nome exato, sem repetir `_READ_WRITE_TOKEN`) com **Production** assinalado? (2) O Blob store está **ligado a este projeto** (Storage → store → Add to project)? (3) Depois de adicionar ou alterar a variável, fez **Redeploy** do deployment de Production? (As env vars são injetadas no deploy; sem redeploy a função não vê a variável.) Para confirmar em produção se o token está definido, abra no browser: `https://seu-dominio.vercel.app/api/files/blob-status` — se devolver `blobConfigured: false`, a variável não está a chegar à função.
 
+**Erro ao clicar CONFIRMAR (FASE B) em produção:** ao confirmar o resumo do GATE 0.5, o agente gera os 3 DOCX (FASE B). Se aparecer «Ocorreu um erro ao gerar os documentos»: (1) **Vercel** → **Deployments** → o deployment em causa → **Functions** → logs da função `/api/chat`: procure por `[chat] onError (produção):` para ver a mensagem e stack do erro. (2) Causas comuns: **modelos em falta** — os ficheiros `lib/ai/modelos/*.txt` devem ser incluídos no deploy (o projeto usa `outputFileTracingIncludes` em `next.config.ts` para o route `/api/chat`); **base de dados** — `POSTGRES_URL` definida para Production e migrações aplicadas; **IA** — `AI_GATEWAY_API_KEY` (ou provider configurado) válida; **timeout** — a rota tem `maxDuration = 120`; se a geração dos 3 documentos demorar mais, considere aumentar o plano ou otimizar. Depois de corrigir variáveis ou configuração, faça **Redeploy** de Production.
+
 **Em desenvolvimento:** se o servidor devolver um campo `detail` no erro, a mensagem do toast inclui esse pormenor para facilitar o debug.
 
 **Alternativa quando o PDF não é processado:** se o upload concluir mas o texto do PDF não for extraído, aparece o aviso «Texto não extraído. Cole o texto na caixa de mensagem.» Nesse caso, cole o texto da Petição Inicial e da Contestação diretamente na caixa de mensagem e envie.
 
 ---
 
-## 8. Referências
+## 9. Referências
 
 - Instruções do agente: `lib/ai/agent-revisor-defesas.ts`
 - Fluxo e API do chat: `docs/PROJETO-REVISOR-DEFESAS.md`

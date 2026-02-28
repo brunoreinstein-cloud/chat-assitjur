@@ -8,6 +8,9 @@ const withBundleAnalyzer = require("@next/bundle-analyzer")({
 const nextConfig: NextConfig = {
   cacheComponents: true,
   experimental: {
+    outputFileTracingIncludes: {
+      "/api/chat": ["./lib/ai/modelos/*.txt"],
+    },
     proxyClientMaxBodySize: "22mb",
     serverActions: {
       bodySizeLimit: "21mb",
