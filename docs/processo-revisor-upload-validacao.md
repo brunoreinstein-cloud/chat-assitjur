@@ -119,6 +119,8 @@ Se o upload falhar, a interface mostra uma mensagem de erro (toast). Causas comu
 
 **Em produção (Word não envia):** alguns browsers ou ambientes enviam ficheiros .doc/.docx com tipo MIME vazio ou `application/octet-stream`. O servidor passou a aceitar estes ficheiros pela extensão do nome (`.doc`, `.docx`) e a inferir o tipo para extração e storage. Se continuar a falhar, verifique o tamanho (≤ 4,5 MB se não usar upload direto).
 
+**Por que continua a dar erro em produção?** A mensagem «Upload de ficheiros grandes não está configurado» significa que a variável `BLOB_READ_WRITE_TOKEN` **não está disponível** na função serverless em runtime. Confirme: (1) **Vercel** → **Settings** → **Environment Variables**: existe `BLOB_READ_WRITE_TOKEN` (nome exato, sem repetir `_READ_WRITE_TOKEN`) com **Production** assinalado? (2) O Blob store está **ligado a este projeto** (Storage → store → Add to project)? (3) Depois de adicionar ou alterar a variável, fez **Redeploy** do deployment de Production? (As env vars são injetadas no deploy; sem redeploy a função não vê a variável.) Para confirmar em produção se o token está definido, abra no browser: `https://seu-dominio.vercel.app/api/files/blob-status` — se devolver `blobConfigured: false`, a variável não está a chegar à função.
+
 **Em desenvolvimento:** se o servidor devolver um campo `detail` no erro, a mensagem do toast inclui esse pormenor para facilitar o debug.
 
 **Alternativa quando o PDF não é processado:** se o upload concluir mas o texto do PDF não for extraído, aparece o aviso «Texto não extraído. Cole o texto na caixa de mensagem.» Nesse caso, cole o texto da Petição Inicial e da Contestação diretamente na caixa de mensagem e envie.
@@ -133,3 +135,4 @@ Se o upload falhar, a interface mostra uma mensagem de erro (toast). Causas comu
 - Checklist desenvolvimento: `.agents/skills/revisor-defesas-context/SKILL.md`
 - API de upload: `app/(chat)/api/files/upload/route.ts`
 - Upload direto (ficheiros &gt; 4,5 MB): `app/(chat)/api/files/upload-token/route.ts`, `app/(chat)/api/files/process/route.ts`
+- Diagnóstico em produção: `GET /api/files/blob-status` (indica se `BLOB_READ_WRITE_TOKEN` está definido)
