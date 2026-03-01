@@ -35,14 +35,14 @@ export function DocumentPreview({
   isReadonly,
   result,
   args,
-}: DocumentPreviewProps) {
+}: Readonly<DocumentPreviewProps>) {
   const { artifact, setArtifact } = useArtifact();
 
   const { data: documents, isLoading: isDocumentsFetching } = useSWR<
     Document[]
   >(result ? `/api/document?id=${result.id}` : null, {
     fetcher: (url) => documentFetcher(url) as Promise<Document[]>,
-    dedupingInterval: 5_000,
+    dedupingInterval: 5000,
   });
 
   const previewDocument = useMemo(() => documents?.[0], [documents]);
@@ -94,16 +94,12 @@ export function DocumentPreview({
   }
 
   if (isDocumentsFetching) {
-    return (
-      <LoadingSkeleton
-        artifactKind={(result?.kind ?? args?.kind ?? "text") as ArtifactKind}
-      />
-    );
+    const skeletonKind = (result?.kind ?? args?.kind ?? "text") as ArtifactKind;
+    return <LoadingSkeleton artifactKind={skeletonKind} />;
   }
 
-  const document: Document | null = previewDocument
-    ? previewDocument
-    : artifact.status === "streaming"
+  const streamingDoc: Document | null =
+    artifact.status === "streaming"
       ? {
           title: artifact.title,
           kind: artifact.kind,
@@ -113,6 +109,7 @@ export function DocumentPreview({
           userId: "noop",
         }
       : null;
+  const document: Document | null = previewDocument ?? streamingDoc;
 
   if (!document) {
     return <LoadingSkeleton artifactKind={artifact.kind} />;
@@ -206,7 +203,6 @@ const PureHitboxLayer = ({
       className="absolute top-0 left-0 z-10 size-full rounded-xl"
       onClick={handleClick}
       ref={hitboxRef}
-      role="presentation"
     >
       <div className="flex w-full items-center justify-end p-4">
         <div className="absolute top-[13px] right-[9px] rounded-md p-2 hover:bg-zinc-100 dark:hover:bg-zinc-700">
@@ -224,6 +220,23 @@ const HitboxLayer = memo(PureHitboxLayer, (prevProps, nextProps) => {
   return true;
 });
 
+function DocumentHeaderIcon({
+  isStreaming,
+  kind,
+}: Readonly<{ isStreaming: boolean; kind: ArtifactKind }>) {
+  if (isStreaming) {
+    return (
+      <div className="animate-spin">
+        <LoaderIcon />
+      </div>
+    );
+  }
+  if (kind === "image") {
+    return <ImageIcon />;
+  }
+  return <FileIcon />;
+}
+
 const PureDocumentHeader = ({
   title,
   kind,
@@ -236,15 +249,7 @@ const PureDocumentHeader = ({
   <div className="flex flex-row items-start justify-between gap-2 rounded-t-2xl border border-b-0 p-4 sm:items-center dark:border-zinc-700 dark:bg-muted">
     <div className="flex flex-row items-start gap-3 sm:items-center">
       <div className="text-muted-foreground">
-        {isStreaming ? (
-          <div className="animate-spin">
-            <LoaderIcon />
-          </div>
-        ) : kind === "image" ? (
-          <ImageIcon />
-        ) : (
-          <FileIcon />
-        )}
+        <DocumentHeaderIcon isStreaming={isStreaming} kind={kind} />
       </div>
       <div className="-translate-y-1 font-medium sm:translate-y-0">{title}</div>
     </div>
@@ -285,23 +290,30 @@ const DocumentContent = ({ document }: { document: Document }) => {
 
   const handleSaveContent = () => null;
 
-  return (
-    <div className={containerClassName}>
-      {document.kind === "text" ? (
-        <Editor {...commonProps} onSaveContent={handleSaveContent} />
-      ) : document.kind === "code" ? (
+  function renderContent() {
+    if (document.kind === "text") {
+      return <Editor {...commonProps} onSaveContent={handleSaveContent} />;
+    }
+    if (document.kind === "code") {
+      return (
         <div className="relative flex w-full flex-1">
           <div className="absolute inset-0">
             <CodeEditor {...commonProps} onSaveContent={handleSaveContent} />
           </div>
         </div>
-      ) : document.kind === "sheet" ? (
+      );
+    }
+    if (document.kind === "sheet") {
+      return (
         <div className="relative flex size-full flex-1 p-4">
           <div className="absolute inset-0">
             <SpreadsheetEditor {...commonProps} />
           </div>
         </div>
-      ) : document.kind === "image" ? (
+      );
+    }
+    if (document.kind === "image") {
+      return (
         <ImageEditor
           content={document.content ?? ""}
           currentVersionIndex={0}
@@ -310,7 +322,10 @@ const DocumentContent = ({ document }: { document: Document }) => {
           status={artifact.status}
           title={document.title}
         />
-      ) : null}
-    </div>
-  );
+      );
+    }
+    return null;
+  }
+
+  return <div className={containerClassName}>{renderContent()}</div>;
 };

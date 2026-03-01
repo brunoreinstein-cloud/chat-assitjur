@@ -25,16 +25,11 @@ export function MessageDocumentTool({
   output,
   isReadonly,
 }: Readonly<MessageDocumentToolProps>) {
-  const hasError =
-    output &&
-    typeof output === "object" &&
-    "error" in output;
+  const hasError = output && typeof output === "object" && "error" in output;
 
   if (hasError) {
     const message =
-      type === "create"
-        ? "Error creating document"
-        : "Error updating document";
+      type === "create" ? "Error creating document" : "Error updating document";
     return (
       <div
         className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-500 dark:bg-red-950/50"
@@ -61,10 +56,6 @@ export function MessageDocumentTool({
   }
 
   return (
-    <DocumentPreview
-      isReadonly={isReadonly}
-      key={toolCallId}
-      result={output}
-    />
+    <DocumentPreview isReadonly={isReadonly} key={toolCallId} result={output} />
   );
 }

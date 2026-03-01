@@ -2,21 +2,16 @@
 
 import type { UseChatHelpers } from "@ai-sdk/react";
 import type { ChatMessage } from "@/lib/types";
-import {
-  Tool,
-  ToolContent,
-  ToolHeader,
-  ToolInput,
-} from "./elements/tool";
+import { Tool, ToolContent, ToolHeader, ToolInput } from "./elements/tool";
 import { Weather, type WeatherAtLocation } from "./weather";
 
-type WeatherPart = {
+interface WeatherPart {
   toolCallId: string;
   state: string;
   input?: unknown;
   output?: unknown;
   approval?: { id: string; approved?: boolean };
-};
+}
 
 interface MessageWeatherToolProps {
   part: WeatherPart;
@@ -41,9 +36,7 @@ export function MessageWeatherTool({
   if (state === "output-available") {
     return (
       <div className={WIDTH_CLASS} key={toolCallId}>
-        <Weather
-          weatherAtLocation={part.output as WeatherAtLocation}
-        />
+        <Weather weatherAtLocation={part.output as WeatherAtLocation} />
       </div>
     );
   }
@@ -81,8 +74,7 @@ export function MessageWeatherTool({
       <Tool className="w-full" defaultOpen={true}>
         <ToolHeader state={state} type="tool-getWeather" />
         <ToolContent>
-          {(state === "input-available" ||
-            state === "approval-requested") && (
+          {(state === "input-available" || state === "approval-requested") && (
             <ToolInput input={part.input} />
           )}
           {state === "approval-requested" && approvalId ? (

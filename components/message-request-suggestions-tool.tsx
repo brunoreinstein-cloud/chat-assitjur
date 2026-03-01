@@ -10,12 +10,12 @@ import {
   ToolOutput,
 } from "./elements/tool";
 
-type RequestSuggestionsOutput = {
+interface RequestSuggestionsOutput {
   id: string;
   title: string;
   kind: ArtifactKind;
   error?: unknown;
-};
+}
 
 interface MessageRequestSuggestionsToolProps {
   toolCallId: string;
@@ -35,10 +35,7 @@ export function MessageRequestSuggestionsTool({
   output,
   isReadonly,
 }: Readonly<MessageRequestSuggestionsToolProps>) {
-  const hasError =
-    output &&
-    typeof output === "object" &&
-    "error" in output;
+  const hasError = output && typeof output === "object" && "error" in output;
 
   return (
     <Tool defaultOpen={true} key={toolCallId}>

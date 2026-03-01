@@ -4,12 +4,12 @@ import type { UseChatHelpers } from "@ai-sdk/react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { Vote } from "@/lib/db/schema";
-import type { ChatMessage } from "@/lib/types";
+import type { ChatMessage, ChatMessagePart } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { useDataStream } from "./data-stream-provider";
-import { MessagePartRenderer } from "./message-part-renderer";
 import { SparklesIcon } from "./icons";
 import { MessageActions } from "./message-actions";
+import { MessagePartRenderer } from "./message-part-renderer";
 import { PreviewAttachment } from "./preview-attachment";
 
 const PurePreviewMessage = ({
@@ -42,7 +42,8 @@ const PurePreviewMessage = ({
   const [mode, setMode] = useState<"view" | "edit">("view");
 
   const attachmentsFromMessage = message.parts.filter(
-    (part) => part.type === "file"
+    (part): part is Extract<ChatMessagePart, { type: "file" }> =>
+      part.type === "file"
   );
 
   useDataStream();
@@ -102,22 +103,22 @@ const PurePreviewMessage = ({
           {message.parts
             ?.filter((p): p is NonNullable<typeof p> => p != null)
             .map((part, index) => (
-            <MessagePartRenderer
-              addToolApprovalResponse={addToolApprovalResponse}
-              index={index}
-              isLoading={isLoading}
-              isReadonly={isReadonly}
-              key={`message-${message.id}-part-${index}`}
-              message={message}
-              messageId={message.id}
-              messageRole={message.role}
-              mode={mode}
-              part={part}
-              regenerate={regenerate}
-              setMessages={setMessages}
-              setMode={setMode}
-            />
-          ))}
+              <MessagePartRenderer
+                addToolApprovalResponse={addToolApprovalResponse}
+                index={index}
+                isLoading={isLoading}
+                isReadonly={isReadonly}
+                key={`message-${message.id}-part-${index}`}
+                message={message}
+                messageId={message.id}
+                messageRole={message.role}
+                mode={mode}
+                part={part}
+                regenerate={regenerate}
+                setMessages={setMessages}
+                setMode={setMode}
+              />
+            ))}
 
           {gate05ConfirmInline && onConfirmGate05 && onCorrigirGate05 && (
             <section

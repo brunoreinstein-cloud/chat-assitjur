@@ -105,7 +105,9 @@ export function RevisorPhaseBanner({
   }, [showFaseB, isStreaming]);
 
   useEffect(() => {
-    if (startTime === null) return;
+    if (startTime === null) {
+      return;
+    }
     const tick = () =>
       setElapsedSeconds(Math.floor((Date.now() - startTime) / 1000));
     tick();
@@ -142,6 +144,7 @@ export function RevisorPhaseBanner({
           <span
             aria-label={`Tempo decorrido: ${formatElapsed(elapsedSeconds)}`}
             className="mt-1 block font-medium tabular-nums"
+            role="timer"
           >
             Tempo: {formatElapsed(elapsedSeconds)}
           </span>

@@ -20,11 +20,7 @@ export function RevisorDefesaDocumentsResult({
   output,
   isReadonly,
 }: Readonly<RevisorDefesaDocumentsResultProps>) {
-  if (
-    output &&
-    typeof output === "object" &&
-    "error" in output
-  ) {
+  if (output && typeof output === "object" && "error" in output) {
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-500 dark:bg-red-950/50">
         Erro ao criar os 3 documentos: {String(output.error)}
@@ -38,8 +34,7 @@ export function RevisorDefesaDocumentsResult({
   if (ids.length === 0) {
     return (
       <div className="rounded-xl border bg-muted/50 px-3 py-2 text-muted-foreground text-sm">
-        A criar os 3 documentos (Avaliação, Roteiro Advogado, Roteiro
-        Preposto)…
+        A criar os 3 documentos (Avaliação, Roteiro Advogado, Roteiro Preposto)…
       </div>
     );
   }
@@ -47,7 +42,7 @@ export function RevisorDefesaDocumentsResult({
   return (
     <ul
       aria-label="Documentos criados: Avaliação, Roteiro Advogado, Roteiro Preposto"
-      className="flex flex-col gap-2 list-none p-0 m-0"
+      className="m-0 flex list-none flex-col gap-2 p-0"
     >
       {ids.map((id, index) => (
         <li key={id}>

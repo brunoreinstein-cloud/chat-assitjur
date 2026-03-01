@@ -33,6 +33,15 @@ import { getChatHistoryPaginationKey } from "./sidebar-history";
 import { toast } from "./toast";
 import type { VisibilityType } from "./visibility-selector";
 
+type ChatProps = Readonly<{
+  id: string;
+  initialMessages: ChatMessage[];
+  initialChatModel: string;
+  initialVisibilityType: VisibilityType;
+  isReadonly: boolean;
+  autoResume: boolean;
+}>;
+
 export function Chat({
   id,
   initialMessages,
@@ -40,14 +49,7 @@ export function Chat({
   initialVisibilityType,
   isReadonly,
   autoResume,
-}: {
-  id: string;
-  initialMessages: ChatMessage[];
-  initialChatModel: string;
-  initialVisibilityType: VisibilityType;
-  isReadonly: boolean;
-  autoResume: boolean;
-}) {
+}: ChatProps) {
   const router = useRouter();
 
   const { visibilityType } = useChatVisibility({
@@ -64,8 +66,8 @@ export function Chat({
       router.refresh();
     };
 
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
+    globalThis.addEventListener("popstate", handlePopState);
+    return () => globalThis.removeEventListener("popstate", handlePopState);
   }, [router]);
   const { setDataStream } = useDataStream();
 
@@ -127,7 +129,9 @@ export function Chat({
           lastMessage?.role !== "user" ||
           request.messages.some((msg) =>
             msg.parts?.some((part) => {
-              if (part == null) return false;
+              if (part == null) {
+                return false;
+              }
               const state = (part as { state?: string }).state;
               return (
                 state === "approval-responded" || state === "output-denied"
@@ -202,24 +206,24 @@ export function Chat({
       });
 
       setHasAppendedQuery(true);
-      window.history.replaceState({}, "", `/chat/${id}`);
+      globalThis.window.history.replaceState({}, "", `/chat/${id}`);
     }
   }, [query, sendMessage, hasAppendedQuery, id]);
 
   const { data: votes } = useSWR<Vote[]>(
     messages.length >= 2 ? `/api/vote?chatId=${id}` : null,
     fetcher,
-    { dedupingInterval: 5_000 }
+    { dedupingInterval: 5000 }
   );
 
   const DRAFT_ATTACHMENTS_KEY = `chat-draft-attachments-${id}`;
 
   const [attachments, setAttachments] = useState<Attachment[]>(() => {
-    if (typeof window === "undefined") {
+    if (globalThis.window === undefined) {
       return [];
     }
     try {
-      const raw = sessionStorage.getItem(DRAFT_ATTACHMENTS_KEY);
+      const raw = globalThis.sessionStorage.getItem(DRAFT_ATTACHMENTS_KEY);
       return raw ? (JSON.parse(raw) as Attachment[]) : [];
     } catch {
       return [];
@@ -230,7 +234,7 @@ export function Chat({
 
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem(DRAFT_ATTACHMENTS_KEY);
+      const raw = globalThis.sessionStorage.getItem(DRAFT_ATTACHMENTS_KEY);
       const stored = raw ? (JSON.parse(raw) as Attachment[]) : [];
       setAttachments(stored);
     } catch {
@@ -246,9 +250,9 @@ export function Chat({
     try {
       const key = `chat-draft-attachments-${id}`;
       if (attachments.length > 0) {
-        sessionStorage.setItem(key, JSON.stringify(attachments));
+        globalThis.sessionStorage.setItem(key, JSON.stringify(attachments));
       } else {
-        sessionStorage.removeItem(key);
+        globalThis.sessionStorage.removeItem(key);
       }
     } catch {
       // Ignora falhas de quota ou sessão
@@ -364,11 +368,11 @@ export function Chat({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                window.open(
+                globalThis.window.open(
                   "https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai%3Fmodal%3Dadd-credit-card",
                   "_blank"
                 );
-                window.location.href = "/";
+                globalThis.window.location.href = "/";
               }}
             >
               Activate

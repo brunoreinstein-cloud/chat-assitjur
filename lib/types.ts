@@ -1,4 +1,4 @@
-import type { InferUITool, UIMessage } from "ai";
+import type { InferUITool, UIMessage, UIMessagePart } from "ai";
 import { z } from "zod";
 import type { ArtifactKind } from "@/components/artifact";
 import type { createDocument } from "./ai/tools/create-document";
@@ -57,15 +57,17 @@ export interface CustomUIDataTypes {
   clear: null;
   finish: null;
   "chat-title": string;
-  /** Index signature required by AI SDK UIDataTypes */
-  [key: string]: string | Suggestion | ArtifactKind | null | undefined;
+  /** Index signature required by AI SDK UIDataTypes. kind stays ArtifactKind via explicit property above. */
+  [key: string]: string | Suggestion | null | undefined;
 }
 
-export type ChatMessage = UIMessage<
-  MessageMetadata,
-  CustomUIDataTypes,
-  ChatTools
->;
+/** Parte de uma mensagem do chat (texto, ficheiro, tool, etc.). */
+export type ChatMessagePart = UIMessagePart<CustomUIDataTypes, ChatTools>;
+
+export interface ChatMessage
+  extends UIMessage<MessageMetadata, CustomUIDataTypes, ChatTools> {
+  parts: ChatMessagePart[];
+}
 
 /** Rótulo opcional para documentos (PI/Contestação) no Revisor de Defesas */
 export type DocumentTypeLabel = "pi" | "contestacao";

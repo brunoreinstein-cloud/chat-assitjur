@@ -60,6 +60,25 @@ export interface UIArtifact {
   };
 }
 
+type PureArtifactProps = Readonly<{
+  addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
+  chatId: string;
+  input: string;
+  setInput: Dispatch<SetStateAction<string>>;
+  status: UseChatHelpers<ChatMessage>["status"];
+  stop: UseChatHelpers<ChatMessage>["stop"];
+  attachments: Attachment[];
+  setAttachments: Dispatch<SetStateAction<Attachment[]>>;
+  messages: ChatMessage[];
+  setMessages: UseChatHelpers<ChatMessage>["setMessages"];
+  votes: Vote[] | undefined;
+  sendMessage: UseChatHelpers<ChatMessage>["sendMessage"];
+  regenerate: UseChatHelpers<ChatMessage>["regenerate"];
+  isReadonly: boolean;
+  selectedVisibilityType: VisibilityType;
+  selectedModelId: string;
+}>;
+
 function PureArtifact({
   addToolApprovalResponse,
   chatId,
@@ -77,37 +96,18 @@ function PureArtifact({
   isReadonly,
   selectedVisibilityType,
   selectedModelId,
-}: {
-  addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
-  chatId: string;
-  input: string;
-  setInput: Dispatch<SetStateAction<string>>;
-  status: UseChatHelpers<ChatMessage>["status"];
-  stop: UseChatHelpers<ChatMessage>["stop"];
-  attachments: Attachment[];
-  setAttachments: Dispatch<SetStateAction<Attachment[]>>;
-  messages: ChatMessage[];
-  setMessages: UseChatHelpers<ChatMessage>["setMessages"];
-  votes: Vote[] | undefined;
-  sendMessage: UseChatHelpers<ChatMessage>["sendMessage"];
-  regenerate: UseChatHelpers<ChatMessage>["regenerate"];
-  isReadonly: boolean;
-  selectedVisibilityType: VisibilityType;
-  selectedModelId: string;
-}) {
+}: PureArtifactProps) {
   const { artifact, setArtifact, metadata, setMetadata } = useArtifact();
 
-  const {
-    data: documents,
-    isLoading: isDocumentsFetching,
-    mutate: mutateDocuments,
-  } = useSWR<Document[]>(
+  const { data: documents, isLoading: isDocumentsFetching } = useSWR<
+    Document[]
+  >(
     artifact.documentId !== "init" && artifact.status !== "streaming"
       ? `/api/document?id=${artifact.documentId}`
       : null,
     {
       fetcher: (url) => documentFetcher(url) as Promise<Document[]>,
-      dedupingInterval: 5_000,
+      dedupingInterval: 5000,
     }
   );
 
@@ -213,6 +213,32 @@ function PureArtifact({
     return documents[index].content ?? "";
   }
 
+  function getDisplayContent() {
+    return isCurrentVersion
+      ? artifact.content
+      : getDocumentContentById(currentVersionIndex);
+  }
+
+  function renderArtifactStatusSubtitle() {
+    if (isContentDirty) {
+      return (
+        <div className="text-muted-foreground text-sm">Saving changes…</div>
+      );
+    }
+    if (document) {
+      return (
+        <div className="text-muted-foreground text-sm">
+          {`Updated ${formatDistance(new Date(document.createdAt), new Date(), {
+            addSuffix: true,
+          })}`}
+        </div>
+      );
+    }
+    return (
+      <div className="mt-2 h-3 w-32 animate-pulse rounded-md bg-muted-foreground/20" />
+    );
+  }
+
   const handleVersionChange = (type: "next" | "prev" | "toggle" | "latest") => {
     if (!documents) {
       return;
@@ -264,6 +290,41 @@ function PureArtifact({
       : CONVERSATION_PANEL_MAX;
   const artifactPanelWidth = Math.max(320, safeWidth - conversationPanelWidth);
 
+  const artifactPanelAnimate = isMobile
+    ? {
+        opacity: 1,
+        x: 0,
+        y: 0,
+        height: windowHeight,
+        width: windowWidth ?? "calc(100dvw)",
+        borderRadius: 0,
+        transition: {
+          delay: 0,
+          type: "spring" as const,
+          stiffness: 300,
+          damping: 30,
+          duration: 0.8,
+        },
+      }
+    : {
+        opacity: 1,
+        x: conversationPanelWidth,
+        y: 0,
+        height: windowHeight,
+        width:
+          windowWidth && windowWidth > conversationPanelWidth
+            ? artifactPanelWidth
+            : `calc(100dvw - ${conversationPanelWidth}px)`,
+        borderRadius: 0,
+        transition: {
+          delay: 0,
+          type: "spring" as const,
+          stiffness: 300,
+          damping: 30,
+          duration: 0.8,
+        },
+      };
+
   const artifactDefinition = artifactDefinitions.find(
     (definition) => definition.kind === artifact.kind
   );
@@ -279,12 +340,20 @@ function PureArtifact({
   const ArtifactContentComponent = definitionWithUnknownMeta.content;
 
   useEffect(() => {
-    if (artifact.documentId !== "init" && artifactDefinition.initialize) {
-      artifactDefinition.initialize({
-        documentId: artifact.documentId,
-        setMetadata,
-      });
+    if (artifact.documentId === "init" || !artifactDefinition.initialize) {
+      return;
     }
+    (() => {
+      const promise = artifactDefinition.initialize({
+        documentId: artifact.documentId,
+        setMetadata: (value: Parameters<typeof setMetadata>[0]) => {
+          setMetadata(value);
+        },
+      });
+      promise.catch(() => {
+        /* ignore init errors */
+      });
+    })();
   }, [artifact.documentId, artifactDefinition, setMetadata]);
 
   return (
@@ -382,42 +451,7 @@ function PureArtifact({
           )}
 
           <motion.div
-            animate={
-              isMobile
-                ? {
-                    opacity: 1,
-                    x: 0,
-                    y: 0,
-                    height: windowHeight,
-                    width: windowWidth ? windowWidth : "calc(100dvw)",
-                    borderRadius: 0,
-                    transition: {
-                      delay: 0,
-                      type: "spring",
-                      stiffness: 300,
-                      damping: 30,
-                      duration: 0.8,
-                    },
-                  }
-                : {
-                    opacity: 1,
-                    x: conversationPanelWidth,
-                    y: 0,
-                    height: windowHeight,
-                    width:
-                      windowWidth && windowWidth > conversationPanelWidth
-                        ? artifactPanelWidth
-                        : `calc(100dvw - ${conversationPanelWidth}px)`,
-                    borderRadius: 0,
-                    transition: {
-                      delay: 0,
-                      type: "spring",
-                      stiffness: 300,
-                      damping: 30,
-                      duration: 0.8,
-                    },
-                  }
-            }
+            animate={artifactPanelAnimate}
             className="fixed flex h-dvh flex-col overflow-hidden border-zinc-200 bg-background md:border-l dark:border-zinc-700 dark:bg-muted"
             exit={{
               opacity: 0,
@@ -429,25 +463,14 @@ function PureArtifact({
                 damping: 30,
               },
             }}
-            initial={
-              isMobile
-                ? {
-                    opacity: 1,
-                    x: artifact.boundingBox.left,
-                    y: artifact.boundingBox.top,
-                    height: artifact.boundingBox.height,
-                    width: artifact.boundingBox.width,
-                    borderRadius: 50,
-                  }
-                : {
-                    opacity: 1,
-                    x: artifact.boundingBox.left,
-                    y: artifact.boundingBox.top,
-                    height: artifact.boundingBox.height,
-                    width: artifact.boundingBox.width,
-                    borderRadius: 50,
-                  }
-            }
+            initial={{
+              opacity: 1,
+              x: artifact.boundingBox.left,
+              y: artifact.boundingBox.top,
+              height: artifact.boundingBox.height,
+              width: artifact.boundingBox.width,
+              borderRadius: 50,
+            }}
           >
             <div className="flex min-h-0 flex-1 flex-col">
               <div className="flex shrink-0 flex-row items-start justify-between gap-3 border-border border-b px-4 py-3">
@@ -462,23 +485,7 @@ function PureArtifact({
                       {artifact.title}
                     </h2>
 
-                    {isContentDirty ? (
-                      <div className="text-muted-foreground text-sm">
-                        Saving changes…
-                      </div>
-                    ) : document ? (
-                      <div className="text-muted-foreground text-sm">
-                        {`Updated ${formatDistance(
-                          new Date(document.createdAt),
-                          new Date(),
-                          {
-                            addSuffix: true,
-                          }
-                        )}`}
-                      </div>
-                    ) : (
-                      <div className="mt-2 h-3 w-32 animate-pulse rounded-md bg-muted-foreground/20" />
-                    )}
+                    {renderArtifactStatusSubtitle()}
                   </div>
                 </div>
 
@@ -495,11 +502,7 @@ function PureArtifact({
 
               <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/40">
                 <ArtifactContentComponent
-                  content={
-                    isCurrentVersion
-                      ? artifact.content
-                      : getDocumentContentById(currentVersionIndex)
-                  }
+                  content={getDisplayContent()}
                   currentVersionIndex={currentVersionIndex}
                   getDocumentContentById={getDocumentContentById}
                   isCurrentVersion={isCurrentVersion}
