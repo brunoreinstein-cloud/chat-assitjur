@@ -343,16 +343,17 @@ function PureArtifact({
     if (artifact.documentId === "init" || !artifactDefinition.initialize) {
       return;
     }
-    void Promise.resolve(
-      artifactDefinition.initialize({
-        documentId: artifact.documentId,
-        setMetadata: (value: Parameters<typeof setMetadata>[0]) => {
-          setMetadata(value);
-        },
-      })
-    ).catch(() => {
-      /* ignore init errors */
+    const result = artifactDefinition.initialize({
+      documentId: artifact.documentId,
+      setMetadata: (value: Parameters<typeof setMetadata>[0]) => {
+        setMetadata(value);
+      },
     });
+    if (typeof (result as Promise<unknown> | undefined)?.catch === "function") {
+      (result as Promise<unknown>).catch(() => {
+        /* ignore init errors */
+      });
+    }
   }, [artifact.documentId, artifactDefinition, setMetadata]);
 
   return (

@@ -1,7 +1,7 @@
 "use client";
 
-import type { ToolUIPart } from "ai";
 import type { UseChatHelpers } from "@ai-sdk/react";
+import type { ToolUIPart } from "ai";
 import type { ChatMessage } from "@/lib/types";
 import { Tool, ToolContent, ToolHeader, ToolInput } from "./elements/tool";
 import { Weather, type WeatherAtLocation } from "./weather";

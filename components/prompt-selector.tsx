@@ -66,10 +66,18 @@ function PurePromptSelector({
     if ("alwaysAvailable" in p && p.alwaysAvailable) {
       return true;
     }
-    if ("requiresAttachments" in p && p.requiresAttachments && !hasAttachments) {
+    if (
+      "requiresAttachments" in p &&
+      p.requiresAttachments &&
+      !hasAttachments
+    ) {
       return false;
     }
-    if ("requiresMessages" in p && p.requiresMessages && messagesCountProp === 0) {
+    if (
+      "requiresMessages" in p &&
+      p.requiresMessages &&
+      messagesCountProp === 0
+    ) {
       return false;
     }
     return true;
