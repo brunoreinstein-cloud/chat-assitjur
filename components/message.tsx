@@ -21,7 +21,7 @@ import { MessageActions } from "./message-actions";
 import { MessageEditor } from "./message-editor";
 import { MessageReasoning } from "./message-reasoning";
 import { PreviewAttachment } from "./preview-attachment";
-import { Weather } from "./weather";
+import { Weather, type WeatherAtLocation } from "./weather";
 
 const PurePreviewMessage = ({
   addToolApprovalResponse,
@@ -186,7 +186,9 @@ const PurePreviewMessage = ({
               if (state === "output-available") {
                 return (
                   <div className={widthClass} key={toolCallId}>
-                    <Weather weatherAtLocation={part.output} />
+                    <Weather
+                      weatherAtLocation={part.output as WeatherAtLocation}
+                    />
                   </div>
                 );
               }
@@ -269,7 +271,11 @@ const PurePreviewMessage = ({
             if (type === "tool-createDocument") {
               const { toolCallId } = part;
 
-              if (part.output && "error" in part.output) {
+              if (
+                part.output &&
+                typeof part.output === "object" &&
+                "error" in part.output
+              ) {
                 return (
                   <div
                     className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-500 dark:bg-red-950/50"
@@ -284,7 +290,15 @@ const PurePreviewMessage = ({
                 <DocumentPreview
                   isReadonly={isReadonly}
                   key={toolCallId}
-                  result={part.output}
+                  result={
+                    part.output as
+                      | ({
+                          id?: string;
+                          kind?: string;
+                          title?: string;
+                        } & Record<string, unknown>)
+                      | undefined
+                  }
                 />
               );
             }
@@ -292,7 +306,11 @@ const PurePreviewMessage = ({
             if (type === "tool-updateDocument") {
               const { toolCallId } = part;
 
-              if (part.output && "error" in part.output) {
+              if (
+                part.output &&
+                typeof part.output === "object" &&
+                "error" in part.output
+              ) {
                 return (
                   <div
                     className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-500 dark:bg-red-950/50"
@@ -306,9 +324,20 @@ const PurePreviewMessage = ({
               return (
                 <div className="relative" key={toolCallId}>
                   <DocumentPreview
-                    args={{ ...part.output, isUpdate: true }}
+                    args={{
+                      ...(part.output as Record<string, unknown>),
+                      isUpdate: true,
+                    }}
                     isReadonly={isReadonly}
-                    result={part.output}
+                    result={
+                      part.output as
+                        | ({
+                            id?: string;
+                            kind?: string;
+                            title?: string;
+                          } & Record<string, unknown>)
+                        | undefined
+                    }
                   />
                 </div>
               );
@@ -328,14 +357,25 @@ const PurePreviewMessage = ({
                       <ToolOutput
                         errorText={undefined}
                         output={
+                          part.output &&
+                          typeof part.output === "object" &&
                           "error" in part.output ? (
                             <div className="rounded border p-2 text-red-500">
-                              Error: {String(part.output.error)}
+                              Error:{" "}
+                              {String(
+                                (part.output as { error: unknown }).error
+                              )}
                             </div>
                           ) : (
                             <DocumentToolResult
                               isReadonly={isReadonly}
-                              result={part.output}
+                              result={
+                                part.output as {
+                                  id: string;
+                                  title: string;
+                                  kind: import("./artifact").ArtifactKind;
+                                }
+                              }
                               type="request-suggestions"
                             />
                           )

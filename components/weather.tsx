@@ -104,7 +104,7 @@ const CloudIcon = ({ size = 24 }: { size?: number }) => (
   </svg>
 );
 
-interface WeatherAtLocation {
+export interface WeatherAtLocation {
   latitude: number;
   longitude: number;
   generationtime_ms: number;

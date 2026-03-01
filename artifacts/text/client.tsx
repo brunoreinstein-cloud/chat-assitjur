@@ -32,9 +32,10 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
   },
   onStreamPart: ({ streamPart, setMetadata, setArtifact }) => {
     if (streamPart.type === "data-suggestion") {
-      setMetadata((metadata) => {
+      setMetadata((metadata): TextArtifactMetadata => {
+        const suggestion = streamPart.data as Suggestion;
         return {
-          suggestions: [...metadata.suggestions, streamPart.data],
+          suggestions: [...metadata.suggestions, suggestion],
         };
       });
     }

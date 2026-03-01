@@ -4,7 +4,11 @@ import { useEffect } from "react";
 import { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
 import { initialArtifactData, useArtifact } from "@/hooks/use-artifact";
-import { artifactDefinitions } from "./artifact";
+import {
+  type ArtifactKind,
+  artifactDefinitions,
+  type UIArtifact,
+} from "./artifact";
 import { useDataStream } from "./data-stream-provider";
 import { getChatHistoryPaginationKey } from "./sidebar-history";
 
@@ -41,7 +45,7 @@ export function DataStreamHandler() {
         });
       }
 
-      setArtifact((draftArtifact) => {
+      setArtifact((draftArtifact): UIArtifact => {
         if (!draftArtifact) {
           return { ...initialArtifactData, status: "streaming" };
         }
@@ -50,21 +54,21 @@ export function DataStreamHandler() {
           case "data-id":
             return {
               ...draftArtifact,
-              documentId: delta.data,
+              documentId: delta.data as string,
               status: "streaming",
             };
 
           case "data-title":
             return {
               ...draftArtifact,
-              title: delta.data,
+              title: delta.data as string,
               status: "streaming",
             };
 
           case "data-kind":
             return {
               ...draftArtifact,
-              kind: delta.data,
+              kind: delta.data as ArtifactKind,
               status: "streaming",
             };
 

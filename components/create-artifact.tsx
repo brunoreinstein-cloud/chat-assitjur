@@ -75,7 +75,7 @@ export class Artifact<T extends string, M = unknown> {
   readonly content: ComponentType<ArtifactContent<M>>;
   readonly actions: ArtifactAction<M>[];
   readonly toolbar: ArtifactToolbarItem[];
-  readonly initialize?: (parameters: InitializeParameters) => void;
+  readonly initialize?: (parameters: InitializeParameters<M>) => void;
   readonly onStreamPart: (args: {
     setMetadata: Dispatch<SetStateAction<M>>;
     setArtifact: Dispatch<SetStateAction<UIArtifact>>;
@@ -88,7 +88,11 @@ export class Artifact<T extends string, M = unknown> {
     this.content = config.content;
     this.actions = config.actions || [];
     this.toolbar = config.toolbar || [];
-    this.initialize = config.initialize || (async () => ({}));
-    this.onStreamPart = config.onStreamPart;
+    this.initialize =
+      config.initialize ??
+      (async (_parameters: InitializeParameters<M>) => {
+        /* no-op default */
+      });
+    this.onStreamPart = config.onStreamPart as this["onStreamPart"];
   }
 }

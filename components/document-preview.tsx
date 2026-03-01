@@ -68,7 +68,11 @@ export function DocumentPreview({
       return (
         <DocumentToolResult
           isReadonly={isReadonly}
-          result={{ id: result.id, title: result.title, kind: result.kind }}
+          result={{
+            id: result.id ?? "",
+            title: result.title ?? "",
+            kind: (result.kind ?? "text") as ArtifactKind,
+          }}
           type="create"
         />
       );
@@ -77,7 +81,10 @@ export function DocumentPreview({
     if (args) {
       return (
         <DocumentToolCall
-          args={{ title: args.title, kind: args.kind }}
+          args={{
+            title: (args.title ?? "") as string,
+            kind: (args.kind ?? "text") as ArtifactKind,
+          }}
           isReadonly={isReadonly}
           type="create"
         />
@@ -86,7 +93,11 @@ export function DocumentPreview({
   }
 
   if (isDocumentsFetching) {
-    return <LoadingSkeleton artifactKind={result.kind ?? args.kind} />;
+    return (
+      <LoadingSkeleton
+        artifactKind={(result?.kind ?? args?.kind ?? "text") as ArtifactKind}
+      />
+    );
   }
 
   const document: Document | null = previewDocument
@@ -110,7 +121,7 @@ export function DocumentPreview({
     <div className="relative w-full max-w-[450px] cursor-pointer">
       <HitboxLayer
         hitboxRef={hitboxRef}
-        result={result}
+        result={result ?? {}}
         setArtifact={setArtifact}
       />
       <DocumentHeader
@@ -166,22 +177,23 @@ const PureHitboxLayer = ({
     (event: MouseEvent<HTMLElement>) => {
       const boundingBox = event.currentTarget.getBoundingClientRect();
 
-      setArtifact((artifact) =>
-        artifact.status === "streaming"
-          ? { ...artifact, isVisible: true }
-          : {
-              ...artifact,
-              title: result.title,
-              documentId: result.id,
-              kind: result.kind,
-              isVisible: true,
-              boundingBox: {
-                left: boundingBox.x,
-                top: boundingBox.y,
-                width: boundingBox.width,
-                height: boundingBox.height,
-              },
-            }
+      setArtifact(
+        (artifact): UIArtifact =>
+          artifact.status === "streaming"
+            ? { ...artifact, isVisible: true }
+            : {
+                ...artifact,
+                title: result.title ?? artifact.title,
+                documentId: result.id ?? artifact.documentId,
+                kind: (result.kind ?? artifact.kind) as ArtifactKind,
+                isVisible: true,
+                boundingBox: {
+                  left: boundingBox.x,
+                  top: boundingBox.y,
+                  width: boundingBox.width,
+                  height: boundingBox.height,
+                },
+              }
       );
     },
     [setArtifact, result]

@@ -35,6 +35,13 @@ export interface ChatTools {
   createRevisorDefesaDocuments: createRevisorDefesaDocumentsTool;
   updateDocument: updateDocumentTool;
   requestSuggestions: requestSuggestionsTool;
+  /** Index signature required by AI SDK UITools */
+  [key: string]:
+    | weatherTool
+    | createDocumentTool
+    | createRevisorDefesaDocumentsTool
+    | updateDocumentTool
+    | requestSuggestionsTool;
 }
 
 export interface CustomUIDataTypes {
