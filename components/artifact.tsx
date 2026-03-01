@@ -350,7 +350,7 @@ function PureArtifact({
       },
     });
     if (typeof (result as Promise<unknown> | undefined)?.catch === "function") {
-      (result as Promise<unknown>).catch(() => {
+      (result as unknown as Promise<unknown>).catch(() => {
         /* ignore init errors */
       });
     }
