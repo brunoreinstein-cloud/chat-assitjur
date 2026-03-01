@@ -18,10 +18,10 @@ test.describe("Chat Page", () => {
     await expect(page.getByTestId("send-button")).toBeVisible();
   });
 
-  test("suggested actions are visible on empty chat", async ({ page }) => {
+  test("prompt selector is visible on empty chat", async ({ page }) => {
     await page.goto("/");
-    const suggestions = page.locator("[data-testid='suggested-actions']");
-    await expect(suggestions).toBeVisible();
+    const trigger = page.getByTestId("prompt-selector-trigger");
+    await expect(trigger).toBeVisible();
   });
 
   test("can stop generation with stop button", async ({ page }) => {

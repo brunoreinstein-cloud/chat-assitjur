@@ -212,7 +212,7 @@ Se `NOW()` retornar horário diferente do que o servidor Vercel usa (ou do que e
 
 ### Performance do chat – onde está o tempo (desenvolvimento)
 
-Em modo desenvolvimento, a rota `POST /api/chat` regista no terminal linhas `[chat-timing]` para cada fase:
+Em modo desenvolvimento (`NODE_ENV=development`), a rota `POST /api/chat` regista no terminal linhas `[chat-timing]` para cada fase. **Em produção estes logs não são emitidos** (gating em `app/(chat)/api/chat/route.ts`).
 
 | Label | O que mede |
 |-------|------------|
@@ -220,7 +220,7 @@ Em modo desenvolvimento, a rota `POST /api/chat` regista no terminal linhas `[ch
 | `getMessageCountByUserId` | Verificação de rate limit (24 h). |
 | `getChatById + getMessagesByChatId` | Carregar chat e histórico de mensagens. |
 | `getKnowledgeDocumentsByIds` | Carregar documentos da base de conhecimento (só se `knowledgeDocumentIds` enviados). |
-| `saveMessages(user)` | Guardar a mensagem do utilizador na BD. |
+| `saveMessages(user) (agendado em background)` | Agendar a gravação da mensagem do utilizador na BD (não bloqueia o stream). |
 | `normalizeMessageParts + convertToModelMessages` | Normalizar partes (truncar docs) e converter para formato do modelo. |
 | `preStream (total antes do stream)` | Tempo total desde o início do pedido até à criação do stream (soma das fases acima). |
 | `execute started` | Quando o callback do stream começou (o modelo e as tools começam aqui). |
@@ -233,7 +233,12 @@ A diferença **total request − preStream** é o tempo em que o stream esteve a
 **Otimizações aplicadas (sem perda de qualidade):**
 
 - **Queries em paralelo:** `getMessageCountByUserId`, `getChatById`, `getMessagesByChatId` e `getKnowledgeDocumentsByIds` correm em `Promise.all`, reduzindo o tempo total da fase de pré-stream.
+- **saveMessages(user) em background:** A gravação da mensagem do utilizador na BD é agendada com `after()` (Next.js) e não bloqueia a criação do stream, reduzindo o preStream em ~300–400 ms. Erros são registados em log; em caso de falha o utilizador pode reenviar.
 - **Limite de mensagens para contexto:** A API carrega apenas as últimas **80 mensagens** do chat para construir o contexto do modelo (`CHAT_MESSAGES_LIMIT` em `app/(chat)/api/chat/route.ts`). A UI da página do chat continua a carregar todas as mensagens para exibição; só o contexto enviado ao modelo é limitado, mantendo a qualidade com o contexto recente.
+
+### GET /api/document – 404 breve após criação por tool
+
+Quando uma tool (ex.: criação de documento) grava um novo documento na BD, o cliente pode pedir `GET /api/document?id=...` antes do commit estar visível. Nesse caso a API devolve **404**. O cliente usa `documentFetcher` em `lib/utils.ts` com **retry** (até 4 tentativas com backoff) para este cenário; não é necessário alterar nada além de estar ciente deste comportamento em logs ou debugging.
 
 ---
 

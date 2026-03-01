@@ -24,7 +24,7 @@ export const createRevisorDefesaDocuments = ({
 }: CreateRevisorDefesaDocumentsProps) =>
   tool({
     description:
-      "Create the 3 Revisor documents (Avaliação, Roteiro Advogado, Roteiro Preposto) in one call. Use this in FASE B after the user CONFIRMs the GATE 0.5 summary. Pass the exact titles for each document.",
+      "Create the 3 Revisor documents (Avaliação, Roteiro Advogado, Roteiro Preposto) in one call. Use this in FASE B after the user CONFIRMs the GATE 0.5 summary. Pass the exact titles for each document. Optionally pass contextoResumo with the case summary (e.g. the text between GATE_0.5_RESUMO delimiters) so documents are filled with correct data.",
     inputSchema: z.object({
       avaliacaoTitle: z
         .string()
@@ -35,11 +35,18 @@ export const createRevisorDefesaDocuments = ({
       roteiroPrepostoTitle: z
         .string()
         .describe("Title for Doc 3: Roteiro Preposto"),
+      contextoResumo: z
+        .string()
+        .optional()
+        .describe(
+          "Optional. Case summary / extracted data (e.g. content between --- GATE_0.5_RESUMO --- and --- /GATE_0.5_RESUMO ---). Use so the 3 documents are filled with the correct case data."
+        ),
     }),
     execute: async ({
       avaliacaoTitle,
       roteiroAdvogadoTitle,
       roteiroPrepostoTitle,
+      contextoResumo,
     }) => {
       const titles = [
         avaliacaoTitle,
@@ -52,7 +59,7 @@ export const createRevisorDefesaDocuments = ({
       // Inicia as 3 gerações em paralelo; cada doc é enviado ao cliente assim que fica pronto (na ordem),
       // reduzindo o tempo até o primeiro documento aparecer em produção.
       const contentPromises = titles.map((title) =>
-        generateRevisorDocumentContent(title)
+        generateRevisorDocumentContent(title, contextoResumo)
       );
 
       for (let i = 0; i < 3; i++) {

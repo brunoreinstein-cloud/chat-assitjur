@@ -1,4 +1,5 @@
 import { auth } from "@/app/(auth)/auth";
+import { docxCache } from "@/lib/cache/document-cache";
 import { getDocumentById } from "@/lib/db/queries";
 import { createDocxBuffer, sanitizeDocxFilename } from "@/lib/document-to-docx";
 import { ChatbotError } from "@/lib/errors";
@@ -10,6 +11,7 @@ const DOCX_MIME =
  * GET /api/document/export?id=xxx
  * Devolve o documento (versão mais recente) como ficheiro DOCX para download.
  * Apenas documentos do tipo "text" são exportados como DOCX.
+ * Resposta em cache 30s para repetidos downloads do mesmo documento.
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -28,13 +30,26 @@ export async function GET(request: Request) {
     return new ChatbotError("unauthorized:document").toResponse();
   }
 
+  const userId = session.user.id;
+  const cached = docxCache.get(userId, id);
+  if (cached !== undefined) {
+    return new Response(cached.buffer, {
+      status: 200,
+      headers: {
+        "Content-Type": DOCX_MIME,
+        "Content-Disposition": `attachment; filename="${cached.filename}"`,
+        "Cache-Control": "private, max-age=15",
+      },
+    });
+  }
+
   const doc = await getDocumentById({ id });
 
   if (!doc) {
     return new ChatbotError("not_found:document").toResponse();
   }
 
-  if (doc.userId !== session.user.id) {
+  if (doc.userId !== userId) {
     return new ChatbotError("forbidden:document").toResponse();
   }
 
@@ -48,13 +63,14 @@ export async function GET(request: Request) {
   const content = doc.content ?? "";
   const buffer = await createDocxBuffer(doc.title, content);
   const filename = sanitizeDocxFilename(doc.title);
+  docxCache.set(userId, id, buffer, filename);
 
   return new Response(buffer, {
     status: 200,
     headers: {
       "Content-Type": DOCX_MIME,
       "Content-Disposition": `attachment; filename="${filename}"`,
-      "Cache-Control": "private, no-cache",
+      "Cache-Control": "private, max-age=15",
     },
   });
 }

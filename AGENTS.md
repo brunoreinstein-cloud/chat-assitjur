@@ -8,7 +8,7 @@ Este documento orienta agentes de IA (Cursor, Codex, etc.) a trabalhar neste rep
 
 - **Nome:** Chatbot (template Next.js + AI SDK).
 - **Domínio:** Agente Revisor de Defesas Trabalhistas (auditor jurídico sênior — contencioso trabalhista). As instruções padrão do agente estão em `lib/ai/agent-revisor-defesas.ts` e são injetadas no system prompt quando o usuário não envia "Instruções do agente".
-- **Funcionalidades principais:** chat com LLM (streaming), histórico de conversas, base de conhecimento (documentos injetados no contexto), ferramentas (clima, criar/atualizar documento, sugestões), autenticação, upload de ficheiros (Vercel Blob ou Supabase Storage).
+- **Funcionalidades principais:** chat com LLM (streaming), histórico de conversas, base de conhecimento (documentos injetados no contexto), ferramentas (clima, criar/atualizar documento, sugestões), autenticação, **modo visitante (guest)** para usar o chat sem conta, upload de ficheiros (Vercel Blob ou Supabase Storage).
 
 ---
 

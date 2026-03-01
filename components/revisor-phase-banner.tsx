@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   GATE_05_RESUMO_END,
@@ -7,7 +8,13 @@ import {
 } from "@/lib/ai/agent-revisor-defesas";
 import type { ChatMessage } from "@/lib/types";
 
-function getAssistantMessageText(message: ChatMessage): string {
+function formatElapsed(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+export function getAssistantMessageText(message: ChatMessage): string {
   if (message.role !== "assistant" || !message.parts) {
     return "";
   }
@@ -21,7 +28,7 @@ function getAssistantMessageText(message: ChatMessage): string {
     .join("");
 }
 
-function getUserMessageText(message: ChatMessage): string {
+export function getUserMessageText(message: ChatMessage): string {
   if (message.role !== "user" || !message.parts) {
     return "";
   }
@@ -31,7 +38,9 @@ function getUserMessageText(message: ChatMessage): string {
   return typeof textPart?.text === "string" ? textPart.text.trim() : "";
 }
 
-function findLastAssistantIndexWithGate05(messages: ChatMessage[]): number {
+export function findLastAssistantIndexWithGate05(
+  messages: ChatMessage[]
+): number {
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role === "assistant") {
       const text = getAssistantMessageText(messages[i]);
@@ -66,12 +75,11 @@ export function RevisorPhaseBanner({
   inputRef,
   isReadonly,
 }: RevisorPhaseBannerProps) {
-  const idx = findLastAssistantIndexWithGate05(messages);
-  if (idx === -1) {
-    return null;
-  }
+  const [startTime, setStartTime] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
-  const afterMessages = messages.slice(idx + 1);
+  const idx = findLastAssistantIndexWithGate05(messages);
+  const afterMessages = idx >= 0 ? messages.slice(idx + 1) : [];
   const userRepliedToGate05 = afterMessages.some(
     (m) =>
       m.role === "user" &&
@@ -85,6 +93,29 @@ export function RevisorPhaseBanner({
   const showFaseB =
     userRepliedToGate05 && (isStreaming || lastMessage?.role === "assistant");
   const showErroAposConfirmar = userRepliedToGate05 && isError;
+
+  // Cronómetro: inicia quando entramos em FASE B em streaming, limpa quando termina
+  useEffect(() => {
+    if (showFaseB && isStreaming) {
+      setStartTime((prev) => prev ?? Date.now());
+    } else {
+      setStartTime(null);
+      setElapsedSeconds(0);
+    }
+  }, [showFaseB, isStreaming]);
+
+  useEffect(() => {
+    if (startTime === null) return;
+    const tick = () =>
+      setElapsedSeconds(Math.floor((Date.now() - startTime) / 1000));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [startTime]);
+
+  if (idx === -1) {
+    return null;
+  }
 
   if (showErroAposConfirmar) {
     return (
@@ -104,7 +135,17 @@ export function RevisorPhaseBanner({
         aria-live="polite"
         className="mx-2 mb-1 block rounded-md border border-border bg-muted/50 px-3 py-2 text-center text-muted-foreground text-sm md:mx-4"
       >
-        FASE B — Gerando os 3 documentos. O primeiro aparecerá em breve.
+        <span className="block">
+          FASE B — Gerando os 3 documentos. O primeiro aparecerá em breve.
+        </span>
+        {startTime !== null && (
+          <span
+            aria-label={`Tempo decorrido: ${formatElapsed(elapsedSeconds)}`}
+            className="mt-1 block font-medium tabular-nums"
+          >
+            Tempo: {formatElapsed(elapsedSeconds)}
+          </span>
+        )}
       </output>
     );
   }
@@ -133,8 +174,8 @@ export function RevisorPhaseBanner({
         aria-live="polite"
         className="mx-2 mb-1 block rounded-md border border-border bg-muted/50 px-3 py-2 text-center text-muted-foreground text-sm md:mx-4"
       >
-        FASE A — Extração e mapeamento. Aguardando confirmação para gerar os 3
-        DOCX.
+        Por favor, CONFIRME se os dados acima estão corretos ou CORRIJA
+        eventuais inconsistências.
       </output>
     );
   }
@@ -145,8 +186,8 @@ export function RevisorPhaseBanner({
       className="mx-2 mb-1 flex flex-col items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2 text-center text-muted-foreground text-sm md:mx-4 md:flex-row md:justify-center"
     >
       <span className="shrink-0">
-        FASE A — Extração e mapeamento. Aguardando sua confirmação para gerar os
-        3 DOCX.
+        Por favor, CONFIRME se os dados acima estão corretos ou CORRIJA
+        eventuais inconsistências.
       </span>
       <div className="flex gap-2">
         <Button

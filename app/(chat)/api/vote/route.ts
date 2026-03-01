@@ -20,7 +20,10 @@ export async function GET(request: Request) {
     return new ChatbotError("unauthorized:vote").toResponse();
   }
 
-  const chat = await getChatById({ id: chatId });
+  const [chat, votes] = await Promise.all([
+    getChatById({ id: chatId }),
+    getVotesByChatId({ id: chatId }),
+  ]);
 
   if (!chat) {
     return new ChatbotError("not_found:chat").toResponse();
@@ -29,8 +32,6 @@ export async function GET(request: Request) {
   if (chat.userId !== session.user.id) {
     return new ChatbotError("forbidden:vote").toResponse();
   }
-
-  const votes = await getVotesByChatId({ id: chatId });
 
   return Response.json(votes, {
     status: 200,

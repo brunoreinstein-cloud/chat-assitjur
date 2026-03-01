@@ -6,13 +6,23 @@ import type { ChatMessage } from "@/lib/types";
 import { useDataStream } from "./data-stream-provider";
 import { Greeting } from "./greeting";
 import { PreviewMessage, ThinkingMessage } from "./message";
+import {
+  findLastAssistantIndexWithGate05,
+  getUserMessageText,
+} from "./revisor-phase-banner";
 
 interface MessagesProps {
   addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
   chatId: string;
+  inputRef: React.RefObject<HTMLTextAreaElement | null>;
   status: UseChatHelpers<ChatMessage>["status"];
   votes: Vote[] | undefined;
   messages: ChatMessage[];
+  sendMessage: (msg: {
+    role: "user";
+    parts: Array<{ type: "text"; text: string }>;
+  }) => void;
+  setInput: (value: string) => void;
   setMessages: UseChatHelpers<ChatMessage>["setMessages"];
   regenerate: UseChatHelpers<ChatMessage>["regenerate"];
   isReadonly: boolean;
@@ -23,9 +33,12 @@ interface MessagesProps {
 function PureMessages({
   addToolApprovalResponse,
   chatId,
+  inputRef,
   status,
   votes,
   messages,
+  sendMessage,
+  setInput,
   setMessages,
   regenerate,
   isReadonly,
@@ -43,6 +56,15 @@ function PureMessages({
 
   useDataStream();
 
+  const gate05Idx = findLastAssistantIndexWithGate05(messages);
+  const afterGate05 = messages.slice(gate05Idx + 1);
+  const userRepliedToGate05 = afterGate05.some(
+    (m) =>
+      m.role === "user" &&
+      (getUserMessageText(m) === "CONFIRMAR" ||
+        getUserMessageText(m).startsWith("CORRIGIR:"))
+  );
+
   return (
     <div className="relative flex-1 bg-background">
       <div
@@ -56,12 +78,30 @@ function PureMessages({
             <PreviewMessage
               addToolApprovalResponse={addToolApprovalResponse}
               chatId={chatId}
+              gate05ConfirmInline={
+                !isReadonly &&
+                message.role === "assistant" &&
+                index === gate05Idx &&
+                !userRepliedToGate05
+              }
               isLoading={
                 status === "streaming" && messages.length - 1 === index
               }
               isReadonly={isReadonly}
               key={message.id}
               message={message}
+              onConfirmGate05={() =>
+                sendMessage({
+                  role: "user",
+                  parts: [{ type: "text", text: "CONFIRMAR" }],
+                })
+              }
+              onCorrigirGate05={() => {
+                setInput("CORRIGIR: ");
+                setTimeout(() => {
+                  inputRef.current?.focus();
+                }, 0);
+              }}
               regenerate={regenerate}
               requiresScrollPadding={
                 hasSentMessage && index === messages.length - 1
@@ -78,7 +118,10 @@ function PureMessages({
           {status === "submitted" &&
             !messages.some((msg) =>
               msg.parts?.some(
-                (part) => "state" in part && part.state === "approval-responded"
+                (part) =>
+                  part != null &&
+                  "state" in part &&
+                  part.state === "approval-responded"
               )
             ) && <ThinkingMessage />}
 

@@ -2,9 +2,9 @@ import { Background, ReactFlow, type ReactFlowProps } from "@xyflow/react";
 import type { ReactNode } from "react";
 import "@xyflow/react/dist/style.css";
 
-type CanvasProps = ReactFlowProps & {
+interface CanvasProps extends ReactFlowProps {
   children?: ReactNode;
-};
+}
 
 export const Canvas = ({ children, ...props }: CanvasProps) => (
   <ReactFlow

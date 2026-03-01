@@ -9,7 +9,11 @@ Sugestões de especialista para alinhar a interface ao fluxo do Revisor (GATE-1 
 ## Implementado
 
 - **Greeting:** Título "Revisor de Defesas Trabalhistas", descrição do papel e instrução "Para começar" (PI + Contestação).
-- **Suggested actions:** Quatro ações contextuais (auditar contestação, explicar fluxo, roteiros, @bancodetese).
+- **Tela inicial simplificada:** As quatro sugestões em bolhas foram **removidas** da tela inicial (0 mensagens, 0 anexos), para não sugerir ações que dependem de anexos (PI + Contestação) antes do utilizador anexar o processo. O foco passa a ser: anexar documentos e usar o hint abaixo do input.
+- **Seletor de prompts no chat:** Botão "Sugestões" (ícone de sparkles) na barra do input abre um menu com prompts **contextuais**:
+  - **Sempre:** "Explicar o fluxo do Revisor" (informativo).
+  - **Com anexos:** "Auditar minha contestação".
+  - **Com conversa já iniciada:** "Preparar roteiros de audiência", "Usar base de teses (@bancodetese)".
 - **Placeholder do input:** "Cole o texto da Petição Inicial e da Contestação, ou descreva o caso e anexe documentos..."
 - **Dialog "Instruções do agente":** Texto explicando que o padrão é o Revisor; placeholder para sobrescrita.
 - **Dialog "Base de conhecimento":** Menção a @bancodetese e uso para teses/precedentes.
@@ -70,6 +74,34 @@ Objetivo: o advogado **sobe todos os arquivos**, a interface **valida se tem as 
 
 - **Destacando artefatos:** Se o agente usar `createDocument` para os 3 arquivos, garantir que os nomes sigam o padrão (AVALIACAO_DEFESA_..., ROTEIRO_ADVOGADO_..., ROTEIRO_PREPOSTO_...) e que o painel de artefatos deixe claro qual é qual (ícone ou label por tipo).
 - **Ressalva visível:** No primeiro DOC (Avaliação), o aviso "Relatório gerado por IA. Revisão humana necessária e obrigatória." deve estar sempre visível no topo; o prompt já orienta isso.
+
+---
+
+## Revisão UX/UI (tela inicial e seletor de prompts)
+
+**Problema:** Na tela inicial apareciam quatro bolhas de prompts (Auditar contestação, Explicar fluxo, Roteiros, @bancodetese). Três delas dependem de anexos ou de análise prévia; mostrar tudo antes de anexar o processo gerava inconsistência e frustração.
+
+**Alterações feitas:**
+
+1. **Remoção das sugestões da tela inicial**  
+   Quando não há mensagens nem anexos, a área acima do input fica vazia. O utilizador vê apenas o input, o hint ("Anexe a Petição Inicial e a Contestação...") e o botão de anexos. Fluxo claro: primeiro anexar, depois escolher ação.
+
+2. **Seletor de prompts integrado ao chat**  
+   Um botão "Sugestões" (ícone ✨) na barra do input abre um menu com prompts que variam consoante o contexto:
+   - Sem anexos: só "Explicar o fluxo do Revisor".
+   - Com anexos: "Auditar minha contestação" + "Explicar o fluxo".
+   - Com mensagens (conversa iniciada): também "Preparar roteiros de audiência" e "Usar base de teses (@bancodetese)".
+
+3. **Componentes**  
+   - `components/prompt-selector.tsx`: dropdown com prompts contextuais.  
+   - `components/suggested-actions.tsx`: mantido para referência ou uso futuro (ex.: grid opcional após anexos); não é renderizado na tela inicial.
+
+**Sugestões adicionais de melhoria:**
+
+- **Checklist "Antes de executar":** Mini-checklist acima ou abaixo do input (PI ✓/✗, Contestação ✓/✗) quando o chat está vazio ou sem resposta do agente, atualizada em tempo real ao marcar tipos nos anexos.
+- **Validação pré-envio:** Avisar ou bloquear envio da primeira mensagem de auditoria se não houver pelo menos um anexo marcado como PI e um como Contestação.
+- **Indicador de etapa:** Banner no chat indicando "FASE A", "Aguardando confirmação (GATE 0.5)" ou "FASE B", conforme o estado da conversa.
+- **Botões CONFIRMAR/CORRIGIR:** Quando a resposta contiver o resumo do GATE 0.5, mostrar botões que enviam "CONFIRMAR" ou "CORRIGIR" em vez de o utilizador digitar.
 
 ---
 

@@ -1,5 +1,6 @@
 import { auth } from "@/app/(auth)/auth";
 import type { ArtifactKind } from "@/components/artifact";
+import { documentCache, docxCache } from "@/lib/cache/document-cache";
 import {
   deleteDocumentsByIdAfterTimestamp,
   getDocumentsById,
@@ -24,19 +25,39 @@ export async function GET(request: Request) {
     return new ChatbotError("unauthorized:document").toResponse();
   }
 
+  const userId = session.user.id;
+  const cached = documentCache.get(userId, id);
+  if (cached !== undefined) {
+    return Response.json(cached, {
+      status: 200,
+      headers: {
+        "Cache-Control": "private, max-age=15",
+      },
+    });
+  }
+
   const documents = await getDocumentsById({ id });
 
   const [document] = documents;
 
   if (!document) {
+    // 404 pode ocorrer brevemente após a tool criar o documento (race com o commit na BD).
+    // O cliente usa documentFetcher com retry (lib/utils.ts) para este caso.
     return new ChatbotError("not_found:document").toResponse();
   }
 
-  if (document.userId !== session.user.id) {
+  if (document.userId !== userId) {
     return new ChatbotError("forbidden:document").toResponse();
   }
 
-  return Response.json(documents, { status: 200 });
+  documentCache.set(userId, id, documents);
+
+  return Response.json(documents, {
+    status: 200,
+    headers: {
+      "Cache-Control": "private, max-age=15",
+    },
+  });
 }
 
 export async function POST(request: Request) {
@@ -73,13 +94,17 @@ export async function POST(request: Request) {
     }
   }
 
+  const userId = session.user.id;
   const document = await saveDocument({
     id,
     content,
     title,
     kind,
-    userId: session.user.id,
+    userId,
   });
+
+  documentCache.delete(userId, id);
+  docxCache.delete(userId, id);
 
   return Response.json(document, { status: 200 });
 }
@@ -121,6 +146,9 @@ export async function DELETE(request: Request) {
     id,
     timestamp: new Date(timestamp),
   });
+
+  documentCache.delete(session.user.id, id);
+  docxCache.delete(session.user.id, id);
 
   return Response.json(documentsDeleted, { status: 200 });
 }

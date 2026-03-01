@@ -49,7 +49,7 @@ import {
 } from "./elements/prompt-input";
 import { ArrowUpIcon, PaperclipIcon, StopIcon } from "./icons";
 import { PreviewAttachment } from "./preview-attachment";
-import { SuggestedActions } from "./suggested-actions";
+import { PromptSelector } from "./prompt-selector";
 import { Button } from "./ui/button";
 import type { VisibilityType } from "./visibility-selector";
 
@@ -59,24 +59,227 @@ function setCookie(name: string, value: string) {
   document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}`;
 }
 
-function PureMultimodalInput({
-  chatId,
-  input,
-  setInput,
-  status,
-  stop,
-  attachments,
-  setAttachments,
-  messages,
-  setMessages,
-  sendMessage,
-  className,
-  selectedVisibilityType,
-  selectedModelId,
-  onModelChange,
-  inputRef: inputRefProp,
-  knowledgeDocumentIds: _knowledgeDocumentIds = [], // reservado para checklist Revisor
-}: {
+/** Limite do body em produção (Vercel). Ficheiros maiores usam upload direto para Blob. */
+const BODY_SIZE_LIMIT_BYTES = 4.5 * 1024 * 1024;
+
+interface FileUploadResponse {
+  url?: string;
+  pathname?: string;
+  contentType?: string;
+  extractedText?: string;
+  extractionFailed?: boolean;
+  extractionDetail?: string;
+  documentType?: "pi" | "contestacao";
+}
+
+function buildAttachmentFromUploadResponse(
+  data: FileUploadResponse,
+  file: File
+) {
+  const {
+    url,
+    pathname,
+    contentType,
+    extractedText,
+    extractionFailed,
+    extractionDetail,
+    documentType,
+  } = data;
+  if (extractionFailed === true) {
+    const reason =
+      typeof extractionDetail === "string" && extractionDetail.length > 0
+        ? ` Motivo: ${extractionDetail}`
+        : "";
+    toast.warning(
+      `Não foi possível extrair o texto deste ficheiro. Pode colar o texto no cartão do documento abaixo.${reason}`
+    );
+  }
+  const docType =
+    documentType === "pi" || documentType === "contestacao"
+      ? documentType
+      : undefined;
+  return {
+    url,
+    name: pathname ?? file.name,
+    contentType: contentType ?? file.type,
+    ...(typeof extractedText === "string" ? { extractedText } : {}),
+    ...(extractionFailed === true ? { extractionFailed: true } : {}),
+    ...(docType ? { documentType: docType } : {}),
+  };
+}
+
+function updateAttachmentByUrl(
+  attachments: Attachment[],
+  url: string,
+  update: Partial<Attachment>
+): Attachment[] {
+  return attachments.map((a) => (a.url === url ? { ...a, ...update } : a));
+}
+
+function removeAttachmentByUrl(
+  attachments: Attachment[],
+  url: string
+): Attachment[] {
+  return attachments.filter((a) => a.url !== url);
+}
+
+function isDocumentContentType(ct: string | undefined): boolean {
+  return (
+    ct === "application/pdf" ||
+    ct === "application/msword" ||
+    ct ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  );
+}
+
+/** Retorna mensagem de erro se houver documentos sem texto extraído; null se válido para envio. */
+function validateAttachmentsForSubmit(
+  attachments: Attachment[]
+): string | null {
+  const docsWithoutText = attachments.filter(
+    (a) => isDocumentContentType(a.contentType) && a.extractedText == null
+  );
+  if (docsWithoutText.length > 0) {
+    return `${docsWithoutText.length} documento(s) sem texto. Cole o texto no cartão do documento ou remova-os para enviar.`;
+  }
+  return null;
+}
+
+interface DocumentPart {
+  type: "document";
+  name: string;
+  text: string;
+  documentType?: "pi" | "contestacao";
+}
+
+interface FilePart {
+  type: "file";
+  url: string;
+  name: string;
+  mediaType: string;
+}
+
+function buildAttachmentParts(
+  attachments: Attachment[]
+): Array<DocumentPart | FilePart> {
+  const parts: Array<DocumentPart | FilePart> = [];
+  for (const attachment of attachments) {
+    if (typeof attachment.extractedText === "string") {
+      parts.push({
+        type: "document",
+        name: attachment.name,
+        text: attachment.extractedText,
+        ...(attachment.documentType
+          ? { documentType: attachment.documentType }
+          : {}),
+      });
+    } else if (attachment.contentType?.startsWith("image/")) {
+      parts.push({
+        type: "file",
+        url: attachment.url,
+        name: attachment.name,
+        mediaType: attachment.contentType,
+      });
+    }
+  }
+  return parts;
+}
+
+async function getUploadErrorFromResponse(response: Response): Promise<string> {
+  if (response.status === 413) {
+    return "Ficheiro demasiado grande. Em produção o limite é 4,5 MB. Use um ficheiro com menos de 4,5 MB.";
+  }
+  try {
+    const data = (await response.json()) as { error?: string; detail?: string };
+    if (typeof data?.error === "string" && data.error.length > 0) {
+      let msg = data.error;
+      if (typeof data?.detail === "string" && data.detail.length > 0) {
+        msg += ` (${data.detail})`;
+      }
+      return msg;
+    }
+  } catch {
+    // Resposta não é JSON; manter mensagem genérica
+  }
+  return "Falha ao enviar o arquivo. Tente novamente.";
+}
+
+async function uploadLargeFile(
+  file: File
+): Promise<ReturnType<typeof buildAttachmentFromUploadResponse> | undefined> {
+  const tokenCheckRes = await fetch("/api/files/upload-token", {
+    method: "GET",
+  });
+  if (!tokenCheckRes.ok) {
+    const errData = (await tokenCheckRes.json().catch(() => ({}))) as {
+      error?: string;
+    };
+    const msg =
+      typeof errData.error === "string"
+        ? errData.error
+        : "Upload de ficheiros grandes não disponível. Use um ficheiro com menos de 4,5 MB.";
+    toast.error(msg);
+    return undefined;
+  }
+  try {
+    const blob = await uploadToBlob(file.name, file, {
+      access: "public",
+      handleUploadUrl: "/api/files/upload-token",
+    });
+    const processRes = await fetch("/api/files/process", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: blob.url,
+        pathname: blob.pathname,
+        contentType: file.type || "application/octet-stream",
+        filename: file.name,
+      }),
+    });
+    if (!processRes.ok) {
+      const errData = (await processRes.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      const msg =
+        typeof errData.error === "string"
+          ? errData.error
+          : "Falha ao processar o ficheiro após o upload.";
+      toast.error(msg);
+      return undefined;
+    }
+    const data = (await processRes.json()) as FileUploadResponse;
+    return buildAttachmentFromUploadResponse(data, file);
+  } catch (directError: unknown) {
+    const msg =
+      directError instanceof Error
+        ? directError.message
+        : "Upload de ficheiros grandes não disponível.";
+    toast.error(
+      `${msg} Use um ficheiro com menos de 4,5 MB ou tente novamente.`
+    );
+    return undefined;
+  }
+}
+
+async function uploadSmallFile(
+  file: File
+): Promise<ReturnType<typeof buildAttachmentFromUploadResponse> | undefined> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch("/api/files/upload", {
+    method: "POST",
+    body: formData,
+  });
+  if (response.ok) {
+    const data = (await response.json()) as FileUploadResponse;
+    return buildAttachmentFromUploadResponse(data, file);
+  }
+  const errorMessage = await getUploadErrorFromResponse(response);
+  toast.error(errorMessage);
+  return undefined;
+}
+
+type PureMultimodalInputProps = Readonly<{
   chatId: string;
   input: string;
   setInput: Dispatch<SetStateAction<string>>;
@@ -95,7 +298,26 @@ function PureMultimodalInput({
   inputRef?: React.RefObject<HTMLTextAreaElement | null>;
   /** IDs da base de conhecimento selecionados (para o checklist Revisor) */
   knowledgeDocumentIds?: string[];
-}) {
+}>;
+
+function PureMultimodalInput({
+  chatId,
+  input,
+  setInput,
+  status,
+  stop,
+  attachments,
+  setAttachments,
+  messages,
+  setMessages,
+  sendMessage,
+  className,
+  selectedVisibilityType: _selectedVisibilityType,
+  selectedModelId,
+  onModelChange,
+  inputRef: inputRefProp,
+  knowledgeDocumentIds: _knowledgeDocumentIds = [], // reservado para checklist Revisor
+}: PureMultimodalInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const { width } = useWindowSize();
 
@@ -157,57 +379,15 @@ function PureMultimodalInput({
   const [uploadQueue, setUploadQueue] = useState<string[]>([]);
 
   const submitForm = useCallback(() => {
-    const isDocumentType = (ct: string | undefined) =>
-      ct === "application/pdf" ||
-      ct === "application/msword" ||
-      ct ===
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-
-    const docsWithoutText = attachments.filter(
-      (a) => isDocumentType(a.contentType) && a.extractedText == null
-    );
-    if (docsWithoutText.length > 0) {
-      toast.error(
-        `${docsWithoutText.length} documento(s) sem texto. Cole o texto no cartão do documento ou remova-os para enviar.`
-      );
+    const validationError = validateAttachmentsForSubmit(attachments);
+    if (validationError !== null) {
+      toast.error(validationError);
       return;
     }
 
-    window.history.pushState({}, "", `/chat/${chatId}`);
+    globalThis.history.pushState({}, "", `/chat/${chatId}`);
 
-    interface DocumentPart {
-      type: "document";
-      name: string;
-      text: string;
-      documentType?: "pi" | "contestacao";
-    }
-    interface FilePart {
-      type: "file";
-      url: string;
-      name: string;
-      mediaType: string;
-    }
-    const attachmentParts: Array<DocumentPart | FilePart> = [];
-    for (const attachment of attachments) {
-      if (attachment.extractedText != null) {
-        attachmentParts.push({
-          type: "document",
-          name: attachment.name,
-          text: attachment.extractedText,
-          ...(attachment.documentType
-            ? { documentType: attachment.documentType }
-            : {}),
-        });
-      } else if (attachment.contentType?.startsWith("image/")) {
-        attachmentParts.push({
-          type: "file",
-          url: attachment.url,
-          name: attachment.name,
-          mediaType: attachment.contentType,
-        });
-      }
-    }
-
+    const attachmentParts = buildAttachmentParts(attachments);
     sendMessage({
       role: "user",
       parts: [
@@ -239,142 +419,13 @@ function PureMultimodalInput({
     resetHeight,
   ]);
 
-  /** Limite do body em produção (Vercel). Ficheiros maiores usam upload direto para Blob. */
-  const BODY_SIZE_LIMIT_BYTES = 4.5 * 1024 * 1024;
-
   const uploadFile = useCallback(async (file: File) => {
-    const buildAttachmentFromResponse = (data: {
-      url?: string;
-      pathname?: string;
-      contentType?: string;
-      extractedText?: string;
-      extractionFailed?: boolean;
-      extractionDetail?: string;
-      documentType?: "pi" | "contestacao";
-    }) => {
-      const {
-        url,
-        pathname,
-        contentType,
-        extractedText,
-        extractionFailed,
-        extractionDetail,
-        documentType,
-      } = data;
-      if (extractionFailed === true) {
-        const reason =
-          typeof extractionDetail === "string" && extractionDetail.length > 0
-            ? ` Motivo: ${extractionDetail}`
-            : "";
-        toast.warning(
-          `Não foi possível extrair o texto deste ficheiro. Pode colar o texto no cartão do documento abaixo.${reason}`
-        );
-      }
-      const docType =
-        documentType === "pi" || documentType === "contestacao"
-          ? documentType
-          : undefined;
-      return {
-        url,
-        name: pathname ?? file.name,
-        contentType: contentType ?? file.type,
-        ...(typeof extractedText === "string" ? { extractedText } : {}),
-        ...(extractionFailed === true ? { extractionFailed: true } : {}),
-        ...(docType ? { documentType: docType } : {}),
-      };
-    };
-
     try {
       if (file.size > BODY_SIZE_LIMIT_BYTES) {
-        const tokenCheckRes = await fetch("/api/files/upload-token", {
-          method: "GET",
-        });
-        if (!tokenCheckRes.ok) {
-          const errData = await tokenCheckRes.json().catch(() => ({}));
-          const msg =
-            typeof (errData as { error?: string }).error === "string"
-              ? (errData as { error: string }).error
-              : "Upload de ficheiros grandes não disponível. Use um ficheiro com menos de 4,5 MB.";
-          toast.error(msg);
-          return undefined;
-        }
-        try {
-          const blob = await uploadToBlob(file.name, file, {
-            access: "public",
-            handleUploadUrl: "/api/files/upload-token",
-          });
-          const processRes = await fetch("/api/files/process", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              url: blob.url,
-              pathname: blob.pathname,
-              contentType: file.type || "application/octet-stream",
-              filename: file.name,
-            }),
-          });
-          if (!processRes.ok) {
-            const errData = await processRes.json().catch(() => ({}));
-            const msg =
-              typeof (errData as { error?: string }).error === "string"
-                ? (errData as { error: string }).error
-                : "Falha ao processar o ficheiro após o upload.";
-            toast.error(msg);
-            return undefined;
-          }
-          const data = (await processRes.json()) as Parameters<
-            typeof buildAttachmentFromResponse
-          >[0];
-          return buildAttachmentFromResponse(data);
-        } catch (directError) {
-          const msg =
-            directError instanceof Error
-              ? directError.message
-              : "Upload de ficheiros grandes não disponível.";
-          toast.error(
-            `${msg} Use um ficheiro com menos de 4,5 MB ou tente novamente.`
-          );
-          return undefined;
-        }
+        return await uploadLargeFile(file);
       }
-
-      const formData = new FormData();
-      formData.append("file", file);
-      const response = await fetch("/api/files/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (response.ok) {
-        const data = (await response.json()) as Parameters<
-          typeof buildAttachmentFromResponse
-        >[0];
-        return buildAttachmentFromResponse(data);
-      }
-
-      let errorMessage = "Falha ao enviar o arquivo. Tente novamente.";
-      if (response.status === 413) {
-        errorMessage =
-          "Ficheiro demasiado grande. Em produção o limite é 4,5 MB. Use um ficheiro com menos de 4,5 MB.";
-      } else {
-        try {
-          const data = (await response.json()) as {
-            error?: string;
-            detail?: string;
-          };
-          if (typeof data?.error === "string" && data.error.length > 0) {
-            errorMessage = data.error;
-            if (typeof data?.detail === "string" && data.detail.length > 0) {
-              errorMessage += ` (${data.detail})`;
-            }
-          }
-        } catch {
-          // Resposta não é JSON (ex.: página de erro)
-        }
-      }
-      toast.error(errorMessage);
-      return undefined;
-    } catch (_error) {
+      return await uploadSmallFile(file);
+    } catch {
       toast.error(
         "Falha ao enviar o arquivo. Verifique a ligação e tente novamente."
       );
@@ -489,17 +540,14 @@ function PureMultimodalInput({
         const uploadedAttachments = await Promise.all(uploadPromises);
         const successfullyUploadedAttachments = uploadedAttachments.filter(
           (attachment) =>
-            attachment !== undefined &&
-            attachment.url !== undefined &&
-            attachment.contentType !== undefined
+            attachment?.url != null && attachment?.contentType != null
         );
 
         setAttachments((curr) => [
           ...curr,
           ...(successfullyUploadedAttachments as Attachment[]),
         ]);
-      } catch (error) {
-        console.error("Error uploading pasted images:", error);
+      } catch {
         toast.error("Falha ao enviar a(s) imagem(ns) colada(s)");
       } finally {
         setUploadQueue([]);
@@ -519,18 +567,42 @@ function PureMultimodalInput({
     return () => textarea.removeEventListener("paste", handlePaste);
   }, [handlePaste]);
 
+  const handleDocumentTypeChange = useCallback(
+    (attachmentUrl: string) => (documentType: "pi" | "contestacao") => {
+      setAttachments((current) =>
+        updateAttachmentByUrl(current, attachmentUrl, { documentType })
+      );
+    },
+    [setAttachments]
+  );
+
+  const handlePastedTextForAttachment = useCallback(
+    (attachmentUrl: string) => (text: string) => {
+      setAttachments((current) =>
+        updateAttachmentByUrl(current, attachmentUrl, {
+          extractedText: text,
+          extractionFailed: false,
+        })
+      );
+    },
+    [setAttachments]
+  );
+
+  const handleRemoveAttachment = useCallback(
+    (attachmentUrl: string) => () => {
+      setAttachments((current) =>
+        removeAttachmentByUrl(current, attachmentUrl)
+      );
+      const inputEl = fileInputRef.current;
+      if (inputEl) {
+        inputEl.value = "";
+      }
+    },
+    [setAttachments]
+  );
+
   return (
     <div className={cn("relative flex w-full flex-col gap-4", className)}>
-      {messages.length === 0 &&
-        attachments.length === 0 &&
-        uploadQueue.length === 0 && (
-          <SuggestedActions
-            chatId={chatId}
-            selectedVisibilityType={selectedVisibilityType}
-            sendMessage={sendMessage}
-          />
-        )}
-
       <input
         accept="image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         className="pointer-events-none fixed -top-4 -left-4 size-0.5 opacity-0"
@@ -547,7 +619,7 @@ function PureMultimodalInput({
         onDrop={handleDrop}
         onSubmit={(event) => {
           event.preventDefault();
-          if (!input.trim() && attachments.length === 0) {
+          if (input.trim() === "" && attachments.length === 0) {
             return;
           }
           if (status !== "ready") {
@@ -593,45 +665,16 @@ function PureMultimodalInput({
                     attachment={attachment}
                     key={attachment.url}
                     onDocumentTypeChange={
-                      attachment.extractedText != null
-                        ? (documentType) => {
-                            setAttachments((currentAttachments) =>
-                              currentAttachments.map((a) =>
-                                a.url === attachment.url
-                                  ? { ...a, documentType }
-                                  : a
-                              )
-                            );
-                          }
+                      typeof attachment.extractedText === "string"
+                        ? handleDocumentTypeChange(attachment.url)
                         : undefined
                     }
                     onPastedText={
                       attachment.extractionFailed === true
-                        ? (text) => {
-                            setAttachments((currentAttachments) =>
-                              currentAttachments.map((a) =>
-                                a.url === attachment.url
-                                  ? {
-                                      ...a,
-                                      extractedText: text,
-                                      extractionFailed: false,
-                                    }
-                                  : a
-                              )
-                            );
-                          }
+                        ? handlePastedTextForAttachment(attachment.url)
                         : undefined
                     }
-                    onRemove={() => {
-                      setAttachments((currentAttachments) =>
-                        currentAttachments.filter(
-                          (a) => a.url !== attachment.url
-                        )
-                      );
-                      if (fileInputRef.current) {
-                        fileInputRef.current.value = "";
-                      }
-                    }}
+                    onRemove={handleRemoveAttachment(attachment.url)}
                   />
                 </li>
               ))}
@@ -674,6 +717,13 @@ function PureMultimodalInput({
         </div>
         <PromptInputToolbar className="border-top-0! border-t-0! p-0 shadow-none dark:border-0 dark:border-transparent!">
           <PromptInputTools className="gap-0 sm:gap-0.5">
+            <PromptSelector
+              chatId={chatId}
+              disabled={status !== "ready"}
+              hasAttachments={attachments.length > 0}
+              messagesCount={messages.length}
+              sendMessage={sendMessage}
+            />
             <AttachmentsButton
               fileInputRef={fileInputRef}
               selectedModelId={selectedModelId}
@@ -692,7 +742,7 @@ function PureMultimodalInput({
               className="size-8 rounded-full bg-primary text-primary-foreground transition-colors duration-200 hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground"
               data-testid="send-button"
               disabled={
-                (attachments.length === 0 && !input.trim()) ||
+                (attachments.length === 0 && input.trim() === "") ||
                 uploadQueue.length > 0
               }
               status={status}
@@ -750,11 +800,11 @@ function PureAttachmentsButton({
   fileInputRef,
   status,
   selectedModelId,
-}: {
+}: Readonly<{
   fileInputRef: React.MutableRefObject<HTMLInputElement | null>;
   status: UseChatHelpers<ChatMessage>["status"];
   selectedModelId: string;
-}) {
+}>) {
   const isReasoningModel =
     selectedModelId.includes("reasoning") || selectedModelId.includes("think");
 
@@ -781,10 +831,10 @@ const AttachmentsButton = memo(PureAttachmentsButton);
 function PureModelSelectorCompact({
   selectedModelId,
   onModelChange,
-}: {
+}: Readonly<{
   selectedModelId: string;
   onModelChange?: (modelId: string) => void;
-}) {
+}>) {
   const [open, setOpen] = useState(false);
 
   const selectedModel =
@@ -853,10 +903,10 @@ const ModelSelectorCompact = memo(PureModelSelectorCompact);
 function PureStopButton({
   stop,
   setMessages,
-}: {
+}: Readonly<{
   stop: () => void;
   setMessages: UseChatHelpers<ChatMessage>["setMessages"];
-}) {
+}>) {
   return (
     <Button
       className="size-7 rounded-full bg-foreground p-1 text-background transition-colors duration-200 hover:bg-foreground/90 disabled:bg-muted disabled:text-muted-foreground"

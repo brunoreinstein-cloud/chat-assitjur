@@ -306,19 +306,25 @@ export async function POST(request: Request) {
 
     if (message?.role === "user") {
       const t4 = Date.now();
-      await saveMessages({
-        messages: [
-          {
-            chatId: id,
-            id: message.id,
-            role: "user",
-            parts: message.parts,
-            attachments: [],
-            createdAt: new Date(),
-          },
-        ],
+      after(async () => {
+        try {
+          await saveMessages({
+            messages: [
+              {
+                chatId: id,
+                id: message.id,
+                role: "user",
+                parts: message.parts,
+                attachments: [],
+                createdAt: new Date(),
+              },
+            ],
+          });
+        } catch (err) {
+          console.error("[chat] saveMessages(user) em background falhou:", err);
+        }
       });
-      logTiming("saveMessages(user)", Date.now() - t4);
+      logTiming("saveMessages(user) (agendado em background)", Date.now() - t4);
     }
 
     const isReasoningModel =

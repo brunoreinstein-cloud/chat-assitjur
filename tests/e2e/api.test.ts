@@ -76,20 +76,18 @@ test.describe("Chat Error Handling", () => {
   });
 });
 
-test.describe("Suggested Actions", () => {
-  test("suggested actions are clickable", async ({ page }) => {
+test.describe("Prompt selector", () => {
+  test("prompt selector sends message and redirects", async ({ page }) => {
     await page.goto("/");
 
-    const suggestions = page.locator(
-      "[data-testid='suggested-actions'] button"
-    );
-    const count = await suggestions.count();
+    const trigger = page.getByTestId("prompt-selector-trigger");
+    await trigger.click();
 
-    if (count > 0) {
-      await suggestions.first().click();
+    // "Explicar o fluxo do Revisor" está sempre disponível
+    await page
+      .getByRole("menuitem", { name: /Explicar o fluxo do Revisor/i })
+      .click();
 
-      // Should redirect after clicking suggestion
-      await expect(page).toHaveURL(CHAT_URL_REGEX, { timeout: 10_000 });
-    }
+    await expect(page).toHaveURL(CHAT_URL_REGEX, { timeout: 10_000 });
   });
 });

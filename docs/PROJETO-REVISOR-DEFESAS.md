@@ -170,7 +170,7 @@ Os documentos são gerados como artefactos **text** via `createDocument`. O util
 ## 7. UX/UI e produto
 
 - **Greeting:** Título "Revisor de Defesas Trabalhistas", descrição do papel, instrução para começar (PI + Contestação).
-- **Suggested actions:** Auditar contestação, explicar fluxo, roteiros, @bancodetese.
+- **Seletor de prompts:** Menu "Sugestões" no input com prompts contextuais (explicar fluxo sempre; auditar e roteiros/@bancodetese consoante anexos e conversa).
 - **Sidebar:** Nome "Revisor de Defesas".
 - **Placeholder:** "Cole o texto da Petição Inicial e da Contestação, ou descreva o caso e anexe documentos...".
 - **Diálogos:** "Instruções do agente" (sobrescrita opcional), "Base de conhecimento" (menção a @bancodetese).

@@ -9,7 +9,6 @@ const SunIcon = ({ size = 40 }: { size?: number }) => (
     aria-label="Sun"
     fill="none"
     height={size}
-    role="img"
     viewBox="0 0 24 24"
     width={size}
   >
@@ -73,7 +72,6 @@ const MoonIcon = ({ size = 40 }: { size?: number }) => (
     aria-label="Moon"
     fill="none"
     height={size}
-    role="img"
     viewBox="0 0 24 24"
     width={size}
   >
@@ -90,7 +88,6 @@ const CloudIcon = ({ size = 24 }: { size?: number }) => (
     aria-label="Cloud"
     fill="none"
     height={size}
-    role="img"
     viewBox="0 0 24 24"
     width={size}
   >
@@ -146,7 +143,7 @@ export interface WeatherAtLocation {
 const SAMPLE = {
   latitude: 37.763_283,
   longitude: -122.412_86,
-  generationtime_ms: 0.027_894_973_754_882_812,
+  generationtime_ms: 0.028,
   utc_offset_seconds: 0,
   timezone: "GMT",
   timezone_abbreviation: "GMT",
@@ -304,9 +301,9 @@ function n(num: number): number {
 
 export function Weather({
   weatherAtLocation = SAMPLE,
-}: {
+}: Readonly<{
   weatherAtLocation?: WeatherAtLocation;
-}) {
+}>) {
   const currentHigh = Math.max(
     ...weatherAtLocation.hourly.temperature_2m.slice(0, 24)
   );
@@ -356,11 +353,10 @@ export function Weather({
       className={cx(
         "relative flex w-full flex-col gap-3 overflow-hidden rounded-2xl p-4 shadow-lg backdrop-blur-sm",
         {
-          "bg-gradient-to-br from-sky-400 via-blue-500 to-blue-600": isDay,
+          "bg-linear-to-br from-sky-400 via-blue-500 to-blue-600": isDay,
         },
         {
-          "bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900":
-            !isDay,
+          "bg-linear-to-br from-indigo-900 via-purple-900 to-slate-900": !isDay,
         }
       )}
     >

@@ -2,11 +2,13 @@
 
 Revisão do fluxo de visitante (guest) no módulo de chat, alinhada ao contexto do Revisor de Defesas e às regras do projeto (Ultracite, AGENTS.md).
 
+**Última atualização:** 2025-03-01
+
 ---
 
 ## Resumo
 
-O acesso guest está **bem integrado**: utilizadores não autenticados podem continuar como visitante a partir do **GuestGate** em `/chat`, obtêm sessão via `/api/auth/guest`, e usam o chat com as mesmas APIs que utilizadores regulares, com limites distintos (entitlements). As correções feitas foram de consistência de tipos e de códigos de erro.
+O acesso guest está **bem integrado**: utilizadores não autenticados podem continuar como visitante a partir do **GuestGate** em `/chat`, obtêm sessão via **server action** `signInAsGuest` (ou, a partir da página de login, via `POST /api/auth/guest`), e usam o chat com as mesmas APIs que utilizadores regulares, com limites distintos (entitlements). As correções feitas foram de consistência de tipos e de códigos de erro.
 
 ---
 
@@ -14,8 +16,8 @@ O acesso guest está **bem integrado**: utilizadores não autenticados podem con
 
 1. **Proxy** (`proxy.ts`): Para `/chat` e `/chat/*` **não** redireciona quando não há token; deixa a página decidir (evita loop).
 2. **`/chat`** (`app/(chat)/chat/page.tsx`): Se `!session` → mostra **GuestGate** (continuar como visitante | iniciar sessão).
-3. **GuestGate** (`guest-gate.tsx`): Link para `/api/auth/guest?redirectUrl=/chat` ou `/login`.
-4. **`/api/auth/guest`**: Cria sessão guest (Auth.js provider `guest` → `createGuestUser()` na DB) e redireciona para `redirectUrl`.
+3. **GuestGate** (`guest-gate.tsx`): **Form** com `action={signInAsGuest}` (server action em `app/(chat)/actions.ts`) que chama `signIn("guest", { redirectTo: "/chat" })`; link para `/login`. Alternativa: na página de login existe link para `GET /api/auth/guest?redirectUrl=/chat`, que devolve HTML com form POST para a mesma rota.
+4. **Sessão guest**: Auth.js provider `guest` → `createGuestUser()` na DB; `session.user.type === "guest"`. A rota `POST /api/auth/guest` (em `app/(auth)/api/auth/guest/route.ts`) também cria sessão e redireciona para `redirectUrl`.
 5. **Layout (chat)** (`app/(chat)/layout.tsx`): Se `session?.user?.type === "guest"` → mostra **GuestBanner** (convite a criar conta).
 6. **APIs**: Todas as rotas de chat/history/knowledge/document/files usam `auth()`; qualquer sessão (guest ou regular) tem `session.user.id` e `session.user.type`, e são tratadas de forma uniforme, com limites por tipo em `lib/ai/entitlements.ts` (guest: 20 msg/dia, regular: 50).
 
@@ -26,7 +28,7 @@ O acesso guest está **bem integrado**: utilizadores não autenticados podem con
 | Área | Estado | Notas |
 |------|--------|--------|
 | **GuestGate** | OK | Mensagem e links acessíveis; redirecionamento correto. |
-| **Layout e GuestBanner** | OK | Banner só para guest; texto claro (“Crie uma conta para guardar o histórico”). |
+| **Layout e GuestBanner** | OK | Banner só para guest; texto: “Está a usar como visitante…”; CTA “Crie uma conta para guardar o histórico”. |
 | **POST /api/chat** | OK | Usa `session.user.id` e `session.user.type`; rate limit via `entitlementsByUserType[userType]`. |
 | **GET/DELETE /api/chat** | OK | Exige sessão; ownership por `session.user.id`. |
 | **/api/history** | OK | Exige `session?.user?.id`; guest vê apenas os seus chats. |
@@ -52,11 +54,38 @@ O acesso guest está **bem integrado**: utilizadores não autenticados podem con
 
 ---
 
+## Limites numéricos (entitlements)
+
+| Tipo    | Mensagens/dia |
+|---------|----------------|
+| `guest` | 20             |
+| `regular` | 50           |
+
+Definidos em `lib/ai/entitlements.ts`; utilizados em `POST /api/chat` para rate limit diário. Futuro: tipo para conta paga (comentário TODO no código).
+
+---
+
+## Segurança e ambiente
+
+- **Guest** não acede a dados de outros utilizadores: ownership por `session.user.id` em todas as APIs de chat/history/knowledge/document/files.
+- **Proxy**: rotas fora de `/chat` e `/api/auth` sem token → redirect para página de guest com `redirectUrl` (não expõe APIs sensíveis sem sessão).
+- **Sessão guest** exige `AUTH_SECRET` e `POSTGRES_URL`; a rota `POST /api/auth/guest` devolve 503 se alguma faltar (ver `checkEnv()` em `app/(auth)/api/auth/guest/route.ts`).
+
+---
+
 ## Recomendações (opcional)
 
-- **UX**: No GuestGate, considerar adicionar um título (e.g. `<h1>`) para acessibilidade e SEO, por exemplo “Chat” ou “Revisor de Defesas”.
+- **UX / a11y**: No GuestGate, adicionar um título (e.g. `<h1>`) para acessibilidade e SEO, por exemplo “Chat” ou “Revisor de Defesas”. Garantir que o botão “Continuar como visitante” tenha contexto semântico (evitar só “Submeter” para leitores de ecrã).
 - **Testes**: Garantir um E2E que: abre `/chat` sem sessão → vê GuestGate → clica “Continuar como visitante” → é redirecionado para `/chat` com sessão guest e vê o chat + GuestBanner.
-- **Docs**: Manter `AGENTS.md` e `.env.example` a mencionar que o chat está acessível em modo visitante e que `POSTGRES_URL` e `AUTH_SECRET` são necessários para o guest.
+- **Docs**: Em `AGENTS.md`, na secção “Funcionalidades principais” ou “Visão geral”, mencionar explicitamente que o chat está acessível em **modo visitante** (guest). O `.env.example` já referencia guest e a necessidade de `POSTGRES_URL` e `AUTH_SECRET` para o fluxo guest.
+
+---
+
+## Referências cruzadas
+
+- [AGENTS.md](../AGENTS.md) — regras e convenções do projeto.
+- [docs/PROJETO-REVISOR-DEFESAS.md](PROJETO-REVISOR-DEFESAS.md) — documentação do Revisor de Defesas (fluxo do agente, não do guest).
+- [.agents/skills/revisor-defesas-context](../.agents/skills/revisor-defesas-context/SKILL.md) — checklist ao alterar prompts ou fluxo do revisor.
 
 ---
 
@@ -64,8 +93,9 @@ O acesso guest está **bem integrado**: utilizadores não autenticados podem con
 
 - `app/(chat)/chat/page.tsx` — entrada do chat; GuestGate quando sem sessão.
 - `app/(chat)/chat/guest-gate.tsx` — UI “continuar como visitante” / “iniciar sessão”.
+- `app/(chat)/actions.ts` — server action `signInAsGuest()` usada pelo GuestGate.
 - `app/(chat)/layout.tsx` — GuestBanner para guest.
-- `app/(auth)/api/auth/guest/route.ts` — criação de sessão guest.
+- `app/(auth)/api/auth/guest/route.ts` — GET (form HTML) e POST (criação de sessão guest e redirect).
 - `app/(auth)/auth.ts` — providers credentials e guest; tipo `UserType`.
 - `app/(chat)/api/chat/route.ts` — handler do chat; usa `entitlementsByUserType[session.user.type]`.
 - `lib/ai/entitlements.ts` — limites por tipo (guest / regular).

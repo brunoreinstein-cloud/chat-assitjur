@@ -105,7 +105,10 @@ function PureArtifact({
     artifact.documentId !== "init" && artifact.status !== "streaming"
       ? `/api/document?id=${artifact.documentId}`
       : null,
-    { fetcher: (url) => documentFetcher(url) as Promise<Document[]> }
+    {
+      fetcher: (url) => documentFetcher(url) as Promise<Document[]>,
+      dedupingInterval: 5_000,
+    }
   );
 
   const [mode, setMode] = useState<"edit" | "diff">("edit");
@@ -128,10 +131,6 @@ function PureArtifact({
       }
     }
   }, [documents, setArtifact]);
-
-  useEffect(() => {
-    mutateDocuments();
-  }, [mutateDocuments]);
 
   const { mutate } = useSWRConfig();
   const [isContentDirty, setIsContentDirty] = useState(false);

@@ -23,12 +23,12 @@ interface TextArtifactMetadata {
 export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
   kind: "text",
   description: "Useful for text content, like drafting essays and emails.",
-  initialize: async ({ documentId, setMetadata }) => {
-    const suggestions = await getSuggestions({ documentId });
-
-    setMetadata({
-      suggestions,
-    });
+  initialize: ({ documentId, setMetadata }) => {
+    const load = async () => {
+      const suggestions = await getSuggestions({ documentId });
+      setMetadata({ suggestions });
+    };
+    load();
   },
   onStreamPart: ({ streamPart, setMetadata, setArtifact }) => {
     if (streamPart.type === "data-suggestion") {
@@ -41,10 +41,12 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
     }
 
     if (streamPart.type === "data-textDelta") {
+      const textDelta =
+        typeof streamPart.data === "string" ? streamPart.data : "";
       setArtifact((draftArtifact) => {
         return {
           ...draftArtifact,
-          content: draftArtifact.content + streamPart.data,
+          content: draftArtifact.content + textDelta,
           isVisible:
             draftArtifact.status === "streaming" &&
             draftArtifact.content.length > 400 &&
@@ -69,7 +71,7 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
   }) => {
     if (isLoading) {
       return (
-        <DocumentPageLayout>
+        <DocumentPageLayout aria-label="Conteúdo do documento" as="article">
           <DocumentSkeleton artifactKind="text" />
         </DocumentPageLayout>
       );
@@ -80,7 +82,10 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
       const newContent = getDocumentContentById(currentVersionIndex);
 
       return (
-        <DocumentPageLayout>
+        <DocumentPageLayout
+          aria-label="Comparação de versões do documento"
+          as="article"
+        >
           <DiffView newContent={newContent} oldContent={oldContent} />
         </DocumentPageLayout>
       );
@@ -90,7 +95,7 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
 
     if (!hasContent) {
       return (
-        <DocumentPageLayout>
+        <DocumentPageLayout aria-label="Conteúdo do documento" as="article">
           <div
             aria-live="polite"
             className="flex min-h-80 flex-col items-center justify-center gap-4 rounded-lg border border-border border-dashed bg-muted/30 px-6 py-16 text-center"
@@ -114,7 +119,7 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
     }
 
     return (
-      <DocumentPageLayout>
+      <DocumentPageLayout aria-label="Conteúdo do documento" as="article">
         <div className="flex flex-row">
           <Editor
             content={content}

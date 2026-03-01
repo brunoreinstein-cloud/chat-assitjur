@@ -42,6 +42,7 @@ export function DocumentPreview({
     Document[]
   >(result ? `/api/document?id=${result.id}` : null, {
     fetcher: (url) => documentFetcher(url) as Promise<Document[]>,
+    dedupingInterval: 5_000,
   });
 
   const previewDocument = useMemo(() => documents?.[0], [documents]);

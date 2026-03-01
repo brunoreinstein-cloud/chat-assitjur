@@ -110,6 +110,7 @@ export function Chat({
       const shouldContinue =
         lastMessage?.parts?.some(
           (part) =>
+            part != null &&
             "state" in part &&
             part.state === "approval-responded" &&
             "approval" in part &&
@@ -126,6 +127,7 @@ export function Chat({
           lastMessage?.role !== "user" ||
           request.messages.some((msg) =>
             msg.parts?.some((part) => {
+              if (part == null) return false;
               const state = (part as { state?: string }).state;
               return (
                 state === "approval-responded" || state === "output-denied"
@@ -206,7 +208,8 @@ export function Chat({
 
   const { data: votes } = useSWR<Vote[]>(
     messages.length >= 2 ? `/api/vote?chatId=${id}` : null,
-    fetcher
+    fetcher,
+    { dedupingInterval: 5_000 }
   );
 
   const DRAFT_ATTACHMENTS_KEY = `chat-draft-attachments-${id}`;
@@ -278,11 +281,14 @@ export function Chat({
         <Messages
           addToolApprovalResponse={addToolApprovalResponse}
           chatId={id}
+          inputRef={inputRef}
           isArtifactVisible={isArtifactVisible}
           isReadonly={isReadonly}
           messages={messages}
           regenerate={regenerate}
           selectedModelId={initialChatModel}
+          sendMessage={sendMessage}
+          setInput={setInput}
           setMessages={setMessages}
           status={status}
           votes={votes}

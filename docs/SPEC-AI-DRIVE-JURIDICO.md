@@ -189,7 +189,7 @@ Especificação completa de produto e sistema para uma plataforma de **inteligê
 - [x] **Selector de modelo** (`selectedChatModel`).
 - [x] **Instruções do agente** opcionais (`agentInstructions`).
 - [x] **Base de conhecimento** no header (seleção de até 20 documentos); envio em `knowledgeDocumentIds`.
-- [x] **Suggested actions** (ex.: "Auditar contestação", "Explicar fluxo", "@bancodetese").
+- [x] **Seletor de prompts** no chat (menu "Sugestões" com prompts contextuais: explicar fluxo, auditar contestação, roteiros, @bancodetese).
 - [ ] **Indicador de etapa** (FASE A / FASE B) e botões CONFIRMAR / CORRIGIR quando o cliente detectar GATE 0.5.
 
 ### 6.3 Revisor de Defesas (workflow)
