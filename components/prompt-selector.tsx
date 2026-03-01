@@ -63,13 +63,13 @@ function PurePromptSelector({
   const [open, setOpen] = useState(false);
 
   const prompts = REVISOR_PROMPTS.filter((p) => {
-    if (p.alwaysAvailable) {
+    if ("alwaysAvailable" in p && p.alwaysAvailable) {
       return true;
     }
-    if (p.requiresAttachments && !hasAttachments) {
+    if ("requiresAttachments" in p && p.requiresAttachments && !hasAttachments) {
       return false;
     }
-    if (p.requiresMessages && messagesCountProp === 0) {
+    if ("requiresMessages" in p && p.requiresMessages && messagesCountProp === 0) {
       return false;
     }
     return true;
@@ -98,7 +98,7 @@ function PurePromptSelector({
           type="button"
           variant="ghost"
         >
-          <SparklesIcon size={14} style={{ width: 14, height: 14 }} />
+          <SparklesIcon size={14} />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent

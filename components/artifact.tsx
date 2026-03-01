@@ -343,17 +343,16 @@ function PureArtifact({
     if (artifact.documentId === "init" || !artifactDefinition.initialize) {
       return;
     }
-    (() => {
-      const promise = artifactDefinition.initialize({
+    void Promise.resolve(
+      artifactDefinition.initialize({
         documentId: artifact.documentId,
         setMetadata: (value: Parameters<typeof setMetadata>[0]) => {
           setMetadata(value);
         },
-      });
-      promise.catch(() => {
-        /* ignore init errors */
-      });
-    })();
+      })
+    ).catch(() => {
+      /* ignore init errors */
+    });
   }, [artifact.documentId, artifactDefinition, setMetadata]);
 
   return (

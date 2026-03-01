@@ -1,5 +1,6 @@
 "use client";
 
+import type { ToolUIPart } from "ai";
 import type { ArtifactKind } from "./artifact";
 import { DocumentToolResult } from "./document";
 import {
@@ -19,7 +20,7 @@ interface RequestSuggestionsOutput {
 
 interface MessageRequestSuggestionsToolProps {
   toolCallId: string;
-  state: string;
+  state: ToolUIPart["state"];
   input: unknown;
   output: RequestSuggestionsOutput | undefined;
   isReadonly: boolean;

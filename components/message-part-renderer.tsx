@@ -1,7 +1,7 @@
 "use client";
 
 import type { UseChatHelpers } from "@ai-sdk/react";
-import type { ReactNode } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 import type { ChatMessage } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
 import { MessageContent } from "./elements/message";
@@ -27,7 +27,7 @@ export interface MessagePartRendererProps {
   addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
   setMessages: UseChatHelpers<ChatMessage>["setMessages"];
   regenerate: UseChatHelpers<ChatMessage>["regenerate"];
-  setMode: (mode: "view" | "edit") => void;
+  setMode: Dispatch<SetStateAction<"view" | "edit">>;
   message: ChatMessage;
 }
 
@@ -41,7 +41,7 @@ type RenderContext = Readonly<{
   addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
   setMessages: UseChatHelpers<ChatMessage>["setMessages"];
   regenerate: UseChatHelpers<ChatMessage>["regenerate"];
-  setMode: (mode: "view" | "edit") => void;
+  setMode: Dispatch<SetStateAction<"view" | "edit">>;
   message: ChatMessage;
 }>;
 
@@ -203,10 +203,11 @@ function renderPartByType(
  * Renderiza uma parte (part) de uma mensagem do chat: texto, reasoning ou uma tool.
  */
 export function MessagePartRenderer(props: Readonly<MessagePartRendererProps>) {
-  const { part, messageId, index, ...ctx } = props;
+  const { part, messageId, index, ...rest } = props;
   if (part == null) {
     return null;
   }
   const key = `message-${messageId}-part-${index}`;
+  const ctx: RenderContext = { ...rest, messageId, index };
   return renderPartByType(part, key, ctx);
 }
