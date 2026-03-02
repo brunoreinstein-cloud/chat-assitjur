@@ -49,7 +49,7 @@ export default function AdminAgentsPage() {
 
   const { data: agents = [], mutate } = useSWR<BuiltInAgentItem[]>(
     adminKey ? ["/api/admin/agents", adminKey] : null,
-    ([url, key]) => fetchAgentsWithKey(url, key),
+    ([url, key]: [string, string]) => fetchAgentsWithKey(url, key),
     { revalidateOnFocus: false }
   );
 
