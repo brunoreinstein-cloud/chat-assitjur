@@ -1,3 +1,5 @@
+import { formatDistanceToNow } from "date-fns";
+import { pt } from "date-fns/locale";
 import Link from "next/link";
 import { memo } from "react";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
@@ -46,7 +48,18 @@ const PureChatItem = ({
     <SidebarMenuItem>
       <SidebarMenuButton asChild isActive={isActive}>
         <Link href={`/chat/${chat.id}`} onClick={() => setOpenMobile(false)}>
-          <span>{chat.title}</span>
+          <span className="flex min-w-0 flex-col items-start gap-0.5">
+            <span className="truncate">{chat.title}</span>
+            <span
+              className="text-muted-foreground text-xs"
+              title={new Date(chat.createdAt).toLocaleString("pt-PT")}
+            >
+              {formatDistanceToNow(new Date(chat.createdAt), {
+                addSuffix: true,
+                locale: pt,
+              })}
+            </span>
+          </span>
         </Link>
       </SidebarMenuButton>
 

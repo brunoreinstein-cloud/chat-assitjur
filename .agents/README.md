@@ -10,11 +10,15 @@ Este projeto usa **Agent Skills** do ecossistema [skills.sh](https://skills.sh) 
 | `skill-creator` | Core | anthropics/skills | Guia para criar novas skills (SKILL.md, frontmatter, instruções). |
 | `next-best-practices` | Dev | vercel-labs/next-skills | Next.js: convenções de ficheiros, RSC, dados, async, route handlers, erro, imagem/font. |
 | `next-cache-components` | Dev | vercel-labs/next-skills | Next.js 16 Cache Components, PPR, `use cache`, cacheLife, cacheTag. |
+| `next-upgrade` | Dev | vercel-labs/next-skills | Migrações entre versões do Next.js (upgrade seguro). |
 | `vercel-react-best-practices` | Dev | vercel-labs/agent-skills | React: hooks, re-renders, SWR, serialização, bundle. |
 | `web-design-guidelines` | Dev | vercel-labs/agent-skills | Diretrizes de design e acessibilidade para UI web. |
 | `supabase-postgres-best-practices` | Dev | supabase/agent-skills | Postgres/Supabase: performance, índices, RLS, transações, schema. |
-| `ai-sdk` | IA | vercel/ai | Vercel AI SDK: generateText, streamText, useChat, tools, embeddings, providers. |
 | `systematic-debugging` | Dev | obra/superpowers | Debug sistemático (hipóteses, reprodução, isolamento). |
+| `webapp-testing` | Dev | anthropics/skills | Testes E2E/UI para web apps (Playwright, etc.). |
+| `ai-sdk` | IA | vercel/ai | Vercel AI SDK: generateText, streamText, useChat, tools, embeddings, providers. |
+| `prompt-engineering-patterns` | IA | wshobson/agents | Padrões para system prompt e instruções de agentes. |
+| `rag-implementation` | IA | wshobson/agents | Implementação de RAG (chunking, embeddings, busca por similaridade). |
 | `revisor-defesas-context` | IA / domínio | (interno) | Contexto e checklist do Revisor de Defesas Trabalhistas; uso ao alterar prompts ou fluxo do revisor. |
 
 ## Comandos úteis
@@ -38,6 +42,8 @@ npx skills check
 # Remover uma skill
 npx skills remove <nome-skill>
 ```
+
+**Nota sobre `npx skills check`:** A mensagem *"Could not check 1 skill(s) (may need reinstall)"* é esperada. A skill **revisor-defesas-context** é interna ao projeto (não vem de um repositório remoto), por isso o CLI não consegue verificar atualizações para ela. As restantes skills, instaladas via skills.sh, são verificadas normalmente. Pode ignorar esse aviso para essa skill.
 
 ## Onde as skills são usadas
 

@@ -14,6 +14,7 @@ interface ArtifactActionsProps {
   mode: "edit" | "diff";
   metadata: unknown;
   setMetadata: Dispatch<SetStateAction<unknown>>;
+  openDocxPreview?: (documentId: string) => void;
 }
 
 function PureArtifactActions({
@@ -24,6 +25,7 @@ function PureArtifactActions({
   mode,
   metadata,
   setMetadata,
+  openDocxPreview,
 }: ArtifactActionsProps) {
   const [isLoading, setIsLoading] = useState(false);
 
@@ -44,6 +46,7 @@ function PureArtifactActions({
     mode,
     metadata,
     setMetadata,
+    openDocxPreview,
   };
 
   const actions = artifactDefinition.actions as ArtifactAction<unknown>[];

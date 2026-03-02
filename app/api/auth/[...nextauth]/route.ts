@@ -47,14 +47,16 @@ export async function GET(
         headers: sessionJsonHeaders,
       });
     } catch (error) {
-      return new NextResponse(
-        JSON.stringify({
-          error: "SessionError",
-          message:
-            error instanceof Error ? error.message : "Failed to get session",
-        }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
+      // Devolver sessão vazia em vez de 500 para evitar ClientFetchError no cliente.
+      // O utilizador fica "não autenticado" e a app continua a carregar.
+      if (process.env.NODE_ENV === "development") {
+        const err = error instanceof Error ? error : new Error(String(error));
+        console.error("[auth] GET /api/auth/session failed:", err.message);
+      }
+      return new NextResponse(JSON.stringify({}), {
+        status: 200,
+        headers: sessionJsonHeaders,
+      });
     }
   }
 

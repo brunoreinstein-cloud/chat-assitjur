@@ -82,7 +82,7 @@ export const systemPrompt = ({
   }
 
   if (knowledgeContext?.trim()) {
-    base += `\n\n## Base de conhecimento (use para fundamentar suas respostas)\n${knowledgeContext.trim()}`;
+    base += `\n\n## Base de conhecimento (documentos selecionados pelo utilizador para este chat)\nConteúdo abaixo: exclusivamente ficheiros do utilizador (modelo de contestação, teses, precedentes, cláusulas). Não confundir com as "Orientações para este agente". Use para fundamentar as respostas.\n\n${knowledgeContext.trim()}`;
   }
 
   return base;

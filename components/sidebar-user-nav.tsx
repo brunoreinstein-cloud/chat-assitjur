@@ -1,7 +1,8 @@
 "use client";
 
-import { ChevronUp } from "lucide-react";
+import { ChevronUp, CoinsIcon } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { User } from "next-auth";
 import { signOut, useSession } from "next-auth/react";
@@ -77,6 +78,16 @@ export function SidebarUserNav({ user }: { user: User }) {
               }
             >
               {`Alternar modo ${resolvedTheme === "light" ? "escuro" : "claro"}`}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild data-testid="user-nav-item-uso">
+              <Link
+                className="flex cursor-pointer items-center gap-2"
+                href="/uso"
+              >
+                <CoinsIcon aria-hidden className="size-4" />
+                Uso e créditos
+              </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             {isGuest ? (

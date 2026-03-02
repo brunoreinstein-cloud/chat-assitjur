@@ -1,25 +1,37 @@
 # Base de conhecimento
 
-## Projeto: Agente Revisor de Defesas Trabalhistas
+A **base de conhecimento** é comum a **todos os agentes** (Revisor de Defesas, Análise de contratos, etc.). Os documentos que o utilizador selecionar são injetados no system prompt e usados como contexto em qualquer conversa, por exemplo:
 
-O assistente usa por padrão as instruções do **Agente Revisor de Defesas Trabalhistas v3.1** (auditor jurídico sênior — contencioso trabalhista). As instruções completas estão em `lib/ai/agent-revisor-defesas.ts`. Se o usuário não enviar "Instruções do agente" no chat, o backend aplica esse bloco automaticamente.
+- **@bancodetese** — teses e precedentes (Revisor de Defesas: quadro de teses na Avaliação da Defesa).
+- **Outros contextos** — cláusulas-modelo, jurisprudência, normas internas, etc., conforme o agente ativo.
+
+O assistente usa por padrão as instruções do **Agente Revisor de Defesas Trabalhistas** (auditor jurídico sênior — contencioso trabalhista). As instruções completas estão em `lib/ai/agent-revisor-defesas.ts`. Se o utilizador não enviar "Instruções do agente" no chat, o backend aplica esse bloco automaticamente.
 
 ---
 
 ## Implementação atual (injeção direta)
 
-- **Tabela:** `KnowledgeDocument` (id, userId, title, content, createdAt).
-- **API:** `GET /api/knowledge` (listar), `GET /api/knowledge?ids=...` (buscar por ids), `POST /api/knowledge` (criar), `DELETE /api/knowledge?id=...` (remover).
+- **Extração inteligente de metadados:** Ao criar documentos a partir de ficheiros (`POST /api/knowledge/from-files`) ou ao fazer upload para o chat (`POST /api/files/upload`), a IA extrai automaticamente título, autor, tipo de documento e informações-chave do texto (módulo `lib/ai/extract-metadata.ts`). O título sugerido pela IA é usado como título do documento na base de conhecimento; a resposta inclui opcionalmente `metadata` (author, documentType, keyInfo) e no upload `extractedMetadata`.
+- **Tabelas:** `KnowledgeDocument` (id, userId, folderId, title, content, createdAt); `KnowledgeFolder` (id, userId, parentId, name, createdAt).
+- **API:** `GET /api/knowledge` (listar; opcional `?folderId=uuid` ou `?folderId=root`; `?recent=N` para últimos N documentos), `GET /api/knowledge?ids=...` (buscar por ids), `POST /api/knowledge` (criar; body opcional `folderId`), `PATCH /api/knowledge/[id]` (atualizar doc, ex. folderId), `DELETE /api/knowledge?id=...` (remover). Pastas: `GET/POST /api/knowledge/folders`, `PATCH/DELETE /api/knowledge/folders/[id]`.
 - **Chat:** O cliente pode enviar `knowledgeDocumentIds` no body do `POST /api/chat`. O servidor busca os documentos do usuário, concatena título e conteúdo e injeta no system prompt em "Base de conhecimento".
-- **UI:** Botão "Base de conhecimento" no header do chat permite selecionar quais documentos usar como contexto (máx. 20).
+- **UI:** Botão "Base de conhecimento" no header do chat permite selecionar quais documentos usar como contexto (máx. 50). É possível **importar múltiplos ficheiros** (até 50 por pedido, enviados em lotes se for mais) e **importar uma pasta** (botão «Importar pasta»: o browser devolve todos os ficheiros da pasta; só são aceites PDF, DOC, DOCX, JPEG, PNG até 100 MB).
 
-Limitação: todo o conteúdo dos documentos selecionados vai no prompt. Para muitas ou longas páginas, pode estourar contexto ou custo. Para busca por relevância (só trechos relacionados à pergunta), use RAG abaixo.
+**Comportamento no chat (RAG quando possível):**
+- Se a última mensagem do utilizador tiver **texto** e os documentos selecionados tiverem **chunks indexados** (embeddings), o chat usa **RAG**: faz embedding do texto, busca os chunks mais relevantes por similaridade (cosine) e injeta só esses trechos no prompt. Isso reduz ruído, custo de tokens e risco de alucinação (o modelo vê apenas trechos relevantes).
+- **Limite de chunks:** 12 por defeito; **24** quando o agente é o Redator de Contestações (mais cobertura de teses para pedidos genéricos).
+- **Fallback:** Se não houver texto na mensagem, ou o embedding falhar, ou não existirem chunks para os documentos, usa **injeção direta** (conteúdo integral dos documentos selecionados, até o limite `MAX_KNOWLEDGE_CONTEXT_CHARS`).
+- As instruções do agente (ex.: Redator) incluem regras de **anti-alucinação** (usar apenas o que consta na base de conhecimento; não inventar teses nem jurisprudência).
+
+**Banco de Teses Padrão do Redator (RAG):** O agente Redator de Contestações dispõe de um documento "sistema" (Banco de Teses Padrão) guardado na base de conhecimento. Quando o utilizador **não** seleciona documentos na sidebar, o backend injeta automaticamente esse documento e usa RAG (chunks relevantes) para preencher a secção "Base de conhecimento". Assim o Redator pode operar em Modo 2 sem o utilizador anexar nada. O conteúdo do banco está em `lib/ai/banco-teses-redator.md`. Após migrações, executar **`pnpm run db:seed-redator-banco`** para criar o documento e indexar os chunks (requer POSTGRES_URL e API de embeddings).
 
 ---
 
-## Evolução: RAG com embeddings
+## RAG com embeddings (implementado)
 
-Para **busca semântica** (retornar só os trechos mais relevantes à pergunta):
+**Implementação:** Tabela `KnowledgeChunk` (id, knowledgeDocumentId, chunkIndex, text, embedding vector(1536)); extensão pgvector; chunking e embeddings no POST /api/knowledge; no chat, embedding da última mensagem do utilizador e busca top-k por similaridade (cosine); fallback para injeção direta. Ver `lib/ai/rag.ts`, `lib/db/queries.ts` (getRelevantChunks, insertKnowledgeChunks), e `app/(chat)/api/chat/route.ts`.
+
+Para **melhorias futuras** (reranking, chunking semântico):
 
 1. **Chunking:** Dividir cada `KnowledgeDocument` em pedaços (ex.: 500–1000 tokens com overlap). Guardar no DB ou em tabela `knowledge_chunk` (documentId, chunkIndex, text, embedding?).
 
@@ -39,3 +51,20 @@ Para **busca semântica** (retornar só os trechos mais relevantes à pergunta):
    - Montar `knowledgeContext` só com o texto desses chunks e passar para `systemPrompt({ ..., knowledgeContext })`.
 
 5. **Referências:** [AI SDK – embedMany](https://sdk.vercel.ai/docs/reference/ai-sdk-core/embed-many), [pgvector](https://github.com/pgvector/pgvector).
+
+---
+
+## Skills para implementação RAG
+
+Ao implementar o RAG (chunking, embeddings, busca por similaridade), use as **Agent Skills** do projeto:
+
+- **rag-implementation** (`.agents/skills/rag-implementation`) — padrões e passos para chunking, embeddings e busca por relevância.
+- **ai-sdk** (`.agents/skills/ai-sdk`) — uso de `embedMany`, providers e integração com `streamText`.
+
+Consultar também [docs/SKILLS_REPORT.md](../docs/SKILLS_REPORT.md) e [.agents/SKILLS_ARCHITECTURE.md](../.agents/SKILLS_ARCHITECTURE.md) para o mapa de skills e tarefas.
+
+---
+
+## Barra lateral e Document Organizer (proposta)
+
+Migração da UI do modal para **barra lateral direita** ao chat, com **organização por pastas** e conceito **Document Organizer** (extrair, organizar, rastrear documentos). Especificação completa, checklist Web Interface Guidelines e fases de implementação em **[docs/KNOWLEDGE-BASE-SIDEBAR-DOCUMENT-ORGANIZER.md](../docs/KNOWLEDGE-BASE-SIDEBAR-DOCUMENT-ORGANIZER.md)**.

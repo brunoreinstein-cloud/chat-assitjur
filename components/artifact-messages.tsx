@@ -73,7 +73,7 @@ function PureArtifactMessages({
               (part) =>
                 part != null &&
                 "state" in part &&
-                part.state === "approval-responded"
+                part?.state === "approval-responded"
             )
           ) && <ThinkingMessage key="thinking" />}
       </AnimatePresence>

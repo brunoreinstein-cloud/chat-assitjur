@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { auth } from "@/app/(auth)/auth";
+import { extractDocumentMetadata } from "@/lib/ai/extract-metadata";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 /** PDFs enormes (muitas páginas ou OCR) podem demorar; permite até 5 min na Vercel (Pro). */
@@ -55,7 +56,40 @@ const MAX_EXTRACTED_TEXT_LENGTH = 600_000; // ~600k caracteres (PI + Contestaç�
 const MAX_OCR_PAGES = 50;
 
 /** Amostra do início do texto para classificação (evita analisar o doc inteiro). */
-const CLASSIFY_SAMPLE_LENGTH = 4000;
+const CLASSIFY_SAMPLE_LENGTH = 6000;
+
+/**
+ * Mapeia o tipo de documento devolvido pela IA (metadados) para "pi" | "contestacao".
+ * Usado como fallback quando a classificação por regex não identifica o tipo.
+ */
+function mapMetadataDocumentType(
+  raw: string | undefined
+): "pi" | "contestacao" | undefined {
+  if (raw == null || raw.trim().length === 0) {
+    return undefined;
+  }
+  const n = raw.trim().toLowerCase();
+  if (
+    n.includes("contestação") ||
+    n.includes("contestacao") ||
+    n.includes("contestaçao") ||
+    n === "contestação" ||
+    n === "contestacao" ||
+    n.startsWith("contest")
+  ) {
+    return "contestacao";
+  }
+  if (
+    n.includes("petição inicial") ||
+    n.includes("peticao inicial") ||
+    n === "pi" ||
+    n === "petição" ||
+    n.startsWith("petição inicial")
+  ) {
+    return "pi";
+  }
+  return undefined;
+}
 
 /**
  * Classifica o tipo de documento (PI ou Contestação) por padrões no texto.
@@ -79,6 +113,11 @@ function classifyDocumentType(text: string): "pi" | "contestacao" | undefined {
     /\bRECLAMADO\s*[:\s]/,
     /\bDEFESA\s+(?:DO\s+)?RECLAMADO\b/,
     /\bCONTESTA[CÇ][AÃ]O\s+AO[S]?\s+PEDIDOS?\b/,
+    /\b(?:EM\s+)?RESPOSTA\s+(?:À|A)\s+(?:RECLAMA[CÇ][AÃ]O|PETI[CÇ][AÃ]O)\b/,
+    /\bNEGA\s+(?:INTEGRALMENTE|EM\s+PARTE)\b/,
+    /\bCONTESTA[CÇ][AÃ]O\s+À[S]?\s+INICIAL\b/,
+    /\bDEFESA\s+(?:PR[EÉ]VIA|APRESENTADA)\b/,
+    /\b(?:VEM\s+)?(?:O\s+)?RECLAMADO\s+[AÀ]\s+PRESEN/,
   ];
   let piScore = 0;
   let contestacaoScore = 0;
@@ -358,12 +397,44 @@ async function extractTextFromDocx(buffer: ArrayBuffer): Promise<string> {
     : text;
 }
 
+/**
+ * OCR para imagens (documentos escaneados em JPEG/PNG).
+ * Transforma imagem em texto pesquisável e editável com Tesseract (por + eng).
+ */
+async function extractTextFromImage(buffer: ArrayBuffer): Promise<string> {
+  const Tesseract = await import("tesseract.js");
+  const worker = await Tesseract.createWorker(["por", "eng"], 1, {
+    logger: () => {
+      /* silenciar logs do Tesseract */
+    },
+  });
+  await worker.setParameters({
+    tessedit_pageseg_mode: Tesseract.PSM?.AUTO ?? "3",
+  });
+  try {
+    const imageBuffer = Buffer.from(buffer);
+    const result = await worker.recognize(imageBuffer);
+    const text = typeof result?.data?.text === "string" ? result.data.text : "";
+    return text.length > MAX_EXTRACTED_TEXT_LENGTH
+      ? `${text.slice(0, MAX_EXTRACTED_TEXT_LENGTH)}\n\n[... texto truncado ...]`
+      : text;
+  } finally {
+    await worker.terminate();
+  }
+}
+
 function storageErrorHint(message?: string): string {
   const isNotFound =
     message?.includes("Bucket not found") || message?.includes("not found");
   return isNotFound
     ? ` Crie o bucket "${SUPABASE_BUCKET}" em Supabase Dashboard → Storage, ou execute: pnpm run supabase:config-push`
     : ` Supabase: ${message ?? ""}`;
+}
+
+function isImageContentType(contentType: string): boolean {
+  return ACCEPTED_IMAGE_TYPES.includes(
+    contentType as (typeof ACCEPTED_IMAGE_TYPES)[number]
+  );
 }
 
 /** Usado por upload (FormData) e por process (após fetch do Blob). */
@@ -379,11 +450,12 @@ export async function runExtractionAndClassification(
   const isPdf = contentType === ACCEPTED_PDF_TYPE;
   const isDoc = contentType === ACCEPTED_DOC_TYPE;
   const isDocx = contentType === ACCEPTED_DOCX_TYPE;
+  const isImage = isImageContentType(contentType);
   let extractedText: string | undefined;
   let extractionFailed = false;
   let extractionDetail: string | undefined;
   let documentType: "pi" | "contestacao" | undefined;
-  if (isPdf || isDoc || isDocx) {
+  if (isPdf || isDoc || isDocx || isImage) {
     try {
       if (isPdf) {
         const result = await extractTextFromPdf(fileBuffer);
@@ -391,8 +463,10 @@ export async function runExtractionAndClassification(
         extractionDetail = result.lastError;
       } else if (isDoc) {
         extractedText = await extractTextFromDoc(fileBuffer);
-      } else {
+      } else if (isDocx) {
         extractedText = await extractTextFromDocx(fileBuffer);
+      } else if (isImage) {
+        extractedText = await extractTextFromImage(fileBuffer);
       }
       if (
         typeof extractedText === "string" &&
@@ -409,6 +483,19 @@ export async function runExtractionAndClassification(
   return { extractedText, extractionFailed, documentType, extractionDetail };
 }
 
+/** Metadados extraídos pela IA (título, autor, tipo, informações-chave). Incluído na resposta do upload quando disponível. */
+export interface UploadExtractedMetadata {
+  title: string;
+  author: string;
+  documentType: string;
+  keyInfo: string;
+}
+
+interface UploadSuccessOptions {
+  extractionDetail?: string;
+  extractedMetadata?: UploadExtractedMetadata;
+}
+
 function respondUploadSuccess(
   uploadResult: { url: string; pathname: string },
   contentType: string,
@@ -416,7 +503,7 @@ function respondUploadSuccess(
   extractedText?: string,
   extractionFailed?: boolean,
   documentType?: "pi" | "contestacao",
-  extractionDetail?: string
+  options?: UploadSuccessOptions
 ): NextResponse {
   const body = {
     url: uploadResult.url,
@@ -425,8 +512,12 @@ function respondUploadSuccess(
     ...(typeof extractedText === "string" ? { extractedText } : {}),
     ...(extractionFailed === true ? { extractionFailed: true } : {}),
     ...(documentType ? { documentType } : {}),
-    ...(typeof extractionDetail === "string" && extractionDetail.length > 0
-      ? { extractionDetail }
+    ...(typeof options?.extractionDetail === "string" &&
+    options.extractionDetail.length > 0
+      ? { extractionDetail: options.extractionDetail }
+      : {}),
+    ...(options?.extractedMetadata
+      ? { extractedMetadata: options.extractedMetadata }
       : {}),
   };
   return NextResponse.json(body);
@@ -494,7 +585,7 @@ export async function persistAndRespond(
       extractedText,
       extractionFailed,
       documentType,
-      extractionDetail
+      { extractionDetail }
     );
   } catch (err) {
     const message =
@@ -547,10 +638,11 @@ export async function POST(request: Request) {
     const isPdf = contentType === ACCEPTED_PDF_TYPE;
     const isDoc = contentType === ACCEPTED_DOC_TYPE;
     const isDocx = contentType === ACCEPTED_DOCX_TYPE;
+    const isImage = isImageContentType(contentType);
 
     // Upload e extração em paralelo: o tempo total é o máximo dos dois, não a soma.
     const extractionPromise =
-      isPdf || isDoc || isDocx
+      isPdf || isDoc || isDocx || isImage
         ? runExtractionAndClassification(fileBuffer, contentType)
         : Promise.resolve({
             extractedText: undefined,
@@ -571,14 +663,42 @@ export async function POST(request: Request) {
       extractionPromise,
     ]);
 
+    // Extração inteligente de metadados pela IA (título, autor, tipo, informações-chave)
+    let extractedMetadata: UploadExtractedMetadata | undefined;
+    let documentTypeFromMeta: "pi" | "contestacao" | undefined;
+    if (
+      typeof extraction.extractedText === "string" &&
+      extraction.extractedText.trim().length > 0
+    ) {
+      const meta = await extractDocumentMetadata(
+        extraction.extractedText,
+        filename
+      );
+      if (meta) {
+        extractedMetadata = {
+          title: meta.title,
+          author: meta.author,
+          documentType: meta.documentType,
+          keyInfo: meta.keyInfo,
+        };
+        documentTypeFromMeta = mapMetadataDocumentType(meta.documentType);
+      }
+    }
+
+    // Tipo de documento: regex primeiro; se não identificou, usa o tipo devolvido pela IA
+    const finalDocumentType = extraction.documentType ?? documentTypeFromMeta;
+
     return respondUploadSuccess(
       uploadResult,
       contentType,
       filename,
       extraction.extractedText,
       extraction.extractionFailed,
-      extraction.documentType,
-      extraction.extractionDetail
+      finalDocumentType,
+      {
+        extractionDetail: extraction.extractionDetail,
+        ...(extractedMetadata ? { extractedMetadata } : {}),
+      }
     );
   } catch (err) {
     const message =

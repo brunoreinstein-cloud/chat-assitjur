@@ -1,5 +1,6 @@
 "use client";
 
+import { CheckIcon, FolderPlusIcon } from "lucide-react";
 import Image from "next/image";
 import { useCallback, useState } from "react";
 import type { Attachment, DocumentTypeLabel } from "@/lib/types";
@@ -92,6 +93,7 @@ export const PreviewAttachment = ({
   onDocumentTypeChange,
   onPastedText,
   onRemove,
+  onSaveToArchivos,
   uploadingLabel = DEFAULT_UPLOADING_LABEL,
 }: {
   attachment: Attachment;
@@ -101,6 +103,8 @@ export const PreviewAttachment = ({
   /** Quando definido e extração falhou, permite colar texto; ao confirmar, o anexo passa a ter extractedText */
   onPastedText?: (text: string) => void;
   onRemove?: () => void;
+  /** Quando definido e anexo tem pathname+url, permite guardar em "Arquivos" */
+  onSaveToArchivos?: (attachment: Attachment) => void;
   /** Texto no overlay durante upload/processamento (ex.: "A processar documento…") */
   uploadingLabel?: string;
 }) => {
@@ -111,7 +115,10 @@ export const PreviewAttachment = ({
     documentType,
     extractedText,
     extractionFailed,
+    pathname,
   } = attachment;
+  const canSaveToArchivos =
+    Boolean(onSaveToArchivos) && Boolean(pathname && url) && !isUploading;
   const isPdf = contentType === "application/pdf";
   const isDoc = contentType === DOC_MIME;
   const isDocx = contentType === DOCX_MIME;
@@ -219,6 +226,34 @@ export const PreviewAttachment = ({
             <option value="pi">Petição Inicial</option>
             <option value="contestacao">Contestação</option>
           </select>
+          {documentType != null && (
+            <output
+              className="mt-0.5 flex items-center gap-1 text-[10px] text-green-700 dark:text-green-400"
+              htmlFor={`attachment-doctype-${url}`}
+            >
+              <CheckIcon aria-hidden className="size-3 shrink-0" />
+              {documentType === "pi"
+                ? "Petição Inicial identificada"
+                : "Contestação identificada"}
+            </output>
+          )}
+        </div>
+      )}
+
+      {canSaveToArchivos && (
+        <div className="px-1 pb-1">
+          <Button
+            aria-label="Guardar em Arquivos"
+            className="h-6 w-full gap-1 text-[10px]"
+            onClick={() => onSaveToArchivos?.(attachment)}
+            size="sm"
+            title="Guardar na biblioteca Arquivos para depois adicionar à base de conhecimento"
+            type="button"
+            variant="secondary"
+          >
+            <FolderPlusIcon aria-hidden size={10} />
+            Guardar em Arquivos
+          </Button>
         </div>
       )}
     </div>

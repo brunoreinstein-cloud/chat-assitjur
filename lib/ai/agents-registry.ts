@@ -1,0 +1,129 @@
+/**
+ * Registry de agentes (SPEC § 7.4, Fase 3).
+ * Mapeia agentId → instruções e conjunto de tools para o chat.
+ */
+
+import { AGENTE_ANALISE_CONTRATOS_INSTRUCTIONS } from "@/lib/ai/agent-analise-contratos";
+import { AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS } from "@/lib/ai/agent-redator-contestacao";
+import { AGENTE_REVISOR_DEFESAS_INSTRUCTIONS } from "@/lib/ai/agent-revisor-defesas";
+
+export const AGENT_ID_REVISOR_DEFESAS = "revisor-defesas";
+export const AGENT_ID_ANALISE_CONTRATOS = "analise-contratos";
+export const AGENT_ID_REDATOR_CONTESTACAO = "redator-contestacao";
+
+export const AGENT_IDS = [
+  AGENT_ID_REVISOR_DEFESAS,
+  AGENT_ID_ANALISE_CONTRATOS,
+  AGENT_ID_REDATOR_CONTESTACAO,
+] as const;
+
+export type AgentId = (typeof AGENT_IDS)[number];
+
+export interface AgentConfig {
+  /** Id do agente: built-in (revisor-defesas, etc.) ou UUID do CustomAgent. */
+  id: string;
+  label: string;
+  instructions: string;
+  /** Incluir createRevisorDefesaDocuments e validação PI+Contestação */
+  useRevisorDefesaTools: boolean;
+  /** Incluir createRedatorContestacaoDocument para export minuta DOCX */
+  useRedatorContestacaoTool: boolean;
+  /**
+   * IDs de modelos LLM permitidos para este agente (ex.: ["anthropic/claude-sonnet-4.6"]).
+   * Se omitido ou vazio, todos os modelos do catálogo são permitidos.
+   */
+  allowedModelIds?: string[];
+}
+
+/** Modelos Claude Sonnet/Opus (recomendados para redação jurídica longa). */
+const REDATOR_ALLOWED_MODEL_IDS = [
+  "anthropic/claude-sonnet-4.5",
+  "anthropic/claude-sonnet-4.6",
+  "anthropic/claude-opus-4.5",
+  "anthropic/claude-opus-4.6",
+];
+
+const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
+  [AGENT_ID_REVISOR_DEFESAS]: {
+    id: AGENT_ID_REVISOR_DEFESAS,
+    label: "Revisor de Defesas",
+    instructions: AGENTE_REVISOR_DEFESAS_INSTRUCTIONS,
+    useRevisorDefesaTools: true,
+    useRedatorContestacaoTool: false,
+    // todos os modelos permitidos (omitido)
+  },
+  [AGENT_ID_ANALISE_CONTRATOS]: {
+    id: AGENT_ID_ANALISE_CONTRATOS,
+    label: "Análise de contratos",
+    instructions: AGENTE_ANALISE_CONTRATOS_INSTRUCTIONS,
+    useRevisorDefesaTools: false,
+    useRedatorContestacaoTool: false,
+    // todos os modelos permitidos (omitido)
+  },
+  [AGENT_ID_REDATOR_CONTESTACAO]: {
+    id: AGENT_ID_REDATOR_CONTESTACAO,
+    label: "Redator de Contestações",
+    instructions: AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS,
+    useRevisorDefesaTools: false,
+    useRedatorContestacaoTool: true,
+    allowedModelIds: REDATOR_ALLOWED_MODEL_IDS,
+  },
+};
+
+export function getAgentConfig(agentId: string): AgentConfig {
+  const id = AGENT_IDS.includes(agentId as AgentId)
+    ? (agentId as AgentId)
+    : AGENT_ID_REVISOR_DEFESAS;
+  return AGENT_CONFIGS[id];
+}
+
+/** Map opcional de overrides por agentId (instruções/label da BD, admin). */
+export type BuiltInAgentOverridesMap = Record<
+  string,
+  { instructions: string | null; label: string | null }
+>;
+
+/** Devolve a config do agente built-in, aplicando overrides da BD se existirem. */
+export function getAgentConfigWithOverrides(
+  agentId: string,
+  overridesMap?: BuiltInAgentOverridesMap | null
+): AgentConfig {
+  const base = getAgentConfig(agentId);
+  const override = overridesMap?.[agentId];
+  if (!override) {
+    return base;
+  }
+  return {
+    ...base,
+    ...(override.instructions != null && override.instructions !== ""
+      ? { instructions: override.instructions }
+      : {}),
+    ...(override.label != null && override.label !== ""
+      ? { label: override.label }
+      : {}),
+  };
+}
+
+/** Configuração resolvida para um agente personalizado (CustomAgent da BD). */
+export function getAgentConfigForCustomAgent(custom: {
+  id: string;
+  name: string;
+  instructions: string;
+  baseAgentId: string | null;
+}): AgentConfig {
+  const useRevisorDefesaTools = custom.baseAgentId === AGENT_ID_REVISOR_DEFESAS;
+  const baseConfig =
+    custom.baseAgentId != null && custom.baseAgentId !== ""
+      ? AGENT_CONFIGS[custom.baseAgentId as AgentId]
+      : undefined;
+  const useRedatorContestacaoTool =
+    custom.baseAgentId === AGENT_ID_REDATOR_CONTESTACAO;
+  return {
+    id: custom.id,
+    label: custom.name,
+    instructions: custom.instructions,
+    useRevisorDefesaTools,
+    useRedatorContestacaoTool: useRedatorContestacaoTool ?? false,
+    allowedModelIds: baseConfig?.allowedModelIds,
+  };
+}

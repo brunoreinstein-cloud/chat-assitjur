@@ -95,12 +95,16 @@ async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const cookieStore = await cookies();
   const chatModelFromCookie = cookieStore.get("chat-model");
 
+  const initialAgentId =
+    chat.agentId && chat.agentId.length > 0 ? chat.agentId : undefined;
+
   if (!chatModelFromCookie) {
     return (
       <>
         <Chat
           autoResume={true}
           id={chat.id}
+          initialAgentId={initialAgentId}
           initialChatModel={DEFAULT_CHAT_MODEL}
           initialMessages={uiMessages}
           initialVisibilityType={chat.visibility}
@@ -116,6 +120,7 @@ async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
       <Chat
         autoResume={true}
         id={chat.id}
+        initialAgentId={initialAgentId}
         initialChatModel={chatModelFromCookie.value}
         initialMessages={uiMessages}
         initialVisibilityType={chat.visibility}

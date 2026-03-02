@@ -10,11 +10,16 @@ const iconsByType: Record<"success" | "error", ReactNode> = {
   error: <WarningIcon />,
 };
 
-export function toast(props: Omit<ToastProps, "id">) {
+function toastFn(props: Omit<ToastProps, "id">) {
   return sonnerToast.custom((id) => (
     <Toast description={props.description} id={id} type={props.type} />
   ));
 }
+
+export const toast = Object.assign(toastFn, {
+  success: (description: string) => toastFn({ type: "success", description }),
+  error: (description: string) => toastFn({ type: "error", description }),
+});
 
 function Toast(props: ToastProps) {
   const { id, type, description } = props;

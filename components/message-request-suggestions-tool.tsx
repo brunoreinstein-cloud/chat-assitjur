@@ -20,7 +20,7 @@ interface RequestSuggestionsOutput {
 
 interface MessageRequestSuggestionsToolProps {
   toolCallId: string;
-  state: ToolUIPart["state"];
+  state?: ToolUIPart["state"];
   input: unknown;
   output: RequestSuggestionsOutput | undefined;
   isReadonly: boolean;

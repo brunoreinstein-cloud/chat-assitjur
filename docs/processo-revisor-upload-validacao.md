@@ -103,17 +103,17 @@ Detalhes de UX/UI e priorização estão em `docs/ux-ui-revisor-defesas.md`.
 
 ## 7. Velocidade do upload
 
-O tempo total de upload depende do tamanho do ficheiro, da rede e do processamento no servidor (extração de texto em PDF/DOC/DOCX). Seguem as otimizações aplicadas e dicas para o utilizador.
+O tempo total de upload depende do tamanho do ficheiro, da rede e do processamento no servidor (extração de texto em PDF/DOC/DOCX e **OCR automático** em JPEG/PNG). Seguem as otimizações aplicadas e dicas para o utilizador.
 
 ### O que já está otimizado
 
-- **Upload e extração em paralelo (ficheiros &lt; 4,5 MB):** No `POST /api/files/upload`, o envio do ficheiro para o storage (Supabase ou Vercel Blob) e a extração de texto (PDF/DOC/DOCX) correm em paralelo. O tempo total é o **máximo** dos dois, e não a soma, o que reduz a latência sentida especialmente em documentos grandes.
+- **Upload e extração em paralelo (ficheiros &lt; 4,5 MB):** No `POST /api/files/upload`, o envio do ficheiro para o storage (Supabase ou Vercel Blob) e a extração de texto (PDF/DOC/DOCX) ou **OCR** (JPEG/PNG) correm em paralelo. O tempo total é o **máximo** dos dois, e não a soma, o que reduz a latência sentida especialmente em documentos grandes.
 - **Upload direto para ficheiros &gt; 4,5 MB:** O browser envia o ficheiro diretamente para o Vercel Blob (sem passar pelo body da função serverless), evitando o limite de 4,5 MB e reduzindo carga no servidor. O processamento (extração e persistência em Supabase) ocorre depois, em `/api/files/process`.
 - **Múltiplos ficheiros:** Vários anexos (ex.: colar várias imagens) são enviados em paralelo (`Promise.all`), não em sequência.
 - **PDFs de tamanho enorme (até 100 MB):** As rotas de upload e de processamento estão preparadas para PDFs muito grandes:
   - **Tempo de execução:** `maxDuration = 300` (5 min) nas rotas `/api/files/upload` e `/api/files/process`, para permitir extração de PDFs com muitas páginas ou OCR (na Vercel Pro o limite pode ser até 800 s).
   - **Descarregamento do Blob:** O fetch ao Vercel Blob em `/api/files/process` usa um timeout de 3 minutos (`BLOB_FETCH_TIMEOUT_MS`), para que ficheiros grandes não falhem por timeout durante a transferência.
-  - **OCR (PDFs digitalizados):** Até 50 páginas são processadas por OCR (antes 15); o texto extraído é truncado a ~600k caracteres para manter a resposta utilizável.
+  - **OCR (PDFs digitalizados e imagens):** PDFs sem camada de texto: até 50 páginas são processadas por OCR; **imagens JPEG/PNG** (documentos escaneados) são sempre processadas por OCR (Tesseract, português + inglês). O texto fica pesquisável e editável; é truncado a ~600k caracteres por documento.
   - **Texto extraído:** Limite de caracteres aumentado para ~600k por documento (PI ou Contestação), suficiente para peças muito longas.
   - **Requisito:** Para PDFs &gt; 4,5 MB é obrigatório ter `BLOB_READ_WRITE_TOKEN` configurado (upload direto). O tamanho máximo aceite é 100 MB.
 

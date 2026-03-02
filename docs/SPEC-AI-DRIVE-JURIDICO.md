@@ -2,9 +2,9 @@
 
 Especificação completa de produto e sistema para uma plataforma de **inteligência de documentos com IA** voltada a advogados e equipas jurídicas — inspirada em conceitos de document intelligence (ex.: [AI Drive](https://myaidrive.com/pt-BR)), adaptada ao contexto legal brasileiro e à stack do projeto (Revisor de Defesas).
 
-**Versão:** 1.0  
-**Data:** 2025-02  
-**Estado:** Especificação de referência (não contrato de implementação).
+**Versão:** 1.1  
+**Data:** 2026-03  
+**Estado:** Especificação de referência (não contrato de implementação). Checklist § 5–6 e § 7.3 alinhados ao estado atual (RAG, multi-agente, validação, OCR, política de dados, etc.).
 
 ---
 
@@ -59,7 +59,7 @@ Especificação completa de produto e sistema para uma plataforma de **inteligê
 - Instrução de testemunha ou perguntas capciosas (art. 342 CP).
 - Integração com sistemas processuais (PJe, e-SAJ) além de upload manual.
 - Multi-inquilino empresarial (RBAC, quotas por escritório) — pode ser v2.
-- Agentes adicionais (contratos, due diligence) — especificados mas implementação em fases.
+- Agente Análise de contratos já implementado; due diligence e outros — em fases futuras.
 
 ---
 
@@ -92,11 +92,11 @@ Especificação completa de produto e sistema para uma plataforma de **inteligê
 - **Saídas:** Doc 1 — Avaliação da defesa (parecer executivo); Doc 2 — Roteiro Advogado; Doc 3 — Roteiro Preposto.
 - **Regras:** Prescrição (bienal/quinquenal), mapeamento de pedidos, anti-alucinação, sinalização (🔴🟡🟢, ✅❌⚠️), siglas só internas.
 
-### 4.2 Análise de contratos (futuro)
+### 4.2 Análise de contratos (implementado)
 
 - **Entradas:** Um ou mais contratos (PDF/DOCX); perguntas em linguagem natural.
 - **Saídas:** Resumos, cláusulas relevantes, extração de termos (prazos, valores, rescisão), comparação entre contratos (quando múltiplos).
-- **Agente:** Especializado em identificar tipo de contrato, partes, obrigações, riscos e prazos; sem juízo de valor económico.
+- **Agente:** `lib/ai/agent-analise-contratos.ts`; selector no header do chat ("Análise de contratos"); especializado em identificar tipo de contrato, partes, obrigações, riscos e prazos; sem juízo de valor económico.
 
 ### 4.3 Due diligence (futuro)
 
@@ -120,7 +120,7 @@ Especificação completa de produto e sistema para uma plataforma de **inteligê
 | **Upload multi-formato** | PDF, DOC, DOCX, JPEG, PNG; suporte a arrastar-e-largar e seletor de ficheiros. | ✅ Já existe |
 | **Extração de texto** | Extrair texto de PDF/DOC/DOCX no backend (ou no cliente) e enviar como parte `document` no chat. | ✅ Já existe |
 | **Tipagem de peça** | Utilizador pode marcar cada documento como "Petição Inicial" ou "Contestação"; backend normaliza para o agente. | ✅ Já existe |
-| **OCR para escaneados** | Quando o PDF é imagem ou o texto extraído está vazio, acionar pipeline de OCR e usar o texto resultante. | 🔶 Desejável v1 |
+| **OCR para escaneados** | Quando o PDF é imagem ou o texto extraído está vazio, acionar pipeline de OCR e usar o texto resultante. | ✅ Já existe |
 | **Metadados automáticos** | IA ou heurísticas para sugerir tipo de peça, número de páginas, partes (reclamante/reclamado); exibir na UI. | 🔶 Desejável v1 |
 
 ### 5.2 Validação e fluxo
@@ -128,9 +128,9 @@ Especificação completa de produto e sistema para uma plataforma de **inteligê
 | Capacidade | Descrição | Prioridade v1 |
 |------------|-----------|----------------|
 | **GATE-1 no agente** | Instruções do Revisor exigem PI + Contestação; se faltar, o agente para e pede. | ✅ Já existe |
-| **Validação pré-envio** | No frontend (e/ou em `/api/files/process`): verificar existência de pelo menos um doc tipado como PI e um como Contestação antes de permitir "Iniciar revisão" ou enviar. | 🔶 Especificado |
-| **Checklist “Antes de executar”** | UI (wizard ou painel) com lista: PI anexada, Contestação anexada, opcionais, @bancodetese. | 🔶 Especificado |
-| **GATE 0.5 e confirmação** | Agente exibe resumo delimitado (`--- GATE_0.5_RESUMO ---` … `--- /GATE_0.5_RESUMO ---`); cliente pode mostrar botões CONFIRMAR / CORRIGIR. | ✅ Já existe (lógica); UI de botões pode ser reforçada |
+| **Validação pré-envio** | No frontend (e/ou em `/api/files/process`): verificar existência de pelo menos um doc tipado como PI e um como Contestação antes de permitir "Iniciar revisão" ou enviar. | ✅ Já existe |
+| **Checklist “Antes de executar”** | UI (wizard ou painel) com lista: PI anexada, Contestação anexada, opcionais, @bancodetese. | ✅ Já existe |
+| **GATE 0.5 e confirmação** | Agente exibe resumo delimitado (`--- GATE_0.5_RESUMO ---` … `--- /GATE_0.5_RESUMO ---`); cliente mostra botões CONFIRMAR / CORRIGIR e banner de etapa (FASE A / FASE B). | ✅ Já existe |
 
 ### 5.3 Chat e agentes
 
@@ -139,8 +139,8 @@ Especificação completa de produto e sistema para uma plataforma de **inteligê
 | **Chat em streaming** | POST `/api/chat` com `message` ou `messages`, `selectedChatModel`, `knowledgeDocumentIds`, `agentInstructions` opcional. | ✅ Já existe |
 | **Agente padrão** | Revisor de Defesas (instruções em `lib/ai/agent-revisor-defesas.ts`); aplicado quando `agentInstructions` não é enviado. | ✅ Já existe |
 | **Instruções customizadas** | `agentInstructions` (até 4000 caracteres) para sobrescrever/complementar o agente (ex.: outro domínio). | ✅ Já existe |
-| **Base de conhecimento** | `knowledgeDocumentIds` (até 20); servidor busca documentos e injeta no system prompt em "Base de conhecimento". | ✅ Já existe |
-| **Multi-agente (escolha na UI)** | Selector "Revisor de Defesas" / "Análise de contratos" (futuro); mapeia para conjunto de instruções + tools. | 🔶 Desejável (após 2.º agente) |
+| **Base de conhecimento** | `knowledgeDocumentIds` (até 50); servidor busca documentos e injeta no system prompt em "Base de conhecimento". | ✅ Já existe |
+| **Multi-agente (escolha na UI)** | Selector "Revisor de Defesas" / "Análise de contratos" no header; mapeia para conjunto de instruções + tools via `agentId` no body do chat. | ✅ Já existe |
 | **Multi-modelo** | Utilizador escolhe modelo (ex.: melhor para análise vs. escrita); enviado em `selectedChatModel`. | ✅ Já existe (selector de modelo) |
 
 ### 5.4 RAG e base de conhecimento
@@ -148,8 +148,8 @@ Especificação completa de produto e sistema para uma plataforma de **inteligê
 | Capacidade | Descrição | Prioridade v1 |
 |------------|-----------|----------------|
 | **Injeção direta** | Conteúdo completo dos documentos selecionados concatenado no prompt. | ✅ Já existe |
-| **RAG (embeddings)** | Chunking dos `KnowledgeDocument`; embeddings; busca por similaridade à pergunta; injetar só trechos relevantes no prompt. | 🔶 Especificado (ver `lib/ai/knowledge-base.md`) |
-| **Limite de contexto** | Evitar estourar contexto/custo; RAG ou sumarização quando há muitos documentos longos. | 🔶 Com RAG |
+| **RAG (embeddings)** | Chunking dos `KnowledgeDocument`; embeddings; busca por similaridade à pergunta; injetar só trechos relevantes no prompt. | ✅ Já existe |
+| **Limite de contexto** | Evitar estourar contexto/custo; RAG ou sumarização quando há muitos documentos longos. | ✅ Já existe (RAG com fallback para injeção direta) |
 
 ### 5.5 Saídas e artefactos
 
@@ -166,7 +166,7 @@ Especificação completa de produto e sistema para uma plataforma de **inteligê
 |------------|-----------|----------------|
 | **Isolamento por utilizador** | Chats, mensagens, documentos, base de conhecimento filtrados por `userId`. | ✅ Já existe |
 | **Auth** | Auth.js (NextAuth) v5; sessão obrigatória para chat e conhecimento. | ✅ Já existe |
-| **Dados não usados para treino** | Política explícita e, quando aplicável, uso de APIs com opt-out de treino (ex.: OpenAI, Anthropic). | 🔶 Documentar e declarar na UI |
+| **Dados não usados para treino** | Política explícita e, quando aplicável, uso de APIs com opt-out de treino (ex.: OpenAI, Anthropic). | ✅ Já existe (texto em `lib/ai/data-policy.ts`; link "Como usamos os seus dados" no footer do chat) |
 | **Criptografia** | TLS em trânsito; dados em repouso conforme infra (Vercel, Supabase). | ✅ Infra |
 | **LGPD** | Tratamento de dados pessoais e sigilo profissional; documentação e consentimento onde aplicável. | 🔶 Especificado |
 
@@ -176,21 +176,22 @@ Especificação completa de produto e sistema para uma plataforma de **inteligê
 
 ### 6.1 Upload e documentos
 
-- [ ] **Upload por arrastar-e-largar e seletor** — múltiplos ficheiros por mensagem.
+- [x] **Upload por arrastar-e-largar e seletor** — múltiplos ficheiros por mensagem.
 - [x] **Formatos:** PDF, DOC, DOCX, JPEG, PNG.
 - [x] **Extração de texto** no backend (ou cliente) e envio como parte `document` com `documentType` opcional (`pi` | `contestacao`).
-- [ ] **OCR** quando texto extraído estiver vazio ou for PDF escaneado (pipeline opcional).
+- [x] **OCR** quando texto extraído estiver vazio ou for PDF escaneado (pipeline em `/api/files/upload` e processamento; até 50 páginas).
 - [ ] **Sugestão automática de tipo** (PI/Contestação) com base em conteúdo ou metadados.
-- [ ] **Validação pré-envio:** bloquear ou avisar se não houver pelo menos uma PI e uma Contestação quando o agente for Revisor de Defesas.
+- [x] **Validação pré-envio:** bloquear ou avisar se não houver pelo menos uma PI e uma Contestação quando o agente for Revisor de Defesas.
 
 ### 6.2 Chat e conversa
 
 - [x] **Streaming** de respostas; histórico de mensagens; suporte a partes `text`, `file`, `document`.
+- [x] **Selector de agente** no header (Revisor de Defesas | Análise de contratos); enviado em `agentId`.
 - [x] **Selector de modelo** (`selectedChatModel`).
 - [x] **Instruções do agente** opcionais (`agentInstructions`).
-- [x] **Base de conhecimento** no header (seleção de até 20 documentos); envio em `knowledgeDocumentIds`.
+- [x] **Base de conhecimento** no header (seleção de até 50 documentos); envio em `knowledgeDocumentIds`.
 - [x] **Seletor de prompts** no chat (menu "Sugestões" com prompts contextuais: explicar fluxo, auditar contestação, roteiros, @bancodetese).
-- [ ] **Indicador de etapa** (FASE A / FASE B) e botões CONFIRMAR / CORRIGIR quando o cliente detectar GATE 0.5.
+- [x] **Indicador de etapa** (FASE A / FASE B) e botões CONFIRMAR / CORRIGIR quando o cliente detectar GATE 0.5.
 
 ### 6.3 Revisor de Defesas (workflow)
 
@@ -200,20 +201,20 @@ Especificação completa de produto e sistema para uma plataforma de **inteligê
 - [x] **FASE B:** Geração dos 3 DOCX via `createDocument`.
 - [x] **ENTREGA:** Referências aos documentos e ressalvas.
 - [x] **Regras:** Prescrição, mapeamento de pedidos, sinalização, siglas, formatação conforme modelos.
-- [ ] **Checklist “Antes de executar”** na UI.
+- [x] **Checklist “Antes de executar”** na UI.
 
 ### 6.4 Base de conhecimento e RAG
 
 - [x] **CRUD** de `KnowledgeDocument` (listar, criar, apagar); GET por ids para o chat.
 - [x] **Injeção no system prompt** como "Base de conhecimento".
-- [ ] **RAG:** Chunking, embeddings, busca por similaridade; injetar só trechos relevantes (ver `lib/ai/knowledge-base.md`).
+- [x] **RAG:** Chunking, embeddings, busca por similaridade; injetar só trechos relevantes (ver `lib/ai/knowledge-base.md`). Fallback para injeção direta quando não há chunks.
 
 ### 6.5 Segurança e política
 
 - [x] **Autenticação** obrigatória para chat e conhecimento.
 - [x] **Rate limit** por tipo de utilizador (guest, regular).
-- [ ] **Política “dados não usados para treino”** publicada e referida na UI.
-- [ ] **Aviso de revisão humana** em todas as entregas relevantes (Doc 1 já tem).
+- [x] **Política “dados não usados para treino”** publicada e referida na UI (link no footer do chat; `DataPolicyLink`).
+- [x] **Aviso de revisão humana** em todas as entregas relevantes (Doc 1, Doc 2 e Doc 3).
 
 ---
 
@@ -235,8 +236,8 @@ Especificação completa de produto e sistema para uma plataforma de **inteligê
 
 ```
 Cliente (useChat)
-  → POST /api/chat { id, message, selectedChatModel, knowledgeDocumentIds?, agentInstructions? }
-  → route.ts: auth, rate limit, getKnowledgeDocumentsByIds, systemPrompt(), streamText(model, system, messages, tools)
+  → POST /api/chat { id, message, selectedChatModel, knowledgeDocumentIds?, agentInstructions?, agentId? }
+  → route.ts: auth, rate limit, getAgentInstructions(agentId), getKnowledgeDocumentsByIds (ou RAG), systemPrompt(), streamText(model, system, messages, tools)
   → Resposta em streaming; tool calls (createDocument, updateDocument, etc.) conforme instruções do agente
 ```
 
@@ -244,20 +245,23 @@ Cliente (useChat)
 
 | Componente | Ficheiro / local |
 |------------|-------------------|
+| Registry de agentes | `lib/ai/agents-registry.ts` → mapeia `agentId` a instruções e tools |
 | Instruções do Revisor | `lib/ai/agent-revisor-defesas.ts` → `AGENTE_REVISOR_DEFESAS_INSTRUCTIONS` |
+| Instruções Análise de contratos | `lib/ai/agent-analise-contratos.ts` → agente segundo domínio |
 | System prompt | `lib/ai/prompts.ts` → `systemPrompt()` |
 | Handler do chat | `app/(chat)/api/chat/route.ts` |
-| Schema do body | `app/(chat)/api/chat/schema.ts` |
+| Schema do body | `app/(chat)/api/chat/schema.ts` (inclui `agentId`) |
 | Tools | `lib/ai/tools/` (createDocument, updateDocument, requestSuggestions, getWeather) |
 | Base de conhecimento (doc) | `lib/ai/knowledge-base.md` |
+| RAG (chunks e embeddings) | Tabela `KnowledgeChunk`; chunking e busca no chat quando há documentos na base |
 | Modelos dos 3 DOCX | `lib/ai/modelos/` (MODELO_PARECER_EXECUTIVO, MODELO_ROTEIRO_*, etc.) |
 
-### 7.4 Extensões para “AI Drive Jurídico”
+### 7.4 Extensões para “AI Drive Jurídico” (implementadas)
 
-- **Validação pré-envio:** Endpoint ou lógica em `/api/files/process` (ou no cliente) que, antes de enviar a primeira mensagem do Revisor, verifica se existe pelo menos um `document` com `documentType: "pi"` e um com `documentType: "contestacao"`.
-- **OCR:** Serviço ou função (ex.: Tesseract, ou API de OCR em nuvem) chamado quando a extração de texto de um PDF/imagem retorna vazio ou muito curto; resultado armazenado ou devolvido como texto da parte `document`.
-- **RAG:** Tabela (ex.: `knowledge_chunk`) com `documentId`, `chunkIndex`, `text`, `embedding`; no chat, embedding da pergunta → busca top-k → montar `knowledgeContext` com só esses trechos.
-- **Multi-agente:** Registry de agentes (id → instruções + tools); selector na UI envia `agentId` ou `agentInstructions` correspondente.
+- **Validação pré-envio:** Frontend (`validateRevisorPiContestacao`) e backend em `POST /api/chat` quando agente Revisor e mensagem tem partes `document`; verifica pelo menos um doc `pi` e um `contestacao`.
+- **OCR:** Pipeline em `/api/files/upload` e processamento (ex.: Tesseract); até 50 páginas; resultado usado como texto da parte `document`.
+- **RAG:** Tabela `KnowledgeChunk` com pgvector; chunking e embeddings no `POST /api/knowledge`; no chat, embedding da pergunta → busca top-k → montar contexto; fallback para injeção direta.
+- **Multi-agente:** Registry em `lib/ai/agents-registry.ts`; selector no header (Revisor de Defesas | Análise de contratos); body do chat envia `agentId`.
 
 ---
 

@@ -2,6 +2,7 @@ import type { InferUITool, UIMessage, UIMessagePart } from "ai";
 import { z } from "zod";
 import type { ArtifactKind } from "@/components/artifact";
 import type { createDocument } from "./ai/tools/create-document";
+import type { createRedatorContestacaoDocument } from "./ai/tools/create-redator-contestacao-document";
 import type { createRevisorDefesaDocuments } from "./ai/tools/create-revisor-defesa-documents";
 import type { getWeather } from "./ai/tools/get-weather";
 import type { requestSuggestions } from "./ai/tools/request-suggestions";
@@ -24,6 +25,9 @@ type createDocumentTool = InferUITool<ReturnType<typeof createDocument>>;
 type createRevisorDefesaDocumentsTool = InferUITool<
   ReturnType<typeof createRevisorDefesaDocuments>
 >;
+type createRedatorContestacaoDocumentTool = InferUITool<
+  ReturnType<typeof createRedatorContestacaoDocument>
+>;
 type updateDocumentTool = InferUITool<ReturnType<typeof updateDocument>>;
 type requestSuggestionsTool = InferUITool<
   ReturnType<typeof requestSuggestions>
@@ -33,6 +37,7 @@ export interface ChatTools {
   getWeather: weatherTool;
   createDocument: createDocumentTool;
   createRevisorDefesaDocuments: createRevisorDefesaDocumentsTool;
+  createRedatorContestacaoDocument: createRedatorContestacaoDocumentTool;
   updateDocument: updateDocumentTool;
   requestSuggestions: requestSuggestionsTool;
   /** Index signature required by AI SDK UITools */
@@ -40,6 +45,7 @@ export interface ChatTools {
     | weatherTool
     | createDocumentTool
     | createRevisorDefesaDocumentsTool
+    | createRedatorContestacaoDocumentTool
     | updateDocumentTool
     | requestSuggestionsTool;
 }
@@ -76,6 +82,8 @@ export interface Attachment {
   name: string;
   url: string;
   contentType: string;
+  /** Caminho no Storage (para "Guardar em Arquivos"); presente quando o upload devolve pathname */
+  pathname?: string;
   /** Texto extraído de PDF ou DOCX; presente quando o backend devolve extractedText */
   extractedText?: string;
   /** Tipo de documento para o Revisor: Petição Inicial ou Contestação */

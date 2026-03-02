@@ -50,6 +50,7 @@ scripts/           # db-ping, db-tables, supabase-env
 - `app/(chat)/api/chat/route.ts` — handler do POST do chat (streaming, system prompt, tools, knowledge).
 - `lib/ai/prompts.ts` — `systemPrompt()` e dicas de pedido.
 - `lib/ai/agent-revisor-defesas.ts` — instruções do Agente Revisor (export `AGENTE_REVISOR_DEFESAS_INSTRUCTIONS`).
+- `lib/ai/agent-redator-contestacao.ts` — instruções do Agente Redator de Contestações v4.0 (modo Modelo e modo @bancodetese).
 - `lib/ai/knowledge-base.md` — documentação da base de conhecimento e evolução RAG.
 - `lib/db/queries.ts` — funções como `getKnowledgeDocumentsByIds`, `getMessagesByChatId`, `saveChat`, etc.
 
@@ -89,10 +90,11 @@ Não hardcodar segredos; usar sempre variáveis de ambiente.
 
 ## Base de conhecimento
 
+- **Comum a todos os agentes:** Revisor de Defesas, Análise de contratos, Redator de Contestações, etc. Usar para @bancodetese (teses, precedentes) ou outros contextos (cláusulas, jurisprudência, etc.). O agente **Redator de Contestações** opera em modo Modelo (template) ou modo **@bancodetese** (montagem por teses do banco).
 - **Tabela:** `KnowledgeDocument` (id, userId, title, content, createdAt).
 - **APIs:** `GET/POST/DELETE /api/knowledge`; `GET /api/knowledge?ids=...` para buscar por ids.
 - **Chat:** o cliente pode enviar `knowledgeDocumentIds` no body do `POST /api/chat`. O servidor busca os documentos, concatena título e conteúdo e injeta no system prompt em "Base de conhecimento".
-- **UI:** botão "Base de conhecimento" no header do chat (máx. 20 documentos). Limitação atual: todo o conteúdo vai no prompt; para RAG/embeddings ver `lib/ai/knowledge-base.md`.
+- **UI:** botão "Base de conhecimento" no header do chat (máx. 50 documentos). Limitação atual: todo o conteúdo vai no prompt; para RAG/embeddings ver `lib/ai/knowledge-base.md`.
 
 ---
 
@@ -129,7 +131,7 @@ Deploy na Vercel: [docs/vercel-setup.md](docs/vercel-setup.md) (checklist, env, 
 
 ## Skills (skills.sh)
 
-O projeto tem **Agent Skills** instaladas em `.agents/skills/` (ecossistema [skills.sh](https://skills.sh)): Next.js, React, AI SDK, Supabase/Postgres, debugging, find-skills, skill-creator, web-design. Lista e categorias em [.agents/README.md](.agents/README.md); arquitetura lógica em [.agents/SKILLS_ARCHITECTURE.md](.agents/SKILLS_ARCHITECTURE.md). Relatório completo: [docs/SKILLS_REPORT.md](docs/SKILLS_REPORT.md).
+O projeto tem **Agent Skills** instaladas em `.agents/skills/` (ecossistema [skills.sh](https://skills.sh)): Next.js (best-practices, cache-components, upgrade), React, AI SDK, Supabase/Postgres, debugging, webapp-testing, find-skills, skill-creator, web-design, prompt-engineering-patterns, rag-implementation, revisor-defesas-context. Lista e categorias em [.agents/README.md](.agents/README.md); arquitetura lógica em [.agents/SKILLS_ARCHITECTURE.md](.agents/SKILLS_ARCHITECTURE.md). Relatório completo: [docs/SKILLS_REPORT.md](docs/SKILLS_REPORT.md).
 
 Comandos: `npx skills list` | `npx skills find [query]` | `npx skills update`.
 
@@ -139,6 +141,7 @@ Comandos: `npx skills list` | `npx skills find [query]` | `npx skills update`.
 
 - **[docs/PROJETO-REVISOR-DEFESAS.md](docs/PROJETO-REVISOR-DEFESAS.md)** — Documentação completa do Agente Revisor: o que é, stack, arquitetura do agente, fluxo (GATE-1 → FASE A → GATE 0.5 → FASE B), API, base de conhecimento, formato dos 3 DOCX, UX/UI, env e comandos.
 - **[docs/SPEC-AI-DRIVE-JURIDICO.md](docs/SPEC-AI-DRIVE-JURIDICO.md)** — Spec completa do produto "AI Drive Jurídico": visão, personas, domínios jurídicos, capacidades, arquitetura, segurança, UX, roadmap e métricas.
+- **[docs/AGENTES-IA-PERSONALIZADOS.md](docs/AGENTES-IA-PERSONALIZADOS.md)** — Agentes de IA personalizados: agentes pré-definidos (Revisor, Análise de contratos, Redator de Contestações), instruções customizadas e base de conhecimento; referência técnica e evolução futura.
 - **[docs/PLANO-PROXIMOS-PASSOS.md](docs/PLANO-PROXIMOS-PASSOS.md)** — Plano de próximos passos: tarefas imediatas (ex.: prebuild), curto prazo, índice do roadmap e onde a documentação descreve "próximos passos". Atualizar este ficheiro quando mudarem prioridades.
 - **[docs/OTIMIZACAO-CUSTO-TOKENS-LLM.md](docs/OTIMIZACAO-CUSTO-TOKENS-LLM.md)** — Revisão e otimização de custo de tokens e uso de LLM: onde se consome, limites atuais, checklist e ações recomendadas.
 

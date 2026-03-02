@@ -1,16 +1,61 @@
 "use client";
 
 import type { UseChatHelpers } from "@ai-sdk/react";
+import { CoinsIcon } from "lucide-react";
 import { useState } from "react";
+import useSWR from "swr";
 import { Button } from "@/components/ui/button";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage, ChatMessagePart } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn, fetcher } from "@/lib/utils";
+
+/** Gera uma key estável e única para uma parte de mensagem. Durante streaming o conteúdo
+ * da parte muda a cada chunk; usar hash do conteúdo faria a key mudar e o React remontar
+ * o componente (piscar). Por isso, para partes sem toolCallId usamos type+index estável. */
+function getMessagePartKey(
+  messageId: string,
+  part: ChatMessagePart,
+  index: number
+): string {
+  const withId = part as { toolCallId?: string };
+  if (typeof withId.toolCallId === "string" && withId.toolCallId) {
+    return `${messageId}-${withId.toolCallId}`;
+  }
+  return `${messageId}-part-${part.type}-${index}`;
+}
+
 import { useDataStream } from "./data-stream-provider";
 import { SparklesIcon } from "./icons";
 import { MessageActions } from "./message-actions";
 import { MessagePartRenderer } from "./message-part-renderer";
 import { PreviewAttachment } from "./preview-attachment";
+
+interface CreditsResponse {
+  balance: number;
+  recentUsage: Array<{
+    promptTokens: number;
+    completionTokens: number;
+    creditsConsumed: number;
+  }>;
+}
+
+function LastMessageUsage() {
+  const { data } = useSWR<CreditsResponse>("/api/credits", fetcher);
+  const last = data?.recentUsage?.[0];
+  if (!last) {
+    return null;
+  }
+  const totalTokens = last.promptTokens + last.completionTokens;
+  return (
+    <p className="mt-2 flex items-center gap-1.5 text-muted-foreground text-xs">
+      <CoinsIcon aria-hidden className="size-3.5 shrink-0" />
+      <span>
+        Esta resposta: {last.creditsConsumed} créditos (
+        {totalTokens.toLocaleString("pt-PT")} tokens)
+      </span>
+    </p>
+  );
+}
 
 const PurePreviewMessage = ({
   addToolApprovalResponse,
@@ -23,6 +68,7 @@ const PurePreviewMessage = ({
   isReadonly,
   requiresScrollPadding: _requiresScrollPadding,
   gate05ConfirmInline = false,
+  showLastUsage = false,
   onConfirmGate05,
   onCorrigirGate05,
 }: {
@@ -36,6 +82,7 @@ const PurePreviewMessage = ({
   isReadonly: boolean;
   requiresScrollPadding: boolean;
   gate05ConfirmInline?: boolean;
+  showLastUsage?: boolean;
   onConfirmGate05?: () => void;
   onCorrigirGate05?: () => void;
 }) => {
@@ -108,7 +155,7 @@ const PurePreviewMessage = ({
                 index={index}
                 isLoading={isLoading}
                 isReadonly={isReadonly}
-                key={`message-${message.id}-part-${index}`}
+                key={getMessagePartKey(message.id, part, index)}
                 message={message}
                 messageId={message.id}
                 messageRole={message.role}
@@ -150,6 +197,7 @@ const PurePreviewMessage = ({
             </section>
           )}
 
+          {showLastUsage && <LastMessageUsage />}
           {!isReadonly && (
             <MessageActions
               chatId={chatId}

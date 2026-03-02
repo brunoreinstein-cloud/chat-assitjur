@@ -4,6 +4,7 @@ import type { UseChatHelpers } from "@ai-sdk/react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
 import type { ChatMessage } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
+import { DocumentToolResult } from "./document";
 import { MessageContent } from "./elements/message";
 import { Response } from "./elements/response";
 import { MessageDocumentTool } from "./message-document-tool";
@@ -51,7 +52,8 @@ function renderReasoningPart(
   ctx: RenderContext
 ): ReactNode {
   const hasContent = (part.text?.trim().length ?? 0) > 0;
-  const isStreaming = "state" in part && part.state === "streaming";
+  const isStreaming =
+    part != null && "state" in part && part?.state === "streaming";
   if (!(hasContent || isStreaming)) {
     return null;
   }
@@ -160,6 +162,41 @@ function renderToolPart(
       />
     );
   }
+  if (type === "tool-createRedatorContestacaoDocument") {
+    const output = part.output as
+      | { id?: string; title?: string; error?: unknown }
+      | undefined;
+    if (output && typeof output === "object" && "error" in output) {
+      return (
+        <div
+          className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-500 dark:bg-red-950/50"
+          key={part.toolCallId}
+        >
+          Erro ao criar minuta: {String(output.error)}
+        </div>
+      );
+    }
+    const id = output?.id;
+    const title = output?.title ?? "Minuta de contestação";
+    if (!id) {
+      return (
+        <div
+          className="rounded-xl border bg-muted/50 px-3 py-2 text-muted-foreground text-sm"
+          key={part.toolCallId}
+        >
+          A criar minuta de contestação…
+        </div>
+      );
+    }
+    return (
+      <DocumentToolResult
+        isReadonly={ctx.isReadonly}
+        key={part.toolCallId}
+        result={{ id, kind: "text", title }}
+        type="create"
+      />
+    );
+  }
   if (type === "tool-requestSuggestions") {
     return (
       <MessageRequestSuggestionsTool
@@ -167,7 +204,7 @@ function renderToolPart(
         isReadonly={ctx.isReadonly}
         key={part.toolCallId}
         output={part.output}
-        state={part.state}
+        state={part != null && "state" in part ? part?.state : undefined}
         toolCallId={part.toolCallId}
       />
     );
@@ -192,6 +229,7 @@ function renderPartByType(
     type === "tool-createDocument" ||
     type === "tool-updateDocument" ||
     type === "tool-createRevisorDefesaDocuments" ||
+    type === "tool-createRedatorContestacaoDocument" ||
     type === "tool-requestSuggestions"
   ) {
     return renderToolPart(part, ctx);

@@ -28,6 +28,9 @@ export function MessageWeatherTool({
   part,
   addToolApprovalResponse,
 }: Readonly<MessageWeatherToolProps>) {
+  if (!part) {
+    return null;
+  }
   const { toolCallId, state } = part;
   const approvalId = part.approval?.id;
   const isDenied =

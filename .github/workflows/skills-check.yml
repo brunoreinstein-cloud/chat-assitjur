@@ -1,5 +1,6 @@
 # Verifica se há atualizações disponíveis para as Agent Skills (skills.sh).
-# Opcional: falha o job se existirem atualizações (remover continue-on-error).
+# Ver docs/SKILLS_REPORT.md § Próximas otimizações.
+# Para falhar o job quando existirem atualizações: remover continue-on-error do step "Check for skill updates".
 name: Skills check
 on:
   push:

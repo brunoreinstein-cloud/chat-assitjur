@@ -27,10 +27,23 @@ export function useAutoResume({
 
     const mostRecentMessage = initialMessages.at(-1);
 
-    if (mostRecentMessage?.role === "user") {
-      resumeStream();
+    if (mostRecentMessage?.role !== "user") {
+      return;
     }
 
+    // Defer so useChat internal state (request/stream refs) is ready; avoids
+    // "Cannot read properties of undefined (reading 'state')" in makeRequest/resumeStream.
+    const id = setTimeout(() => {
+      try {
+        Promise.resolve(resumeStream()).catch(() => {
+          // No stream to resume or SDK not ready; ignore.
+        });
+      } catch {
+        // Sync throw (e.g. undefined.state); ignore.
+      }
+    }, 0);
+
+    return () => clearTimeout(id);
     // we intentionally run this once
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoResume, initialMessages.at, resumeStream]);

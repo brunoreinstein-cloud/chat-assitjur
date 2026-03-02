@@ -9,8 +9,11 @@ import {
   gt,
   gte,
   inArray,
+  isNull,
   lt,
+  or,
   type SQL,
+  sql,
 } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
@@ -19,17 +22,24 @@ import type { VisibilityType } from "@/components/visibility-selector";
 import { ChatbotError } from "../errors";
 import { generateUUID, isUUID } from "../utils";
 import {
+  builtInAgentOverride,
   type Chat,
   chat,
+  customAgent,
   type DBMessage,
   document,
+  knowledgeChunk,
   knowledgeDocument,
+  knowledgeFolder,
+  llmUsageRecord,
   message,
   type Suggestion,
   stream,
   suggestion,
   type User,
   user,
+  userCreditBalance,
+  userFile,
   vote,
 } from "./schema";
 import { generateHashedPassword } from "./utils";
@@ -115,16 +125,20 @@ export async function createGuestUser() {
   }
 }
 
+const DEFAULT_CHAT_AGENT_ID = "revisor-defesas";
+
 export async function saveChat({
   id,
   userId,
   title,
   visibility,
+  agentId = DEFAULT_CHAT_AGENT_ID,
 }: {
   id: string;
   userId: string;
   title: string;
   visibility: VisibilityType;
+  agentId?: string;
 }) {
   try {
     return await getDb().insert(chat).values({
@@ -133,6 +147,7 @@ export async function saveChat({
       userId,
       title,
       visibility,
+      agentId: agentId ?? DEFAULT_CHAT_AGENT_ID,
     });
   } catch (error: unknown) {
     const err = error as { code?: string; constraint_name?: string };
@@ -621,6 +636,37 @@ export async function updateChatTitleById({
   }
 }
 
+export async function updateChatActiveStreamId({
+  chatId,
+  activeStreamId,
+}: {
+  chatId: string;
+  activeStreamId: string | null;
+}) {
+  try {
+    await getDb()
+      .update(chat)
+      .set({ activeStreamId })
+      .where(eq(chat.id, chatId));
+  } catch (error) {
+    console.warn("Failed to update activeStreamId for chat", chatId, error);
+  }
+}
+
+export async function updateChatAgentId({
+  chatId,
+  agentId,
+}: {
+  chatId: string;
+  agentId: string;
+}) {
+  try {
+    await getDb().update(chat).set({ agentId }).where(eq(chat.id, chatId));
+  } catch (error) {
+    console.warn("Failed to update agentId for chat", chatId, error);
+  }
+}
+
 export async function getMessageCountByUserId({
   id,
   differenceInHours,
@@ -694,17 +740,28 @@ export async function getStreamIdsByChatId({ chatId }: { chatId: string }) {
 
 export async function createKnowledgeDocument({
   userId,
+  folderId,
   title,
   content,
+  id,
 }: {
   userId: string;
+  folderId?: string | null;
   title: string;
   content: string;
+  /** ID fixo (ex.: documento sistema do Redator); omitir para gerar aleatório. */
+  id?: string;
 }) {
   try {
     const [created] = await getDb()
       .insert(knowledgeDocument)
-      .values({ userId, title, content })
+      .values({
+        ...(id ? { id } : {}),
+        userId,
+        folderId: folderId ?? null,
+        title,
+        content,
+      })
       .returning();
     return created;
   } catch (_error) {
@@ -717,19 +774,52 @@ export async function createKnowledgeDocument({
 
 export async function getKnowledgeDocumentsByUserId({
   userId,
+  folderId,
 }: {
   userId: string;
+  /** Se definido, filtra documentos desta pasta (null = raiz). */
+  folderId?: string | null;
+}) {
+  try {
+    const conditions = [eq(knowledgeDocument.userId, userId)];
+    if (folderId !== undefined) {
+      if (folderId === null) {
+        conditions.push(isNull(knowledgeDocument.folderId));
+      } else {
+        conditions.push(eq(knowledgeDocument.folderId, folderId));
+      }
+    }
+    return await getDb()
+      .select()
+      .from(knowledgeDocument)
+      .where(and(...conditions))
+      .orderBy(desc(knowledgeDocument.createdAt));
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get knowledge documents by user id"
+    );
+  }
+}
+
+export async function getKnowledgeDocumentsRecentByUserId({
+  userId,
+  limit = 8,
+}: {
+  userId: string;
+  limit?: number;
 }) {
   try {
     return await getDb()
       .select()
       .from(knowledgeDocument)
       .where(eq(knowledgeDocument.userId, userId))
-      .orderBy(desc(knowledgeDocument.createdAt));
+      .orderBy(desc(knowledgeDocument.createdAt))
+      .limit(Math.min(Math.max(1, limit), 50));
   } catch (_error) {
     throw new ChatbotError(
       "bad_request:database",
-      "Failed to get knowledge documents by user id"
+      "Failed to get recent knowledge documents"
     );
   }
 }
@@ -760,28 +850,80 @@ export async function getKnowledgeDocumentById({
 export async function getKnowledgeDocumentsByIds({
   ids,
   userId,
+  allowedUserIds,
 }: {
   ids: string[];
   userId: string;
+  /** Quando definido, permite incluir documentos destes userIds (ex.: documento sistema do Redator). */
+  allowedUserIds?: string[];
 }) {
   if (ids.length === 0) {
     return [];
   }
   try {
+    const userIdCondition =
+      allowedUserIds?.length
+        ? or(
+            eq(knowledgeDocument.userId, userId),
+            inArray(knowledgeDocument.userId, allowedUserIds)
+          )
+        : eq(knowledgeDocument.userId, userId);
     return await getDb()
       .select()
       .from(knowledgeDocument)
-      .where(
-        and(
-          inArray(knowledgeDocument.id, ids),
-          eq(knowledgeDocument.userId, userId)
-        )
-      )
+      .where(and(inArray(knowledgeDocument.id, ids), userIdCondition))
       .orderBy(asc(knowledgeDocument.title));
   } catch (_error) {
     throw new ChatbotError(
       "bad_request:database",
       "Failed to get knowledge documents by ids"
+    );
+  }
+}
+
+export async function updateKnowledgeDocumentById({
+  id,
+  userId,
+  folderId,
+  title,
+  content,
+}: {
+  id: string;
+  userId: string;
+  folderId?: string | null;
+  title?: string;
+  content?: string;
+}) {
+  try {
+    const updates: Partial<{
+      folderId: string | null;
+      title: string;
+      content: string;
+    }> = {};
+    if (folderId !== undefined) {
+      updates.folderId = folderId ?? null;
+    }
+    if (title !== undefined) {
+      updates.title = title;
+    }
+    if (content !== undefined) {
+      updates.content = content;
+    }
+    if (Object.keys(updates).length === 0) {
+      return (await getKnowledgeDocumentById({ id, userId })) ?? null;
+    }
+    const [updated] = await getDb()
+      .update(knowledgeDocument)
+      .set(updates)
+      .where(
+        and(eq(knowledgeDocument.id, id), eq(knowledgeDocument.userId, userId))
+      )
+      .returning();
+    return updated ?? null;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to update knowledge document"
     );
   }
 }
@@ -805,6 +947,724 @@ export async function deleteKnowledgeDocumentById({
     throw new ChatbotError(
       "bad_request:database",
       "Failed to delete knowledge document"
+    );
+  }
+}
+
+export async function createUserFile({
+  userId,
+  pathname,
+  url,
+  filename,
+  contentType,
+  extractedTextCache,
+}: {
+  userId: string;
+  pathname: string;
+  url: string;
+  filename: string;
+  contentType: string;
+  extractedTextCache?: string | null;
+}) {
+  try {
+    const [created] = await getDb()
+      .insert(userFile)
+      .values({
+        userId,
+        pathname,
+        url,
+        filename,
+        contentType,
+        extractedTextCache: extractedTextCache ?? null,
+      })
+      .returning();
+    return created;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to create user file"
+    );
+  }
+}
+
+export async function getUserFilesByUserId({ userId }: { userId: string }) {
+  try {
+    return await getDb()
+      .select()
+      .from(userFile)
+      .where(eq(userFile.userId, userId))
+      .orderBy(desc(userFile.createdAt));
+  } catch (_error) {
+    throw new ChatbotError("bad_request:database", "Failed to get user files");
+  }
+}
+
+export async function getUserFileById({
+  id,
+  userId,
+}: {
+  id: string;
+  userId: string;
+}) {
+  try {
+    const [row] = await getDb()
+      .select()
+      .from(userFile)
+      .where(and(eq(userFile.id, id), eq(userFile.userId, userId)));
+    return row ?? null;
+  } catch (_error) {
+    throw new ChatbotError("bad_request:database", "Failed to get user file");
+  }
+}
+
+export async function getUserFilesByIds({
+  ids,
+  userId,
+}: {
+  ids: string[];
+  userId: string;
+}) {
+  if (ids.length === 0) {
+    return [];
+  }
+  try {
+    return await getDb()
+      .select()
+      .from(userFile)
+      .where(and(eq(userFile.userId, userId), inArray(userFile.id, ids)));
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get user files by ids"
+    );
+  }
+}
+
+export async function deleteUserFileById({
+  id,
+  userId,
+}: {
+  id: string;
+  userId: string;
+}) {
+  try {
+    const [deleted] = await getDb()
+      .delete(userFile)
+      .where(and(eq(userFile.id, id), eq(userFile.userId, userId)))
+      .returning();
+    return deleted ?? null;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to delete user file"
+    );
+  }
+}
+
+export async function getKnowledgeFoldersByUserId({
+  userId,
+}: {
+  userId: string;
+}) {
+  try {
+    return await getDb()
+      .select()
+      .from(knowledgeFolder)
+      .where(eq(knowledgeFolder.userId, userId))
+      .orderBy(asc(knowledgeFolder.name));
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get knowledge folders by user id"
+    );
+  }
+}
+
+export async function createKnowledgeFolder({
+  userId,
+  parentId,
+  name,
+}: {
+  userId: string;
+  parentId?: string | null;
+  name: string;
+}) {
+  try {
+    const [created] = await getDb()
+      .insert(knowledgeFolder)
+      .values({ userId, parentId: parentId ?? null, name })
+      .returning();
+    return created;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to create knowledge folder"
+    );
+  }
+}
+
+export async function updateKnowledgeFolderById({
+  id,
+  userId,
+  parentId,
+  name,
+}: {
+  id: string;
+  userId: string;
+  parentId?: string | null;
+  name?: string;
+}) {
+  try {
+    const updates: Partial<{
+      parentId: string | null;
+      name: string;
+    }> = {};
+    if (parentId !== undefined) {
+      updates.parentId = parentId ?? null;
+    }
+    if (name !== undefined) {
+      updates.name = name;
+    }
+    if (Object.keys(updates).length === 0) {
+      const [folder] = await getDb()
+        .select()
+        .from(knowledgeFolder)
+        .where(
+          and(eq(knowledgeFolder.id, id), eq(knowledgeFolder.userId, userId))
+        );
+      return folder ?? null;
+    }
+    const [updated] = await getDb()
+      .update(knowledgeFolder)
+      .set(updates)
+      .where(
+        and(eq(knowledgeFolder.id, id), eq(knowledgeFolder.userId, userId))
+      )
+      .returning();
+    return updated ?? null;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to update knowledge folder"
+    );
+  }
+}
+
+export async function deleteKnowledgeFolderById({
+  id,
+  userId,
+}: {
+  id: string;
+  userId: string;
+}) {
+  try {
+    await getDb()
+      .update(knowledgeDocument)
+      .set({ folderId: null })
+      .where(eq(knowledgeDocument.folderId, id));
+    await getDb()
+      .update(knowledgeFolder)
+      .set({ parentId: null })
+      .where(eq(knowledgeFolder.parentId, id));
+    const [deleted] = await getDb()
+      .delete(knowledgeFolder)
+      .where(
+        and(eq(knowledgeFolder.id, id), eq(knowledgeFolder.userId, userId))
+      )
+      .returning();
+    return deleted ?? null;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to delete knowledge folder"
+    );
+  }
+}
+
+export interface KnowledgeChunkRow {
+  id: string;
+  text: string;
+  knowledgeDocumentId: string;
+  title: string;
+}
+
+/**
+ * Insere chunks com embeddings na tabela KnowledgeChunk.
+ * Usado após criar/atualizar um KnowledgeDocument para RAG.
+ */
+export async function insertKnowledgeChunks({
+  knowledgeDocumentId,
+  chunksWithEmbeddings,
+}: {
+  knowledgeDocumentId: string;
+  chunksWithEmbeddings: { text: string; embedding: number[] }[];
+}) {
+  if (chunksWithEmbeddings.length === 0) {
+    return;
+  }
+  await getDb()
+    .insert(knowledgeChunk)
+    .values(
+      chunksWithEmbeddings.map((c, i) => ({
+        knowledgeDocumentId,
+        chunkIndex: i,
+        text: c.text,
+        embedding: c.embedding,
+      }))
+    );
+}
+
+/**
+ * Remove todos os chunks de um documento (ex.: antes de reindexar).
+ */
+export async function deleteChunksByKnowledgeDocumentId(
+  knowledgeDocumentId: string
+) {
+  await getDb()
+    .delete(knowledgeChunk)
+    .where(eq(knowledgeChunk.knowledgeDocumentId, knowledgeDocumentId));
+}
+
+/**
+ * Busca os chunks mais relevantes para o embedding da pergunta (cosine similarity).
+ * Considera documentos do userId; se allowedUserIds for passado, inclui também documentos desses utilizadores (ex.: doc. sistema).
+ */
+export async function getRelevantChunks({
+  userId,
+  documentIds,
+  queryEmbedding,
+  limit = 12,
+  allowedUserIds,
+}: {
+  userId: string;
+  documentIds: string[];
+  queryEmbedding: number[];
+  limit?: number;
+  /** Quando definido, inclui chunks de documentos destes userIds (ex.: Redator banco padrão). */
+  allowedUserIds?: string[];
+}): Promise<KnowledgeChunkRow[]> {
+  if (documentIds.length === 0 || queryEmbedding.length === 0) {
+    return [];
+  }
+  const embeddingStr = `[${queryEmbedding.join(",")}]`;
+  const vectorLiteral = `'${embeddingStr.replaceAll("'", "''")}'::vector`;
+  const userIdCondition =
+    allowedUserIds?.length
+      ? or(
+          eq(knowledgeDocument.userId, userId),
+          inArray(knowledgeDocument.userId, allowedUserIds)
+        )
+      : eq(knowledgeDocument.userId, userId);
+  const rows = await getDb()
+    .select({
+      id: knowledgeChunk.id,
+      text: knowledgeChunk.text,
+      knowledgeDocumentId: knowledgeChunk.knowledgeDocumentId,
+      title: knowledgeDocument.title,
+    })
+    .from(knowledgeChunk)
+    .innerJoin(
+      knowledgeDocument,
+      eq(knowledgeChunk.knowledgeDocumentId, knowledgeDocument.id)
+    )
+    .where(
+      and(
+        userIdCondition,
+        inArray(knowledgeDocument.id, documentIds),
+        sql`${knowledgeChunk.embedding} IS NOT NULL`
+      )
+    )
+    .orderBy(sql`${knowledgeChunk.embedding} <=> ${sql.raw(vectorLiteral)}`)
+    .limit(limit);
+  return rows as KnowledgeChunkRow[];
+}
+
+// --- CustomAgent (agentes personalizados do utilizador) ---
+
+export async function getCustomAgentsByUserId(userId: string) {
+  try {
+    return await getDb()
+      .select()
+      .from(customAgent)
+      .where(eq(customAgent.userId, userId))
+      .orderBy(asc(customAgent.name));
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get custom agents by user id"
+    );
+  }
+}
+
+export async function getCustomAgentById({
+  id,
+  userId,
+}: {
+  id: string;
+  userId: string;
+}) {
+  try {
+    const [row] = await getDb()
+      .select()
+      .from(customAgent)
+      .where(and(eq(customAgent.id, id), eq(customAgent.userId, userId)))
+      .limit(1);
+    return row ?? null;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get custom agent by id"
+    );
+  }
+}
+
+export async function createCustomAgent({
+  userId,
+  name,
+  instructions,
+  baseAgentId,
+}: {
+  userId: string;
+  name: string;
+  instructions: string;
+  baseAgentId?: string | null;
+}) {
+  try {
+    const [created] = await getDb()
+      .insert(customAgent)
+      .values({
+        userId,
+        name,
+        instructions,
+        baseAgentId: baseAgentId ?? null,
+      })
+      .returning();
+    if (!created) {
+      throw new ChatbotError(
+        "bad_request:database",
+        "Failed to create custom agent"
+      );
+    }
+    return created;
+  } catch (error) {
+    if (error instanceof ChatbotError) {
+      throw error;
+    }
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to create custom agent"
+    );
+  }
+}
+
+export async function updateCustomAgentById({
+  id,
+  userId,
+  name,
+  instructions,
+  baseAgentId,
+}: {
+  id: string;
+  userId: string;
+  name?: string;
+  instructions?: string;
+  baseAgentId?: string | null;
+}) {
+  try {
+    const updates: {
+      name?: string;
+      instructions?: string;
+      baseAgentId?: string | null;
+    } = {};
+    if (name !== undefined) {
+      updates.name = name;
+    }
+    if (instructions !== undefined) {
+      updates.instructions = instructions;
+    }
+    if (baseAgentId !== undefined) {
+      updates.baseAgentId = baseAgentId ?? null;
+    }
+    if (Object.keys(updates).length === 0) {
+      return (await getCustomAgentById({ id, userId })) ?? null;
+    }
+    const [updated] = await getDb()
+      .update(customAgent)
+      .set(updates)
+      .where(and(eq(customAgent.id, id), eq(customAgent.userId, userId)))
+      .returning();
+    return updated ?? null;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to update custom agent"
+    );
+  }
+}
+
+export async function deleteCustomAgentById({
+  id,
+  userId,
+}: {
+  id: string;
+  userId: string;
+}) {
+  try {
+    const [deleted] = await getDb()
+      .delete(customAgent)
+      .where(and(eq(customAgent.id, id), eq(customAgent.userId, userId)))
+      .returning();
+    return deleted ?? null;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to delete custom agent"
+    );
+  }
+}
+
+// --- Built-in agent overrides (admin painel) ---
+
+/** Devolve todos os overrides de agentes built-in (por agentId). */
+export async function getBuiltInAgentOverrides(): Promise<
+  Record<string, { instructions: string | null; label: string | null }>
+> {
+  try {
+    const rows = await getDb()
+      .select({
+        agentId: builtInAgentOverride.agentId,
+        instructions: builtInAgentOverride.instructions,
+        label: builtInAgentOverride.label,
+      })
+      .from(builtInAgentOverride);
+    const map: Record<string, { instructions: string | null; label: string | null }> = {};
+    for (const row of rows) {
+      map[row.agentId] = {
+        instructions: row.instructions,
+        label: row.label,
+      };
+    }
+    return map;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get built-in agent overrides"
+    );
+  }
+}
+
+/** Cria ou atualiza override de um agente built-in (admin). */
+export async function upsertBuiltInAgentOverride({
+  agentId,
+  instructions,
+  label,
+}: {
+  agentId: string;
+  instructions?: string | null;
+  label?: string | null;
+}) {
+  try {
+    await getDb()
+      .insert(builtInAgentOverride)
+      .values({
+        agentId,
+        instructions: instructions ?? null,
+        label: label ?? null,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: builtInAgentOverride.agentId,
+        set: {
+          instructions: instructions ?? null,
+          label: label ?? null,
+          updatedAt: new Date(),
+        },
+      });
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to upsert built-in agent override"
+    );
+  }
+}
+
+// --- Créditos por consumo de LLM (docs/SPEC-CREDITOS-LLM.md) ---
+
+export async function getCreditBalance(userId: string) {
+  try {
+    const [row] = await getDb()
+      .select()
+      .from(userCreditBalance)
+      .where(eq(userCreditBalance.userId, userId))
+      .limit(1);
+    return row ?? null;
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get credit balance"
+    );
+  }
+}
+
+/** Devolve o saldo atual; se não existir linha, cria com initialBalance e devolve esse valor. */
+export async function getOrCreateCreditBalance(
+  userId: string,
+  initialBalance: number
+) {
+  const existing = await getCreditBalance(userId);
+  if (existing) {
+    return existing.balance;
+  }
+  try {
+    await getDb().insert(userCreditBalance).values({
+      userId,
+      balance: initialBalance,
+      updatedAt: new Date(),
+    });
+    return initialBalance;
+  } catch (err) {
+    const code = err as { code?: string };
+    if (code?.code === "23505") {
+      const row = await getCreditBalance(userId);
+      return row?.balance ?? initialBalance;
+    }
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to create credit balance"
+    );
+  }
+}
+
+export async function deductCreditsAndRecordUsage({
+  userId,
+  chatId,
+  promptTokens,
+  completionTokens,
+  model,
+  creditsConsumed,
+}: {
+  userId: string;
+  chatId: string | null;
+  promptTokens: number;
+  completionTokens: number;
+  model: string | null;
+  creditsConsumed: number;
+}) {
+  try {
+    await getDb().insert(llmUsageRecord).values({
+      userId,
+      chatId,
+      promptTokens,
+      completionTokens,
+      model,
+      creditsConsumed,
+    });
+    const [row] = await getDb()
+      .select({ balance: userCreditBalance.balance })
+      .from(userCreditBalance)
+      .where(eq(userCreditBalance.userId, userId))
+      .limit(1);
+    if (row) {
+      await getDb()
+        .update(userCreditBalance)
+        .set({
+          balance: Math.max(0, row.balance - creditsConsumed),
+          updatedAt: new Date(),
+        })
+        .where(eq(userCreditBalance.userId, userId));
+    }
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to deduct credits or record usage"
+    );
+  }
+}
+
+export async function addCreditsToUser({
+  userId,
+  delta,
+}: {
+  userId: string;
+  delta: number;
+}) {
+  if (delta <= 0) {
+    return;
+  }
+  try {
+    const [row] = await getDb()
+      .select()
+      .from(userCreditBalance)
+      .where(eq(userCreditBalance.userId, userId))
+      .limit(1);
+    if (row) {
+      await getDb()
+        .update(userCreditBalance)
+        .set({
+          balance: sql`${userCreditBalance.balance} + ${delta}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(userCreditBalance.userId, userId));
+    } else {
+      await getDb().insert(userCreditBalance).values({
+        userId,
+        balance: delta,
+        updatedAt: new Date(),
+      });
+    }
+  } catch (_error) {
+    throw new ChatbotError("bad_request:database", "Failed to add credits");
+  }
+}
+
+const RECENT_USAGE_LIMIT = 50;
+
+export async function getRecentUsageByUserId(userId: string, limit = 10) {
+  try {
+    return await getDb()
+      .select({
+        id: llmUsageRecord.id,
+        chatId: llmUsageRecord.chatId,
+        promptTokens: llmUsageRecord.promptTokens,
+        completionTokens: llmUsageRecord.completionTokens,
+        model: llmUsageRecord.model,
+        creditsConsumed: llmUsageRecord.creditsConsumed,
+        createdAt: llmUsageRecord.createdAt,
+      })
+      .from(llmUsageRecord)
+      .where(eq(llmUsageRecord.userId, userId))
+      .orderBy(desc(llmUsageRecord.createdAt))
+      .limit(Math.min(limit, RECENT_USAGE_LIMIT));
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to get recent usage"
+    );
+  }
+}
+
+/** Lista todos os utilizadores com saldo de créditos (para admin). */
+export async function getUsersWithCreditBalances() {
+  try {
+    const rows = await getDb()
+      .select({
+        userId: user.id,
+        email: user.email,
+        balance: userCreditBalance.balance,
+        updatedAt: userCreditBalance.updatedAt,
+      })
+      .from(user)
+      .leftJoin(userCreditBalance, eq(user.id, userCreditBalance.userId));
+    return rows.map((r) => ({
+      userId: r.userId,
+      email: r.email,
+      balance: r.balance ?? 0,
+      updatedAt: r.updatedAt,
+    }));
+  } catch (_error) {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Failed to list users with credits"
     );
   }
 }

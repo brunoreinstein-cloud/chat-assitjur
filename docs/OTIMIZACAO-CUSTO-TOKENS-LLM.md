@@ -29,7 +29,7 @@ Estes valores limitam input/output e reduzem custo; ajustar só se precisares de
 | **CHAT_MESSAGES_LIMIT** | 80 | Idem | Só as últimas 80 mensagens são carregadas do histórico. |
 | **maxOutputTokens** | 8192 | Idem | Resposta do modelo limitada a 8192 tokens por turno. |
 | **stopWhen: stepCountIs(5)** | 5 | Idem | Máximo 5 “steps” (tool loops) por pedido; evita loops longos. |
-| **knowledgeDocumentIds** | max 20 IDs | `app/(chat)/api/chat/schema.ts` | Máximo 20 documentos da base de conhecimento no contexto. |
+| **knowledgeDocumentIds** | max 50 IDs | `app/(chat)/api/chat/schema.ts` | Máximo 50 documentos da base de conhecimento no contexto. |
 | **Entitlements** | 20 (guest) / 50 (regular) msgs/dia | `lib/ai/entitlements.ts` | Limite de mensagens por dia por tipo de utilizador. |
 
 Estimativa grosseira de tamanho de prompt por pedido de chat (sem knowledge): system (~2–4k tokens) + instruções Revisor (~1.5k) + últimas N mensagens + documentos truncados. Com 100k chars de docs ≈ ~25k tokens só de docs; total típico 30k–80k input tokens por request em conversas com PI+Contestação.
@@ -47,7 +47,7 @@ Estimativa grosseira de tamanho de prompt por pedido de chat (sem knowledge): sy
 ### 3.2 Base de conhecimento
 
 - **Onde:** `knowledgeContext` em `systemPrompt` = concatenação de todos os documentos selecionados (`getKnowledgeDocumentsByIds`).
-- **Problema:** Até 20 documentos sem limite de tamanho por documento → o system prompt pode ficar muito grande.
+- **Problema:** Até 50 documentos sem limite de tamanho por documento → o system prompt pode ficar muito grande.
 - **Otimização:**
   - Limitar caracteres totais de `knowledgeContext` (ex.: primeiros 50k chars ou N chars por documento).
   - Evoluir para **RAG** (embeddings + retrieval) e injetar só trechos relevantes — ver `lib/ai/knowledge-base.md`.

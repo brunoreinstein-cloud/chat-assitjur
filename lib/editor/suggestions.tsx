@@ -71,6 +71,15 @@ export function createSuggestionWidget(
   view: EditorView,
   artifactKind: ArtifactKind = "text"
 ): { dom: HTMLElement; destroy: () => void } {
+  if (!view) {
+    const empty = document.createElement("span");
+    return {
+      dom: empty,
+      destroy: () => {
+        /* no-op when no view */
+      },
+    };
+  }
   const dom = document.createElement("span");
   const root = createRoot(dom);
 

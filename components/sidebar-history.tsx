@@ -148,7 +148,7 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
     });
 
     toast.promise(deletePromise, {
-      loading: "Excluindo chat...",
+      loading: "Excluindo chat…",
       success: () => {
         mutate((chatHistories) => {
           if (chatHistories) {
@@ -352,14 +352,14 @@ export function SidebarHistory({ user }: { user: User | undefined }) {
 
           {hasReachedEnd ? (
             <div className="mt-8 flex w-full flex-row items-center justify-center gap-2 px-2 text-sm text-zinc-500">
-              You have reached the end of your chat history.
+              Chegou ao fim do histórico de conversas.
             </div>
           ) : (
             <div className="mt-8 flex flex-row items-center gap-2 p-2 text-zinc-500 dark:text-zinc-400">
               <div className="animate-spin">
                 <LoaderIcon />
               </div>
-              <div>Loading Chats...</div>
+              <div>A carregar conversas…</div>
             </div>
           )}
         </SidebarGroupContent>

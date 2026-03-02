@@ -51,7 +51,16 @@ export const postRequestBodySchema = z
     /** Optional agent guidance prompt: instructions that orient how the assistant should respond (persona, tone, format). */
     agentInstructions: z.string().max(4000).optional(),
     /** Optional IDs of knowledge base documents to inject as context for this request. */
-    knowledgeDocumentIds: z.array(z.string().uuid()).max(20).optional(),
+    knowledgeDocumentIds: z.array(z.string().uuid()).max(50).optional(),
+    /** Optional IDs of Arquivos (UserFile) to use as context in this chat only, without saving to the knowledge base. */
+    archivoIds: z.array(z.string().uuid()).max(50).optional(),
+    /** Agent id: built-in (revisor-defesas | analise-contratos | redator-contestacao) or UUID of a custom agent. When absent, defaults to revisor-defesas. */
+    agentId: z
+      .union([
+        z.enum(["revisor-defesas", "analise-contratos", "redator-contestacao"]),
+        z.string().uuid(),
+      ])
+      .optional(),
   })
   .refine(
     (data) => data.message !== undefined || (data.messages?.length ?? 0) > 0,

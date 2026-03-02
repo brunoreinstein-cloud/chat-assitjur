@@ -1,4 +1,4 @@
-import { Download, FileText } from "lucide-react";
+import { Download, Eye, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { Artifact } from "@/components/create-artifact";
 import { DiffView } from "@/components/diffview";
@@ -188,9 +188,19 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
       },
     },
     {
+      icon: <Eye size={18} />,
+      label: "Pré-visualizar",
+      description: "Pré-visualizar como DOCX no browser",
+      isDisabled: ({ documentId }) => documentId === "init",
+      onClick: ({ documentId, openDocxPreview }) => {
+        openDocxPreview?.(documentId);
+      },
+    },
+    {
       icon: <Download size={18} />,
       label: "DOCX",
       description: "Descarregar como DOCX",
+      isDisabled: ({ documentId }) => documentId === "init",
       onClick: ({ documentId }) => {
         (async () => {
           try {

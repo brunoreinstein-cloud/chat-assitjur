@@ -94,6 +94,20 @@ export function RevisorPhaseBanner({
     userRepliedToGate05 && (isStreaming || lastMessage?.role === "assistant");
   const showErroAposConfirmar = userRepliedToGate05 && isError;
 
+  const hasAnyAssistantMessage = messages.some((m) => m.role === "assistant");
+  const noGate05Yet = !messages.some((m) => {
+    if (m.role !== "assistant") {
+      return false;
+    }
+    const t = getAssistantMessageText(m);
+    return t.includes(GATE_05_RESUMO_START) && t.includes(GATE_05_RESUMO_END);
+  });
+  const showFaseA =
+    hasAnyAssistantMessage &&
+    noGate05Yet &&
+    (isStreaming || lastMessage?.role === "assistant") &&
+    idx === -1;
+
   // Cronómetro: inicia quando entramos em FASE B em streaming, limpa quando termina
   useEffect(() => {
     if (showFaseB && isStreaming) {
@@ -114,6 +128,18 @@ export function RevisorPhaseBanner({
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [startTime]);
+
+  if (showFaseA) {
+    return (
+      <output
+        aria-live="polite"
+        className="mx-2 mb-1 block rounded-md border border-border bg-muted/50 px-3 py-2 text-center text-muted-foreground text-sm md:mx-4"
+      >
+        FASE A — Extração e mapeamento. Aguarde o resumo para CONFIRMAR ou
+        CORRIGIR.
+      </output>
+    );
+  }
 
   if (idx === -1) {
     return null;
@@ -138,7 +164,8 @@ export function RevisorPhaseBanner({
         className="mx-2 mb-1 block rounded-md border border-border bg-muted/50 px-3 py-2 text-center text-muted-foreground text-sm md:mx-4"
       >
         <span className="block">
-          FASE B — Gerando os 3 documentos. O primeiro aparecerá em breve.
+          FASE B — Gerando os 3 documentos (Avaliação da defesa, Roteiro
+          Advogado, Roteiro Preposto). O primeiro aparecerá em breve.
         </span>
         {startTime !== null && (
           <span

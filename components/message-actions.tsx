@@ -87,7 +87,7 @@ export function PureMessageActions({
           });
 
           toast.promise(upvote, {
-            loading: "Avaliando resposta...",
+            loading: "Avaliando resposta…",
             success: () => {
               mutate<Vote[]>(
                 `/api/vote?chatId=${chatId}`,
@@ -136,7 +136,7 @@ export function PureMessageActions({
           });
 
           toast.promise(downvote, {
-            loading: "Avaliando resposta negativamente...",
+            loading: "Avaliando resposta negativamente…",
             success: () => {
               mutate<Vote[]>(
                 `/api/vote?chatId=${chatId}`,

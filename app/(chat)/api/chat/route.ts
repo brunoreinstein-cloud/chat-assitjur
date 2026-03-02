@@ -4,6 +4,7 @@ import {
   createUIMessageStream,
   createUIMessageStreamResponse,
   generateId,
+  safeValidateUIMessages,
   stepCountIs,
   streamText,
 } from "ai";
@@ -11,25 +12,53 @@ import { after } from "next/server";
 import { createResumableStreamContext } from "resumable-stream";
 import { ZodError } from "zod";
 import { auth, type UserType } from "@/app/(auth)/auth";
-import { AGENTE_REVISOR_DEFESAS_INSTRUCTIONS } from "@/lib/ai/agent-revisor-defesas";
+import {
+  getDefaultModelForAgent,
+  isModelAllowedForAgent,
+} from "@/lib/ai/agent-models";
+import type { AgentConfig } from "@/lib/ai/agents-registry";
+import {
+  AGENT_ID_REDATOR_CONTESTACAO,
+  AGENT_IDS,
+  getAgentConfig,
+  getAgentConfigForCustomAgent,
+  getAgentConfigWithOverrides,
+} from "@/lib/ai/agents-registry";
+import {
+  REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID,
+  REDATOR_BANCO_SYSTEM_USER_ID,
+} from "@/lib/ai/redator-banco-rag";
+import { MIN_CREDITS_TO_START_CHAT, tokensToCredits } from "@/lib/ai/credits";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
+import { embedQuery } from "@/lib/ai/rag";
 import { createDocument } from "@/lib/ai/tools/create-document";
+import { createRedatorContestacaoDocument } from "@/lib/ai/tools/create-redator-contestacao-document";
 import { createRevisorDefesaDocuments } from "@/lib/ai/tools/create-revisor-defesa-documents";
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
 import { updateDocument } from "@/lib/ai/tools/update-document";
+import { validationToolsForValidate } from "@/lib/ai/tools/validation-tools";
 import { isProductionEnvironment } from "@/lib/constants";
 import {
+  addCreditsToUser,
   createStreamId,
+  deductCreditsAndRecordUsage,
   deleteChatById,
+  getBuiltInAgentOverrides,
   getChatById,
+  getCustomAgentById,
   getKnowledgeDocumentsByIds,
   getMessageCountByUserId,
   getMessagesByChatId,
+  getOrCreateCreditBalance,
+  getRelevantChunks,
+  getUserFilesByIds,
   saveChat,
   saveMessages,
+  updateChatActiveStreamId,
+  updateChatAgentId,
   updateChatTitleById,
   updateMessage,
 } from "@/lib/db/queries";
@@ -73,7 +102,40 @@ const CHAT_MESSAGES_LIMIT = 80;
 /** Máximo de caracteres da base de conhecimento no system prompt (reduz custo de tokens). */
 const MAX_KNOWLEDGE_CONTEXT_CHARS = 50_000;
 
-/** Converte partes do tipo "document" (PDF/DOCX) em partes "text" para o modelo. Ordena PI antes de Contestação. Trunca texto para não exceder o limite do modelo. */
+/**
+ * Indica se uma parte de mensagem é válida para o AI SDK (convertToModelMessages).
+ * Partes "document" são sempre inválidas (devem ser convertidas em "text" antes).
+ * Partes "file" precisam de url e mediaType. Partes tool-* precisam de toolCallId.
+ */
+function isPartValidForModel(part: unknown): boolean {
+  const p = part as {
+    type?: string;
+    url?: string;
+    mediaType?: string;
+    toolCallId?: string;
+  };
+  const type = p?.type;
+  if (typeof type !== "string") {
+    return false;
+  }
+  if (type === "document") {
+    return false;
+  }
+  if (type === "file") {
+    return (
+      typeof p.url === "string" &&
+      p.url.length > 0 &&
+      typeof p.mediaType === "string" &&
+      p.mediaType.length > 0
+    );
+  }
+  if (type.startsWith("tool-")) {
+    return typeof p.toolCallId === "string" && p.toolCallId.length > 0;
+  }
+  return true;
+}
+
+/** Converte partes do tipo "document" (PDF/DOCX) em partes "text" para o modelo. Ordena PI antes de Contestação. Trunca texto para não exceder o limite do modelo. Remove partes inválidas para o AI SDK (ex.: tool sem toolCallId vindas da BD). */
 function normalizeMessageParts(messages: ChatMessage[]): ChatMessage[] {
   return messages.map((msg) => {
     if (!msg.parts?.length) {
@@ -126,10 +188,15 @@ function normalizeMessageParts(messages: ChatMessage[]): ChatMessage[] {
       if (p.type === "text" && (p.text?.trim().length ?? 0) === 0) {
         return [];
       }
+      if (!isPartValidForModel(part)) {
+        return [];
+      }
       return [part];
     });
 
-    const normalizedParts = [...docTextParts, ...normalizedOther];
+    const normalizedParts = [...docTextParts, ...normalizedOther].filter(
+      isPartValidForModel
+    );
     return { ...msg, parts: normalizedParts } as ChatMessage;
   }) as ChatMessage[];
 }
@@ -188,7 +255,46 @@ export async function POST(request: Request) {
       selectedVisibilityType,
       agentInstructions,
       knowledgeDocumentIds,
+      archivoIds,
+      agentId: agentIdFromBody,
     } = requestBody;
+
+    const agentId = agentIdFromBody ?? "revisor-defesas";
+
+    const t0 = Date.now();
+    const session = await auth();
+    logTiming("auth", Date.now() - t0);
+
+    if (!session?.user) {
+      return new ChatbotError("unauthorized:chat").toResponse();
+    }
+
+    let builtInOverrides: Record<
+      string,
+      { instructions: string | null; label: string | null }
+    > = {};
+    try {
+      builtInOverrides = await getBuiltInAgentOverrides();
+    } catch {
+      // Tabela BuiltInAgentOverride pode não existir se migrações não foram aplicadas; usa config em código.
+    }
+
+    let agentConfig: AgentConfig;
+    if (AGENT_IDS.includes(agentId as (typeof AGENT_IDS)[number])) {
+      agentConfig = getAgentConfigWithOverrides(agentId, builtInOverrides);
+    } else {
+      const customAgent = await getCustomAgentById({
+        id: agentId,
+        userId: session.user.id,
+      });
+      agentConfig = customAgent
+        ? getAgentConfigForCustomAgent(customAgent)
+        : getAgentConfigWithOverrides("revisor-defesas", builtInOverrides);
+    }
+
+    const effectiveModel = isModelAllowedForAgent(agentId, selectedChatModel)
+      ? selectedChatModel
+      : getDefaultModelForAgent(agentId);
 
     if (message?.role === "user" && message.parts) {
       const hasContent = message.parts.some((p) => {
@@ -209,18 +315,45 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
-    }
-
-    const t0 = Date.now();
-    const session = await auth();
-    logTiming("auth", Date.now() - t0);
-
-    if (!session?.user) {
-      return new ChatbotError("unauthorized:chat").toResponse();
+      const isRevisorAgent = agentConfig.useRevisorDefesaTools;
+      if (isRevisorAgent) {
+        const documentParts = message.parts.filter(
+          (p) => (p as { type?: string }).type === "document"
+        ) as DocumentPartLike[];
+        const hasDocParts = documentParts.length > 0;
+        if (hasDocParts) {
+          const hasPi = documentParts.some((p) => p.documentType === "pi");
+          const hasContestacao = documentParts.some(
+            (p) => p.documentType === "contestacao"
+          );
+          if (!(hasPi && hasContestacao)) {
+            return Response.json(
+              {
+                code: "bad_request:api",
+                message:
+                  "Para auditar a contestação, anexe a Petição Inicial e a Contestação (arraste para os slots ou use o anexo). O tipo é identificado automaticamente quando possível; pode ajustar no menu de cada documento.",
+              },
+              { status: 400 }
+            );
+          }
+        }
+      }
     }
 
     const userType: UserType = session.user.type;
     const isToolApprovalFlow = Boolean(messages);
+
+    const effectiveKnowledgeIds =
+      knowledgeDocumentIds?.length && session.user.id
+        ? knowledgeDocumentIds
+        : agentId === AGENT_ID_REDATOR_CONTESTACAO
+          ? [REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID]
+          : [];
+    const redatorBancoAllowedUserIds =
+      agentId === AGENT_ID_REDATOR_CONTESTACAO &&
+      effectiveKnowledgeIds.includes(REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID)
+        ? [REDATOR_BANCO_SYSTEM_USER_ID]
+        : undefined;
 
     const t1 = Date.now();
     const [messageCount, chat, messagesFromDb, knowledgeDocsResult] =
@@ -231,10 +364,11 @@ export async function POST(request: Request) {
         }),
         getChatById({ id }),
         getMessagesByChatId({ id, limit: CHAT_MESSAGES_LIMIT }),
-        knowledgeDocumentIds?.length && session.user.id
+        effectiveKnowledgeIds.length > 0
           ? getKnowledgeDocumentsByIds({
-              ids: knowledgeDocumentIds,
+              ids: effectiveKnowledgeIds,
               userId: session.user.id,
+              allowedUserIds: redatorBancoAllowedUserIds,
             })
           : Promise.resolve(
               [] as Awaited<ReturnType<typeof getKnowledgeDocumentsByIds>>
@@ -252,11 +386,48 @@ export async function POST(request: Request) {
       return new ChatbotError("rate_limit:chat").toResponse();
     }
 
+    const initialCredits = entitlementsByUserType[userType].initialCredits;
+    let balance: number;
+    try {
+      balance = await getOrCreateCreditBalance(session.user.id, initialCredits);
+    } catch (creditError) {
+      if (process.env.NODE_ENV === "development") {
+        console.warn(
+          "[chat] Credit balance unavailable (tabela de créditos?), a usar saldo inicial:",
+          creditError
+        );
+      }
+      balance = initialCredits;
+    }
+    if (balance < MIN_CREDITS_TO_START_CHAT) {
+      if (process.env.NODE_ENV === "development") {
+        try {
+          await addCreditsToUser({
+            userId: session.user.id,
+            delta: initialCredits,
+          });
+          balance += initialCredits;
+        } catch {
+          balance = initialCredits;
+        }
+      }
+      if (balance < MIN_CREDITS_TO_START_CHAT) {
+        return new ChatbotError(
+          "rate_limit:chat",
+          `Sem créditos suficientes para enviar mensagens. Saldo atual: ${balance} créditos. Contacte o administrador para recarregar.`
+        ).toResponse();
+      }
+    }
+
     let titlePromise: Promise<string> | null = null;
 
     if (chat) {
       if (chat.userId !== session.user.id) {
         return new ChatbotError("forbidden:chat").toResponse();
+      }
+      // Persistir alteração de agente quando o utilizador envia mensagem com outro agente selecionado
+      if (message?.role === "user" && (chat.agentId ?? "revisor-defesas") !== agentId) {
+        await updateChatAgentId({ chatId: id, agentId });
       }
       // messagesFromDb já vem do Promise.all (últimas CHAT_MESSAGES_LIMIT mensagens quando chat existe)
       if (isToolApprovalFlow) {
@@ -268,6 +439,7 @@ export async function POST(request: Request) {
         userId: session.user.id,
         title: "New chat",
         visibility: selectedVisibilityType,
+        agentId,
       });
       titlePromise = generateTitleFromUserMessage({
         message: normalizeMessageParts([message as ChatMessage])[0],
@@ -277,12 +449,38 @@ export async function POST(request: Request) {
     const effectiveMessagesFromDb =
       chat && !isToolApprovalFlow ? messagesFromDb : [];
 
-    const uiMessages = isToolApprovalFlow
+    let uiMessages: ChatMessage[] = isToolApprovalFlow
       ? (messages as ChatMessage[])
       : [
           ...convertToUIMessages(effectiveMessagesFromDb),
           message as ChatMessage,
         ];
+
+    // Normalizar antes da validação: partes "document" (PI/Contestação) passam a "text",
+    // para a validação do AI SDK aceitar e para preservar histórico na conversa (memória).
+    const normalizedForValidation =
+      !isToolApprovalFlow && uiMessages.length > 0
+        ? normalizeMessageParts(uiMessages)
+        : uiMessages;
+
+    if (!isToolApprovalFlow && normalizedForValidation.length > 0) {
+      const validation = await safeValidateUIMessages({
+        messages: normalizedForValidation,
+        tools: validationToolsForValidate,
+      });
+      if (validation.success) {
+        uiMessages = validation.data as ChatMessage[];
+      } else {
+        if (isDev) {
+          console.warn(
+            "[chat] Validação de mensagens da BD falhou, a manter histórico normalizado:",
+            validation.error?.message ?? validation.error
+          );
+        }
+        // Manter histórico normalizado (PI/Contestação em mensagens anteriores) em vez de descartar
+        uiMessages = normalizedForValidation;
+      }
+    }
 
     const { longitude, latitude, city, country } = geolocation(request);
 
@@ -293,12 +491,65 @@ export async function POST(request: Request) {
       country,
     };
 
-    const rawKnowledgeContext =
-      knowledgeDocsResult.length > 0
-        ? knowledgeDocsResult
-            .map((doc) => `--- ${doc.title} ---\n${doc.content}`)
-            .join("\n\n")
-        : "";
+    let rawKnowledgeContext = "";
+    if (knowledgeDocsResult.length > 0) {
+      const lastUserText =
+        message?.parts
+          ?.filter((p) => (p as { type?: string }).type === "text")
+          .map((p) => (p as { text?: string }).text ?? "")
+          .join(" ")
+          .trim() ?? "";
+      if (lastUserText.length > 0) {
+        const queryEmbedding = await embedQuery(lastUserText);
+        if (queryEmbedding !== null) {
+          const ragLimit =
+            agentId === AGENT_ID_REDATOR_CONTESTACAO ? 24 : 12;
+          const chunks = await getRelevantChunks({
+            userId: session.user.id,
+            documentIds: effectiveKnowledgeIds,
+            queryEmbedding,
+            limit: ragLimit,
+            allowedUserIds: redatorBancoAllowedUserIds,
+          });
+          if (chunks.length > 0) {
+            rawKnowledgeContext = chunks
+              .map((c) => `--- ${c.title} ---\n${c.text}`)
+              .join("\n\n");
+          }
+        }
+      }
+      if (rawKnowledgeContext.length === 0) {
+        rawKnowledgeContext = knowledgeDocsResult
+          .map((doc) => `--- ${doc.title} ---\n${doc.content}`)
+          .join("\n\n");
+      }
+    }
+    if (
+      archivoIds != null &&
+      archivoIds.length > 0 &&
+      session.user.id != null
+    ) {
+      const userFilesFromArchivos = await getUserFilesByIds({
+        ids: archivoIds,
+        userId: session.user.id,
+      });
+      const archivosParts = userFilesFromArchivos
+        .filter(
+          (uf) =>
+            typeof uf.extractedTextCache === "string" &&
+            uf.extractedTextCache.trim().length > 0
+        )
+        .map(
+          (uf) => `--- ${uf.filename} ---\n${uf.extractedTextCache?.trim()}`
+        );
+      if (archivosParts.length > 0) {
+        const archivosBlock = `## Documentos de Arquivos (uso apenas neste chat)\n${archivosParts.join("\n\n")}`;
+        rawKnowledgeContext =
+          rawKnowledgeContext.length > 0
+            ? `${rawKnowledgeContext}\n\n${archivosBlock}`
+            : archivosBlock;
+      }
+    }
     const knowledgeContext =
       rawKnowledgeContext.length > MAX_KNOWLEDGE_CONTEXT_CHARS
         ? `${rawKnowledgeContext.slice(0, MAX_KNOWLEDGE_CONTEXT_CHARS)}\n\n[... base de conhecimento truncada para caber no limite ...]`
@@ -328,12 +579,27 @@ export async function POST(request: Request) {
     }
 
     const isReasoningModel =
-      selectedChatModel.includes("reasoning") ||
-      selectedChatModel.includes("thinking");
+      effectiveModel.includes("reasoning") ||
+      effectiveModel.includes("thinking");
 
     const t5 = Date.now();
     const normalizedMessages = normalizeMessageParts(uiMessages);
-    const modelMessages = await convertToModelMessages(normalizedMessages);
+    let modelMessages: Awaited<ReturnType<typeof convertToModelMessages>>;
+    try {
+      modelMessages = await convertToModelMessages(normalizedMessages);
+    } catch (convertError) {
+      if (isDev) {
+        console.warn(
+          "[chat] convertToModelMessages falhou (partes inválidas?), a usar apenas a última mensagem:",
+          convertError
+        );
+      }
+      const fallbackMessages =
+        message?.role === "user"
+          ? normalizeMessageParts([message as ChatMessage])
+          : normalizedMessages.slice(-1);
+      modelMessages = await convertToModelMessages(fallbackMessages);
+    }
     logTiming(
       "normalizeMessageParts + convertToModelMessages",
       Date.now() - t5
@@ -341,6 +607,9 @@ export async function POST(request: Request) {
 
     const preStreamEnd = Date.now();
     logTiming("preStream (total antes do stream)", preStreamEnd - requestStart);
+
+    type StreamTextResult = Awaited<ReturnType<typeof streamText>>;
+    let streamTextResult: StreamTextResult | null = null;
 
     const stream = createUIMessageStream({
       originalMessages: isToolApprovalFlow ? uiMessages : undefined,
@@ -350,29 +619,74 @@ export async function POST(request: Request) {
           Date.now() - requestStart
         );
         const effectiveAgentInstructions =
-          agentInstructions?.trim() || AGENTE_REVISOR_DEFESAS_INSTRUCTIONS;
+          agentInstructions?.trim() || agentConfig.instructions;
+
+        const baseToolNames = [
+          "getWeather",
+          "createDocument",
+          "updateDocument",
+          "requestSuggestions",
+        ] as const;
+        type ActiveToolName =
+          | (typeof baseToolNames)[number]
+          | "createRevisorDefesaDocuments"
+          | "createRedatorContestacaoDocument";
+        const activeToolNames: ActiveToolName[] = isReasoningModel
+          ? []
+          : [
+              ...baseToolNames,
+              ...(agentConfig.useRevisorDefesaTools
+                ? (["createRevisorDefesaDocuments"] as const)
+                : []),
+              ...(agentConfig.useRedatorContestacaoTool
+                ? (["createRedatorContestacaoDocument"] as const)
+                : []),
+            ];
+
+        const tools = {
+          getWeather,
+          createDocument: createDocument({ session, dataStream }),
+          updateDocument: updateDocument({ session, dataStream }),
+          requestSuggestions: requestSuggestions({ session, dataStream }),
+        } as {
+          getWeather: typeof getWeather;
+          createDocument: ReturnType<typeof createDocument>;
+          updateDocument: ReturnType<typeof updateDocument>;
+          requestSuggestions: ReturnType<typeof requestSuggestions>;
+          createRevisorDefesaDocuments?: ReturnType<
+            typeof createRevisorDefesaDocuments
+          >;
+          createRedatorContestacaoDocument?: ReturnType<
+            typeof createRedatorContestacaoDocument
+          >;
+        };
+        if (agentConfig.useRevisorDefesaTools) {
+          tools.createRevisorDefesaDocuments = createRevisorDefesaDocuments({
+            session,
+            dataStream,
+          });
+        }
+        if (agentConfig.useRedatorContestacaoTool) {
+          tools.createRedatorContestacaoDocument =
+            createRedatorContestacaoDocument({
+              session,
+              dataStream,
+            });
+        }
 
         const result = streamText({
-          model: getLanguageModel(selectedChatModel),
+          model: getLanguageModel(effectiveModel),
           temperature: 0.2,
           maxOutputTokens: 8192,
           system: systemPrompt({
-            selectedChatModel,
+            selectedChatModel: effectiveModel,
             requestHints,
             agentInstructions: effectiveAgentInstructions,
             knowledgeContext,
           }),
           messages: modelMessages,
           stopWhen: stepCountIs(5),
-          experimental_activeTools: isReasoningModel
-            ? []
-            : [
-                "getWeather",
-                "createDocument",
-                "createRevisorDefesaDocuments",
-                "updateDocument",
-                "requestSuggestions",
-              ],
+          experimental_activeTools: activeToolNames,
           providerOptions: isReasoningModel
             ? {
                 anthropic: {
@@ -380,21 +694,13 @@ export async function POST(request: Request) {
                 },
               }
             : undefined,
-          tools: {
-            getWeather,
-            createDocument: createDocument({ session, dataStream }),
-            createRevisorDefesaDocuments: createRevisorDefesaDocuments({
-              session,
-              dataStream,
-            }),
-            updateDocument: updateDocument({ session, dataStream }),
-            requestSuggestions: requestSuggestions({ session, dataStream }),
-          },
+          tools,
           experimental_telemetry: {
             isEnabled: isProductionEnvironment,
             functionId: "stream-text",
           },
         });
+        streamTextResult = result as unknown as StreamTextResult;
 
         dataStream.merge(result.toUIMessageStream({ sendReasoning: true }));
 
@@ -453,6 +759,39 @@ export async function POST(request: Request) {
           });
           logTiming("saveMessages(assistant) em onFinish", Date.now() - tSave);
         }
+        if (streamTextResult) {
+          try {
+            const usage = await streamTextResult.totalUsage;
+            const promptTokens =
+              "promptTokens" in usage
+                ? (usage as { promptTokens: number }).promptTokens
+                : ((usage as { inputTokens?: number }).inputTokens ?? 0);
+            const completionTokens =
+              "completionTokens" in usage
+                ? (usage as { completionTokens: number }).completionTokens
+                : ((usage as { outputTokens?: number }).outputTokens ?? 0);
+            const creditsConsumed = tokensToCredits(
+              promptTokens,
+              completionTokens
+            );
+            await deductCreditsAndRecordUsage({
+              userId: session.user.id,
+              chatId: id,
+              promptTokens,
+              completionTokens,
+              model: effectiveModel,
+              creditsConsumed,
+            });
+          } catch (error_) {
+            if (isDev) {
+              console.warn(
+                "[chat] Falha ao registar uso/créditos em onFinish:",
+                error_
+              );
+            }
+          }
+        }
+        await updateChatActiveStreamId({ chatId: id, activeStreamId: null });
         logTiming("onFinish completo", Date.now() - onFinishStart);
       },
       onError: (error: unknown) => {
@@ -486,12 +825,20 @@ export async function POST(request: Request) {
         try {
           const streamContext = getStreamContext();
           if (streamContext) {
+            await updateChatActiveStreamId({
+              chatId: id,
+              activeStreamId: null,
+            });
             const streamId = generateId();
             await createStreamId({ streamId, chatId: id });
             await streamContext.createNewResumableStream(
               streamId,
               () => sseStream
             );
+            await updateChatActiveStreamId({
+              chatId: id,
+              activeStreamId: streamId,
+            });
           }
         } catch (_) {
           // ignore redis errors

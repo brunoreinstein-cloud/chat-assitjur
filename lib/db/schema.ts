@@ -2,6 +2,8 @@ import type { InferSelectModel } from "drizzle-orm";
 import {
   boolean,
   foreignKey,
+  index,
+  integer,
   json,
   pgTable,
   primaryKey,
@@ -9,6 +11,7 @@ import {
   timestamp,
   uuid,
   varchar,
+  vector,
 } from "drizzle-orm/pg-core";
 
 /** Tabela de utilizadores. No Postgres existe como public."User" (nome entre aspas = case-sensitive). */
@@ -30,6 +33,10 @@ export const chat = pgTable("Chat", {
   visibility: varchar("visibility", { enum: ["public", "private"] })
     .notNull()
     .default("private"),
+  /** ID do stream ativo no Redis (resumable-stream); limpo em onFinish. Usado pelo GET /api/chat/[id]/stream para retomar. */
+  activeStreamId: text("activeStreamId"),
+  /** Agente do chat: built-in (revisor-defesas, analise-contratos, redator-contestacao) ou UUID de agente personalizado. Default revisor-defesas. */
+  agentId: varchar("agentId", { length: 64 }).default("revisor-defesas"),
 });
 
 export type Chat = InferSelectModel<typeof chat>;
@@ -170,15 +177,151 @@ export const stream = pgTable(
 
 export type Stream = InferSelectModel<typeof stream>;
 
+/** Pastas da base de conhecimento (organização por utilizador; hierarquia opcional). */
+export const knowledgeFolder = pgTable(
+  "KnowledgeFolder",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => user.id),
+    parentId: uuid("parentId"),
+    name: varchar("name", { length: 256 }).notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (table) => ({
+    parentFk: foreignKey({
+      columns: [table.parentId],
+      foreignColumns: [table.id],
+      name: "KnowledgeFolder_parentId_fk",
+    }),
+  })
+);
+
+export type KnowledgeFolder = InferSelectModel<typeof knowledgeFolder>;
+
 /** Base de conhecimento: documentos que podem ser usados como contexto no chat (RAG ou injeção direta). */
 export const knowledgeDocument = pgTable("KnowledgeDocument", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
   userId: uuid("userId")
     .notNull()
     .references(() => user.id),
+  folderId: uuid("folderId").references(() => knowledgeFolder.id, {
+    onDelete: "set null",
+  }),
   title: varchar("title", { length: 512 }).notNull(),
   content: text("content").notNull(),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
 
 export type KnowledgeDocument = InferSelectModel<typeof knowledgeDocument>;
+
+/** Chunks da base de conhecimento para RAG: texto + embedding para busca por similaridade. */
+export const knowledgeChunk = pgTable(
+  "KnowledgeChunk",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    knowledgeDocumentId: uuid("knowledgeDocumentId")
+      .notNull()
+      .references(() => knowledgeDocument.id, { onDelete: "cascade" }),
+    chunkIndex: integer("chunkIndex").notNull(),
+    text: text("text").notNull(),
+    embedding: vector("embedding", { dimensions: 1536 }),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (table) => ({
+    embeddingHnswIdx: index("KnowledgeChunk_embedding_hnsw_idx").using(
+      "hnsw",
+      table.embedding.op("vector_cosine_ops")
+    ),
+  })
+);
+
+export type KnowledgeChunk = InferSelectModel<typeof knowledgeChunk>;
+
+/**
+ * Arquivos: biblioteca de ficheiros do utilizador (referências ao Storage).
+ * Permite "Guardar em Arquivos" a partir do chat e depois "Adicionar à base de conhecimento".
+ */
+export const userFile = pgTable("UserFile", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  pathname: varchar("pathname", { length: 1024 }).notNull(),
+  /** URL pública para obter o ficheiro (Supabase public URL ou Blob); usada ao converter em conhecimento. */
+  url: varchar("url", { length: 2048 }).notNull(),
+  filename: varchar("filename", { length: 512 }).notNull(),
+  contentType: varchar("contentType", { length: 128 }).notNull(),
+  /** Texto extraído em cache; evita re-extração ao converter em conhecimento. */
+  extractedTextCache: text("extractedTextCache"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+});
+
+export type UserFile = InferSelectModel<typeof userFile>;
+
+/**
+ * Agentes personalizados criados pelo utilizador (AGENTES-IA-PERSONALIZADOS).
+ * Instruções próprias; opcionalmente herdam tools de um agente base (ex.: revisor-defesas).
+ */
+export const customAgent = pgTable("CustomAgent", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 256 }).notNull(),
+  instructions: text("instructions").notNull(),
+  /** Id do agente base (revisor-defesas | analise-contratos | redator-contestacao); se definido, usa as tools desse agente. */
+  baseAgentId: varchar("baseAgentId", { length: 64 }),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+});
+
+export type CustomAgent = InferSelectModel<typeof customAgent>;
+
+/**
+ * Overrides de agentes built-in editados pelo admin (painel administrativo).
+ * Só instruções e label; useRevisorDefesaTools e allowedModelIds vêm do código.
+ */
+export const builtInAgentOverride = pgTable("BuiltInAgentOverride", {
+  agentId: varchar("agentId", { length: 64 }).primaryKey(),
+  instructions: text("instructions"),
+  label: varchar("label", { length: 256 }),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+});
+
+export type BuiltInAgentOverride = InferSelectModel<
+  typeof builtInAgentOverride
+>;
+
+/**
+ * Saldo de créditos por utilizador (consumo de LLM).
+ * 1 crédito = 1000 tokens (input+output). Ver docs/SPEC-CREDITOS-LLM.md.
+ */
+export const userCreditBalance = pgTable("UserCreditBalance", {
+  userId: uuid("userId")
+    .primaryKey()
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  balance: integer("balance").notNull().default(0),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+});
+
+export type UserCreditBalance = InferSelectModel<typeof userCreditBalance>;
+
+/**
+ * Registo de uso de LLM por pedido (auditoria e transparência).
+ */
+export const llmUsageRecord = pgTable("LlmUsageRecord", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  userId: uuid("userId")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  chatId: uuid("chatId").references(() => chat.id, { onDelete: "set null" }),
+  promptTokens: integer("promptTokens").notNull(),
+  completionTokens: integer("completionTokens").notNull(),
+  model: varchar("model", { length: 128 }),
+  creditsConsumed: integer("creditsConsumed").notNull(),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+});
+
+export type LlmUsageRecord = InferSelectModel<typeof llmUsageRecord>;

@@ -14,6 +14,8 @@ export interface ArtifactActionContext<M = unknown> {
   mode: "edit" | "diff";
   metadata: M;
   setMetadata: Dispatch<SetStateAction<M>>;
+  /** Abre o modal de pré-visualização DOCX (apenas artefato text). */
+  openDocxPreview?: (documentId: string) => void;
 }
 
 export interface ArtifactAction<M = unknown> {

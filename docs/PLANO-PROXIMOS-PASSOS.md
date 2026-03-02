@@ -2,7 +2,7 @@
 
 Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. Atualizar este ficheiro quando prioridades ou estado mudarem.
 
-**Última atualização:** 2026-03-01 (revisão e reorganização; integração .agents; curto prazo em tabela).
+**Última atualização:** 2026-03-01 (Fase 3 implementada: multi-agente com Revisor de Defesas e Análise de contratos, selector no header).
 
 ---
 
@@ -10,14 +10,21 @@ Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. 
 
 | #   | Tarefa                                        | Detalhe                                                                                                                                 | Estado   |
 |-----|-----------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------|----------|
-| 1   | **Validação pré-envio (PI + Contestação)**    | Validar no frontend ou em `/api/files/process` que existem documentos identificados como Petição Inicial e Contestação antes de permitir/enviar; evita que o advogado envie sem os obrigatórios. | Pendente |
-| 2   | *(a definir)*                                 | Inserir aqui a próxima tarefa crítica assim que priorizada.                                                                             | —        |
+| 1   | *(a definir)*                                 | Inserir aqui a próxima tarefa crítica assim que priorizada.                                                                             | —        |
 
 ### 1.1 Concluído (arquivo)
 
 | #   | Tarefa             | Resolução                                                                                                                                 |
 |-----|--------------------|-------------------------------------------------------------------------------------------------------------------------------------------|
 | —   | Prebuild a passar  | Alinhada rota `/api/chat` com teste: `temperature: 0.2`, `maxOutputTokens: 8192` em `streamText`; prebuild e build passam.                 |
+| —   | **Validação pré-envio (PI + Contestação)** | Frontend: `validateRevisorPiContestacao` em `multimodal-input.tsx` (agente Revisor, primeira mensagem ou anexos com documentos). Backend: validação em `POST /api/chat` quando Revisor e mensagem tem partes document. |
+| —   | **Checklist "Antes de executar"** | `RevisorChecklist` renderizado em `chat.tsx` (acima do input), com `attachments`, `knowledgeDocumentIds`, `messageCount`. |
+| —   | **Política "dados não usados para treino"** | Texto em `lib/ai/data-policy.ts`; componente `DataPolicyLink` com dialog; link "Como usamos os seus dados" no footer do chat. |
+| —   | **Aviso revisão humana em Doc 2 e Doc 3** | Modelos `MODELO_ROTEIRO_ADVOGADO.txt` e `MODELO_ROTEIRO_PREPOSTO.txt` atualizados com a mesma frase do Doc 1; instruções do agente alinhadas. |
+| —   | **OCR** | Já implementado em `app/(chat)/api/files/upload/route.ts` (até 50 páginas); `/api/files/process` usa `runExtractionAndClassification`. |
+| —   | **RAG (Fase 2)** | Tabela `KnowledgeChunk` com pgvector; chunking e embeddings no POST /api/knowledge; no chat, embedding da pergunta e busca top-k; fallback para injeção direta. Ver [lib/ai/knowledge-base.md](../lib/ai/knowledge-base.md). |
+| —   | **UX etapas / DOCX (Fase 2)** | Banner com "FASE A — Extração e mapeamento"; "FASE B" com nomes dos 3 documentos; instruções do agente a indicar os 3 nomes na ENTREGA. |
+| —   | **Multi-agente (Fase 3)** | Registry em `lib/ai/agents-registry.ts`; agente "Análise de contratos" em `lib/ai/agent-analise-contratos.ts`; `agentId` no body do chat; selector no header (Revisor de Defesas | Análise de contratos). Export .docx ficou opcional. |
 
 **Referência:** Validação pré-envio — secção 6 de [processo-revisor-upload-validacao.md](processo-revisor-upload-validacao.md); checklist em [PROJETO-REVISOR-DEFESAS.md](PROJETO-REVISOR-DEFESAS.md).
 
@@ -30,7 +37,10 @@ Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. 
 | 1 | **Lint e qualidade** | Manter `pnpm run format` e `pnpm run lint` antes de commits; considerar pre-commit hook (Ultracite). | — |
 | 2 | **CredentialsSignin em produção** | Seguir passos da secção “Próximos passos quando vês CredentialsSignin em produção” (passos 1–3). | [vercel-setup.md § CredentialsSignin](vercel-setup.md#credentialssignin-login--guest) |
 | 3 | **Deploy** | Usar checklist antes de cada deploy; incluir `pnpm run prebuild` (lint + test:unit) no fluxo. | [pre-deploy-checklist.md](pre-deploy-checklist.md) |
-| 4 | **Skills (.agents)** | Executar `npx skills update` periodicamente; considerar skills opcionais (next-upgrade, prompt-engineering-patterns). | [.agents/README.md](../.agents/README.md), [SKILLS_REPORT.md § 5–6](SKILLS_REPORT.md) |
+| 4 | **Skills (.agents)** | Executar `npx skills update` periodicamente; CI já faz `npx skills check` em push em main e semanalmente (.github/workflows/skills-check.yml). | [.agents/README.md](../.agents/README.md), [SKILLS_REPORT.md](SKILLS_REPORT.md) |
+| 5 | **Upgrade Next.js** | Usar a skill **@next-upgrade** ao planear ou executar upgrade do Next.js. | [next-upgrade.md](next-upgrade.md) |
+| 6 | **RAG (base de conhecimento)** | Implementado (Fase 2). Melhorias futuras: reranking, chunking semântico. | [lib/ai/knowledge-base.md](../lib/ai/knowledge-base.md) |
+| 7 | **Modo Split-Screen (Revisor)** | Sugestão UX: ao gerar o parecer, ver documento original de um lado e sugestões da IA do outro, com highlights ligando os dois — padrão em ferramentas jurídicas de revisão. | Especificar em SPEC ou PROJETO-REVISOR-DEFESAS.md |
 
 ---
 
@@ -57,10 +67,13 @@ Priorizar itens da Fase 1 conforme [PROJETO-REVISOR-DEFESAS.md](PROJETO-REVISOR-
 | **pre-deploy-checklist.md** | Tabela “Falha → Próximo passo” e checklist manual. |
 | **chat-guest-review.md** | Recomendações opcionais (UX/a11y GuestGate, E2E guest, docs). |
 | **SPEC-AI-DRIVE-JURIDICO.md** | § 11 Roadmap (Fases 1–4). |
-| **SKILLS_REPORT.md** | “Próximas otimizações possíveis” e resumo de próximos passos (skills). |
+| **AGENTES-IA-PERSONALIZADOS.md** | Descrição da oferta “agentes personalizados” (agentes pré-definidos + instruções + base de conhecimento); referência técnica e evolução futura. |
+| **SKILLS_REPORT.md** | “Próximas otimizações possíveis” e resumo de próximos passos (skills); CI skills check. |
+| **next-upgrade.md** | Uso da skill @next-upgrade ao atualizar o Next.js. |
 | **.agents/README.md** | Skills instaladas, comandos (`npx skills list`, `npx skills update`), link para SKILLS_REPORT. |
 | **.agents/SKILLS_ARCHITECTURE.md** | Categorias e mapa de dependências das skills. |
 | **ux-ui-revisor-defesas.md** | Acessibilidade e próximo passo na mensagem de erro. |
+| **AVALIACAO-UPLOAD-ARQUIVOS-CONHECIMENTO.md** | Avaliação da proposta: guardar anexos em “Arquivos”, Arquivos → Conhecimento, Chat → Conhecimento; conclusões e próximos passos. |
 
 **Sugestão:** Manter este plano como índice; alterações de prioridade ou novas tarefas imediatas devem ser atualizadas na secção 1 e, se relevante, no roadmap da SPEC.
 

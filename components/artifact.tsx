@@ -26,6 +26,7 @@ import { ArtifactMessages } from "./artifact-messages";
 import type { Artifact as ArtifactClass } from "./create-artifact";
 import { MultimodalInput } from "./multimodal-input";
 import { Toolbar } from "./toolbar";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { useSidebar } from "./ui/sidebar";
 import { VersionFooter } from "./version-footer";
 import type { VisibilityType } from "./visibility-selector";
@@ -263,6 +264,7 @@ function PureArtifact({
   };
 
   const [isToolbarVisible, setIsToolbarVisible] = useState(false);
+  const [docxPreviewId, setDocxPreviewId] = useState<string | null>(null);
 
   /*
    * NOTE: if there are no documents, or if
@@ -357,195 +359,225 @@ function PureArtifact({
   }, [artifact.documentId, artifactDefinition, setMetadata]);
 
   return (
-    <AnimatePresence>
-      {artifact.isVisible && (
-        <motion.div
-          animate={{ opacity: 1 }}
-          className="fixed top-0 left-0 z-50 flex h-dvh w-dvw flex-row bg-transparent"
-          data-testid="artifact"
-          exit={{ opacity: 0, transition: { delay: 0.4 } }}
-          initial={{ opacity: 1 }}
-        >
-          {!isMobile && (
-            <motion.div
-              animate={{ width: windowWidth, right: 0 }}
-              className="fixed h-dvh bg-background"
-              exit={{
-                width: isSidebarOpen ? windowWidth - 256 : windowWidth,
-                right: 0,
-              }}
-              initial={{
-                width: isSidebarOpen ? windowWidth - 256 : windowWidth,
-                right: 0,
-              }}
-            />
-          )}
+    <>
+      <AnimatePresence>
+        {artifact.isVisible && (
+          <motion.div
+            animate={{ opacity: 1 }}
+            className="fixed top-0 left-0 z-50 flex h-dvh w-dvw flex-row bg-transparent"
+            data-testid="artifact"
+            exit={{ opacity: 0, transition: { delay: 0.4 } }}
+            initial={{ opacity: 1 }}
+          >
+            {!isMobile && (
+              <motion.div
+                animate={{ width: windowWidth, right: 0 }}
+                className="fixed h-dvh bg-background"
+                exit={{
+                  width: isSidebarOpen ? windowWidth - 256 : windowWidth,
+                  right: 0,
+                }}
+                initial={{
+                  width: isSidebarOpen ? windowWidth - 256 : windowWidth,
+                  right: 0,
+                }}
+              />
+            )}
 
-          {!isMobile && (
-            <motion.div
-              animate={{
-                opacity: 1,
-                x: 0,
-                scale: 1,
-                transition: {
-                  delay: 0.1,
-                  type: "spring",
-                  stiffness: 300,
-                  damping: 30,
-                },
-              }}
-              className="relative flex h-dvh min-w-0 shrink-0 flex-col bg-muted dark:bg-background"
-              exit={{
-                opacity: 0,
-                x: 0,
-                scale: 1,
-                transition: { duration: 0 },
-              }}
-              initial={{ opacity: 0, x: 10, scale: 1 }}
-              style={{ width: conversationPanelWidth }}
-            >
-              <AnimatePresence>
-                {!isCurrentVersion && (
-                  <motion.div
-                    animate={{ opacity: 1 }}
-                    className="absolute top-0 left-0 z-50 h-dvh bg-zinc-900/50"
-                    exit={{ opacity: 0 }}
-                    initial={{ opacity: 0 }}
-                    style={{ width: conversationPanelWidth }}
-                  />
-                )}
-              </AnimatePresence>
+            {!isMobile && (
+              <motion.div
+                animate={{
+                  opacity: 1,
+                  x: 0,
+                  scale: 1,
+                  transition: {
+                    delay: 0.1,
+                    type: "spring",
+                    stiffness: 300,
+                    damping: 30,
+                  },
+                }}
+                className="relative flex h-dvh min-w-0 shrink-0 flex-col bg-muted dark:bg-background"
+                exit={{
+                  opacity: 0,
+                  x: 0,
+                  scale: 1,
+                  transition: { duration: 0 },
+                }}
+                initial={{ opacity: 0, x: 10, scale: 1 }}
+                style={{ width: conversationPanelWidth }}
+              >
+                <AnimatePresence>
+                  {!isCurrentVersion && (
+                    <motion.div
+                      animate={{ opacity: 1 }}
+                      className="absolute top-0 left-0 z-50 h-dvh bg-zinc-900/50"
+                      exit={{ opacity: 0 }}
+                      initial={{ opacity: 0 }}
+                      style={{ width: conversationPanelWidth }}
+                    />
+                  )}
+                </AnimatePresence>
 
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <ArtifactMessages
-                  addToolApprovalResponse={addToolApprovalResponse}
-                  artifactStatus={artifact.status}
-                  chatId={chatId}
-                  isReadonly={isReadonly}
-                  messages={messages}
-                  regenerate={regenerate}
-                  setMessages={setMessages}
-                  status={status}
-                  votes={votes}
-                />
-
-                <div className="relative flex w-full flex-row items-end gap-2 px-4 pb-4">
-                  <MultimodalInput
-                    attachments={attachments}
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                  <ArtifactMessages
+                    addToolApprovalResponse={addToolApprovalResponse}
+                    artifactStatus={artifact.status}
                     chatId={chatId}
-                    className="bg-background dark:bg-muted"
-                    input={input}
+                    isReadonly={isReadonly}
                     messages={messages}
-                    selectedModelId={selectedModelId}
-                    selectedVisibilityType={selectedVisibilityType}
-                    sendMessage={sendMessage}
-                    setAttachments={setAttachments}
-                    setInput={setInput}
+                    regenerate={regenerate}
                     setMessages={setMessages}
                     status={status}
-                    stop={stop}
+                    votes={votes}
                   />
-                </div>
-              </div>
-            </motion.div>
-          )}
 
-          <motion.div
-            animate={artifactPanelAnimate}
-            className="fixed flex h-dvh flex-col overflow-hidden border-zinc-200 bg-background md:border-l dark:border-zinc-700 dark:bg-muted"
-            exit={{
-              opacity: 0,
-              scale: 0.5,
-              transition: {
-                delay: 0.1,
-                type: "spring",
-                stiffness: 600,
-                damping: 30,
-              },
-            }}
-            initial={{
-              opacity: 1,
-              x: artifact.boundingBox.left,
-              y: artifact.boundingBox.top,
-              height: artifact.boundingBox.height,
-              width: artifact.boundingBox.width,
-              borderRadius: 50,
-            }}
-          >
-            <div className="flex min-h-0 flex-1 flex-col">
-              <div className="flex shrink-0 flex-row items-start justify-between gap-3 border-border border-b px-4 py-3">
-                <div className="flex min-w-0 flex-1 flex-row items-start gap-3">
-                  <ArtifactCloseButton />
-
-                  <div className="min-w-0 flex-1">
-                    <h2
-                      className="wrap-break-word line-clamp-2 font-medium leading-tight"
-                      title={artifact.title}
-                    >
-                      {artifact.title}
-                    </h2>
-
-                    {renderArtifactStatusSubtitle()}
-                  </div>
-                </div>
-
-                <ArtifactActions
-                  artifact={artifact}
-                  currentVersionIndex={currentVersionIndex}
-                  handleVersionChange={handleVersionChange}
-                  isCurrentVersion={isCurrentVersion}
-                  metadata={metadata}
-                  mode={mode}
-                  setMetadata={setMetadata}
-                />
-              </div>
-
-              <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/40">
-                <ArtifactContentComponent
-                  content={getDisplayContent()}
-                  currentVersionIndex={currentVersionIndex}
-                  getDocumentContentById={getDocumentContentById}
-                  isCurrentVersion={isCurrentVersion}
-                  isInline={false}
-                  isLoading={isDocumentsFetching && !artifact.content}
-                  metadata={metadata}
-                  mode={mode}
-                  onSaveContent={saveContent}
-                  setMetadata={setMetadata}
-                  status={artifact.status}
-                  suggestions={[]}
-                  title={artifact.title}
-                />
-
-                <AnimatePresence>
-                  {isCurrentVersion && (
-                    <Toolbar
-                      artifactKind={artifact.kind}
-                      isToolbarVisible={isToolbarVisible}
+                  <div className="relative flex w-full flex-row items-end gap-2 px-4 pb-4">
+                    <MultimodalInput
+                      attachments={attachments}
+                      chatId={chatId}
+                      className="bg-background dark:bg-muted"
+                      input={input}
+                      messages={messages}
+                      selectedModelId={selectedModelId}
+                      selectedVisibilityType={selectedVisibilityType}
                       sendMessage={sendMessage}
-                      setIsToolbarVisible={setIsToolbarVisible}
+                      setAttachments={setAttachments}
+                      setInput={setInput}
                       setMessages={setMessages}
                       status={status}
                       stop={stop}
                     />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            <motion.div
+              animate={artifactPanelAnimate}
+              className="fixed flex h-dvh flex-col overflow-hidden border-zinc-200 bg-background md:border-l dark:border-zinc-700 dark:bg-muted"
+              exit={{
+                opacity: 0,
+                scale: 0.5,
+                transition: {
+                  delay: 0.1,
+                  type: "spring",
+                  stiffness: 600,
+                  damping: 30,
+                },
+              }}
+              initial={{
+                opacity: 1,
+                x: artifact.boundingBox.left,
+                y: artifact.boundingBox.top,
+                height: artifact.boundingBox.height,
+                width: artifact.boundingBox.width,
+                borderRadius: 50,
+              }}
+            >
+              <div className="flex min-h-0 flex-1 flex-col">
+                <div className="flex shrink-0 flex-row items-start justify-between gap-3 border-border border-b px-4 py-3">
+                  <div className="flex min-w-0 flex-1 flex-row items-start gap-3">
+                    <ArtifactCloseButton />
+
+                    <div className="min-w-0 flex-1">
+                      <h2
+                        className="wrap-break-word line-clamp-2 font-medium leading-tight"
+                        title={artifact.title}
+                      >
+                        {artifact.title}
+                      </h2>
+
+                      {renderArtifactStatusSubtitle()}
+                    </div>
+                  </div>
+
+                  <ArtifactActions
+                    artifact={artifact}
+                    currentVersionIndex={currentVersionIndex}
+                    handleVersionChange={handleVersionChange}
+                    isCurrentVersion={isCurrentVersion}
+                    metadata={metadata}
+                    mode={mode}
+                    openDocxPreview={setDocxPreviewId}
+                    setMetadata={setMetadata}
+                  />
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-muted/40">
+                  <ArtifactContentComponent
+                    content={getDisplayContent()}
+                    currentVersionIndex={currentVersionIndex}
+                    getDocumentContentById={getDocumentContentById}
+                    isCurrentVersion={isCurrentVersion}
+                    isInline={false}
+                    isLoading={isDocumentsFetching && !artifact.content}
+                    metadata={metadata}
+                    mode={mode}
+                    onSaveContent={saveContent}
+                    setMetadata={setMetadata}
+                    status={artifact.status}
+                    suggestions={[]}
+                    title={artifact.title}
+                  />
+
+                  <AnimatePresence>
+                    {isCurrentVersion && (
+                      <Toolbar
+                        artifactKind={artifact.kind}
+                        isToolbarVisible={isToolbarVisible}
+                        sendMessage={sendMessage}
+                        setIsToolbarVisible={setIsToolbarVisible}
+                        setMessages={setMessages}
+                        status={status}
+                        stop={stop}
+                      />
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <AnimatePresence>
+                  {!isCurrentVersion && (
+                    <VersionFooter
+                      currentVersionIndex={currentVersionIndex}
+                      documents={documents}
+                      handleVersionChange={handleVersionChange}
+                    />
                   )}
                 </AnimatePresence>
               </div>
-
-              <AnimatePresence>
-                {!isCurrentVersion && (
-                  <VersionFooter
-                    currentVersionIndex={currentVersionIndex}
-                    documents={documents}
-                    handleVersionChange={handleVersionChange}
-                  />
-                )}
-              </AnimatePresence>
-            </div>
+            </motion.div>
           </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+        )}
+      </AnimatePresence>
+
+      <Dialog
+        onOpenChange={(open) => {
+          if (open === false) {
+            setDocxPreviewId(null);
+          }
+        }}
+        open={docxPreviewId !== null}
+      >
+        <DialogContent
+          aria-describedby="docx-preview-desc"
+          className="flex max-h-[90dvh] max-w-4xl flex-col gap-0 p-0"
+        >
+          <DialogHeader className="shrink-0 border-b px-4 py-3">
+            <DialogTitle>Pré-visualização DOCX</DialogTitle>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-auto" id="docx-preview-desc">
+            {docxPreviewId !== null ? (
+              <iframe
+                className="h-[75dvh] w-full border-0"
+                src={`/api/document/preview?id=${encodeURIComponent(docxPreviewId)}`}
+                title="Pré-visualização do documento em formato Word"
+              />
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

@@ -24,8 +24,11 @@ export const buildContentFromDocument = (document: Node) => {
 
 export const createDecorations = (
   suggestions: UISuggestion[],
-  view: EditorView
+  view: EditorView | null | undefined
 ) => {
+  if (!view?.state?.doc) {
+    return DecorationSet.empty;
+  }
   const decorations: Decoration[] = [];
 
   for (const suggestion of suggestions) {
@@ -47,6 +50,9 @@ export const createDecorations = (
       Decoration.widget(
         suggestion.selectionStart,
         (currentView) => {
+          if (!currentView) {
+            return document.createElement("span");
+          }
           const { dom } = createSuggestionWidget(suggestion, currentView);
           return dom;
         },

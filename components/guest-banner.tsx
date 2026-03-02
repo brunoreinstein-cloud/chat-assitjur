@@ -8,7 +8,7 @@ export function GuestBanner() {
         histórico é apagado.
       </span>
       <Link
-        className="font-medium text-foreground underline underline-offset-4 hover:no-underline"
+        className="rounded-sm font-medium text-foreground underline underline-offset-4 outline-none hover:no-underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         href="/register"
       >
         Crie uma conta

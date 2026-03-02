@@ -74,8 +74,10 @@ export const register = async (
       redirect: false,
     });
 
+    // Auth.js v5 com redirect: false pode retornar undefined, { ok: true }, ou a URL de redirect (string) em sucesso
     const ok =
       signInResult === undefined ||
+      (typeof signInResult === "string" && signInResult.length > 0) ||
       (typeof signInResult === "object" &&
         signInResult !== null &&
         "ok" in signInResult &&

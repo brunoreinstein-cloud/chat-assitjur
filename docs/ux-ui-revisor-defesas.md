@@ -51,7 +51,7 @@ Objetivo: o advogado **sobe todos os arquivos**, a interface **valida se tem as 
 
 ### Documentos (PI e Contestação)
 
-- **Upload:** JPEG, PNG, PDF, DOC e DOCX já suportados; extração de texto no backend (`unpdf` para PDF, `word-extractor` para DOC, `mammoth` para DOCX); texto injetado como parte `document`. Ver `api/files/upload` e `accept` no cliente.
+- **Upload:** JPEG, PNG, PDF, DOC e DOCX já suportados; extração de texto no backend (`unpdf` para PDF, `word-extractor` para DOC, `mammoth` para DOCX; **OCR automático** para JPEG/PNG e para PDFs escaneados via Tesseract). O texto é injetado como parte `document`. Ver `api/files/upload` e `accept` no cliente.
 - **Rótulos por tipo de documento:** Já existente para PDF/DOC/DOCX (dropdown por anexo). Melhoria: destacar anexos ainda "Selecionar tipo" quando há mais de um documento, para incentivar a identificação.
 - **Dica visual:** Abaixo do input, texto curto: "Anexe a Petição Inicial e a Contestação (PDF, DOC ou DOCX) e identifique cada uma no menu. Ou cole o texto abaixo."
 

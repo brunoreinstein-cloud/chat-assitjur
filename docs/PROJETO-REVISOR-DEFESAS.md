@@ -163,7 +163,9 @@ O agente é implementado como **instruções de sistema** longas injetadas no `s
 - **Formato:** Arial 12pt, títulos 14pt negrito; tabelas com bordas limpas.
 - **Siglas nos DOCX:** Sempre por extenso (Reclamante, Reclamado, Data Ajuizamento, Data Término Contrato). Uso de RTE, RDO, DAJ, DTC apenas interno (instruções).
 
-Os documentos são gerados como artefactos **text** via `createDocument`. O utilizador pode **descarregar cada documento como ficheiro .docx** através do botão «Descarregar DOCX» (ou «DOCX») na barra de ações do artefacto; a rota `GET /api/document/export?id=<documentId>` devolve o conteúdo em formato Word (DOCX). O nome do ficheiro é derivado do título do documento (sanitizado, máx. 120 caracteres).
+Os documentos são gerados como artefactos **text** via `createDocument`. O utilizador pode **pré-visualizar** o documento como DOCX no browser (botão «Pré-visualizar» na barra do artefacto), que abre um modal com a versão HTML do DOCX (rota `GET /api/document/preview?id=<documentId>`), ou **descarregar** como ficheiro .docx (botão «DOCX»; rota `GET /api/document/export?id=<documentId>`). O nome do ficheiro no download é derivado do título do documento (sanitizado, máx. 120 caracteres).
+
+**Conversão texto → DOCX** (`lib/document-to-docx.ts`): o título do documento aparece no topo do Word; o corpo suporta `##` / `###` / `####` como títulos (níveis 1–3), `**texto**` como negrito, e linhas com separador **tab** ou **` | `** (espaço-pipe-espaço) são convertidas em **tabelas de 2 colunas**. Fonte Arial 12pt (títulos 14pt). Para dados do processo em quadro, o agente deve usar tab ou ` | ` entre campo e valor (ex.: `Processo nº\t0000000-00.2026.5.00.0000` ou `Processo nº | 0000000-00.2026.5.00.0000`).
 
 ---
 
@@ -175,7 +177,7 @@ Os documentos são gerados como artefactos **text** via `createDocument`. O util
 - **Placeholder:** "Cole o texto da Petição Inicial e da Contestação, ou descreva o caso e anexe documentos...".
 - **Diálogos:** "Instruções do agente" (sobrescrita opcional), "Base de conhecimento" (menção a @bancodetese).
 
-Sugestões futuras (indicador de etapa FASE A/B, botões CONFIRMAR/CORRIGIR, rótulos PI/Contestação): ver `docs/ux-ui-revisor-defesas.md`. Upload já suporta JPEG, PNG, PDF, DOC e DOCX (com extração de texto).
+Sugestões futuras (indicador de etapa FASE A/B, botões CONFIRMAR/CORRIGIR, rótulos PI/Contestação): ver `docs/ux-ui-revisor-defesas.md`. Upload já suporta JPEG, PNG, PDF, DOC e DOCX (extração de texto; OCR automático para imagens e PDFs escaneados). Ver `docs/ocr-automatico.md`.
 
 ---
 
