@@ -20,19 +20,18 @@ import type { AgentConfig } from "@/lib/ai/agents-registry";
 import {
   AGENT_ID_REDATOR_CONTESTACAO,
   AGENT_IDS,
-  getAgentConfig,
   getAgentConfigForCustomAgent,
   getAgentConfigWithOverrides,
 } from "@/lib/ai/agents-registry";
-import {
-  REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID,
-  REDATOR_BANCO_SYSTEM_USER_ID,
-} from "@/lib/ai/redator-banco-rag";
 import { MIN_CREDITS_TO_START_CHAT, tokensToCredits } from "@/lib/ai/credits";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
 import { embedQuery } from "@/lib/ai/rag";
+import {
+  REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID,
+  REDATOR_BANCO_SYSTEM_USER_ID,
+} from "@/lib/ai/redator-banco-rag";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { createRedatorContestacaoDocument } from "@/lib/ai/tools/create-redator-contestacao-document";
 import { createRevisorDefesaDocuments } from "@/lib/ai/tools/create-revisor-defesa-documents";
@@ -426,7 +425,10 @@ export async function POST(request: Request) {
         return new ChatbotError("forbidden:chat").toResponse();
       }
       // Persistir alteração de agente quando o utilizador envia mensagem com outro agente selecionado
-      if (message?.role === "user" && (chat.agentId ?? "revisor-defesas") !== agentId) {
+      if (
+        message?.role === "user" &&
+        (chat.agentId ?? "revisor-defesas") !== agentId
+      ) {
         await updateChatAgentId({ chatId: id, agentId });
       }
       // messagesFromDb já vem do Promise.all (últimas CHAT_MESSAGES_LIMIT mensagens quando chat existe)
@@ -502,8 +504,7 @@ export async function POST(request: Request) {
       if (lastUserText.length > 0) {
         const queryEmbedding = await embedQuery(lastUserText);
         if (queryEmbedding !== null) {
-          const ragLimit =
-            agentId === AGENT_ID_REDATOR_CONTESTACAO ? 24 : 12;
+          const ragLimit = agentId === AGENT_ID_REDATOR_CONTESTACAO ? 24 : 12;
           const chunks = await getRelevantChunks({
             userId: session.user.id,
             documentIds: effectiveKnowledgeIds,

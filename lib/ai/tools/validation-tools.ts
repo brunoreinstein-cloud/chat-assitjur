@@ -85,9 +85,7 @@ export const validationTools = {
         .describe(
           "Title for the document (suggested: Contestacao_[Nº processo]_minuta)"
         ),
-      minutaContent: z
-        .string()
-        .describe("Full text of the contestação minuta"),
+      minutaContent: z.string().describe("Full text of the contestação minuta"),
     }),
     execute: noop,
   }),

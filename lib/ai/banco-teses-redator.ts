@@ -7,7 +7,12 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const PATH_BANCO_MD = join(process.cwd(), "lib", "ai", "banco-teses-redator.md");
+const PATH_BANCO_MD = join(
+  process.cwd(),
+  "lib",
+  "ai",
+  "banco-teses-redator.md"
+);
 
 function loadBancoTeses(): string {
   try {

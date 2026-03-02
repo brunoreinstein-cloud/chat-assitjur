@@ -5,27 +5,27 @@
  * Requer: POSTGRES_URL, API de embeddings (AI_GATEWAY_API_KEY ou provider).
  */
 
-import { config } from "dotenv";
-import { eq, and } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import {
-  user,
-  knowledgeDocument,
-  knowledgeChunk,
-} from "../lib/db/schema";
+import { config } from "dotenv";
+import { and, eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import { chunkText, embedChunks } from "../lib/ai/rag";
+import { knowledgeChunk, knowledgeDocument, user } from "../lib/db/schema";
 
 config({ path: ".env" });
 config({ path: ".env.local" });
 
-const REDATOR_BANCO_SYSTEM_USER_ID =
-  "00000000-0000-4000-8000-000000000001";
+const REDATOR_BANCO_SYSTEM_USER_ID = "00000000-0000-4000-8000-000000000001";
 const REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID =
   "00000000-0000-4000-8000-000000000002";
-const PATH_BANCO_MD = join(process.cwd(), "lib", "ai", "banco-teses-redator.md");
+const PATH_BANCO_MD = join(
+  process.cwd(),
+  "lib",
+  "ai",
+  "banco-teses-redator.md"
+);
 
 async function main() {
   if (!process.env.POSTGRES_URL) {
@@ -49,7 +49,10 @@ async function main() {
   try {
     content = readFileSync(PATH_BANCO_MD, "utf-8").trim();
   } catch (err) {
-    console.error("Ficheiro lib/ai/banco-teses-redator.md não encontrado.", err);
+    console.error(
+      "Ficheiro lib/ai/banco-teses-redator.md não encontrado.",
+      err
+    );
     process.exit(1);
   }
   if (!content) {
@@ -85,7 +88,10 @@ async function main() {
     await db
       .delete(knowledgeChunk)
       .where(
-        eq(knowledgeChunk.knowledgeDocumentId, REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID)
+        eq(
+          knowledgeChunk.knowledgeDocumentId,
+          REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID
+        )
       );
   } else {
     await db.insert(knowledgeDocument).values({

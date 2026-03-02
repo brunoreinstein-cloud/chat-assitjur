@@ -141,14 +141,16 @@ export async function saveChat({
   agentId?: string;
 }) {
   try {
-    return await getDb().insert(chat).values({
-      id,
-      createdAt: new Date(),
-      userId,
-      title,
-      visibility,
-      agentId: agentId ?? DEFAULT_CHAT_AGENT_ID,
-    });
+    return await getDb()
+      .insert(chat)
+      .values({
+        id,
+        createdAt: new Date(),
+        userId,
+        title,
+        visibility,
+        agentId: agentId ?? DEFAULT_CHAT_AGENT_ID,
+      });
   } catch (error: unknown) {
     const err = error as { code?: string; constraint_name?: string };
     if (err.code === "23505") {
@@ -861,13 +863,12 @@ export async function getKnowledgeDocumentsByIds({
     return [];
   }
   try {
-    const userIdCondition =
-      allowedUserIds?.length
-        ? or(
-            eq(knowledgeDocument.userId, userId),
-            inArray(knowledgeDocument.userId, allowedUserIds)
-          )
-        : eq(knowledgeDocument.userId, userId);
+    const userIdCondition = allowedUserIds?.length
+      ? or(
+          eq(knowledgeDocument.userId, userId),
+          inArray(knowledgeDocument.userId, allowedUserIds)
+        )
+      : eq(knowledgeDocument.userId, userId);
     return await getDb()
       .select()
       .from(knowledgeDocument)
@@ -1248,13 +1249,12 @@ export async function getRelevantChunks({
   }
   const embeddingStr = `[${queryEmbedding.join(",")}]`;
   const vectorLiteral = `'${embeddingStr.replaceAll("'", "''")}'::vector`;
-  const userIdCondition =
-    allowedUserIds?.length
-      ? or(
-          eq(knowledgeDocument.userId, userId),
-          inArray(knowledgeDocument.userId, allowedUserIds)
-        )
-      : eq(knowledgeDocument.userId, userId);
+  const userIdCondition = allowedUserIds?.length
+    ? or(
+        eq(knowledgeDocument.userId, userId),
+        inArray(knowledgeDocument.userId, allowedUserIds)
+      )
+    : eq(knowledgeDocument.userId, userId);
   const rows = await getDb()
     .select({
       id: knowledgeChunk.id,
@@ -1437,7 +1437,10 @@ export async function getBuiltInAgentOverrides(): Promise<
         label: builtInAgentOverride.label,
       })
       .from(builtInAgentOverride);
-    const map: Record<string, { instructions: string | null; label: string | null }> = {};
+    const map: Record<
+      string,
+      { instructions: string | null; label: string | null }
+    > = {};
     for (const row of rows) {
       map[row.agentId] = {
         instructions: row.instructions,

@@ -134,7 +134,7 @@ export function Chat({
     if (!isModelAllowedForAgent(agentId, currentModelId)) {
       setCurrentModelId(getDefaultModelForAgent(agentId));
     }
-  }, [agentId]); // only when agent changes; currentModelId intentionally omitted to avoid loops
+  }, [agentId, currentModelId]); // only when agent changes; currentModelId intentionally omitted to avoid loops
 
   useEffect(() => {
     knowledgeDocumentIdsRef.current = knowledgeDocumentIds;

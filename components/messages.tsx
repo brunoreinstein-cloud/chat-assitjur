@@ -110,9 +110,7 @@ function PureMessages({
                   variant="central"
                 />
               )}
-              {agentId === "redator-contestacao" && (
-                <RedatorContestacaoHint />
-              )}
+              {agentId === "redator-contestacao" && <RedatorContestacaoHint />}
             </>
           )}
 

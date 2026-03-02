@@ -26,7 +26,8 @@ export const chatModels: ChatModel[] = [
     id: "anthropic/claude-sonnet-4.6",
     name: "Claude Sonnet 4.6",
     provider: "anthropic",
-    description: "Latest Sonnet: coding, agents, long context, adaptive thinking",
+    description:
+      "Latest Sonnet: coding, agents, long context, adaptive thinking",
   },
   {
     id: "anthropic/claude-opus-4.5",

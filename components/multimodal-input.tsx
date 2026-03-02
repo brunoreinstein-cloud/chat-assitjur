@@ -1776,9 +1776,7 @@ function PureModelSelectorCompact({
 }>) {
   const [open, setOpen] = useState(false);
 
-  const modelsForAgent = agentId
-    ? getModelsForAgent(agentId)
-    : chatModels;
+  const modelsForAgent = agentId ? getModelsForAgent(agentId) : chatModels;
   const modelsByProviderFiltered = agentId
     ? getModelsByProviderForAgent(agentId)
     : modelsByProvider;

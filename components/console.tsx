@@ -173,7 +173,7 @@ export function Console({ consoleOutputs, setConsoleOutputs }: ConsoleProps) {
                       </picture>
                     ) : (
                       <div
-                        className="w-full whitespace-pre-line break-words"
+                        className="wrap-break-word w-full whitespace-pre-line"
                         key={`${consoleOutput.id}-text-${content.value.length}-${content.value.slice(0, 100)}`}
                       >
                         {content.value}

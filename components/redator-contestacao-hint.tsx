@@ -21,17 +21,21 @@ export function RedatorContestacaoHint() {
           replica o modelo e adapta ao caso.
         </li>
         <li>
-          <strong className="text-foreground">Modo @bancodetese:</strong> selecione
-          os documentos na <strong className="text-foreground">Base de conhecimento</strong>{" "}
-          (sidebar) e envie a Petição Inicial; o agente usa essa base como banco de teses.
-          Pode também referenciar <code className="rounded bg-muted px-1 text-xs">@bancodetese</code> na
-          mensagem. Não é necessário anexar de novo — o agente valida primeiro o que está no contexto.
+          <strong className="text-foreground">Modo @bancodetese:</strong>{" "}
+          selecione os documentos na{" "}
+          <strong className="text-foreground">Base de conhecimento</strong>{" "}
+          (sidebar) e envie a Petição Inicial; o agente usa essa base como banco
+          de teses. Pode também referenciar{" "}
+          <code className="rounded bg-muted px-1 text-xs">@bancodetese</code> na
+          mensagem. Não é necessário anexar de novo — o agente valida primeiro o
+          que está no contexto.
         </li>
       </ul>
       <p className="mt-2 text-muted-foreground text-xs">
         Em ambos os modos o agente valida os documentos, aplica gates de
         qualidade e entrega minuta com campos pendentes destacados. Após o mapa
-        preliminar, confirme com &quot;CONFIRMAR&quot; para prosseguir à redação.
+        preliminar, confirme com &quot;CONFIRMAR&quot; para prosseguir à
+        redação.
       </p>
     </section>
   );

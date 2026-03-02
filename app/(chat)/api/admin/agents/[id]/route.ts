@@ -27,7 +27,10 @@ export async function PATCH(
   const { id: agentId } = await context.params;
   if (!AGENT_IDS.includes(agentId as AgentId)) {
     return NextResponse.json(
-      { error: "Invalid agent id. Must be one of: revisor-defesas, analise-contratos, redator-contestacao" },
+      {
+        error:
+          "Invalid agent id. Must be one of: revisor-defesas, analise-contratos, redator-contestacao",
+      },
       { status: 400 }
     );
   }
@@ -42,12 +45,16 @@ export async function PATCH(
   const obj = body as Record<string, unknown>;
   const instructions =
     typeof obj?.instructions === "string" ? obj.instructions : undefined;
-  const label =
-    typeof obj?.label === "string" ? obj.label.trim() : undefined;
+  const label = typeof obj?.label === "string" ? obj.label.trim() : undefined;
 
-  if (instructions !== undefined && instructions.length > MAX_INSTRUCTIONS_LENGTH) {
+  if (
+    instructions !== undefined &&
+    instructions.length > MAX_INSTRUCTIONS_LENGTH
+  ) {
     return NextResponse.json(
-      { error: `instructions must be at most ${MAX_INSTRUCTIONS_LENGTH} characters` },
+      {
+        error: `instructions must be at most ${MAX_INSTRUCTIONS_LENGTH} characters`,
+      },
       { status: 400 }
     );
   }

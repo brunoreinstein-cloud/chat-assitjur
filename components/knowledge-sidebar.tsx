@@ -262,8 +262,7 @@ export function KnowledgeSidebarContent({
   /** Filtra ficheiros por extensão e tamanho (útil quando vêm de uma pasta). */
   const filterAcceptedFiles = (files: File[]): File[] =>
     files.filter(
-      (f) =>
-        f.size <= MAX_FILE_SIZE_BYTES && ACCEPTED_EXTENSIONS.test(f.name)
+      (f) => f.size <= MAX_FILE_SIZE_BYTES && ACCEPTED_EXTENSIONS.test(f.name)
     );
 
   const handleKnowledgeFiles = async (fileList: FileList | null) => {
@@ -334,7 +333,10 @@ export function KnowledgeSidebarContent({
       }
       if (totalFailed.length > 0) {
         toast.warning(
-          `${totalFailed.length} ficheiro(s) falharam: ${totalFailed.map((f) => f.filename).slice(0, 5).join(", ")}${totalFailed.length > 5 ? "…" : ""}`
+          `${totalFailed.length} ficheiro(s) falharam: ${totalFailed
+            .map((f) => f.filename)
+            .slice(0, 5)
+            .join(", ")}${totalFailed.length > 5 ? "…" : ""}`
         );
       }
       if (filesInputRef.current) {
@@ -450,7 +452,7 @@ export function KnowledgeSidebarContent({
   };
 
   const handleRenameSubmit = async () => {
-    if (!docToRename || !renameInputValue.trim()) {
+    if (!(docToRename && renameInputValue.trim())) {
       return;
     }
     setIsPatchingDoc(true);
@@ -462,7 +464,9 @@ export function KnowledgeSidebarContent({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        toast.error((data as { message?: string }).message ?? "Erro ao renomear.");
+        toast.error(
+          (data as { message?: string }).message ?? "Erro ao renomear."
+        );
         return;
       }
       toast.success("Documento renomeado.");
@@ -507,16 +511,23 @@ export function KnowledgeSidebarContent({
     }
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/knowledge?id=${encodeURIComponent(docToDelete.id)}`, {
-        method: "DELETE",
-      });
+      const res = await fetch(
+        `/api/knowledge?id=${encodeURIComponent(docToDelete.id)}`,
+        {
+          method: "DELETE",
+        }
+      );
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        toast.error((data as { message?: string }).message ?? "Erro ao eliminar.");
+        toast.error(
+          (data as { message?: string }).message ?? "Erro ao eliminar."
+        );
         setDocToDelete(null);
         return;
       }
-      setKnowledgeDocumentIds((prev) => prev.filter((id) => id !== docToDelete.id));
+      setKnowledgeDocumentIds((prev) =>
+        prev.filter((id) => id !== docToDelete.id)
+      );
       toast.success("Documento eliminado.");
       setDocToDelete(null);
       await mutate("/api/knowledge");
@@ -532,10 +543,14 @@ export function KnowledgeSidebarContent({
 
   /** Selecionar todos os documentos visíveis (máx. para o chat = MAX_KNOWLEDGE_SELECT). */
   const selectAllFiltered = () => {
-    const ids = filteredKnowledgeDocs.map((d) => d.id).slice(0, MAX_KNOWLEDGE_SELECT);
+    const ids = filteredKnowledgeDocs
+      .map((d) => d.id)
+      .slice(0, MAX_KNOWLEDGE_SELECT);
     setKnowledgeDocumentIds((prev) => {
       const set = new Set(prev);
-      for (const id of ids) set.add(id);
+      for (const id of ids) {
+        set.add(id);
+      }
       return [...set].slice(0, MAX_KNOWLEDGE_SELECT);
     });
   };
@@ -545,7 +560,9 @@ export function KnowledgeSidebarContent({
   };
 
   const handleBulkMove = async (folderId: string | null) => {
-    if (knowledgeDocumentIds.length === 0) return;
+    if (knowledgeDocumentIds.length === 0) {
+      return;
+    }
     setIsBulkMoving(true);
     try {
       for (const id of knowledgeDocumentIds) {
@@ -556,13 +573,13 @@ export function KnowledgeSidebarContent({
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          toast.error((data as { message?: string }).message ?? "Erro ao mover.");
+          toast.error(
+            (data as { message?: string }).message ?? "Erro ao mover."
+          );
           return;
         }
       }
-      toast.success(
-        `${knowledgeDocumentIds.length} documento(s) movido(s).`
-      );
+      toast.success(`${knowledgeDocumentIds.length} documento(s) movido(s).`);
       await mutate("/api/knowledge");
       await mutate(docsKey);
       await mutateRecent();
@@ -574,26 +591,27 @@ export function KnowledgeSidebarContent({
   };
 
   const handleBulkDeleteConfirm = async () => {
-    if (knowledgeDocumentIds.length === 0) return;
+    if (knowledgeDocumentIds.length === 0) {
+      return;
+    }
     const idsToDelete = [...knowledgeDocumentIds];
     setIsBulkDeleting(true);
     setBulkDeleteConfirmOpen(false);
     try {
       for (const id of idsToDelete) {
-        const res = await fetch(
-          `/api/knowledge?id=${encodeURIComponent(id)}`,
-          { method: "DELETE" }
-        );
+        const res = await fetch(`/api/knowledge?id=${encodeURIComponent(id)}`, {
+          method: "DELETE",
+        });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          toast.error((data as { message?: string }).message ?? "Erro ao eliminar.");
+          toast.error(
+            (data as { message?: string }).message ?? "Erro ao eliminar."
+          );
           return;
         }
       }
       setKnowledgeDocumentIds([]);
-      toast.success(
-        `${idsToDelete.length} documento(s) eliminado(s).`
-      );
+      toast.success(`${idsToDelete.length} documento(s) eliminado(s).`);
       await mutate("/api/knowledge");
       await mutate(docsKey);
       await mutateRecent();
@@ -669,7 +687,7 @@ export function KnowledgeSidebarContent({
                   <DropdownMenuTrigger asChild>
                     <Button
                       aria-label={`Ações do documento «${doc.title}»`}
-                      className="size-7 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100"
+                      className="size-7 shrink-0 opacity-0 transition-opacity focus:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100"
                       size="icon"
                       type="button"
                       variant="ghost"
@@ -1113,9 +1131,7 @@ export function KnowledgeSidebarContent({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start">
-                      <DropdownMenuItem
-                        onSelect={() => handleBulkMove(null)}
-                      >
+                      <DropdownMenuItem onSelect={() => handleBulkMove(null)}>
                         Raiz
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
@@ -1131,7 +1147,7 @@ export function KnowledgeSidebarContent({
                   </DropdownMenu>
                   <Button
                     aria-label="Eliminar documentos selecionados"
-                    className="h-7 gap-1 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    className="h-7 gap-1 text-destructive text-xs hover:bg-destructive/10 hover:text-destructive"
                     disabled={isBulkDeleting}
                     onClick={() => setBulkDeleteConfirmOpen(true)}
                     size="sm"
@@ -1177,7 +1193,9 @@ export function KnowledgeSidebarContent({
             onChange={(e) => handleKnowledgeFiles(e.target.files)}
             ref={folderInputRef}
             type="file"
-            {...({ webkitdirectory: "" } as React.InputHTMLAttributes<HTMLInputElement>)}
+            {...({
+              webkitdirectory: "",
+            } as React.InputHTMLAttributes<HTMLInputElement>)}
           />
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <button
@@ -1271,7 +1289,9 @@ export function KnowledgeSidebarContent({
 
       <Dialog
         onOpenChange={(open) => {
-          if (!open) setDocToRename(null);
+          if (!open) {
+            setDocToRename(null);
+          }
         }}
         open={docToRename !== null}
       >
@@ -1309,7 +1329,9 @@ export function KnowledgeSidebarContent({
 
       <AlertDialog
         onOpenChange={(open) => {
-          if (!open) setDocToDelete(null);
+          if (!open) {
+            setDocToDelete(null);
+          }
         }}
         open={docToDelete !== null}
       >
@@ -1344,13 +1366,17 @@ export function KnowledgeSidebarContent({
 
       <AlertDialog
         onOpenChange={(open) => {
-          if (!open && !isBulkDeleting) setBulkDeleteConfirmOpen(false);
+          if (!(open || isBulkDeleting)) {
+            setBulkDeleteConfirmOpen(false);
+          }
         }}
         open={bulkDeleteConfirmOpen}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar documentos selecionados?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Eliminar documentos selecionados?
+            </AlertDialogTitle>
             <AlertDialogDescription>
               {knowledgeDocumentIds.length} documento(s) serão eliminados da
               base de conhecimento. Esta ação não pode ser desfeita.
