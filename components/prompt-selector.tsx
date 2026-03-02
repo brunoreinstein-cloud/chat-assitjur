@@ -12,8 +12,8 @@ import {
 import type { ChatMessage } from "@/lib/types";
 import { SparklesIcon } from "./icons";
 
-/** Prompts do Revisor: label curto (UI) e texto completo (enviado no chat). */
-const REVISOR_PROMPTS = [
+/** Prompts do Revisor: label curto (UI) e texto completo (enviado no chat). Exportado para uso no overflow do composer. */
+export const REVISOR_PROMPTS = [
   {
     id: "explicar-fluxo",
     label: "Explicar o fluxo do Revisor",

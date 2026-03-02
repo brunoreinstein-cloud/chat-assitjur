@@ -7,6 +7,8 @@ import equal from "fast-deep-equal";
 import {
   BookOpenIcon,
   CheckIcon,
+  FileTextIcon,
+  MoreHorizontalIcon,
   PencilIcon,
   PlusIcon,
   Settings2Icon,
@@ -26,26 +28,6 @@ import {
 import { toast } from "sonner";
 import useSWR from "swr";
 import { useLocalStorage, useWindowSize } from "usehooks-ts";
-import {
-  ModelSelector,
-  ModelSelectorContent,
-  ModelSelectorGroup,
-  ModelSelectorInput,
-  ModelSelectorItem,
-  ModelSelectorList,
-  ModelSelectorLogo,
-  ModelSelectorName,
-  ModelSelectorTrigger,
-} from "@/components/ai-elements/model-selector";
-import {
-  getModelsByProviderForAgent,
-  getModelsForAgent,
-} from "@/lib/ai/agent-models";
-import {
-  AGENT_IDS,
-  type AgentId,
-  getAgentConfig,
-} from "@/lib/ai/agents-registry";
 
 interface CustomAgentRow {
   id: string;
@@ -55,11 +37,6 @@ interface CustomAgentRow {
   createdAt: string;
 }
 
-import {
-  chatModels,
-  DEFAULT_CHAT_MODEL,
-  modelsByProvider,
-} from "@/lib/ai/models";
 import type {
   Attachment,
   ChatMessage,
@@ -75,8 +52,7 @@ import {
   PromptInputTools,
 } from "./elements/prompt-input";
 import { ArrowUpIcon, PaperclipIcon, StopIcon } from "./icons";
-import { PreviewAttachment } from "./preview-attachment";
-import { PromptSelector } from "./prompt-selector";
+import { REVISOR_PROMPTS } from "./prompt-selector";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -94,8 +70,16 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "./ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import {
@@ -110,7 +94,7 @@ import type { VisibilityType } from "./visibility-selector";
 
 const AGENT_INSTRUCTIONS_MAX_LENGTH = 4000;
 
-function setCookie(name: string, value: string) {
+function _setCookie(name: string, value: string) {
   const maxAge = 60 * 60 * 24 * 365; // 1 year
   // biome-ignore lint/suspicious/noDocumentCookie: needed for client-side cookie setting
   document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}`;
@@ -481,7 +465,7 @@ function PureMultimodalInput({
   className,
   selectedVisibilityType: _selectedVisibilityType,
   selectedModelId,
-  onModelChange,
+  onModelChange: _onModelChange,
   inputRef: inputRefProp,
   knowledgeDocumentIds = [],
   setKnowledgeDocumentIds,
@@ -504,6 +488,8 @@ function PureMultimodalInput({
   const [agentFormInstructions, setAgentFormInstructions] = useState("");
   const [agentFormBaseId, setAgentFormBaseId] = useState<string>("");
   const [agentIdToDelete, setAgentIdToDelete] = useState<string | null>(null);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [chipsExpanded, setChipsExpanded] = useState(false);
 
   const { data: customAgents = [], mutate: mutateCustomAgents } = useSWR<
     CustomAgentRow[]
@@ -664,6 +650,7 @@ function PureMultimodalInput({
       typeof a.extractedText === "string" && a.documentType === "contestacao"
   );
   const hasPiAndContestacao = hasPi && hasContestacao;
+  const hasPiOrContestacao = hasPi || hasContestacao;
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const { width } = useWindowSize();
 
@@ -896,6 +883,7 @@ function PureMultimodalInput({
 
   const handleDrop = useCallback(
     (event: React.DragEvent) => {
+      setIsDraggingOver(false);
       event.preventDefault();
       const items = event.dataTransfer.files;
       if (!items?.length) {
@@ -919,16 +907,46 @@ function PureMultimodalInput({
   const handleDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
+    setIsDraggingOver(true);
   }, []);
 
-  const removeAllAttachments = useCallback(() => {
+  const handleDragLeave = useCallback((event: React.DragEvent) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setIsDraggingOver(false);
+    }
+  }, []);
+
+  const handleDropWithOverlay = useCallback(
+    (event: React.DragEvent, preferredType?: "pi" | "contestacao") => {
+      setIsDraggingOver(false);
+      event.preventDefault();
+      const items = event.dataTransfer.files;
+      if (!items?.length) {
+        return;
+      }
+      const files = Array.from(items).filter(
+        (f) =>
+          f.type.startsWith("image/") ||
+          f.type === "application/pdf" ||
+          f.type === "application/msword" ||
+          f.type ===
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      );
+      if (files.length > 0) {
+        processFiles(files, preferredType);
+      }
+    },
+    [processFiles]
+  );
+
+  const _removeAllAttachments = useCallback(() => {
     setAttachments([]);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   }, [setAttachments]);
 
-  const handleSaveToArchivos = useCallback(async (attachment: Attachment) => {
+  const _handleSaveToArchivos = useCallback(async (attachment: Attachment) => {
     const pathname = attachment.pathname;
     const url = attachment.url;
     if (!(pathname && url)) {
@@ -1022,7 +1040,7 @@ function PureMultimodalInput({
     return () => textarea.removeEventListener("paste", handlePaste);
   }, [handlePaste]);
 
-  const handleDocumentTypeChange = useCallback(
+  const _handleDocumentTypeChange = useCallback(
     (attachmentUrl: string) => (documentType: "pi" | "contestacao") => {
       setAttachments((current) =>
         updateAttachmentByUrl(current, attachmentUrl, { documentType })
@@ -1031,7 +1049,7 @@ function PureMultimodalInput({
     [setAttachments]
   );
 
-  const handlePastedTextForAttachment = useCallback(
+  const _handlePastedTextForAttachment = useCallback(
     (attachmentUrl: string) => (text: string) => {
       setAttachments((current) =>
         updateAttachmentByUrl(current, attachmentUrl, {
@@ -1111,7 +1129,8 @@ function PureMultimodalInput({
       />
 
       <PromptInput
-        className="rounded-xl border border-border bg-background p-3 shadow-xs transition-all duration-200 focus-within:border-border hover:border-muted-foreground/50"
+        className="relative rounded-[22px] border border-border/80 bg-muted/10 p-3 shadow-sm transition-all duration-200 focus-within:border-primary/30 focus-within:bg-background hover:border-muted-foreground/40"
+        onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         onSubmit={(event) => {
@@ -1132,167 +1151,229 @@ function PureMultimodalInput({
           submitForm();
         }}
       >
-        {messages.length === 0 &&
-          agentId === "revisor-defesas" &&
-          attachments.length < 2 && (
-            <section
-              aria-label="Zonas de drop para Petição Inicial e Contestação"
-              className="mb-3 grid gap-3 sm:grid-cols-2"
-            >
-              <button
-                aria-label="Enviar Petição Inicial: arraste o ficheiro ou clique para selecionar"
-                className="flex min-h-[88px] cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-muted-foreground/30 border-dashed bg-muted/20 px-4 py-4 text-center transition-colors hover:border-primary/40 hover:bg-muted/40 focus-visible:border-primary/50 focus-visible:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        {isDraggingOver && (
+          <section
+            aria-label="Zona de largar ficheiros para anexar"
+            aria-live="polite"
+            className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-[22px] bg-background/90 backdrop-blur-sm"
+            onDragLeave={handleDragLeave}
+            onDrop={(e) => handleDropWithOverlay(e)}
+          >
+            <p className="font-medium text-foreground text-sm">
+              Solte para anexar
+            </p>
+            <div className="flex gap-2">
+              <Button
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.stopPropagation();
+                  handleDropWithOverlay(e, "pi");
+                }}
+                size="sm"
+                type="button"
+                variant="secondary"
+              >
+                Marcar como PI
+              </Button>
+              <Button
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.stopPropagation();
+                  handleDropWithOverlay(e, "contestacao");
+                }}
+                size="sm"
+                type="button"
+                variant="secondary"
+              >
+                Marcar como Contestação
+              </Button>
+            </div>
+          </section>
+        )}
+        {messages.length === 0 && agentId === "revisor-defesas" && (
+          <section
+            aria-label="Dicas para começar a revisão"
+            className="mb-2 flex flex-wrap items-center gap-2 rounded-lg bg-muted/30 px-3 py-2"
+          >
+            <span className="text-muted-foreground text-xs">
+              Para revisar defesas, anexe PI e Contestação (PDF/DOC/DOCX) ou
+              cole o texto.
+            </span>
+            <div className="flex gap-1.5">
+              <Button
+                aria-label="Adicionar Petição Inicial"
+                className="h-7 text-xs"
                 onClick={() => {
                   pendingPreferredTypeRef.current = "pi";
                   fileInputRef.current?.click();
                 }}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  e.dataTransfer.dropEffect = "copy";
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  const file = e.dataTransfer.files[0];
-                  if (
-                    file &&
-                    (file.type.startsWith("image/") ||
-                      file.type === "application/pdf" ||
-                      file.type === "application/msword" ||
-                      file.type ===
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-                  ) {
-                    processFiles([file], "pi");
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    pendingPreferredTypeRef.current = "pi";
-                    fileInputRef.current?.click();
-                  }
-                }}
+                size="sm"
                 type="button"
+                variant="outline"
               >
-                <span className="font-medium text-muted-foreground text-sm">
-                  Petição Inicial
-                </span>
-                <span className="text-muted-foreground/80 text-xs">
-                  Arraste o documento aqui ou clique para selecionar
-                </span>
-              </button>
-              <button
-                aria-label="Enviar Contestação: arraste o ficheiro ou clique para selecionar"
-                className="flex min-h-[88px] cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-muted-foreground/30 border-dashed bg-muted/20 px-4 py-4 text-center transition-colors hover:border-primary/40 hover:bg-muted/40 focus-visible:border-primary/50 focus-visible:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                Adicionar PI
+              </Button>
+              <Button
+                aria-label="Adicionar Contestação"
+                className="h-7 text-xs"
                 onClick={() => {
                   pendingPreferredTypeRef.current = "contestacao";
                   fileInputRef.current?.click();
                 }}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  e.dataTransfer.dropEffect = "copy";
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  const file = e.dataTransfer.files[0];
-                  if (
-                    file &&
-                    (file.type.startsWith("image/") ||
-                      file.type === "application/pdf" ||
-                      file.type === "application/msword" ||
-                      file.type ===
-                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-                  ) {
-                    processFiles([file], "contestacao");
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    pendingPreferredTypeRef.current = "contestacao";
-                    fileInputRef.current?.click();
-                  }
-                }}
+                size="sm"
                 type="button"
+                variant="outline"
               >
-                <span className="font-medium text-muted-foreground text-sm">
-                  Contestação
-                </span>
-                <span className="text-muted-foreground/80 text-xs">
-                  Arraste o documento aqui ou clique para selecionar
-                </span>
-              </button>
-            </section>
-          )}
+                Adicionar Contestação
+              </Button>
+            </div>
+          </section>
+        )}
         {(attachments.length > 0 || uploadQueue.length > 0) && (
-          <div className="flex flex-col gap-1">
-            {attachments.length >= 2 && (
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                {attachments.length >= 4 && (
-                  <span
-                    aria-live="polite"
-                    className="text-muted-foreground text-xs"
-                  >
-                    {attachments.length} anexos
-                    {attachments.some((a) => a.extractionFailed) &&
-                      ` (${attachments.filter((a) => a.extractionFailed).length} sem texto)`}
-                  </span>
-                )}
-                <Button
-                  aria-label="Remover todos os anexos"
-                  className="h-6 text-muted-foreground text-xs"
-                  onClick={removeAllAttachments}
-                  type="button"
-                  variant="ghost"
-                >
-                  Remover todos os anexos
-                </Button>
-              </div>
-            )}
-            <ul
-              aria-label={`Lista de anexos: ${attachments.length} documento(s)`}
-              className="flex flex-row items-end gap-2 overflow-x-auto overflow-y-hidden py-0.5"
-              data-testid="attachments-preview"
-            >
-              {attachments.map((attachment) => (
-                <li className="min-w-[120px] shrink-0" key={attachment.url}>
-                  <PreviewAttachment
-                    attachment={attachment}
-                    key={attachment.url}
-                    onDocumentTypeChange={
-                      typeof attachment.extractedText === "string"
-                        ? handleDocumentTypeChange(attachment.url)
-                        : undefined
-                    }
-                    onPastedText={
-                      attachment.extractionFailed === true
-                        ? handlePastedTextForAttachment(attachment.url)
-                        : undefined
-                    }
-                    onRemove={handleRemoveAttachment(attachment.url)}
-                    onSaveToArchivos={handleSaveToArchivos}
-                  />
-                </li>
-              ))}
-
-              {uploadQueue.map((filename) => (
-                <PreviewAttachment
-                  attachment={{
-                    url: "",
-                    name: filename,
-                    contentType: "",
-                  }}
-                  isUploading={true}
-                  key={filename}
-                  uploadingLabel="A enviar e a processar documento…"
-                />
-              ))}
-            </ul>
+          <div className="mb-2 flex flex-wrap items-center gap-1.5">
+            {(() => {
+              const total = attachments.length + uploadQueue.length;
+              const showCollapsed = total > 3 && !chipsExpanded;
+              const visibleAttachments = showCollapsed
+                ? attachments.slice(0, 2)
+                : attachments;
+              const visibleQueue = showCollapsed
+                ? uploadQueue.slice(0, Math.max(0, 2 - attachments.length))
+                : uploadQueue;
+              return (
+                <>
+                  {visibleAttachments.map((attachment) => (
+                    <div
+                      className="flex max-w-[200px] items-center gap-1.5 rounded-full border border-border/60 bg-muted/50 px-2.5 py-1 text-xs"
+                      key={attachment.url}
+                    >
+                      <FileTextIcon
+                        aria-hidden
+                        className="size-3.5 shrink-0 text-muted-foreground"
+                      />
+                      <span
+                        className="min-w-0 truncate text-foreground"
+                        title={attachment.name}
+                      >
+                        {attachment.name}
+                      </span>
+                      {attachment.documentType != null && (
+                        <span
+                          className={cn(
+                            "shrink-0 rounded px-1.5 py-0.5 font-medium text-[10px]",
+                            attachment.documentType === "pi"
+                              ? "bg-primary/15 text-primary"
+                              : "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                          )}
+                        >
+                          {attachment.documentType === "pi" ? "PI" : "Cont."}
+                        </span>
+                      )}
+                      {attachment.extractionFailed === true && (
+                        <span className="shrink-0 text-[10px] text-amber-600 dark:text-amber-400">
+                          sem texto
+                        </span>
+                      )}
+                      <Button
+                        aria-label="Remover anexo"
+                        className="size-5 shrink-0 rounded-full p-0"
+                        onClick={handleRemoveAttachment(attachment.url)}
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Trash2Icon size={10} />
+                      </Button>
+                    </div>
+                  ))}
+                  {visibleQueue.map((filename) => (
+                    <div
+                      className="flex max-w-[200px] items-center gap-1.5 rounded-full border border-border/60 bg-muted/50 px-2.5 py-1 text-xs"
+                      key={filename}
+                    >
+                      <FileTextIcon
+                        aria-hidden
+                        className="size-3.5 shrink-0 text-muted-foreground"
+                      />
+                      <span className="min-w-0 truncate text-muted-foreground">
+                        {filename}
+                      </span>
+                      <span className="shrink-0 text-[10px] text-muted-foreground">
+                        extraindo…
+                      </span>
+                    </div>
+                  ))}
+                  {showCollapsed && (
+                    <Button
+                      aria-label={`Mostrar mais ${total - 2} anexos`}
+                      className="h-6 rounded-full px-2.5 text-xs"
+                      onClick={() => setChipsExpanded(true)}
+                      type="button"
+                      variant="ghost"
+                    >
+                      +{total - 2} anexos
+                    </Button>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
+        {isRevisorAgent &&
+          (messages.length === 0 || hasPiOrContestacao) &&
+          (hasPiAndContestacao ? (
+            <div
+              aria-live="polite"
+              className="mb-2 flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/5 px-3 py-1.5 text-green-800 dark:text-green-200"
+            >
+              <CheckIcon aria-hidden className="size-4 shrink-0" />
+              <span className="font-medium text-sm">Pronto para enviar</span>
+            </div>
+          ) : (
+            <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-1.5">
+              <span className="text-amber-800 text-sm dark:text-amber-200">
+                Falta anexar: {(() => {
+                  if (hasPi && hasContestacao) {
+                    return null;
+                  }
+                  if (hasPi) {
+                    return "Contestação";
+                  }
+                  if (hasContestacao) {
+                    return "Petição Inicial";
+                  }
+                  return "PI e Contestação";
+                })()}
+              </span>
+              {!hasPi && (
+                <Button
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    pendingPreferredTypeRef.current = "pi";
+                    fileInputRef.current?.click();
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  Adicionar PI
+                </Button>
+              )}
+              {!hasContestacao && (
+                <Button
+                  className="h-7 text-xs"
+                  onClick={() => {
+                    pendingPreferredTypeRef.current = "contestacao";
+                    fileInputRef.current?.click();
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  Adicionar Contestação
+                </Button>
+              )}
+            </div>
+          ))}
         <div className="relative flex flex-row items-start gap-1 sm:gap-2">
           {atPopoverOpen && setKnowledgeDocumentIds && (
             <section
@@ -1361,7 +1442,7 @@ function PureMultimodalInput({
                 setAtPopoverOpen(false);
               }
             }}
-            placeholder="Cole o texto da Petição Inicial e da Contestação, ou descreva o caso e anexe documentos… Escreva @ para incluir um documento da base."
+            placeholder="Descreva o caso ou cole o texto… (@ para base)"
             ref={(el) => {
               textareaRef.current = el;
               if (inputRefProp) {
@@ -1374,49 +1455,158 @@ function PureMultimodalInput({
             value={input}
           />
         </div>
-        <PromptInputToolbar className="mt-1.5 flex min-h-9 flex-wrap items-center justify-between gap-2 border-border/60 border-t p-0 pt-2 shadow-none">
+        <PromptInputToolbar className="mt-1.5 flex min-h-11 flex-wrap items-center justify-between gap-2 border-border/50 border-t p-0 pt-2 shadow-none">
           <PromptInputTools className="min-w-0 flex-1 flex-wrap items-center gap-1 sm:gap-1.5">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  aria-label="Anexar ficheiros ou abrir base de conhecimento"
+                  className="size-11 shrink-0 rounded-full p-0"
+                  title="Adicionar (PI, Contestação, outros, base)"
+                  type="button"
+                  variant="ghost"
+                >
+                  <PlusIcon size={20} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" side="top">
+                <DropdownMenuItem
+                  onSelect={() => {
+                    pendingPreferredTypeRef.current = "pi";
+                    fileInputRef.current?.click();
+                  }}
+                >
+                  Anexar Petição Inicial
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    pendingPreferredTypeRef.current = "contestacao";
+                    fileInputRef.current?.click();
+                  }}
+                >
+                  Anexar Contestação
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    pendingPreferredTypeRef.current = null;
+                    fileInputRef.current?.click();
+                  }}
+                >
+                  Anexar outros docs
+                </DropdownMenuItem>
+                {onOpenKnowledgeSidebar && (
+                  <DropdownMenuItem onSelect={onOpenKnowledgeSidebar}>
+                    Base de conhecimento
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <AttachmentsButton
+              fileInputRef={fileInputRef}
+              selectedModelId={selectedModelId}
+              status={status}
+            />
+            {onOpenKnowledgeSidebar && setKnowledgeDocumentIds && (
+              <Button
+                aria-label="Abrir base de conhecimento"
+                className={cn(
+                  "relative size-11 shrink-0 rounded-full p-0 transition-colors hover:bg-accent",
+                  (knowledgeDocumentIds?.length ?? 0) > 0 && "text-primary"
+                )}
+                onClick={onOpenKnowledgeSidebar}
+                title="Base de conhecimento (@ no texto)"
+                type="button"
+                variant="ghost"
+              >
+                <BookOpenIcon size={18} />
+                {(knowledgeDocumentIds?.length ?? 0) > 0 && (
+                  <span
+                    aria-hidden
+                    className="absolute -top-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-primary font-medium text-[10px] text-primary-foreground"
+                  >
+                    {knowledgeDocumentIds.length > 9
+                      ? "9+"
+                      : knowledgeDocumentIds.length}
+                  </span>
+                )}
+              </Button>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  aria-label="Mais opções (sugestões, instruções, agentes)"
+                  className="size-11 shrink-0 rounded-full p-0"
+                  title="Mais opções"
+                  type="button"
+                  variant="ghost"
+                >
+                  <MoreHorizontalIcon size={18} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[200px]">
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    Sugestões de prompt
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    {REVISOR_PROMPTS.filter((p) => {
+                      if ("alwaysAvailable" in p && p.alwaysAvailable) {
+                        return true;
+                      }
+                      if (
+                        "requiresAttachments" in p &&
+                        p.requiresAttachments &&
+                        !(attachments.length > 0)
+                      ) {
+                        return false;
+                      }
+                      if (
+                        "requiresMessages" in p &&
+                        p.requiresMessages &&
+                        messages.length === 0
+                      ) {
+                        return false;
+                      }
+                      return true;
+                    }).map((p) => (
+                      <DropdownMenuItem
+                        className="whitespace-normal py-2 text-left"
+                        key={p.id}
+                        onSelect={() => {
+                          globalThis.history.pushState(
+                            {},
+                            "",
+                            `/chat/${chatId}`
+                          );
+                          sendMessage({
+                            role: "user",
+                            parts: [{ type: "text", text: p.text }],
+                          });
+                        }}
+                      >
+                        {p.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                {setAgentInstructions && (
+                  <DropdownMenuItem
+                    onSelect={() => setAgentInstructionsDialogOpen(true)}
+                  >
+                    <SparklesIcon className="mr-2 size-4" />
+                    Instruções do agente
+                  </DropdownMenuItem>
+                )}
+                {setAgentId && (
+                  <DropdownMenuItem onSelect={openManageAgents}>
+                    <Settings2Icon className="mr-2 size-4" />
+                    Meus agentes
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
             {setAgentId && (
               <>
-                <Select
-                  onValueChange={(value) => setAgentId(value)}
-                  value={
-                    AGENT_IDS.includes(agentId as AgentId)
-                      ? agentId
-                      : customAgents.some((a) => a.id === agentId)
-                        ? agentId
-                        : "revisor-defesas"
-                  }
-                >
-                  <SelectTrigger
-                    aria-label="Selecionar agente"
-                    className="h-8 w-auto min-w-[120px] border border-border/60 bg-muted/40 px-2.5 shadow-none transition-colors hover:border-muted-foreground/30 hover:bg-muted/70 focus:ring-2 focus:ring-ring/50 md:min-w-[140px]"
-                  >
-                    <SelectValue placeholder="Agente" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {AGENT_IDS.map((id) => {
-                      const config = getAgentConfig(id);
-                      return (
-                        <SelectItem key={id} value={id}>
-                          {config.label}
-                        </SelectItem>
-                      );
-                    })}
-                    {customAgents.length > 0 && (
-                      <>
-                        <div className="border-t px-2 py-1.5 font-medium text-muted-foreground text-xs">
-                          Meus agentes
-                        </div>
-                        {customAgents.map((agent) => (
-                          <SelectItem key={agent.id} value={agent.id}>
-                            {agent.name}
-                          </SelectItem>
-                        ))}
-                      </>
-                    )}
-                  </SelectContent>
-                </Select>
                 <Dialog
                   onOpenChange={(open) => {
                     setManageAgentsOpen(open);
@@ -1426,25 +1616,12 @@ function PureMultimodalInput({
                   }}
                   open={manageAgentsOpen}
                 >
-                  <DialogTrigger asChild>
-                    <Button
-                      aria-label="Gerir agentes personalizados"
-                      className="size-8 shrink-0 rounded-lg p-0 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                      onClick={openManageAgents}
-                      title="Gerir agentes personalizados"
-                      type="button"
-                      variant="ghost"
-                    >
-                      <Settings2Icon size={16} />
-                    </Button>
-                  </DialogTrigger>
                   <DialogContent className="max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>Meus agentes</DialogTitle>
                       <DialogDescription>
                         Crie e edite agentes com instruções e base de
-                        conhecimento próprias. Pode herdar as ferramentas do
-                        Revisor de Defesas (agente base).
+                        conhecimento próprias.
                       </DialogDescription>
                     </DialogHeader>
                     {agentFormVisible ? (
@@ -1488,8 +1665,7 @@ function PureMultimodalInput({
                             <SelectContent>
                               <SelectItem value="none">Nenhum</SelectItem>
                               <SelectItem value="revisor-defesas">
-                                Revisor de Defesas (DOCX, validação
-                                PI+Contestação)
+                                Revisor de Defesas
                               </SelectItem>
                               <SelectItem value="analise-contratos">
                                 Análise de contratos
@@ -1551,8 +1727,7 @@ function PureMultimodalInput({
                         </ul>
                         {customAgents.length === 0 && (
                           <p className="text-muted-foreground text-sm">
-                            Ainda não tem agentes personalizados. Crie um para
-                            usar instruções e contexto próprios.
+                            Ainda não tem agentes personalizados.
                           </p>
                         )}
                         <Button
@@ -1573,25 +1748,12 @@ function PureMultimodalInput({
                     onOpenChange={handleAgentInstructionsDialogOpenChange}
                     open={agentInstructionsDialogOpen}
                   >
-                    <DialogTrigger asChild>
-                      <Button
-                        aria-label="Configurar instruções do agente (padrão: Revisor de Defesas)"
-                        className="size-8 shrink-0 rounded-lg p-0 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                        title="Instruções do agente (padrão: Revisor de Defesas)"
-                        type="button"
-                        variant="ghost"
-                      >
-                        <SparklesIcon size={16} />
-                      </Button>
-                    </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
                         <DialogTitle>Instruções do agente</DialogTitle>
                         <DialogDescription>
-                          Por padrão o agente atua como Revisor de Defesas
-                          Trabalhistas (auditoria, parecer, roteiros).
-                          Sobrescreva aqui apenas se quiser outro comportamento
-                          neste chat.
+                          Por padrão o agente atua como Revisor de Defesas.
+                          Sobrescreva aqui apenas se quiser outro comportamento.
                         </DialogDescription>
                       </DialogHeader>
                       <div className="grid gap-2">
@@ -1606,7 +1768,7 @@ function PureMultimodalInput({
                           onChange={(e) =>
                             setLocalAgentInstructions(e.target.value)
                           }
-                          placeholder="Deixe em branco = Revisor de Defesas. Ou descreva outro tom/regras para este chat…"
+                          placeholder="Deixe em branco = Revisor de Defesas."
                           rows={4}
                           value={localAgentInstructions}
                         />
@@ -1620,49 +1782,6 @@ function PureMultimodalInput({
                 )}
               </>
             )}
-            {onOpenKnowledgeSidebar && setKnowledgeDocumentIds && (
-              <Button
-                aria-label="Abrir base de conhecimento"
-                className={cn(
-                  "relative size-8 shrink-0 rounded-lg p-0 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
-                  (knowledgeDocumentIds?.length ?? 0) > 0 && "text-primary"
-                )}
-                onClick={onOpenKnowledgeSidebar}
-                title="Base de conhecimento — escolher documentos para o chat (ou use @ no texto)"
-                type="button"
-                variant="ghost"
-              >
-                <BookOpenIcon size={16} />
-                {(knowledgeDocumentIds?.length ?? 0) > 0 && (
-                  <span
-                    aria-hidden
-                    className="absolute -top-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-primary font-medium text-[10px] text-primary-foreground"
-                  >
-                    {knowledgeDocumentIds.length > 9
-                      ? "9+"
-                      : knowledgeDocumentIds.length}
-                  </span>
-                )}
-              </Button>
-            )}
-            <PromptSelector
-              chatId={chatId}
-              disabled={status !== "ready"}
-              hasAttachments={attachments.length > 0}
-              messagesCount={messages.length}
-              sendMessage={sendMessage}
-            />
-            <AttachmentsButton
-              fileInputRef={fileInputRef}
-              selectedModelId={selectedModelId}
-              status={status}
-            />
-            <div aria-hidden className="mx-1 h-4 w-px shrink-0 bg-border/60" />
-            <ModelSelectorCompact
-              agentId={agentId}
-              onModelChange={onModelChange}
-              selectedModelId={selectedModelId}
-            />
           </PromptInputTools>
 
           {status === "submitted" ? (
@@ -1680,11 +1799,8 @@ function PureMultimodalInput({
         </PromptInputToolbar>
       </PromptInput>
       {messages.length === 0 && (
-        <p className="text-muted-foreground text-xs" id="revisor-input-hint">
-          Anexe a Petição Inicial e a Contestação (PDF, DOC ou DOCX); o tipo é
-          identificado automaticamente. Ajuste no menu de cada documento se
-          necessário. Use o ícone de livro para a base ou @ no texto. Pode
-          arrastar ficheiros para a caixa.
+        <p className="text-muted-foreground/90 text-xs" id="revisor-input-hint">
+          PDF/DOC/DOCX • Auto-identificação • @ base
         </p>
       )}
     </div>
@@ -1764,85 +1880,6 @@ function PureAttachmentsButton({
 }
 
 const AttachmentsButton = memo(PureAttachmentsButton);
-
-function PureModelSelectorCompact({
-  agentId,
-  selectedModelId,
-  onModelChange,
-}: Readonly<{
-  agentId?: string;
-  selectedModelId: string;
-  onModelChange?: (modelId: string) => void;
-}>) {
-  const [open, setOpen] = useState(false);
-
-  const modelsForAgent = agentId ? getModelsForAgent(agentId) : chatModels;
-  const modelsByProviderFiltered = agentId
-    ? getModelsByProviderForAgent(agentId)
-    : modelsByProvider;
-
-  const selectedModel =
-    modelsForAgent.find((m) => m.id === selectedModelId) ??
-    modelsForAgent.find((m) => m.id === DEFAULT_CHAT_MODEL) ??
-    modelsForAgent[0] ??
-    chatModels[0];
-  const [provider] = selectedModel.id.split("/");
-
-  const providerNames: Record<string, string> = {
-    anthropic: "Anthropic",
-    openai: "OpenAI",
-    google: "Google",
-    xai: "xAI",
-    reasoning: "Raciocínio",
-  };
-
-  return (
-    <ModelSelector onOpenChange={setOpen} open={open}>
-      <ModelSelectorTrigger asChild>
-        <Button className="h-8 w-[200px] justify-between px-2" variant="ghost">
-          {provider && <ModelSelectorLogo provider={provider} />}
-          <ModelSelectorName>{selectedModel.name}</ModelSelectorName>
-        </Button>
-      </ModelSelectorTrigger>
-      <ModelSelectorContent>
-        <ModelSelectorInput placeholder="Buscar modelos…" />
-        <ModelSelectorList>
-          {Object.entries(modelsByProviderFiltered).map(
-            ([providerKey, providerModels]) => (
-              <ModelSelectorGroup
-                heading={providerNames[providerKey] ?? providerKey}
-                key={providerKey}
-              >
-                {providerModels.map((model) => {
-                  const logoProvider = model.id.split("/")[0];
-                  return (
-                    <ModelSelectorItem
-                      key={model.id}
-                      onSelect={() => {
-                        onModelChange?.(model.id);
-                        setCookie("chat-model", model.id);
-                        setOpen(false);
-                      }}
-                      value={model.id}
-                    >
-                      <ModelSelectorLogo provider={logoProvider} />
-                      <ModelSelectorName>{model.name}</ModelSelectorName>
-                      {model.id === selectedModel.id && (
-                        <CheckIcon className="ml-auto size-4" />
-                      )}
-                    </ModelSelectorItem>
-                  );
-                })}
-              </ModelSelectorGroup>
-            )
-          )}
-        </ModelSelectorList>
-      </ModelSelectorContent>
-    </ModelSelector>
-  );
-}
-
-const ModelSelectorCompact = memo(PureModelSelectorCompact);
 
 function PureStopButton({
   stop,

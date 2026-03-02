@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
+import { ChatComposerHeader } from "@/components/chat-composer-header";
 import { ChatHeader } from "@/components/chat-header";
 import {
   AlertDialog,
@@ -402,6 +403,15 @@ export function Chat({
             onSaveToKnowledge={openSaveToKnowledgeDialog}
             selectedVisibilityType={initialVisibilityType}
           />
+
+          {!isReadonly && (
+            <ChatComposerHeader
+              agentId={agentId}
+              onModelChange={setCurrentModelId}
+              selectedModelId={currentModelId}
+              setAgentId={setAgentId}
+            />
+          )}
 
           <Messages
             addToolApprovalResponse={addToolApprovalResponse}
