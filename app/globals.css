@@ -11,6 +11,18 @@
 @plugin "tailwindcss-animate";
 @plugin "@tailwindcss/typography";
 
+/* AssistJur.IA brand tokens — Brand Book docs/BRAND-BOOK-ASSISTJUR.md */
+:root {
+  --assistjur-purple: #7c3aed;
+  --assistjur-purple-dark: #3f1c6b;
+  --assistjur-purple-darker: #2e1065;
+  --assistjur-gold: #eab308;
+  --assistjur-gold-alt: #f59e0b;
+  --assistjur-gray: #9ca3af;
+  --assistjur-gray-light: #d1d5db;
+  --assistjur-purple-light: #a78bfa;
+}
+
 /* define design tokens (light mode) */
 :root {
   --background: hsl(0 0% 100%);
@@ -198,9 +210,9 @@
   }
 
   body {
-    @apply bg-background text-foreground;
-    overflow-x: hidden;
     position: relative;
+    overflow-x: hidden;
+    @apply bg-background text-foreground;
   }
 
   html {
@@ -293,8 +305,8 @@
 
 /* firefox scrollbar styling */
 * {
-  scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
+  scrollbar-width: thin;
 }
 
 @theme inline {
@@ -306,6 +318,13 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  /* AssistJur.IA brand */
+  --color-assistjur-purple: var(--assistjur-purple);
+  --color-assistjur-purple-dark: var(--assistjur-purple-dark);
+  --color-assistjur-purple-darker: var(--assistjur-purple-darker);
+  --color-assistjur-gold: var(--assistjur-gold);
+  --color-assistjur-gray: var(--assistjur-gray);
+  --color-assistjur-gray-light: var(--assistjur-gray-light);
 }
 
 @layer base {
@@ -314,5 +333,23 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* Skip link — visible on focus, hidden otherwise (a11y) */
+.skip-link {
+  @apply absolute left-4 top-4 z-[100] -translate-y-[200%] rounded-md bg-assistjur-gold px-4 py-3 font-bold text-assistjur-purple-darker text-sm transition-transform duration-200 focus:translate-y-0 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-assistjur-purple-darker focus:outline-none;
+}
+
+/* Landing: reduced motion — disable decorative transitions */
+@media (prefers-reduced-motion: reduce) {
+  .skip-link {
+    transition: none;
+  }
+  .landing-card-hover {
+    transition: none;
+  }
+  .landing-cta-hover {
+    transition: none;
   }
 }

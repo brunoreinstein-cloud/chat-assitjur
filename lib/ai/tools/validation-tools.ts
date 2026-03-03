@@ -54,6 +54,18 @@ export const validationTools = {
     }),
     execute: noop,
   }),
+  improvePrompt: tool({
+    description:
+      "Improve a prompt or instruction text using prompt engineering best practices. Use when the user asks to improve, refine or rewrite a prompt or instruction.",
+    inputSchema: z.object({
+      prompt: z
+        .string()
+        .describe(
+          "The prompt or instruction text to improve (up to 4000 characters)."
+        ),
+    }),
+    execute: noop,
+  }),
   createRevisorDefesaDocuments: tool({
     description:
       "Create the 3 Revisor documents (Avaliação, Roteiro Advogado, Roteiro Preposto) in one call. Use this in FASE B after the user CONFIRMs the GATE 0.5 summary. Pass the exact titles for each document. Optionally pass contextoResumo with the case summary (e.g. the text between GATE_0.5_RESUMO delimiters) so documents are filled with correct data.",

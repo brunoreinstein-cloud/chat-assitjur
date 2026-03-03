@@ -3,15 +3,24 @@
  * Mapeia agentId → instruções e conjunto de tools para o chat.
  */
 
+import { AGENTE_ASSISTENTE_GERAL_INSTRUCTIONS } from "@/lib/ai/agent-assistente-geral";
+import { AGENTE_ASSISTJUR_MASTER_INSTRUCTIONS } from "@/lib/ai/agent-assistjur-master";
 import { AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS } from "@/lib/ai/agent-redator-contestacao";
 import { AGENTE_REVISOR_DEFESAS_INSTRUCTIONS } from "@/lib/ai/agent-revisor-defesas";
 
+export const AGENT_ID_ASSISTENTE_GERAL = "assistente-geral";
 export const AGENT_ID_REVISOR_DEFESAS = "revisor-defesas";
 export const AGENT_ID_REDATOR_CONTESTACAO = "redator-contestacao";
+export const AGENT_ID_ASSISTJUR_MASTER = "assistjur-master";
+
+/** Id usado pela API quando o cliente não envia agentId (chat sem agente selecionado). */
+export const DEFAULT_AGENT_ID_WHEN_EMPTY = AGENT_ID_ASSISTENTE_GERAL;
 
 export const AGENT_IDS = [
+  AGENT_ID_ASSISTENTE_GERAL,
   AGENT_ID_REVISOR_DEFESAS,
   AGENT_ID_REDATOR_CONTESTACAO,
+  AGENT_ID_ASSISTJUR_MASTER,
 ] as const;
 
 export type AgentId = (typeof AGENT_IDS)[number];
@@ -41,6 +50,13 @@ const REDATOR_ALLOWED_MODEL_IDS = [
 ];
 
 const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
+  [AGENT_ID_ASSISTENTE_GERAL]: {
+    id: AGENT_ID_ASSISTENTE_GERAL,
+    label: "Assistente",
+    instructions: AGENTE_ASSISTENTE_GERAL_INSTRUCTIONS,
+    useRevisorDefesaTools: false,
+    useRedatorContestacaoTool: false,
+  },
   [AGENT_ID_REVISOR_DEFESAS]: {
     id: AGENT_ID_REVISOR_DEFESAS,
     label: "Revisor de Defesas",
@@ -57,12 +73,19 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
     useRedatorContestacaoTool: true,
     allowedModelIds: REDATOR_ALLOWED_MODEL_IDS,
   },
+  [AGENT_ID_ASSISTJUR_MASTER]: {
+    id: AGENT_ID_ASSISTJUR_MASTER,
+    label: "AssistJur.IA Master",
+    instructions: AGENTE_ASSISTJUR_MASTER_INSTRUCTIONS,
+    useRevisorDefesaTools: false,
+    useRedatorContestacaoTool: false,
+  },
 };
 
 export function getAgentConfig(agentId: string): AgentConfig {
   const id = AGENT_IDS.includes(agentId as AgentId)
     ? (agentId as AgentId)
-    : AGENT_ID_REVISOR_DEFESAS;
+    : DEFAULT_AGENT_ID_WHEN_EMPTY;
   return AGENT_CONFIGS[id];
 }
 

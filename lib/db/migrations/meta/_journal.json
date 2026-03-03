@@ -113,6 +113,48 @@
       "when": 1772375606853,
       "tag": "0015_credit_balance_and_usage",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1772375606854,
+      "tag": "0019_indexing_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1772375606855,
+      "tag": "0020_llm_usage_user_created_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1772375606856,
+      "tag": "0021_chat_user_id_created_at_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1772375606857,
+      "tag": "0022_custom_agent_knowledge",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1772562572466,
+      "tag": "0020_purple_jigsaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1772571126803,
+      "tag": "0021_green_sunfire",
+      "breakpoints": true
     }
   ]
 }

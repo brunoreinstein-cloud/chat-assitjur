@@ -511,7 +511,12 @@ function PureArtifact({
                     getDocumentContentById={getDocumentContentById}
                     isCurrentVersion={isCurrentVersion}
                     isInline={false}
-                    isLoading={isDocumentsFetching && !artifact.content}
+                    isLoading={
+                      (isDocumentsFetching && !artifact.content) ||
+                      (artifact.documentId !== "init" &&
+                        documents === undefined &&
+                        !artifact.content)
+                    }
                     metadata={metadata}
                     mode={mode}
                     onSaveContent={saveContent}

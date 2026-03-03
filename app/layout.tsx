@@ -7,7 +7,11 @@ import "./globals.css";
 import { SessionProvider } from "next-auth/react";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://chat.vercel.ai"),
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL ??
+      process.env.AUTH_URL ??
+      "http://localhost:3300"
+  ),
   title: "Revisor de Defesas Trabalhistas",
   description:
     "Agente revisor de contestações trabalhistas: auditoria, parecer executivo, roteiros de advogado e preposto para audiência.",
@@ -65,6 +69,14 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <head>
+        <script
+          // Inline script: aplica tema antes da hidratação para evitar flash (next-themes).
+          // Deve correr antes de qualquer conteúdo visível.
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: required for theme FOUC prevention
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var t=localStorage.getItem('theme');var d=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);})();`,
+          }}
+        />
         <script
           // biome-ignore lint/security/noDangerouslySetInnerHtml: "Required"
           dangerouslySetInnerHTML={{

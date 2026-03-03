@@ -1,79 +1,83 @@
-<a href="https://chat.vercel.ai/">
-  <img alt="Next.js 14 and App Router-ready Chatbot." src="app/(chat)/opengraph-image.png">
-  <h1 align="center">Chatbot</h1>
-</a>
+# Chatbot — Agentes Jurídicos com IA
+
+Aplicação de chat com agentes de IA especializados em **contencioso trabalhista**: Revisor de Defesas Trabalhistas, Redator de Contestações e AssistJur Master. Baseada em Next.js e no Vercel AI SDK.
 
 <p align="center">
-    Chatbot (formerly AI Chatbot) is a free, open-source template built with Next.js and the AI SDK that helps you quickly build powerful chatbot applications.
-</p>
-
-<p align="center">
-  <a href="https://chatbot.dev"><strong>Read Docs</strong></a> ·
-  <a href="#features"><strong>Features</strong></a> ·
-  <a href="#model-providers"><strong>Model Providers</strong></a> ·
-  <a href="#deploy-your-own"><strong>Deploy Your Own</strong></a> ·
-  <a href="#running-locally"><strong>Running locally</strong></a> ·
+  <a href="#funcionalidades"><strong>Funcionalidades</strong></a> ·
+  <a href="#stack"><strong>Stack</strong></a> ·
+  <a href="#provedores-de-modelos"><strong>Provedores de modelos</strong></a> ·
+  <a href="#executar-localmente"><strong>Executar localmente</strong></a> ·
+  <a href="#deploy"><strong>Deploy</strong></a> ·
+  <a href="#documentação"><strong>Documentação</strong></a> ·
   <a href="#agent-skills"><strong>Agent Skills</strong></a>
 </p>
 <br/>
 
-## Features
+## Funcionalidades
 
-- [Next.js](https://nextjs.org) App Router
-  - Advanced routing for seamless navigation and performance
-  - React Server Components (RSCs) and Server Actions for server-side rendering and increased performance
-- [AI SDK](https://ai-sdk.dev/docs/introduction)
-  - Unified API for generating text, structured objects, and tool calls with LLMs
-  - Hooks for building dynamic chat and generative user interfaces
-  - Supports xAI (default), OpenAI, Fireworks, and other model providers
-- [shadcn/ui](https://ui.shadcn.com)
-  - Styling with [Tailwind CSS](https://tailwindcss.com)
-  - Component primitives from [Radix UI](https://radix-ui.com) for accessibility and flexibility
-- Data Persistence
-  - [Neon Serverless Postgres](https://vercel.com/marketplace/neon) for saving chat history and user data
-  - [Vercel Blob](https://vercel.com/storage/blob) for efficient file storage
-- [Auth.js](https://authjs.dev)
-  - Simple and secure authentication
+- **Chat com LLM** — Streaming, histórico de conversas, múltiplos agentes built-in (Revisor de Defesas, Redator de Contestações, AssistJur Master).
+- **Base de conhecimento** — Documentos (teses, precedentes, cláusulas) associados ao utilizador, injetados no contexto do chat; suporte a modo @bancodetese no Redator de Contestações.
+- **Ferramentas** — Clima, criar/atualizar documento, sugestões; integração com o fluxo do agente.
+- **Autenticação** — Auth.js (NextAuth) v5; **modo visitante (guest)** para usar o chat sem conta.
+- **Upload de ficheiros** — Vercel Blob ou Supabase Storage; suporte a PDF e outros formatos no chat.
+- **Ajuda** — `/ajuda`: guia das funcionalidades (agentes, base de conhecimento, créditos, ficheiros, modo visitante).
+- **Painel administrativo** — `/admin/agents`: edição das instruções e etiquetas dos agentes built-in; APIs de créditos LLM (protegidas por chave).
+- **Persistência** — PostgreSQL (Supabase/Neon) com Drizzle ORM; histórico de chats e mensagens.
 
-## Model Providers
+## Stack
 
-This template uses the [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) to access multiple AI models through a unified interface. The default configuration includes [xAI](https://x.ai) models (`grok-2-vision-1212`, `grok-3-mini`) routed through the gateway.
+| Área            | Tecnologia |
+|-----------------|------------|
+| Framework       | Next.js 16 (App Router), React 19 |
+| IA              | Vercel AI SDK, AI Gateway (xAI, OpenAI, etc.) |
+| Base de dados   | PostgreSQL (Supabase/Neon), Drizzle ORM |
+| Auth            | Auth.js (NextAuth) v5 beta |
+| Storage         | Vercel Blob ou Supabase Storage |
+| Lint/Format     | Ultracite (Biome) |
+| Package manager | pnpm |
+| Deploy          | Vercel (recomendado) |
 
-### AI Gateway Authentication
+## Provedores de modelos
 
-**For Vercel deployments**: Authentication is handled automatically via OIDC tokens.
+O projeto usa o [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) para aceder a vários modelos (xAI, OpenAI, etc.). A configuração padrão inclui modelos xAI via gateway.
 
-**For non-Vercel deployments**: You need to provide an AI Gateway API key by setting the `AI_GATEWAY_API_KEY` environment variable in your `.env.local` file.
+- **Deploy na Vercel:** autenticação via OIDC.
+- **Fora da Vercel:** definir `AI_GATEWAY_API_KEY` em `.env.local`.
 
-With the [AI SDK](https://ai-sdk.dev/docs/introduction), you can also switch to direct LLM providers like [OpenAI](https://openai.com), [Anthropic](https://anthropic.com), [Cohere](https://cohere.com/), and [many more](https://ai-sdk.dev/providers/ai-sdk-providers) with just a few lines of code.
+Com o [AI SDK](https://ai-sdk.dev/docs/introduction) é possível usar outros provedores (OpenAI, Anthropic, etc.) alterando poucas linhas.
 
-## Deploy Your Own
+## Executar localmente
 
-You can deploy your own version of Chatbot to Vercel with one click:
+Usar as variáveis definidas em [`.env.example`](.env.example). Recomendado: Vercel CLI para puxar env (`pnpm run vercel:env`). Ver [docs/vercel-cli.md](docs/vercel-cli.md).
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/templates/next.js/chatbot)
-
-## Running locally
-
-You will need to use the environment variables [defined in `.env.example`](.env.example) to run Chatbot. It's recommended you use [Vercel Environment Variables](https://vercel.com/docs/projects/environment-variables) for this, but a `.env` file is all that is necessary.
-
-> Note: You should not commit your `.env` file or it will expose secrets that will allow others to control access to your various AI and authentication provider accounts.
-
-1. **Vercel CLI** (recomendado): `pnpm exec vercel login` → `pnpm run vercel:link` → `pnpm run vercel:env`. Ver [docs/vercel-cli.md](docs/vercel-cli.md) para a configuração completa.
-2. Ou instala globalmente: `npm i -g vercel`, depois `vercel link` e `vercel env pull .env.local`.
+> Não commitar `.env` ou `.env.local` — contêm segredos.
 
 ```bash
 pnpm install
-pnpm db:migrate # Setup database or apply latest database changes
+pnpm db:migrate   # criar/aplicar migrações
 pnpm dev
 ```
 
-Your app template should now be running on [localhost:3000](http://localhost:3000).
+A aplicação fica disponível em [http://localhost:3300](http://localhost:3300). O primeiro carregamento em dev pode ser mais lento (Turbopack compila sob pedido); depois fica rápido. Opcional: com o servidor a correr, noutro terminal `pnpm run dev:warmup` para aquecer a cache.
+
+**Outros comandos úteis:** `pnpm run prebuild` (lint + testes unitários), `pnpm build`, `pnpm db:studio` (Drizzle Studio), `pnpm run format`, `pnpm run lint`. Ver [AGENTS.md](AGENTS.md#comandos-úteis).
+
+## Deploy
+
+Deploy recomendado na [Vercel](https://vercel.com). Checklist e variáveis em [docs/vercel-setup.md](docs/vercel-setup.md) e [docs/vercel-cli.md](docs/vercel-cli.md). Antes do push: `pnpm run prepush` (build completo).
+
+## Documentação
+
+- **[AGENTS.md](AGENTS.md)** — Guia para agentes de IA: visão do projeto, stack, estrutura, regras, variáveis de ambiente, painel admin, base de conhecimento, comandos.
+- **[docs/PROJETO-REVISOR-DEFESAS.md](docs/PROJETO-REVISOR-DEFESAS.md)** — Agente Revisor de Defesas: fluxo (GATE-1 → FASE A → GATE 0.5 → FASE B), entradas/saídas (Doc 1–3), API, base de conhecimento.
+- **[docs/AGENTES-IA-PERSONALIZADOS.md](docs/AGENTES-IA-PERSONALIZADOS.md)** — Agentes built-in, instruções customizadas e base de conhecimento.
+- **[docs/SPEC-AI-DRIVE-JURIDICO.md](docs/SPEC-AI-DRIVE-JURIDICO.md)** — Especificação do produto AI Drive Jurídico.
+- **[docs/SPEC-CREDITOS-LLM.md](docs/SPEC-CREDITOS-LLM.md)** — Créditos LLM e painel administrativo.
 
 ## Agent Skills
 
-This project uses [Agent Skills](https://skills.sh) from `.agents/skills/` to extend AI coding agents (Cursor, Codex, etc.) with Next.js, React, AI SDK, Supabase, and debugging know-how.
+O projeto usa [Agent Skills](https://skills.sh) em `.agents/skills/` (Next.js, React, AI SDK, Supabase, debugging, revisor-defesas-context, etc.).
 
-- **List installed skills:** `pnpm run skills:list` or `npx skills list`
-- **Check for updates:** `pnpm run skills:check` or `npx skills update`
-- **Full overview:** [.agents/README.md](.agents/README.md)
+- **Listar:** `npx skills list` ou `pnpm run skills:list`
+- **Atualizar:** `npx skills update` ou `pnpm run skills:check`
+- **Visão geral:** [.agents/README.md](.agents/README.md)

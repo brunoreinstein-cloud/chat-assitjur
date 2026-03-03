@@ -1,6 +1,6 @@
 "use client";
 
-import { PencilIcon } from "lucide-react";
+import { LoaderIcon, PencilIcon, WandIcon } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import useSWR from "swr";
@@ -37,6 +37,44 @@ async function fetchAgentsWithKey(url: string, adminKey: string) {
   return res.json() as Promise<BuiltInAgentItem[]>;
 }
 
+function buildImproveToastDescription(data: {
+  diagnosis?: string;
+  notes?: string;
+}): string | undefined {
+  const parts: string[] = [];
+  if (data.diagnosis?.trim()) {
+    parts.push(data.diagnosis.trim());
+  }
+  if (data.notes?.trim()) {
+    parts.push(`Alterações: ${data.notes.trim()}`);
+  }
+  if (parts.length === 0) {
+    return undefined;
+  }
+  const full = parts.join("\n\n");
+  return full.length > 400 ? `${full.slice(0, 400)}…` : full;
+}
+
+async function patchAgentAndMutate(
+  agentId: string,
+  adminKey: string,
+  label: string | undefined,
+  instructions: string
+): Promise<void> {
+  const res = await fetch(`/api/admin/agents/${agentId}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      "x-admin-key": adminKey,
+    },
+    body: JSON.stringify({ label: label || undefined, instructions }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error((data as { error?: string }).error ?? "Falha ao guardar");
+  }
+}
+
 export default function AdminAgentsPage() {
   const [adminKey, setAdminKey] = useState("");
   const [keyInput, setKeyInput] = useState("");
@@ -46,12 +84,26 @@ export default function AdminAgentsPage() {
   const [formLabel, setFormLabel] = useState("");
   const [formInstructions, setFormInstructions] = useState("");
   const [saving, setSaving] = useState(false);
+  const [isImprovingPrompt, setIsImprovingPrompt] = useState(false);
 
-  const { data: agents = [], mutate } = useSWR<BuiltInAgentItem[]>(
+  const {
+    data: agents = [],
+    error: agentsError,
+    isLoading: agentsLoading,
+    mutate,
+  } = useSWR<BuiltInAgentItem[]>(
     adminKey ? ["/api/admin/agents", adminKey] : null,
     ([url, key]: [string, string]) => fetchAgentsWithKey(url, key),
     { revalidateOnFocus: false }
   );
+
+  const isUnauthorized =
+    agentsError?.message?.toLowerCase().includes("unauthorized") ?? false;
+
+  const resetKey = useCallback(() => {
+    setAdminKey("");
+    setKeyInput("");
+  }, []);
 
   const openEdit = useCallback((agent: BuiltInAgentItem) => {
     setEditingAgent(agent);
@@ -69,30 +121,59 @@ export default function AdminAgentsPage() {
     }
     setSaving(true);
     try {
-      const res = await fetch(`/api/admin/agents/${editingAgent.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "x-admin-key": adminKey,
-        },
-        body: JSON.stringify({
-          label: formLabel.trim() || undefined,
-          instructions: formInstructions,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.error ?? "Falha ao guardar");
-      }
+      await patchAgentAndMutate(
+        editingAgent.id,
+        adminKey,
+        formLabel.trim() || undefined,
+        formInstructions
+      );
       toast.success("Agente atualizado.");
-      await mutate();
       closeEdit();
+      await mutate();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao guardar");
     } finally {
       setSaving(false);
     }
   }, [adminKey, closeEdit, editingAgent, formInstructions, formLabel, mutate]);
+
+  const improvePrompt = useCallback(async () => {
+    const text = formInstructions.trim();
+    if (text.length === 0) {
+      toast.error("Escreva ou cole instruções para melhorar.");
+      return;
+    }
+    setIsImprovingPrompt(true);
+    try {
+      const res = await fetch("/api/prompt/improve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: text }),
+      });
+      const data = (await res.json()) as
+        | { improvedPrompt: string; diagnosis?: string; notes?: string }
+        | { error?: string };
+      if (!res.ok) {
+        const msg =
+          "error" in data && typeof data.error === "string"
+            ? data.error
+            : "Não foi possível melhorar o prompt.";
+        toast.error(msg);
+        return;
+      }
+      if ("improvedPrompt" in data && typeof data.improvedPrompt === "string") {
+        setFormInstructions(data.improvedPrompt);
+        const description = buildImproveToastDescription(data);
+        toast.success("Instruções melhoradas. Reveja e guarde quando quiser.", {
+          description,
+        });
+      }
+    } catch {
+      toast.error("Erro de ligação. Tente novamente.");
+    } finally {
+      setIsImprovingPrompt(false);
+    }
+  }, [formInstructions]);
 
   const handleKeySubmit = useCallback(
     (e: React.FormEvent) => {
@@ -122,7 +203,7 @@ export default function AdminAgentsPage() {
             autoComplete="off"
             id="admin-key"
             onChange={(e) => setKeyInput(e.target.value)}
-            placeholder="ADMIN_CREDITS_SECRET"
+            placeholder="Introduza a chave definida em ADMIN_CREDITS_SECRET"
             type="password"
             value={keyInput}
           />
@@ -142,6 +223,26 @@ export default function AdminAgentsPage() {
           valor do código.
         </p>
       </div>
+
+      {agentsError && (
+        <div
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-destructive"
+          role="alert"
+        >
+          <p className="text-sm">
+            {isUnauthorized
+              ? "Chave de administrador inválida ou em falta no servidor (ADMIN_CREDITS_SECRET). Verifique .env.local e reinicie o servidor se acabou de adicionar."
+              : agentsError.message}
+          </p>
+          <Button onClick={resetKey} type="button" variant="outline">
+            Introduzir outra chave
+          </Button>
+        </div>
+      )}
+
+      {agentsLoading && agents.length === 0 ? (
+        <p className="text-muted-foreground text-sm">A carregar agentes…</p>
+      ) : null}
 
       <ul className="flex flex-col gap-2">
         {agents.map((agent) => (
@@ -209,7 +310,28 @@ export default function AdminAgentsPage() {
                 />
               </div>
               <div className="grid min-h-0 flex-1 gap-2">
-                <Label htmlFor="edit-agent-instructions">Instruções</Label>
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor="edit-agent-instructions">Instruções</Label>
+                  <Button
+                    aria-label="Melhorar instruções com IA"
+                    disabled={
+                      isImprovingPrompt || formInstructions.trim().length === 0
+                    }
+                    onClick={improvePrompt}
+                    size="sm"
+                    type="button"
+                    variant="secondary"
+                  >
+                    {isImprovingPrompt ? (
+                      <LoaderIcon aria-hidden className="size-4 animate-spin" />
+                    ) : (
+                      <WandIcon aria-hidden className="size-4" />
+                    )}
+                    <span className="ml-1.5">
+                      {isImprovingPrompt ? "A melhorar…" : "Melhorar prompt"}
+                    </span>
+                  </Button>
+                </div>
                 <ScrollArea className="h-[min(50vh,320px)] rounded-md border border-input">
                   <Textarea
                     className="min-h-[min(50vh,300px)] resize-none border-0 focus-visible:ring-0"

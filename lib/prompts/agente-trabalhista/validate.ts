@@ -72,8 +72,12 @@ export function validateSystemPrompt(prompt: string): PromptValidationResult {
     );
   }
 
-  // E3
-  if (prompt && !prompt.includes("GATE-1")) {
+  // E3: fluxo inicial (GATE-1 ou tag <gate_1>)
+  if (
+    prompt &&
+    !prompt.includes("GATE-1") &&
+    !prompt.toUpperCase().includes("GATE_1")
+  ) {
     erros.push("E3: Fluxo obrigatório GATE-1 ausente.");
   }
 

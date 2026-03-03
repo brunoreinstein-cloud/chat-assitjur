@@ -20,6 +20,40 @@ interface TextArtifactMetadata {
   suggestions: Suggestion[];
 }
 
+async function downloadDocx(
+  documentId: string,
+  layout?: "default" | "assistjur-master"
+): Promise<void> {
+  try {
+    const url = new URL("/api/document/export", globalThis.location.origin);
+    url.searchParams.set("id", documentId);
+    if (layout && layout !== "default") {
+      url.searchParams.set("layout", layout);
+    }
+    const res = await fetch(url.toString(), { credentials: "include" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      const msg =
+        (data as { message?: string }).message ?? "Falha ao exportar DOCX.";
+      toast.error(msg);
+      return;
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition");
+    const filenameMatch = disposition?.match(/filename="?([^";\n]+)"?/);
+    const filename = filenameMatch?.[1] ?? "documento.docx";
+    const urlObj = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = urlObj;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(urlObj);
+    toast.success("DOCX descarregado.");
+  } catch {
+    toast.error("Falha ao descarregar DOCX.");
+  }
+}
+
 export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
   kind: "text",
   description: "Useful for text content, like drafting essays and emails.",
@@ -103,7 +137,7 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
             <div className="rounded-full bg-muted p-4">
               <FileText aria-hidden className="size-8 text-muted-foreground" />
             </div>
-            <div className="space-y-1">
+            <div className="space-y-2">
               <p className="font-medium text-foreground text-sm">
                 Nenhum conteúdo ainda
               </p>
@@ -111,6 +145,10 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
                 O conteúdo do documento será exibido aqui. Peça ao assistente
                 para gerar ou atualizar o documento (ex.: gerar os 3 DOCX na
                 FASE B).
+              </p>
+              <p className="max-w-sm text-muted-foreground text-xs">
+                Quando houver conteúdo, pode editá-lo nesta área e usar
+                «Pré-visualizar» para ver como DOCX ou «DOCX» para descarregar.
               </p>
             </div>
           </div>
@@ -202,35 +240,17 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
       description: "Descarregar como DOCX",
       isDisabled: ({ documentId }) => documentId === "init",
       onClick: ({ documentId }) => {
-        (async () => {
-          try {
-            const res = await fetch(
-              `/api/document/export?id=${encodeURIComponent(documentId)}`,
-              { credentials: "include" }
-            );
-            if (!res.ok) {
-              const data = await res.json().catch(() => ({}));
-              const msg =
-                (data as { message?: string }).message ??
-                "Falha ao exportar DOCX.";
-              toast.error(msg);
-              return;
-            }
-            const blob = await res.blob();
-            const disposition = res.headers.get("Content-Disposition");
-            const filenameMatch = disposition?.match(/filename="?([^";\n]+)"?/);
-            const filename = filenameMatch?.[1] ?? "documento.docx";
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = filename;
-            a.click();
-            URL.revokeObjectURL(url);
-            toast.success("DOCX descarregado.");
-          } catch {
-            toast.error("Falha ao descarregar DOCX.");
-          }
-        })();
+        downloadDocx(documentId);
+      },
+    },
+    {
+      icon: <Download size={18} />,
+      label: "DOCX (layout Master)",
+      description:
+        "Descarregar como DOCX com layout AssistJur (cinza/dourado, cabeçalho e rodapé)",
+      isDisabled: ({ documentId }) => documentId === "init",
+      onClick: ({ documentId }) => {
+        downloadDocx(documentId, "assistjur-master");
       },
     },
   ],

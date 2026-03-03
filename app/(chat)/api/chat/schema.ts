@@ -54,10 +54,15 @@ export const postRequestBodySchema = z
     knowledgeDocumentIds: z.array(z.string().uuid()).max(50).optional(),
     /** Optional IDs of Arquivos (UserFile) to use as context in this chat only, without saving to the knowledge base. */
     archivoIds: z.array(z.string().uuid()).max(50).optional(),
-    /** Agent id: built-in (revisor-defesas | redator-contestacao) or UUID of a custom agent. When absent, defaults to revisor-defesas. */
+    /** Agent id: built-in (assistente-geral | revisor-defesas | redator-contestacao | assistjur-master) or UUID of a custom agent. When absent, defaults to assistente-geral. */
     agentId: z
       .union([
-        z.enum(["revisor-defesas", "redator-contestacao"]),
+        z.enum([
+          "assistente-geral",
+          "revisor-defesas",
+          "redator-contestacao",
+          "assistjur-master",
+        ]),
         z.string().uuid(),
       ])
       .optional(),

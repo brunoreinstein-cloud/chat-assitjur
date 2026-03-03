@@ -7,53 +7,49 @@ export function AuthForm({
   action,
   children,
   defaultEmail = "",
-}: {
+}: Readonly<{
   action: NonNullable<
     string | ((formData: FormData) => void | Promise<void>) | undefined
   >;
   children: React.ReactNode;
   defaultEmail?: string;
-}) {
+}>) {
   return (
-    <Form action={action} className="flex flex-col gap-4 px-4 sm:px-16">
+    <Form action={action} className="flex flex-col gap-4 px-4 sm:px-10">
       <div className="flex flex-col gap-2">
         <Label
-          className="font-normal text-zinc-600 dark:text-zinc-400"
+          className="font-medium text-assistjur-purple-darker text-sm"
           htmlFor="email"
         >
           E-mail
         </Label>
-
         <Input
           autoComplete="email"
           autoFocus
-          className="bg-muted text-md md:text-sm"
+          className="border-assistjur-purple-dark/30 bg-white text-assistjur-purple-darker placeholder:text-assistjur-gray focus-visible:ring-assistjur-purple md:text-sm"
           defaultValue={defaultEmail}
           id="email"
           name="email"
-          placeholder="seu@email.com"
+          placeholder="seu@email.com…"
           required
           type="email"
         />
       </div>
-
       <div className="flex flex-col gap-2">
         <Label
-          className="font-normal text-zinc-600 dark:text-zinc-400"
+          className="font-medium text-assistjur-purple-darker text-sm"
           htmlFor="password"
         >
           Senha
         </Label>
-
         <Input
-          className="bg-muted text-md md:text-sm"
+          className="border-assistjur-purple-dark/30 bg-white text-assistjur-purple-darker placeholder:text-assistjur-gray focus-visible:ring-assistjur-purple md:text-sm"
           id="password"
           name="password"
           required
           type="password"
         />
       </div>
-
       {children}
     </Form>
   );

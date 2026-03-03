@@ -3,7 +3,14 @@
 import { useControllableState } from "@radix-ui/react-use-controllable-state";
 import { BrainIcon, ChevronDownIcon } from "lucide-react";
 import type { ComponentProps } from "react";
-import { createContext, memo, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  memo,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -17,6 +24,7 @@ interface ReasoningContextValue {
   isOpen: boolean;
   setIsOpen: (open: boolean) => void;
   duration: number;
+  stepCount: number;
 }
 
 const ReasoningContext = createContext<ReasoningContextValue | null>(null);
@@ -35,6 +43,8 @@ export type ReasoningProps = ComponentProps<typeof Collapsible> & {
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   duration?: number;
+  /** Número de passos do pensamento (para o trigger: "3 passos" em vez de "Thinking steps"). */
+  stepCount?: number;
 };
 
 const AUTO_CLOSE_DELAY = 500;
@@ -48,6 +58,7 @@ export const Reasoning = memo(
     defaultOpen = true,
     onOpenChange,
     duration: durationProp,
+    stepCount = 0,
     children,
     ...props
   }: ReasoningProps) => {
@@ -93,10 +104,12 @@ export const Reasoning = memo(
       setIsOpen(newOpen);
     };
 
+    const contextValue = useMemo(
+      () => ({ isStreaming, isOpen, setIsOpen, duration, stepCount }),
+      [isStreaming, isOpen, setIsOpen, duration, stepCount]
+    );
     return (
-      <ReasoningContext.Provider
-        value={{ isStreaming, isOpen, setIsOpen, duration }}
-      >
+      <ReasoningContext.Provider value={contextValue}>
         <Collapsible
           className={cn("not-prose", className)}
           onOpenChange={handleOpenChange}
@@ -114,7 +127,14 @@ export type ReasoningTriggerProps = ComponentProps<typeof CollapsibleTrigger>;
 
 export const ReasoningTrigger = memo(
   ({ className, children, ...props }: ReasoningTriggerProps) => {
-    const { isStreaming, isOpen, duration } = useReasoning();
+    const { isStreaming, isOpen, duration, stepCount } = useReasoning();
+
+    let label: string;
+    if (isStreaming || duration === 0) {
+      label = stepCount > 1 ? `${stepCount} passos` : "Thinking steps";
+    } else {
+      label = `${duration}s`;
+    }
 
     return (
       <CollapsibleTrigger
@@ -127,11 +147,7 @@ export const ReasoningTrigger = memo(
         {children ?? (
           <>
             <BrainIcon aria-hidden className="size-3" />
-            {isStreaming || duration === 0 ? (
-              <span>Thinking steps</span>
-            ) : (
-              <span>{duration}s</span>
-            )}
+            <span>{label}</span>
             <ChevronDownIcon
               className={cn(
                 "size-2.5 transition-transform",
@@ -148,26 +164,56 @@ export const ReasoningTrigger = memo(
 export type ReasoningContentProps = ComponentProps<
   typeof CollapsibleContent
 > & {
-  children: string;
+  /** Texto único (comportamento clássico). */
+  children?: string;
+  /** Quando definido, mostra a estrutura do pensamento em passos (Passo 1, Passo 2, …). */
+  steps?: string[];
 };
 
 export const ReasoningContent = memo(
-  ({ className, children, ...props }: ReasoningContentProps) => (
-    <CollapsibleContent
-      className={cn(
-        "mt-1.5 text-[11px] text-muted-foreground leading-relaxed",
-        "data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 outline-hidden data-[state=closed]:animate-out data-[state=open]:animate-in",
-        className
-      )}
-      {...props}
-    >
-      <div className="max-h-48 overflow-y-auto rounded-md border border-border/50 bg-muted/30 p-2.5">
-        <Response className="grid gap-1 text-[11px] **:text-[11px] [&_li]:my-0 [&_ol]:my-1 [&_p]:my-0 [&_ul]:my-1">
-          {children}
-        </Response>
-      </div>
-    </CollapsibleContent>
-  )
+  ({ className, children, steps, ...props }: ReasoningContentProps) => {
+    const hasSteps = Array.isArray(steps) && steps.length > 0;
+    return (
+      <CollapsibleContent
+        className={cn(
+          "mt-1.5 text-[11px] text-muted-foreground leading-relaxed",
+          "data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 outline-hidden data-[state=closed]:animate-out data-[state=open]:animate-in",
+          className
+        )}
+        {...props}
+      >
+        <div className="max-h-48 overflow-y-auto rounded-md border border-border/50 bg-muted/30 p-2.5">
+          {hasSteps ? (
+            <ol
+              aria-label="Estrutura do pensamento"
+              className="grid list-none gap-2 pl-0"
+            >
+              {steps.map((stepText, i) => (
+                <li
+                  className="grid gap-0.5"
+                  key={
+                    stepText.trim().slice(0, 200) ||
+                    `step-empty-${stepText.length}`
+                  }
+                >
+                  <span className="font-medium text-muted-foreground/90">
+                    Passo {i + 1}
+                  </span>
+                  <Response className="grid gap-1 text-[11px] **:text-[11px] [&_li]:my-0 [&_ol]:my-1 [&_p]:my-0 [&_ul]:my-1">
+                    {stepText.trim() || "\u00A0"}
+                  </Response>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <Response className="grid gap-1 text-[11px] **:text-[11px] [&_li]:my-0 [&_ol]:my-1 [&_p]:my-0 [&_ul]:my-1">
+              {children ?? ""}
+            </Response>
+          )}
+        </div>
+      </CollapsibleContent>
+    );
+  }
 );
 
 Reasoning.displayName = "Reasoning";

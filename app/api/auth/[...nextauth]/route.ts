@@ -25,38 +25,92 @@ const authErrorResponse = (error: unknown) => {
   );
 };
 
-const sessionJsonHeaders = {
+const sessionJsonHeaders: HeadersInit = {
   "Content-Type": "application/json",
   "Cache-Control": "no-store, max-age=0",
-} as const;
+  "X-Auth-Session": "1",
+};
+
+const EMPTY_SESSION_JSON = "{}";
+
+/** Sempre que o path for o endpoint de sessão (params podem vir errados com Turbopack/Next 16). */
+function isSessionRequest(
+  nextauth: string[] | undefined,
+  pathname: string
+): boolean {
+  if (nextauth?.at(0) === "session") {
+    return true;
+  }
+  const normalized = pathname.replace(/\/$/, "") || "/";
+  return normalized.endsWith("/session");
+}
+
+/** Resposta sempre JSON válido para o cliente (evita ClientFetchError por "Unexpected end of JSON input"). */
+function sessionResponse(body: {
+  user?: unknown;
+  expires?: string;
+}): NextResponse {
+  const json =
+    body && typeof body === "object" && Object.keys(body).length > 0
+      ? JSON.stringify(body)
+      : EMPTY_SESSION_JSON;
+  return new NextResponse(json, {
+    status: 200,
+    headers: { ...sessionJsonHeaders },
+  });
+}
+
+async function handleSessionGet(): Promise<NextResponse> {
+  try {
+    const session = await auth();
+    const body =
+      session && typeof session === "object"
+        ? { user: session.user, expires: session.expires }
+        : {};
+    return sessionResponse(body);
+  } catch (error) {
+    if (process.env.NODE_ENV === "development") {
+      const err = error instanceof Error ? error : new Error(String(error));
+      console.error("[auth] GET /api/auth/session failed:", err.message);
+    }
+    return sessionResponse({});
+  }
+}
 
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ nextauth: string[] }> }
+  context: { params: Promise<{ nextauth?: string[] }> }
 ) {
-  const { nextauth } = await context.params;
-  if (nextauth?.at(0) === "session") {
+  const pathname = request.nextUrl?.pathname ?? "";
+  const pathIsSession =
+    pathname.endsWith("/session") || pathname.endsWith("/session/");
+
+  if (pathIsSession) {
     try {
-      const session = await auth();
-      const body =
-        session && typeof session === "object"
-          ? { user: session.user, expires: session.expires }
-          : {};
-      return new NextResponse(JSON.stringify(body), {
-        status: 200,
-        headers: sessionJsonHeaders,
-      });
+      return await handleSessionGet();
     } catch (error) {
-      // Devolver sessão vazia em vez de 500 para evitar ClientFetchError no cliente.
-      // O utilizador fica "não autenticado" e a app continua a carregar.
       if (process.env.NODE_ENV === "development") {
-        const err = error instanceof Error ? error : new Error(String(error));
-        console.error("[auth] GET /api/auth/session failed:", err.message);
+        console.error("[auth] GET session unexpected error:", error);
       }
-      return new NextResponse(JSON.stringify({}), {
-        status: 200,
-        headers: sessionJsonHeaders,
-      });
+      return sessionResponse({});
+    }
+  }
+
+  let nextauth: string[] | undefined;
+  try {
+    nextauth = (await context.params)?.nextauth;
+  } catch {
+    nextauth = undefined;
+  }
+
+  if (isSessionRequest(nextauth, pathname)) {
+    try {
+      return await handleSessionGet();
+    } catch (error) {
+      if (process.env.NODE_ENV === "development") {
+        console.error("[auth] GET session unexpected error:", error);
+      }
+      return sessionResponse({});
     }
   }
 

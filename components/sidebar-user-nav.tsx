@@ -1,12 +1,13 @@
 "use client";
 
-import { ChevronUp, CoinsIcon } from "lucide-react";
+import { ChevronUp, CoinsIcon, HelpCircleIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { User } from "next-auth";
 import { signOut, useSession } from "next-auth/react";
 import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,12 +23,23 @@ import {
 import { guestRegex } from "@/lib/constants";
 import { LoaderIcon } from "./icons";
 
-export function SidebarUserNav({ user }: { user: User }) {
+export function SidebarUserNav({ user }: Readonly<{ user: User }>) {
   const router = useRouter();
   const { data, status } = useSession();
   const { setTheme, resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const isGuest = guestRegex.test(data?.user?.email ?? "");
+
+  const themeToggleLabel = mounted
+    ? resolvedTheme === "light"
+      ? "Alternar modo escuro"
+      : "Alternar modo claro"
+    : "Alternar tema";
 
   return (
     <SidebarMenu>
@@ -77,9 +89,18 @@ export function SidebarUserNav({ user }: { user: User }) {
                 setTheme(resolvedTheme === "dark" ? "light" : "dark")
               }
             >
-              {`Alternar modo ${resolvedTheme === "light" ? "escuro" : "claro"}`}
+              {themeToggleLabel}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
+            <DropdownMenuItem asChild data-testid="user-nav-item-ajuda">
+              <Link
+                className="flex cursor-pointer items-center gap-2"
+                href="/ajuda"
+              >
+                <HelpCircleIcon aria-hidden className="size-4" />
+                Ajuda
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem asChild data-testid="user-nav-item-uso">
               <Link
                 className="flex cursor-pointer items-center gap-2"
@@ -102,7 +123,10 @@ export function SidebarUserNav({ user }: { user: User }) {
                       if (status === "loading") {
                         return;
                       }
-                      await fetch("/api/history", { method: "DELETE" });
+                      const { deleteAllMyChats } = await import(
+                        "@/app/(chat)/actions"
+                      );
+                      await deleteAllMyChats();
                       await signOut({ redirect: false });
                       globalThis.window.location.href =
                         "/api/auth/guest?redirectUrl=/chat";
@@ -119,7 +143,10 @@ export function SidebarUserNav({ user }: { user: User }) {
                       if (status === "loading") {
                         return;
                       }
-                      await fetch("/api/history", { method: "DELETE" });
+                      const { deleteAllMyChats } = await import(
+                        "@/app/(chat)/actions"
+                      );
+                      await deleteAllMyChats();
                       router.push("/login");
                     }}
                     type="button"

@@ -39,7 +39,11 @@ export async function GET(request: NextRequest) {
       endingBefore,
     });
 
-    return Response.json(chats);
+    return Response.json(chats, {
+      headers: {
+        "Cache-Control": "private, max-age=5",
+      },
+    });
   } catch (error) {
     if (error instanceof ChatbotError) {
       if (error.surface === "database") {

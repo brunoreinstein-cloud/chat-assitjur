@@ -31,6 +31,8 @@ Estes valores limitam input/output e reduzem custo; ajustar só se precisares de
 | **stopWhen: stepCountIs(5)** | 5 | Idem | Máximo 5 “steps” (tool loops) por pedido; evita loops longos. |
 | **knowledgeDocumentIds** | max 50 IDs | `app/(chat)/api/chat/schema.ts` | Máximo 50 documentos da base de conhecimento no contexto. |
 | **Entitlements** | 20 (guest) / 50 (regular) msgs/dia | `lib/ai/entitlements.ts` | Limite de mensagens por dia por tipo de utilizador. |
+| **Prompt caching (Anthropic)** | configurável | `lib/ai/prompt-caching-config.ts`, `app/(chat)/api/chat/route.ts` | Para modelos Claude, `cache_control` na última mensagem; prefixo em cache reduz custo (leitura ~10% do input) e latência. **Env:** `PROMPT_CACHING_ENABLED` (default `true`), `PROMPT_CACHING_TTL` (`5m` ou `1h`). Desativar: `PROMPT_CACHING_ENABLED=false`. |
+| **Context window (estimativa + editing)** | `lib/ai/context-window.ts` | Idem | **Token counting:** antes de enviar, estima tokens (system + mensagens). Se exceder `CONTEXT_WINDOW_INPUT_TARGET_TOKENS` (180k), a rota devolve 413 e sugere novo chat. **Context editing:** em mensagens antigas (fora das últimas N), substitui conteúdo de tool-result por placeholder e remove partes reasoning/thinking para poupar tokens. **Compaction:** quando o provider (ex.: Anthropic) expor compaction server-side, ativar em `COMPACTION_AVAILABLE` / providerOptions. |
 
 Estimativa grosseira de tamanho de prompt por pedido de chat (sem knowledge): system (~2–4k tokens) + instruções Revisor (~1.5k) + últimas N mensagens + documentos truncados. Com 100k chars de docs ≈ ~25k tokens só de docs; total típico 30k–80k input tokens por request em conversas com PI+Contestação.
 
@@ -113,6 +115,7 @@ Estimativa grosseira de tamanho de prompt por pedido de chat (sem knowledge): sy
 
 | Tema | Ficheiros |
 |------|-----------|
+| Janela de contexto (estimativa, context editing, compaction) | `lib/ai/context-window.ts`, `app/(chat)/api/chat/route.ts` |
 | Limites de documentos e mensagens | `app/(chat)/api/chat/route.ts` (constantes e `normalizeMessageParts`) |
 | System prompt e knowledge | `lib/ai/prompts.ts`, `app/(chat)/api/chat/route.ts` (knowledgeContext) |
 | Modelos e gateway | `lib/ai/providers.ts` |

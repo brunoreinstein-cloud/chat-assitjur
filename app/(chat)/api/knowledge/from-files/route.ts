@@ -1,38 +1,30 @@
 import { auth } from "@/app/(auth)/auth";
-import {
-  contentTypeFromFilename,
-  runExtractionAndClassification,
-} from "@/app/(chat)/api/files/upload/route";
-import { extractDocumentMetadata } from "@/lib/ai/extract-metadata";
-import { chunkText, embedChunks } from "@/lib/ai/rag";
-import {
-  createKnowledgeDocument,
-  deleteChunksByKnowledgeDocumentId,
-  insertKnowledgeChunks,
-} from "@/lib/db/queries";
+import { contentTypeFromFilename } from "@/app/(chat)/api/files/upload/route";
+import { createKnowledgeDocument } from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
+import { vectorizeAndIndex } from "@/lib/rag";
+import { ingestFromBuffer } from "@/lib/rag/ingestion";
 
 /** Tempo para processar vários ficheiros (extração + OCR eventual). */
 export const maxDuration = 300;
 
 const OCTET_STREAM = "application/octet-stream";
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
-const ACCEPTED_EXTENSIONS = /\.(docx?|pdf|jpe?g|png)$/i;
+const ACCEPTED_EXTENSIONS = /\.(docx?|pdf|jpe?g|png|xlsx?|csv|txt|odt)$/i;
 const MAX_FILES_PER_REQUEST = 50;
-const TITLE_MAX_LENGTH = 512;
-const FALLBACK_CONTENT =
-  "(Texto não extraído. Pode colar o conteúdo manualmente ao editar o documento.)";
 
-function sanitizeTitleFromFilename(filename: string): string {
-  const base = filename.replace(/\.[^.]+$/i, "").trim() || filename;
-  const sanitized = base
-    .replaceAll(/[^\p{L}\p{N}\s._-]/gu, " ")
-    .replaceAll(/\s+/g, " ")
-    .trim();
-  return (
-    sanitized.slice(0, TITLE_MAX_LENGTH) || filename.slice(0, TITLE_MAX_LENGTH)
-  );
-}
+const ACCEPTED_MIME_TYPES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+  "text/csv",
+  "text/plain",
+  "application/vnd.oasis.opendocument.text",
+  "image/jpeg",
+  "image/png",
+] as const;
 
 function isAcceptedFile(file: File): boolean {
   if (file.size > MAX_FILE_SIZE) {
@@ -40,12 +32,7 @@ function isAcceptedFile(file: File): boolean {
   }
   const type = file.type;
   if (
-    type === "application/pdf" ||
-    type === "application/msword" ||
-    type ===
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-    type === "image/jpeg" ||
-    type === "image/png"
+    ACCEPTED_MIME_TYPES.includes(type as (typeof ACCEPTED_MIME_TYPES)[number])
   ) {
     return true;
   }
@@ -82,10 +69,19 @@ function parseFolderId(value: string | null): string | null {
   return value;
 }
 
+function parseSkipVectorize(value: FormDataEntryValue | null): boolean {
+  if (value === null) {
+    return false;
+  }
+  const s = String(value).toLowerCase().trim();
+  return s === "true" || s === "1" || s === "yes";
+}
+
 async function processOneFile(
   file: File,
   userId: string,
-  folderId: string | null
+  folderId: string | null,
+  skipVectorize: boolean
 ): Promise<
   | { ok: true; id: string; title: string; metadata?: FromFilesMetadata }
   | { ok: false; filename: string; error: string }
@@ -95,7 +91,7 @@ async function processOneFile(
       ok: false,
       filename: file.name,
       error:
-        "Tipo ou tamanho não aceite. Use PDF, DOC, DOCX, JPEG ou PNG (até 100 MB).",
+        "Tipo ou tamanho não aceite. Use PDF, DOC, DOCX, XLS, XLSX, CSV, TXT, ODT, JPEG ou PNG (até 100 MB).",
     };
   }
 
@@ -116,30 +112,8 @@ async function processOneFile(
     };
   }
 
-  const { extractedText } = await runExtractionAndClassification(
-    buffer,
-    contentType
-  );
-  const hasText =
-    typeof extractedText === "string" && extractedText.trim().length > 0;
-  const content = hasText ? extractedText.trim() : FALLBACK_CONTENT;
-
-  // Extração inteligente de metadados pela IA (título, autor, tipo, informações-chave)
-  let title = sanitizeTitleFromFilename(filename);
-  let metadata: FromFilesMetadata | undefined;
-  if (hasText && typeof extractedText === "string") {
-    const extracted = await extractDocumentMetadata(extractedText, filename);
-    if (extracted?.title?.trim()) {
-      title = extracted.title.slice(0, TITLE_MAX_LENGTH).trim();
-    }
-    if (extracted) {
-      metadata = {
-        author: extracted.author,
-        documentType: extracted.documentType,
-        keyInfo: extracted.keyInfo,
-      };
-    }
-  }
+  const ingested = await ingestFromBuffer(buffer, contentType, filename);
+  const { title, content, metadata } = ingested;
 
   try {
     const doc = await createKnowledgeDocument({
@@ -147,23 +121,12 @@ async function processOneFile(
       folderId,
       title,
       content,
+      indexingStatus: skipVectorize ? "pending" : "indexed",
     });
-    const chunks = chunkText(content);
-    if (chunks.length > 0) {
-      const embedded = await embedChunks(chunks);
-      if (embedded !== null && embedded.length === chunks.length) {
-        try {
-          await insertKnowledgeChunks({
-            knowledgeDocumentId: doc.id,
-            chunksWithEmbeddings: chunks.map((text, i) => ({
-              text,
-              embedding: embedded[i]?.embedding ?? [],
-            })),
-          });
-        } catch {
-          await deleteChunksByKnowledgeDocumentId(doc.id);
-        }
-      }
+    if (!skipVectorize) {
+      await vectorizeAndIndex(doc.id, content, {
+        meta: { userId: doc.userId, title: doc.title },
+      });
     }
     return {
       ok: true,
@@ -212,6 +175,7 @@ export async function POST(request: Request): Promise<Response> {
   const folderIdRaw = formData.get("folderId");
   const folderId =
     typeof folderIdRaw === "string" ? parseFolderId(folderIdRaw) : null;
+  const skipVectorize = parseSkipVectorize(formData.get("skipVectorize"));
 
   const files: File[] = rawFiles.filter((f): f is File => f instanceof File);
   if (files.length === 0) {
@@ -231,7 +195,12 @@ export async function POST(request: Request): Promise<Response> {
   const failed: FromFilesResult["failed"] = [];
 
   for (const file of files) {
-    const result = await processOneFile(file, session.user.id, folderId);
+    const result = await processOneFile(
+      file,
+      session.user.id,
+      folderId,
+      skipVectorize
+    );
     if (result.ok) {
       created.push({
         id: result.id,

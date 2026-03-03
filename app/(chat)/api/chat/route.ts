@@ -20,14 +20,20 @@ import type { AgentConfig } from "@/lib/ai/agents-registry";
 import {
   AGENT_ID_REDATOR_CONTESTACAO,
   AGENT_IDS,
+  DEFAULT_AGENT_ID_WHEN_EMPTY,
   getAgentConfigForCustomAgent,
   getAgentConfigWithOverrides,
 } from "@/lib/ai/agents-registry";
+import {
+  applyContextEditing,
+  CONTEXT_WINDOW_INPUT_TARGET_TOKENS,
+  estimateInputTokens,
+} from "@/lib/ai/context-window";
 import { MIN_CREDITS_TO_START_CHAT, tokensToCredits } from "@/lib/ai/credits";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
+import { getPromptCachingCacheControl } from "@/lib/ai/prompt-caching-config";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
-import { embedQuery } from "@/lib/ai/rag";
 import {
   REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID,
   REDATOR_BANCO_SYSTEM_USER_ID,
@@ -36,9 +42,11 @@ import { createDocument } from "@/lib/ai/tools/create-document";
 import { createRedatorContestacaoDocument } from "@/lib/ai/tools/create-redator-contestacao-document";
 import { createRevisorDefesaDocuments } from "@/lib/ai/tools/create-revisor-defesa-documents";
 import { getWeather } from "@/lib/ai/tools/get-weather";
+import { improvePromptTool } from "@/lib/ai/tools/improve-prompt";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
 import { updateDocument } from "@/lib/ai/tools/update-document";
 import { validationToolsForValidate } from "@/lib/ai/tools/validation-tools";
+import { creditsCache } from "@/lib/cache/credits-cache";
 import { isProductionEnvironment } from "@/lib/constants";
 import {
   addCreditsToUser,
@@ -52,7 +60,6 @@ import {
   getMessageCountByUserId,
   getMessagesByChatId,
   getOrCreateCreditBalance,
-  getRelevantChunks,
   getUserFilesByIds,
   saveChat,
   saveMessages,
@@ -62,6 +69,7 @@ import {
   updateMessage,
 } from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
+import { retrieveKnowledgeContext } from "@/lib/rag";
 import type { ChatMessage } from "@/lib/types";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
 import { generateTitleFromUserMessage } from "../../actions";
@@ -71,6 +79,44 @@ import { type PostRequestBody, postRequestBodySchema } from "./schema";
 export const maxDuration = 120;
 
 const isDev = process.env.NODE_ENV === "development";
+
+/** Indica se o modelo é Anthropic (Claude), para aplicar prompt caching quando suportado. */
+function isAnthropicModel(modelId: string): boolean {
+  return modelId.includes("anthropic") || modelId.includes("claude");
+}
+
+/**
+ * Adiciona cache_control à última mensagem para modelos Anthropic (prompt caching).
+ * Reduz custo e latência em conversas multi-turn ao reutilizar o prefixo em cache.
+ * Respeita PROMPT_CACHING_ENABLED e PROMPT_CACHING_TTL.
+ * Ver: https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
+ */
+function withPromptCachingForAnthropic<T extends { providerOptions?: unknown }>(
+  modelId: string,
+  messages: T[]
+): T[] {
+  const cacheControl = getPromptCachingCacheControl();
+  if (
+    messages.length === 0 ||
+    !isAnthropicModel(modelId) ||
+    cacheControl === null
+  ) {
+    return messages;
+  }
+  const lastIndex = messages.length - 1;
+  const last = messages[lastIndex];
+  const augmented: T = {
+    ...last,
+    providerOptions: {
+      ...(typeof last.providerOptions === "object" &&
+      last.providerOptions !== null
+        ? (last.providerOptions as object)
+        : {}),
+      anthropic: { cacheControl },
+    },
+  };
+  return [...messages.slice(0, lastIndex), augmented];
+}
 function logTiming(label: string, ms: number): void {
   if (isDev) {
     console.info(`[chat-timing] ${label}: ${Math.round(ms)}ms`);
@@ -90,6 +136,29 @@ const DOC_TYPE_ORDER: Record<string, number> = {
   "": 2,
 };
 
+/** Escapa valor para uso em atributo XML (title, etc.). */
+function escapeXmlAttr(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
+/** Envolve conteúdo em tag <document> dentro de <knowledge_base> para o modelo referenciar por id/título. */
+function wrapKnowledgeDocument(
+  id: string,
+  title: string,
+  content: string
+): string {
+  const safeTitle = escapeXmlAttr(title);
+  const safeContent = content.includes("]]>")
+    ? content.replaceAll("]]>", "]]>]]><![CDATA[>")
+    : content;
+  const cdataBody = safeContent.length > 0 ? `<![CDATA[${safeContent}]]>` : "";
+  return `<document id="${id}" title="${safeTitle}">${cdataBody}</document>`;
+}
+
 /** Máximo de caracteres por documento no prompt (evita "prompt is too long" ~200k tokens). */
 const MAX_CHARS_PER_DOCUMENT = 35_000;
 /** Máximo total de caracteres de documentos numa única mensagem. */
@@ -100,6 +169,28 @@ const CHAT_MESSAGES_LIMIT = 80;
 
 /** Máximo de caracteres da base de conhecimento no system prompt (reduz custo de tokens). */
 const MAX_KNOWLEDGE_CONTEXT_CHARS = 50_000;
+
+function getDocumentPartLabel(documentType: string | undefined): string {
+  if (documentType === "pi") {
+    return "Petição Inicial";
+  }
+  if (documentType === "contestacao") {
+    return "Contestação";
+  }
+  return "Documento";
+}
+
+function fillKnowledgeFromFullDocsWhenEmpty(
+  parts: string[],
+  docs: Array<{ id: string; title: string; content: string }>
+): void {
+  const shouldFillFromFullDocs = parts.length === 0;
+  if (shouldFillFromFullDocs) {
+    for (const doc of docs) {
+      parts.push(wrapKnowledgeDocument(doc.id, doc.title, doc.content));
+    }
+  }
+}
 
 /**
  * Indica se uma parte de mensagem é válida para o AI SDK (convertToModelMessages).
@@ -140,12 +231,15 @@ function normalizeMessageParts(messages: ChatMessage[]): ChatMessage[] {
     if (!msg.parts?.length) {
       return msg;
     }
+    const isDocumentPart = (part: unknown): part is DocumentPartLike =>
+      typeof part === "object" &&
+      part !== null &&
+      "type" in part &&
+      (part as Record<string, unknown>).type === "document";
     const documentParts = msg.parts.filter(
-      (part) => (part as { type?: string }).type === "document"
+      isDocumentPart
     ) as unknown as DocumentPartLike[];
-    const otherParts = msg.parts.filter(
-      (part) => (part as { type?: string }).type !== "document"
-    );
+    const otherParts = msg.parts.filter((part) => !isDocumentPart(part));
 
     const sortedDocs = [...documentParts].sort((a, b) => {
       const orderA = DOC_TYPE_ORDER[a.documentType ?? ""] ?? 2;
@@ -168,12 +262,7 @@ function normalizeMessageParts(messages: ChatMessage[]): ChatMessage[] {
           ? `${p.text.slice(0, maxForThis)}\n\n[... texto truncado para caber no limite do modelo ...]`
           : p.text;
       totalDocChars += truncated.length;
-      const label =
-        p.documentType === "pi"
-          ? "Petição Inicial"
-          : p.documentType === "contestacao"
-            ? "Contestação"
-            : "Documento";
+      const label = getDocumentPartLabel(p.documentType);
       return [
         {
           type: "text" as const,
@@ -203,9 +292,44 @@ function normalizeMessageParts(messages: ChatMessage[]): ChatMessage[] {
 function getStreamContext() {
   try {
     return createResumableStreamContext({ waitUntil: after });
-  } catch (_) {
+  } catch {
     return null;
   }
+}
+
+function resolveEffectiveKnowledgeIds(
+  knowledgeDocumentIds: string[] | undefined,
+  userId: string | undefined,
+  agentId: string
+): string[] {
+  if (knowledgeDocumentIds?.length && userId) {
+    return knowledgeDocumentIds;
+  }
+  if (agentId === AGENT_ID_REDATOR_CONTESTACAO) {
+    return [REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID];
+  }
+  return [];
+}
+
+const REDATOR_BANCO_UNAVAILABLE_MESSAGE =
+  "[Banco de Teses Padrão não disponível. Para satisfazer (B), o utilizador deve selecionar documentos na Base de conhecimento (sidebar) ou anexar modelo/banco de teses.]";
+
+function buildKnowledgeContext(
+  rawKnowledgeContext: string,
+  agentId: string,
+  effectiveKnowledgeIds: string[]
+): string | undefined {
+  if (rawKnowledgeContext.length > MAX_KNOWLEDGE_CONTEXT_CHARS) {
+    return `${rawKnowledgeContext.slice(0, MAX_KNOWLEDGE_CONTEXT_CHARS)}\n\n[... base de conhecimento truncada para caber no limite ...]`;
+  }
+  const redatorBancoIntendedButEmpty =
+    agentId === AGENT_ID_REDATOR_CONTESTACAO &&
+    effectiveKnowledgeIds.includes(REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID) &&
+    rawKnowledgeContext.length === 0;
+  if (redatorBancoIntendedButEmpty) {
+    return REDATOR_BANCO_UNAVAILABLE_MESSAGE;
+  }
+  return rawKnowledgeContext || undefined;
 }
 
 export async function POST(request: Request) {
@@ -258,7 +382,10 @@ export async function POST(request: Request) {
       agentId: agentIdFromBody,
     } = requestBody;
 
-    const agentId = agentIdFromBody ?? "revisor-defesas";
+    const agentId =
+      agentIdFromBody && typeof agentIdFromBody === "string"
+        ? agentIdFromBody.trim() || DEFAULT_AGENT_ID_WHEN_EMPTY
+        : DEFAULT_AGENT_ID_WHEN_EMPTY;
 
     const t0 = Date.now();
     const session = await auth();
@@ -267,33 +394,6 @@ export async function POST(request: Request) {
     if (!session?.user) {
       return new ChatbotError("unauthorized:chat").toResponse();
     }
-
-    let builtInOverrides: Record<
-      string,
-      { instructions: string | null; label: string | null }
-    > = {};
-    try {
-      builtInOverrides = await getBuiltInAgentOverrides();
-    } catch {
-      // Tabela BuiltInAgentOverride pode não existir se migrações não foram aplicadas; usa config em código.
-    }
-
-    let agentConfig: AgentConfig;
-    if (AGENT_IDS.includes(agentId as (typeof AGENT_IDS)[number])) {
-      agentConfig = getAgentConfigWithOverrides(agentId, builtInOverrides);
-    } else {
-      const customAgent = await getCustomAgentById({
-        id: agentId,
-        userId: session.user.id,
-      });
-      agentConfig = customAgent
-        ? getAgentConfigForCustomAgent(customAgent)
-        : getAgentConfigWithOverrides("revisor-defesas", builtInOverrides);
-    }
-
-    const effectiveModel = isModelAllowedForAgent(agentId, selectedChatModel)
-      ? selectedChatModel
-      : getDefaultModelForAgent(agentId);
 
     if (message?.role === "user" && message.parts) {
       const hasContent = message.parts.some((p) => {
@@ -314,6 +414,83 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
+    }
+
+    const userType: UserType = session.user.type;
+    const isToolApprovalFlow = Boolean(messages);
+    const initialCredits = entitlementsByUserType[userType].initialCredits;
+
+    const effectiveKnowledgeIds = resolveEffectiveKnowledgeIds(
+      knowledgeDocumentIds,
+      session.user.id,
+      agentId
+    );
+    const redatorBancoAllowedUserIds =
+      agentId === AGENT_ID_REDATOR_CONTESTACAO &&
+      effectiveKnowledgeIds.includes(REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID)
+        ? [REDATOR_BANCO_SYSTEM_USER_ID]
+        : undefined;
+
+    const t1 = Date.now();
+    const [
+      messageCount,
+      chat,
+      messagesFromDb,
+      knowledgeDocsResult,
+      builtInOverridesFromBatch,
+      balanceFromDb,
+    ] = await Promise.all([
+      getMessageCountByUserId({
+        id: session.user.id,
+        differenceInHours: 24,
+      }),
+      getChatById({ id }),
+      getMessagesByChatId({ id, limit: CHAT_MESSAGES_LIMIT }),
+      effectiveKnowledgeIds.length > 0
+        ? getKnowledgeDocumentsByIds({
+            ids: effectiveKnowledgeIds,
+            userId: session.user.id,
+            allowedUserIds: redatorBancoAllowedUserIds,
+          })
+        : Promise.resolve(
+            [] as Awaited<ReturnType<typeof getKnowledgeDocumentsByIds>>
+          ),
+      getBuiltInAgentOverrides().catch(() => ({})),
+      getOrCreateCreditBalance(session.user.id, initialCredits).catch(() => {
+        if (process.env.NODE_ENV === "development") {
+          console.warn(
+            "[chat] Credit balance unavailable (tabela de créditos?), a usar saldo inicial."
+          );
+        }
+        return initialCredits;
+      }),
+    ]);
+    const builtInOverrides = builtInOverridesFromBatch as Record<
+      string,
+      { instructions: string | null; label: string | null }
+    >;
+
+    let agentConfig: AgentConfig;
+    if (AGENT_IDS.includes(agentId as (typeof AGENT_IDS)[number])) {
+      agentConfig = getAgentConfigWithOverrides(agentId, builtInOverrides);
+    } else {
+      const customAgent = await getCustomAgentById({
+        id: agentId,
+        userId: session.user.id,
+      });
+      agentConfig = customAgent
+        ? getAgentConfigForCustomAgent(customAgent)
+        : getAgentConfigWithOverrides(
+            DEFAULT_AGENT_ID_WHEN_EMPTY,
+            builtInOverrides
+          );
+    }
+
+    const effectiveModel = isModelAllowedForAgent(agentId, selectedChatModel)
+      ? selectedChatModel
+      : getDefaultModelForAgent(agentId);
+
+    if (message?.role === "user" && message.parts) {
       const isRevisorAgent = agentConfig.useRevisorDefesaTools;
       if (isRevisorAgent) {
         const documentParts = message.parts.filter(
@@ -339,42 +516,8 @@ export async function POST(request: Request) {
       }
     }
 
-    const userType: UserType = session.user.type;
-    const isToolApprovalFlow = Boolean(messages);
-
-    const effectiveKnowledgeIds =
-      knowledgeDocumentIds?.length && session.user.id
-        ? knowledgeDocumentIds
-        : agentId === AGENT_ID_REDATOR_CONTESTACAO
-          ? [REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID]
-          : [];
-    const redatorBancoAllowedUserIds =
-      agentId === AGENT_ID_REDATOR_CONTESTACAO &&
-      effectiveKnowledgeIds.includes(REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID)
-        ? [REDATOR_BANCO_SYSTEM_USER_ID]
-        : undefined;
-
-    const t1 = Date.now();
-    const [messageCount, chat, messagesFromDb, knowledgeDocsResult] =
-      await Promise.all([
-        getMessageCountByUserId({
-          id: session.user.id,
-          differenceInHours: 24,
-        }),
-        getChatById({ id }),
-        getMessagesByChatId({ id, limit: CHAT_MESSAGES_LIMIT }),
-        effectiveKnowledgeIds.length > 0
-          ? getKnowledgeDocumentsByIds({
-              ids: effectiveKnowledgeIds,
-              userId: session.user.id,
-              allowedUserIds: redatorBancoAllowedUserIds,
-            })
-          : Promise.resolve(
-              [] as Awaited<ReturnType<typeof getKnowledgeDocumentsByIds>>
-            ),
-      ]);
     logTiming(
-      "getMessageCount + getChat + getMessages + knowledge (paralelo)",
+      "getMessageCount + getChat + getMessages + knowledge + overrides + credits (paralelo)",
       Date.now() - t1
     );
 
@@ -385,19 +528,7 @@ export async function POST(request: Request) {
       return new ChatbotError("rate_limit:chat").toResponse();
     }
 
-    const initialCredits = entitlementsByUserType[userType].initialCredits;
-    let balance: number;
-    try {
-      balance = await getOrCreateCreditBalance(session.user.id, initialCredits);
-    } catch (creditError) {
-      if (process.env.NODE_ENV === "development") {
-        console.warn(
-          "[chat] Credit balance unavailable (tabela de créditos?), a usar saldo inicial:",
-          creditError
-        );
-      }
-      balance = initialCredits;
-    }
+    let balance = balanceFromDb;
     if (balance < MIN_CREDITS_TO_START_CHAT) {
       if (process.env.NODE_ENV === "development") {
         try {
@@ -405,6 +536,7 @@ export async function POST(request: Request) {
             userId: session.user.id,
             delta: initialCredits,
           });
+          creditsCache.delete(session.user.id);
           balance += initialCredits;
         } catch {
           balance = initialCredits;
@@ -427,7 +559,7 @@ export async function POST(request: Request) {
       // Persistir alteração de agente quando o utilizador envia mensagem com outro agente selecionado
       if (
         message?.role === "user" &&
-        (chat.agentId ?? "revisor-defesas") !== agentId
+        (chat.agentId ?? DEFAULT_AGENT_ID_WHEN_EMPTY) !== agentId
       ) {
         await updateChatAgentId({ chatId: id, agentId });
       }
@@ -465,23 +597,56 @@ export async function POST(request: Request) {
         ? normalizeMessageParts(uiMessages)
         : uiMessages;
 
-    if (!isToolApprovalFlow && normalizedForValidation.length > 0) {
-      const validation = await safeValidateUIMessages({
-        messages: normalizedForValidation,
-        tools: validationToolsForValidate,
-      });
-      if (validation.success) {
-        uiMessages = validation.data as ChatMessage[];
-      } else {
-        if (isDev) {
-          console.warn(
-            "[chat] Validação de mensagens da BD falhou, a manter histórico normalizado:",
-            validation.error?.message ?? validation.error
-          );
-        }
-        // Manter histórico normalizado (PI/Contestação em mensagens anteriores) em vez de descartar
-        uiMessages = normalizedForValidation;
+    const lastUserText =
+      message?.parts
+        ?.filter((p) => (p as { type?: string }).type === "text")
+        .map((p) => (p as { text?: string }).text ?? "")
+        .join(" ")
+        .trim() ?? "";
+
+    const t2 = Date.now();
+    const [validationResult, ragChunks, userFilesFromArchivos] =
+      await Promise.all([
+        !isToolApprovalFlow && normalizedForValidation.length > 0
+          ? safeValidateUIMessages({
+              messages: normalizedForValidation,
+              tools: validationToolsForValidate,
+            })
+          : Promise.resolve({
+              success: false as const,
+              data: normalizedForValidation,
+              error: undefined,
+            }),
+        knowledgeDocsResult.length > 0 && lastUserText.length > 0
+          ? retrieveKnowledgeContext({
+              userId: session.user.id,
+              documentIds: effectiveKnowledgeIds,
+              queryText: lastUserText,
+              limit: agentId === AGENT_ID_REDATOR_CONTESTACAO ? 24 : 12,
+              allowedUserIds: redatorBancoAllowedUserIds,
+            })
+          : Promise.resolve<
+              Awaited<ReturnType<typeof retrieveKnowledgeContext>>
+            >([]),
+        archivoIds != null && archivoIds.length > 0 && session.user.id != null
+          ? getUserFilesByIds({
+              ids: archivoIds,
+              userId: session.user.id,
+            })
+          : Promise.resolve<Awaited<ReturnType<typeof getUserFilesByIds>>>([]),
+      ]);
+    logTiming("validação + RAG + getUserFiles (paralelo)", Date.now() - t2);
+
+    if (validationResult.success) {
+      uiMessages = validationResult.data as ChatMessage[];
+    } else if (!isToolApprovalFlow && normalizedForValidation.length > 0) {
+      if (isDev) {
+        console.warn(
+          "[chat] Validação de mensagens da BD falhou, a manter histórico normalizado:",
+          validationResult.error?.message ?? validationResult.error
+        );
       }
+      uiMessages = normalizedForValidation;
     }
 
     const { longitude, latitude, city, country } = geolocation(request);
@@ -493,74 +658,55 @@ export async function POST(request: Request) {
       country,
     };
 
-    let rawKnowledgeContext = "";
-    if (knowledgeDocsResult.length > 0) {
-      const lastUserText =
-        message?.parts
-          ?.filter((p) => (p as { type?: string }).type === "text")
-          .map((p) => (p as { text?: string }).text ?? "")
-          .join(" ")
-          .trim() ?? "";
-      if (lastUserText.length > 0) {
-        const queryEmbedding = await embedQuery(lastUserText);
-        if (queryEmbedding !== null) {
-          const ragLimit = agentId === AGENT_ID_REDATOR_CONTESTACAO ? 24 : 12;
-          const chunks = await getRelevantChunks({
-            userId: session.user.id,
-            documentIds: effectiveKnowledgeIds,
-            queryEmbedding,
-            limit: ragLimit,
-            allowedUserIds: redatorBancoAllowedUserIds,
+    const knowledgeDocParts: string[] = [];
+    if (ragChunks.length > 0) {
+      const byDoc = new Map<string, { title: string; texts: string[] }>();
+      for (const c of ragChunks) {
+        const cur = byDoc.get(c.knowledgeDocumentId);
+        if (cur) {
+          cur.texts.push(c.text);
+        } else {
+          byDoc.set(c.knowledgeDocumentId, {
+            title: c.title,
+            texts: [c.text],
           });
-          if (chunks.length > 0) {
-            rawKnowledgeContext = chunks
-              .map((c) => `--- ${c.title} ---\n${c.text}`)
-              .join("\n\n");
-          }
         }
       }
-      if (rawKnowledgeContext.length === 0) {
-        rawKnowledgeContext = knowledgeDocsResult
-          .map((doc) => `--- ${doc.title} ---\n${doc.content}`)
-          .join("\n\n");
-      }
-    }
-    if (
-      archivoIds != null &&
-      archivoIds.length > 0 &&
-      session.user.id != null
-    ) {
-      const userFilesFromArchivos = await getUserFilesByIds({
-        ids: archivoIds,
-        userId: session.user.id,
-      });
-      const archivosParts = userFilesFromArchivos
-        .filter(
-          (uf) =>
-            typeof uf.extractedTextCache === "string" &&
-            uf.extractedTextCache.trim().length > 0
-        )
-        .map(
-          (uf) => `--- ${uf.filename} ---\n${uf.extractedTextCache?.trim()}`
+      for (const [docId, { title, texts }] of byDoc.entries()) {
+        knowledgeDocParts.push(
+          wrapKnowledgeDocument(docId, title, texts.join("\n\n"))
         );
-      if (archivosParts.length > 0) {
-        const archivosBlock = `## Documentos de Arquivos (uso apenas neste chat)\n${archivosParts.join("\n\n")}`;
-        rawKnowledgeContext =
-          rawKnowledgeContext.length > 0
-            ? `${rawKnowledgeContext}\n\n${archivosBlock}`
-            : archivosBlock;
       }
     }
-    const redatorBancoIntendedButEmpty =
-      agentId === AGENT_ID_REDATOR_CONTESTACAO &&
-      effectiveKnowledgeIds.includes(REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID) &&
-      rawKnowledgeContext.length === 0;
-    const knowledgeContext =
-      rawKnowledgeContext.length > MAX_KNOWLEDGE_CONTEXT_CHARS
-        ? `${rawKnowledgeContext.slice(0, MAX_KNOWLEDGE_CONTEXT_CHARS)}\n\n[... base de conhecimento truncada para caber no limite ...]`
-        : redatorBancoIntendedButEmpty
-          ? "[Banco de Teses Padrão não disponível. Para satisfazer (B), o utilizador deve selecionar documentos na Base de conhecimento (sidebar) ou anexar modelo/banco de teses.]"
-          : rawKnowledgeContext || undefined;
+    if (knowledgeDocsResult.length > 0) {
+      fillKnowledgeFromFullDocsWhenEmpty(
+        knowledgeDocParts,
+        knowledgeDocsResult
+      );
+    }
+    for (const uf of userFilesFromArchivos) {
+      if (
+        typeof uf.extractedTextCache === "string" &&
+        uf.extractedTextCache.trim().length > 0
+      ) {
+        knowledgeDocParts.push(
+          wrapKnowledgeDocument(
+            uf.id,
+            uf.filename,
+            uf.extractedTextCache.trim()
+          )
+        );
+      }
+    }
+    const rawKnowledgeContext =
+      knowledgeDocParts.length > 0
+        ? `<knowledge_base>\n${knowledgeDocParts.join("\n\n")}\n</knowledge_base>`
+        : "";
+    const knowledgeContext = buildKnowledgeContext(
+      rawKnowledgeContext,
+      agentId,
+      effectiveKnowledgeIds
+    );
 
     if (message?.role === "user") {
       const t4 = Date.now();
@@ -591,9 +737,34 @@ export async function POST(request: Request) {
 
     const t5 = Date.now();
     const normalizedMessages = normalizeMessageParts(uiMessages);
+    const effectiveAgentInstructionsForContext =
+      agentInstructions?.trim() || agentConfig.instructions;
+    const systemStrForEstimate = systemPrompt({
+      selectedChatModel: effectiveModel,
+      requestHints,
+      agentInstructions: effectiveAgentInstructionsForContext,
+      knowledgeContext,
+    });
+    const messagesToSend = applyContextEditing(normalizedMessages);
+    const estimatedInputTokens = estimateInputTokens(
+      systemStrForEstimate.length,
+      messagesToSend
+    );
+    if (estimatedInputTokens > CONTEXT_WINDOW_INPUT_TARGET_TOKENS) {
+      return Response.json(
+        {
+          code: "context_limit",
+          message:
+            "O contexto desta conversa excede o limite do modelo. Por favor, inicia um novo chat ou encurta a conversa.",
+          estimatedTokens: estimatedInputTokens,
+          limit: CONTEXT_WINDOW_INPUT_TARGET_TOKENS,
+        },
+        { status: 413 }
+      );
+    }
     let modelMessages: Awaited<ReturnType<typeof convertToModelMessages>>;
     try {
-      modelMessages = await convertToModelMessages(normalizedMessages);
+      modelMessages = await convertToModelMessages(messagesToSend);
     } catch (convertError) {
       if (isDev) {
         console.warn(
@@ -608,8 +779,13 @@ export async function POST(request: Request) {
       modelMessages = await convertToModelMessages(fallbackMessages);
     }
     logTiming(
-      "normalizeMessageParts + convertToModelMessages",
+      "contextEditing + estimateTokens + normalizeMessageParts + convertToModelMessages",
       Date.now() - t5
+    );
+
+    const messagesForModel = withPromptCachingForAnthropic(
+      effectiveModel,
+      modelMessages
     );
 
     const preStreamEnd = Date.now();
@@ -633,6 +809,7 @@ export async function POST(request: Request) {
           "createDocument",
           "updateDocument",
           "requestSuggestions",
+          "improvePrompt",
         ] as const;
         type ActiveToolName =
           | (typeof baseToolNames)[number]
@@ -655,11 +832,13 @@ export async function POST(request: Request) {
           createDocument: createDocument({ session, dataStream }),
           updateDocument: updateDocument({ session, dataStream }),
           requestSuggestions: requestSuggestions({ session, dataStream }),
+          improvePrompt: improvePromptTool,
         } as {
           getWeather: typeof getWeather;
           createDocument: ReturnType<typeof createDocument>;
           updateDocument: ReturnType<typeof updateDocument>;
           requestSuggestions: ReturnType<typeof requestSuggestions>;
+          improvePrompt: typeof improvePromptTool;
           createRevisorDefesaDocuments?: ReturnType<
             typeof createRevisorDefesaDocuments
           >;
@@ -691,7 +870,7 @@ export async function POST(request: Request) {
             agentInstructions: effectiveAgentInstructions,
             knowledgeContext,
           }),
-          messages: modelMessages,
+          messages: messagesForModel,
           stopWhen: stepCountIs(5),
           experimental_activeTools: activeToolNames,
           providerOptions: isReasoningModel
@@ -724,37 +903,37 @@ export async function POST(request: Request) {
           "onFinish (stream terminou) total request",
           onFinishStart - requestStart
         );
+
+        let saveMessagesPromise: Promise<void>;
         if (isToolApprovalFlow) {
-          const tSaveTool = Date.now();
-          for (const finishedMsg of finishedMessages) {
-            const existingMsg = uiMessages.find((m) => m.id === finishedMsg.id);
-            if (existingMsg) {
-              await updateMessage({
-                id: finishedMsg.id,
-                parts: finishedMsg.parts,
-              });
-            } else {
-              await saveMessages({
-                messages: [
-                  {
-                    id: finishedMsg.id,
-                    role: finishedMsg.role,
-                    parts: finishedMsg.parts,
-                    createdAt: new Date(),
-                    attachments: [],
-                    chatId: id,
-                  },
-                ],
-              });
+          saveMessagesPromise = (async () => {
+            for (const finishedMsg of finishedMessages) {
+              const existingMsg = uiMessages.find(
+                (m) => m.id === finishedMsg.id
+              );
+              if (existingMsg) {
+                await updateMessage({
+                  id: finishedMsg.id,
+                  parts: finishedMsg.parts,
+                });
+              } else {
+                await saveMessages({
+                  messages: [
+                    {
+                      id: finishedMsg.id,
+                      role: finishedMsg.role,
+                      parts: finishedMsg.parts,
+                      createdAt: new Date(),
+                      attachments: [],
+                      chatId: id,
+                    },
+                  ],
+                });
+              }
             }
-          }
-          logTiming(
-            "saveMessages(tool-flow) em onFinish",
-            Date.now() - tSaveTool
-          );
+          })();
         } else if (finishedMessages.length > 0) {
-          const tSave = Date.now();
-          await saveMessages({
+          saveMessagesPromise = saveMessages({
             messages: finishedMessages.map((currentMessage) => ({
               id: currentMessage.id,
               role: currentMessage.role,
@@ -763,42 +942,52 @@ export async function POST(request: Request) {
               attachments: [],
               chatId: id,
             })),
-          });
-          logTiming("saveMessages(assistant) em onFinish", Date.now() - tSave);
+          }).then(() => undefined);
+        } else {
+          saveMessagesPromise = Promise.resolve();
         }
-        if (streamTextResult) {
-          try {
-            const usage = await streamTextResult.totalUsage;
-            const promptTokens =
-              "promptTokens" in usage
-                ? (usage as { promptTokens: number }).promptTokens
-                : ((usage as { inputTokens?: number }).inputTokens ?? 0);
-            const completionTokens =
-              "completionTokens" in usage
-                ? (usage as { completionTokens: number }).completionTokens
-                : ((usage as { outputTokens?: number }).outputTokens ?? 0);
-            const creditsConsumed = tokensToCredits(
-              promptTokens,
-              completionTokens
-            );
-            await deductCreditsAndRecordUsage({
-              userId: session.user.id,
-              chatId: id,
-              promptTokens,
-              completionTokens,
-              model: effectiveModel,
-              creditsConsumed,
-            });
-          } catch (error_) {
-            if (isDev) {
-              console.warn(
-                "[chat] Falha ao registar uso/créditos em onFinish:",
-                error_
-              );
-            }
-          }
-        }
-        await updateChatActiveStreamId({ chatId: id, activeStreamId: null });
+
+        const creditsPromise = streamTextResult
+          ? (async () => {
+              try {
+                const usage = await streamTextResult.totalUsage;
+                const promptTokens =
+                  "promptTokens" in usage
+                    ? (usage as { promptTokens: number }).promptTokens
+                    : ((usage as { inputTokens?: number }).inputTokens ?? 0);
+                const completionTokens =
+                  "completionTokens" in usage
+                    ? (usage as { completionTokens: number }).completionTokens
+                    : ((usage as { outputTokens?: number }).outputTokens ?? 0);
+                const creditsConsumed = tokensToCredits(
+                  promptTokens,
+                  completionTokens
+                );
+                await deductCreditsAndRecordUsage({
+                  userId: session.user.id,
+                  chatId: id,
+                  promptTokens,
+                  completionTokens,
+                  model: effectiveModel,
+                  creditsConsumed,
+                });
+                creditsCache.delete(session.user.id);
+              } catch (error_) {
+                if (isDev) {
+                  console.warn(
+                    "[chat] Falha ao registar uso/créditos em onFinish:",
+                    error_
+                  );
+                }
+              }
+            })()
+          : Promise.resolve();
+
+        await Promise.all([saveMessagesPromise, creditsPromise]);
+
+        after(() =>
+          updateChatActiveStreamId({ chatId: id, activeStreamId: null })
+        );
         logTiming("onFinish completo", Date.now() - onFinishStart);
       },
       onError: (error: unknown) => {
@@ -847,8 +1036,8 @@ export async function POST(request: Request) {
               activeStreamId: streamId,
             });
           }
-        } catch (_) {
-          // ignore redis errors
+        } catch {
+          // Redis/stream context opcional: ignorar erros para não falhar o request
         }
       },
     });

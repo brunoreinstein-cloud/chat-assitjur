@@ -3,7 +3,7 @@
  * Filtra o catálogo global conforme AgentConfig.allowedModelIds.
  */
 
-import { getAgentConfig } from "@/lib/ai/agents-registry";
+import { getAgentConfig } from "@/lib/ai/agents-registry-metadata";
 import type { ChatModel } from "@/lib/ai/models";
 import { chatModels } from "@/lib/ai/models";
 

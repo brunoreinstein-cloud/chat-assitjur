@@ -1,8 +1,10 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
 import { ArrowDownIcon } from "lucide-react";
 import { useMessages } from "@/hooks/use-messages";
+import type { AgentId } from "@/lib/ai/agents-registry-metadata";
 import type { Vote } from "@/lib/db/schema";
 import type { Attachment, ChatMessage } from "@/lib/types";
+import { ChatEmptyState } from "./chat-empty-state";
 import { useDataStream } from "./data-stream-provider";
 import { Greeting } from "./greeting";
 import { PreviewMessage, ThinkingMessage } from "./message";
@@ -38,6 +40,9 @@ interface MessagesProps {
   attachments?: Attachment[];
   knowledgeDocumentIds?: string[];
   agentId?: string;
+  /** Quando definidos, usa ChatEmptyState em vez de Greeting no estado vazio */
+  onAgentSelect?: (id: AgentId) => void;
+  onQuickPrompt?: (text: string) => void;
 }
 
 function PureMessages({
@@ -58,6 +63,8 @@ function PureMessages({
   attachments = [],
   knowledgeDocumentIds = [],
   agentId,
+  onAgentSelect,
+  onQuickPrompt,
 }: MessagesProps) {
   const {
     containerRef: messagesContainerRef,
@@ -88,19 +95,35 @@ function PureMessages({
         getUserMessageText(m).startsWith("CORRIGIR:"))
   );
 
+  const showNewEmptyState =
+    messages.length === 0 && onAgentSelect != null && onQuickPrompt != null;
+
   return (
-    <div className="relative flex-1 bg-background">
+    <div className="relative flex-1 bg-background dark:bg-[#0d0f12]">
       <div
-        className="absolute inset-0 touch-pan-y overflow-y-auto bg-background"
+        className="absolute inset-0 touch-pan-y overflow-y-auto bg-background dark:bg-[#0d0f12]"
         ref={messagesContainerRef}
       >
         <div className="mx-auto flex min-w-0 max-w-4xl flex-col gap-4 px-2 py-4 md:gap-6 md:px-4">
           {messages.length === 0 && (
             <>
-              <Greeting
-                onFocusInput={onFocusInput ?? (() => inputRef.current?.focus())}
-                onOpenKnowledge={onOpenKnowledge}
-              />
+              {showNewEmptyState ? (
+                <ChatEmptyState
+                  onAgentSelect={onAgentSelect}
+                  onQuickPrompt={(text) => {
+                    onQuickPrompt(text);
+                    setTimeout(() => inputRef.current?.focus(), 0);
+                  }}
+                />
+              ) : (
+                <Greeting
+                  agentId={agentId}
+                  onFocusInput={
+                    onFocusInput ?? (() => inputRef.current?.focus())
+                  }
+                  onOpenKnowledge={onOpenKnowledge}
+                />
+              )}
               {agentId === "revisor-defesas" && (
                 <RevisorChecklist
                   attachments={attachments}
@@ -179,7 +202,7 @@ function PureMessages({
 
       <button
         aria-label="Rolar para o final"
-        className={`absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full border bg-background p-2 shadow-lg transition-all hover:bg-muted ${
+        className={`absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full border border-border bg-muted/95 p-2 shadow-lg transition-all hover:bg-accent ${
           isAtBottom
             ? "pointer-events-none scale-0 opacity-0"
             : "pointer-events-auto scale-100 opacity-100"
@@ -187,7 +210,7 @@ function PureMessages({
         onClick={() => scrollToBottom("smooth")}
         type="button"
       >
-        <ArrowDownIcon className="size-4" />
+        <ArrowDownIcon className="size-4 text-foreground" />
       </button>
     </div>
   );

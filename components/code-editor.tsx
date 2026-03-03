@@ -5,6 +5,7 @@ import { EditorState, Transaction } from "@codemirror/state";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { EditorView } from "@codemirror/view";
 import { basicSetup } from "codemirror";
+import { useTheme } from "next-themes";
 import { memo, useEffect, useRef } from "react";
 import type { Suggestion } from "@/lib/db/schema";
 
@@ -17,59 +18,74 @@ interface EditorProps {
   suggestions: Suggestion[];
 }
 
-function PureCodeEditor({ content, onSaveContent, status }: EditorProps) {
+function PureCodeEditor({
+  content,
+  onSaveContent,
+  status,
+}: Readonly<EditorProps>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<EditorView | null>(null);
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === "dark";
 
   useEffect(() => {
-    if (containerRef.current && !editorRef.current) {
-      const startState = EditorState.create({
-        doc: content,
-        extensions: [basicSetup, python(), oneDark],
-      });
-
-      editorRef.current = new EditorView({
-        state: startState,
-        parent: containerRef.current,
-      });
+    if (!containerRef.current) {
+      return;
     }
-
+    if (editorRef.current) {
+      editorRef.current.destroy();
+      editorRef.current = null;
+    }
+    const extensions = [basicSetup, python(), ...(isDark ? [oneDark] : [])];
+    const startState = EditorState.create({
+      doc: content,
+      extensions,
+    });
+    editorRef.current = new EditorView({
+      state: startState,
+      parent: containerRef.current,
+    });
     return () => {
       if (editorRef.current) {
         editorRef.current.destroy();
         editorRef.current = null;
       }
     };
-    // NOTE: we only want to run this effect once
-    // eslint-disable-next-line
-  }, [content]);
+  }, [content, isDark]);
 
   useEffect(() => {
-    if (editorRef.current) {
-      const updateListener = EditorView.updateListener.of((update) => {
-        if (update.docChanged) {
-          const transaction = update.transactions.find(
-            (tr) => !tr.annotation(Transaction.remote)
-          );
-
-          if (transaction) {
-            const newContent = update.state.doc.toString();
-            onSaveContent(newContent, true);
-          }
-        }
-      });
-
-      const currentSelection = editorRef.current.state.selection;
-
-      const newState = EditorState.create({
-        doc: editorRef.current.state.doc,
-        extensions: [basicSetup, python(), oneDark, updateListener],
-        selection: currentSelection,
-      });
-
-      editorRef.current.setState(newState);
+    if (!editorRef.current) {
+      return;
     }
-  }, [onSaveContent]);
+    const updateListener = EditorView.updateListener.of((update) => {
+      if (update.docChanged) {
+        const transaction = update.transactions.find(
+          (tr) => !tr.annotation(Transaction.remote)
+        );
+
+        if (transaction) {
+          const newContent = update.state.doc.toString();
+          onSaveContent(newContent, true);
+        }
+      }
+    });
+
+    const currentSelection = editorRef.current.state.selection;
+    const extensions = [
+      basicSetup,
+      python(),
+      ...(isDark ? [oneDark] : []),
+      updateListener,
+    ];
+
+    const newState = EditorState.create({
+      doc: editorRef.current.state.doc,
+      extensions,
+      selection: currentSelection,
+    });
+
+    editorRef.current.setState(newState);
+  }, [onSaveContent, isDark]);
 
   useEffect(() => {
     if (editorRef.current && content) {

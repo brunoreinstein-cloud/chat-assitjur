@@ -1,0 +1,15 @@
+diff --git a/config/biome/core/biome.jsonc b/config/biome/core/biome.jsonc
+index d1c316e794ceabf38d7824786f74388460e7f36e..240653b097ad3f8cf8aad6be9377f77c5b9d703e 100644
+--- a/config/biome/core/biome.jsonc
++++ b/config/biome/core/biome.jsonc
+@@ -66,10 +66,6 @@
+         "useSortedAttributes": "on",
+         // Enforce ordering of a JS object properties.
+         "useSortedKeys": "off",
+-        // Enforce no duplicate classes in the file.
+-        "noDuplicateClasses": "on",
+-        // Enforce ordering of a TypeScript interface members.
+-        "useSortedInterfaceMembers": "on",
+         // Enforce ordering of a JavaScript object properties.
+         "useSortedProperties": "on"
+       }

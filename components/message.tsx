@@ -2,24 +2,96 @@
 
 import type { UseChatHelpers } from "@ai-sdk/react";
 import { CoinsIcon } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { Button } from "@/components/ui/button";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage, ChatMessagePart } from "@/lib/types";
 import { cn, fetcher } from "@/lib/utils";
 
+/** Part sintética para reasoning agregado (várias parts reasoning → uma com steps). */
+type ReasoningAggregatePart = ChatMessagePart & {
+  type: "reasoning";
+  steps?: string[];
+};
+
+function aggregateConsecutiveReasoning(
+  parts: ChatMessagePart[],
+  startIndex: number
+): {
+  steps: string[];
+  lastState: "streaming" | undefined;
+  nextIndex: number;
+} {
+  const steps: string[] = [];
+  let lastState: "streaming" | undefined;
+  let i = startIndex;
+  while (
+    i < parts.length &&
+    (parts[i] as { type: string })?.type === "reasoning"
+  ) {
+    const p = parts[i] as {
+      type: "reasoning";
+      text?: string;
+      state?: "streaming";
+    };
+    steps.push(p.text ?? "");
+    if (p.state === "streaming") {
+      lastState = "streaming";
+    }
+    i++;
+  }
+  return { steps, lastState, nextIndex: i };
+}
+
+/** Agrega parts consecutivas de reasoning numa única part com steps (estrutura do pensamento). */
+function flattenReasoningParts(
+  parts: ChatMessagePart[] | undefined
+): (ChatMessagePart | ReasoningAggregatePart)[] {
+  if (!parts?.length) {
+    return [];
+  }
+  const result: (ChatMessagePart | ReasoningAggregatePart)[] = [];
+  let i = 0;
+  while (i < parts.length) {
+    const part = parts[i];
+    if (part?.type === "reasoning") {
+      const { steps, lastState, nextIndex } = aggregateConsecutiveReasoning(
+        parts,
+        i
+      );
+      result.push({
+        type: "reasoning",
+        text: steps.join("\n\n"),
+        ...(lastState && { state: lastState }),
+        steps: steps.length > 0 ? steps : undefined,
+      });
+      i = nextIndex;
+      continue;
+    }
+    result.push(part);
+    i++;
+  }
+  return result;
+}
+
 /** Gera uma key estável e única para uma parte de mensagem. Durante streaming o conteúdo
  * da parte muda a cada chunk; usar hash do conteúdo faria a key mudar e o React remontar
  * o componente (piscar). Por isso, para partes sem toolCallId usamos type+index estável. */
 function getMessagePartKey(
   messageId: string,
-  part: ChatMessagePart,
+  part: ChatMessagePart | ReasoningAggregatePart,
   index: number
 ): string {
   const withId = part as { toolCallId?: string };
   if (typeof withId.toolCallId === "string" && withId.toolCallId) {
     return `${messageId}-${withId.toolCallId}`;
+  }
+  if (
+    part.type === "reasoning" &&
+    (part as ReasoningAggregatePart).steps?.length
+  ) {
+    return `${messageId}-reasoning-aggregate`;
   }
   return `${messageId}-part-${part.type}-${index}`;
 }
@@ -88,6 +160,11 @@ const PurePreviewMessage = ({
 }) => {
   const [mode, setMode] = useState<"view" | "edit">("view");
 
+  const processedParts = useMemo(
+    () => flattenReasoningParts(message.parts?.filter(Boolean) ?? []),
+    [message.parts]
+  );
+
   const attachmentsFromMessage = message.parts.filter(
     (part): part is Extract<ChatMessagePart, { type: "file" }> =>
       part.type === "file"
@@ -147,25 +224,23 @@ const PurePreviewMessage = ({
             </div>
           )}
 
-          {message.parts
-            ?.filter((p): p is NonNullable<typeof p> => p != null)
-            .map((part, index) => (
-              <MessagePartRenderer
-                addToolApprovalResponse={addToolApprovalResponse}
-                index={index}
-                isLoading={isLoading}
-                isReadonly={isReadonly}
-                key={getMessagePartKey(message.id, part, index)}
-                message={message}
-                messageId={message.id}
-                messageRole={message.role}
-                mode={mode}
-                part={part}
-                regenerate={regenerate}
-                setMessages={setMessages}
-                setMode={setMode}
-              />
-            ))}
+          {processedParts.map((part, index) => (
+            <MessagePartRenderer
+              addToolApprovalResponse={addToolApprovalResponse}
+              index={index}
+              isLoading={isLoading}
+              isReadonly={isReadonly}
+              key={getMessagePartKey(message.id, part, index)}
+              message={message}
+              messageId={message.id}
+              messageRole={message.role}
+              mode={mode}
+              part={part}
+              regenerate={regenerate}
+              setMessages={setMessages}
+              setMode={setMode}
+            />
+          ))}
 
           {gate05ConfirmInline && onConfirmGate05 && onCorrigirGate05 && (
             <section

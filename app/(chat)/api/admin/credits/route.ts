@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { creditsCache } from "@/lib/cache/credits-cache";
 import { addCreditsToUser, getUsersWithCreditBalances } from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
 
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
 
   try {
     await addCreditsToUser({ userId, delta });
+    creditsCache.delete(userId);
     return NextResponse.json({ ok: true, userId, delta });
   } catch (err) {
     if (err instanceof ChatbotError) {

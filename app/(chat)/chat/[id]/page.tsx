@@ -6,7 +6,9 @@ import { Suspense } from "react";
 import { auth } from "@/app/(auth)/auth";
 import { Chat } from "@/components/chat";
 import { DataStreamHandler } from "@/components/data-stream-handler";
+import { DEFAULT_AGENT_ID_WHEN_EMPTY } from "@/lib/ai/agents-registry";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
+import { CHAT_PAGE_MESSAGES_LIMIT } from "@/lib/constants";
 import { getChatById, getMessagesByChatId } from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
 import { convertToUIMessages, isUUID } from "@/lib/utils";
@@ -82,7 +84,10 @@ async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
 
   let messagesFromDb: Awaited<ReturnType<typeof getMessagesByChatId>>;
   try {
-    messagesFromDb = await getMessagesByChatId({ id });
+    messagesFromDb = await getMessagesByChatId({
+      id,
+      limit: CHAT_PAGE_MESSAGES_LIMIT,
+    });
   } catch (error) {
     if (error instanceof ChatbotError && error.surface === "database") {
       return <DatabaseUnavailable />;
@@ -96,7 +101,9 @@ async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   const chatModelFromCookie = cookieStore.get("chat-model");
 
   const initialAgentId =
-    chat.agentId && chat.agentId.length > 0 ? chat.agentId : undefined;
+    chat.agentId && chat.agentId.length > 0
+      ? chat.agentId
+      : DEFAULT_AGENT_ID_WHEN_EMPTY;
 
   if (!chatModelFromCookie) {
     return (

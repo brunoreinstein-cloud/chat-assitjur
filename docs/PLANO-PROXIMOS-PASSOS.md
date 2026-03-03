@@ -25,6 +25,7 @@ Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. 
 | —   | **RAG (Fase 2)** | Tabela `KnowledgeChunk` com pgvector; chunking e embeddings no POST /api/knowledge; no chat, embedding da pergunta e busca top-k; fallback para injeção direta. Ver [lib/ai/knowledge-base.md](../lib/ai/knowledge-base.md). |
 | —   | **UX etapas / DOCX (Fase 2)** | Banner com "FASE A — Extração e mapeamento"; "FASE B" com nomes dos 3 documentos; instruções do agente a indicar os 3 nomes na ENTREGA. |
 | —   | **Multi-agente (Fase 3)** | Registry em `lib/ai/agents-registry.ts`; agentes Revisor de Defesas e Redator de Contestações; `agentId` no body do chat; selector no header. Export .docx ficou opcional. |
+| —   | **UX: novo chat sem agente + agente visível** | Novo chat abre sem agente pré-selecionado; sidebar e header com opção "Selecionar agente"; greeting dinâmico (agente atual ou "Escolha um agente"); envio bloqueado sem agente (toast + API 400). Ver sugestões em [ux-ui-revisor-defesas.md](ux-ui-revisor-defesas.md) e lista abaixo. |
 
 **Referência:** Validação pré-envio — secção 6 de [processo-revisor-upload-validacao.md](processo-revisor-upload-validacao.md); checklist em [PROJETO-REVISOR-DEFESAS.md](PROJETO-REVISOR-DEFESAS.md).
 
@@ -41,6 +42,7 @@ Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. 
 | 5 | **Upgrade Next.js** | Usar a skill **@next-upgrade** ao planear ou executar upgrade do Next.js. | [next-upgrade.md](next-upgrade.md) |
 | 6 | **RAG (base de conhecimento)** | Implementado (Fase 2). Melhorias futuras: reranking, chunking semântico. | [lib/ai/knowledge-base.md](../lib/ai/knowledge-base.md) |
 | 7 | **Modo Split-Screen (Revisor)** | Sugestão UX: ao gerar o parecer, ver documento original de um lado e sugestões da IA do outro, com highlights ligando os dois — padrão em ferramentas jurídicas de revisão. | Especificar em SPEC ou PROJETO-REVISOR-DEFESAS.md |
+| 8 | **Mais melhorias UX/UI chat** | (1) Indicador de modelo LLM ao lado do agente no header. (2) Breadcrumb ou título da conversa visível no topo. (3) Reduzir redundância: agente mostrado na sidebar + header + greeting — considerar um único ponto de verdade com destaque. (4) Botão "Faça anexar PI e Contestação" só quando Revisor selecionado. (5) Acessibilidade: garantir que o seletor de agente tenha foco lógico e anúncio para leitores de ecrã. | [ux-ui-revisor-defesas.md](ux-ui-revisor-defesas.md) |
 
 ---
 

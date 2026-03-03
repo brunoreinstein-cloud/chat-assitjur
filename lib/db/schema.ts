@@ -23,26 +23,35 @@ export const user = pgTable("User", {
 
 export type User = InferSelectModel<typeof user>;
 
-export const chat = pgTable("Chat", {
-  id: uuid("id").primaryKey().notNull().defaultRandom(),
-  createdAt: timestamp("createdAt").notNull(),
-  title: text("title").notNull(),
-  userId: uuid("userId")
-    .notNull()
-    .references(() => user.id),
-  visibility: varchar("visibility", { enum: ["public", "private"] })
-    .notNull()
-    .default("private"),
-  /** ID do stream ativo no Redis (resumable-stream); limpo em onFinish. Usado pelo GET /api/chat/[id]/stream para retomar. */
-  activeStreamId: text("activeStreamId"),
-  /** Agente do chat: built-in (revisor-defesas, redator-contestacao) ou UUID de agente personalizado. Default revisor-defesas. */
-  agentId: varchar("agentId", { length: 64 }).default("revisor-defesas"),
-});
+export const chat = pgTable(
+  "Chat",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    createdAt: timestamp("createdAt").notNull(),
+    title: text("title").notNull(),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => user.id),
+    visibility: varchar("visibility", { enum: ["public", "private"] })
+      .notNull()
+      .default("private"),
+    /** ID do stream ativo no Redis (resumable-stream); limpo em onFinish. Usado pelo GET /api/chat/[id]/stream para retomar. */
+    activeStreamId: text("activeStreamId"),
+    /** Agente do chat: built-in (revisor-defesas, redator-contestacao) ou UUID de agente personalizado. Default revisor-defesas. */
+    agentId: varchar("agentId", { length: 64 }).default("revisor-defesas"),
+  },
+  (table) => ({
+    /** GET /api/history: listar chats por userId ordenados por createdAt DESC. */
+    userIdCreatedAtIdx: index("Chat_userId_createdAt_idx").on(
+      table.userId,
+      table.createdAt
+    ),
+  })
+);
 
 export type Chat = InferSelectModel<typeof chat>;
 
-// DEPRECATED: The following schema is deprecated and will be removed in the future.
-// Read the migration guide at https://chatbot.dev/docs/migration-guides/message-parts
+// DEPRECATED: schema antigo; usar Message_v2 (parts/attachments) abaixo.
 export const messageDeprecated = pgTable("Message", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
   chatId: uuid("chatId")
@@ -55,21 +64,29 @@ export const messageDeprecated = pgTable("Message", {
 
 export type MessageDeprecated = InferSelectModel<typeof messageDeprecated>;
 
-export const message = pgTable("Message_v2", {
-  id: uuid("id").primaryKey().notNull().defaultRandom(),
-  chatId: uuid("chatId")
-    .notNull()
-    .references(() => chat.id),
-  role: varchar("role").notNull(),
-  parts: json("parts").notNull(),
-  attachments: json("attachments").notNull(),
-  createdAt: timestamp("createdAt").notNull(),
-});
+export const message = pgTable(
+  "Message_v2",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    chatId: uuid("chatId")
+      .notNull()
+      .references(() => chat.id),
+    role: varchar("role").notNull(),
+    parts: json("parts").notNull(),
+    attachments: json("attachments").notNull(),
+    createdAt: timestamp("createdAt").notNull(),
+  },
+  (table) => ({
+    chatIdCreatedAtIdx: index("Message_v2_chatId_createdAt_idx").on(
+      table.chatId,
+      table.createdAt
+    ),
+  })
+);
 
 export type DBMessage = InferSelectModel<typeof message>;
 
-// DEPRECATED: The following schema is deprecated and will be removed in the future.
-// Read the migration guide at https://chatbot.dev/docs/migration-guides/message-parts
+// DEPRECATED: associado ao Message antigo; migrar para Message_v2.
 export const voteDeprecated = pgTable(
   "Vote",
   {
@@ -200,6 +217,10 @@ export const knowledgeFolder = pgTable(
 
 export type KnowledgeFolder = InferSelectModel<typeof knowledgeFolder>;
 
+/** Estado da indexação RAG: pending (só guardado), indexed (chunks indexados), failed (erro ao vetorizar). */
+export const INDEXING_STATUS = ["pending", "indexed", "failed"] as const;
+export type IndexingStatus = (typeof INDEXING_STATUS)[number];
+
 /** Base de conhecimento: documentos que podem ser usados como contexto no chat (RAG ou injeção direta). */
 export const knowledgeDocument = pgTable("KnowledgeDocument", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
@@ -211,6 +232,10 @@ export const knowledgeDocument = pgTable("KnowledgeDocument", {
   }),
   title: varchar("title", { length: 512 }).notNull(),
   content: text("content").notNull(),
+  /** pending = só guardado (job/endpoint vetoriza depois); indexed = chunks disponíveis; failed = erro ao vetorizar. */
+  indexingStatus: varchar("indexingStatus", { length: 32 })
+    .notNull()
+    .default("indexed"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
 
@@ -273,6 +298,10 @@ export const customAgent = pgTable("CustomAgent", {
   instructions: text("instructions").notNull(),
   /** Id do agente base (revisor-defesas | redator-contestacao); se definido, usa as tools desse agente. */
   baseAgentId: varchar("baseAgentId", { length: 64 }),
+  /** IDs de documentos da base de conhecimento associados ao agente (máx. 50); usados ao selecionar o agente no chat. */
+  knowledgeDocumentIds: json("knowledgeDocumentIds")
+    .$type<string[]>()
+    .default([]),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
 
@@ -311,17 +340,26 @@ export type UserCreditBalance = InferSelectModel<typeof userCreditBalance>;
 /**
  * Registo de uso de LLM por pedido (auditoria e transparência).
  */
-export const llmUsageRecord = pgTable("LlmUsageRecord", {
-  id: uuid("id").primaryKey().notNull().defaultRandom(),
-  userId: uuid("userId")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  chatId: uuid("chatId").references(() => chat.id, { onDelete: "set null" }),
-  promptTokens: integer("promptTokens").notNull(),
-  completionTokens: integer("completionTokens").notNull(),
-  model: varchar("model", { length: 128 }),
-  creditsConsumed: integer("creditsConsumed").notNull(),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-});
+export const llmUsageRecord = pgTable(
+  "LlmUsageRecord",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    chatId: uuid("chatId").references(() => chat.id, { onDelete: "set null" }),
+    promptTokens: integer("promptTokens").notNull(),
+    completionTokens: integer("completionTokens").notNull(),
+    model: varchar("model", { length: 128 }),
+    creditsConsumed: integer("creditsConsumed").notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdCreatedAtIdx: index("LlmUsageRecord_userId_createdAt_idx").on(
+      table.userId,
+      table.createdAt
+    ),
+  })
+);
 
 export type LlmUsageRecord = InferSelectModel<typeof llmUsageRecord>;

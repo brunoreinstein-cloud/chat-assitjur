@@ -125,7 +125,7 @@ export async function createGuestUser() {
   }
 }
 
-const DEFAULT_CHAT_AGENT_ID = "revisor-defesas";
+const DEFAULT_CHAT_AGENT_ID = "assistente-geral";
 
 export async function saveChat({
   id,
@@ -746,6 +746,7 @@ export async function createKnowledgeDocument({
   title,
   content,
   id,
+  indexingStatus = "indexed",
 }: {
   userId: string;
   folderId?: string | null;
@@ -753,6 +754,8 @@ export async function createKnowledgeDocument({
   content: string;
   /** ID fixo (ex.: documento sistema do Redator); omitir para gerar aleatório. */
   id?: string;
+  /** pending = só guardado (vetorizar depois); indexed (default) = já indexado ou a indexar em seguida. */
+  indexingStatus?: "pending" | "indexed" | "failed";
 }) {
   try {
     const [created] = await getDb()
@@ -763,6 +766,7 @@ export async function createKnowledgeDocument({
         folderId: folderId ?? null,
         title,
         content,
+        indexingStatus,
       })
       .returning();
     return created;
@@ -772,6 +776,46 @@ export async function createKnowledgeDocument({
       "Failed to create knowledge document"
     );
   }
+}
+
+/** Documentos com indexingStatus = 'pending' para processar por job ou endpoint. */
+export function getKnowledgeDocumentsPendingIndexing({
+  limit = 50,
+  userId,
+}: {
+  limit?: number;
+  /** Se definido, só documentos deste utilizador; caso contrário todos (ex.: job admin). */
+  userId?: string;
+}) {
+  const conditions = [eq(knowledgeDocument.indexingStatus, "pending")];
+  if (userId !== undefined) {
+    conditions.push(eq(knowledgeDocument.userId, userId));
+  }
+  return getDb()
+    .select()
+    .from(knowledgeDocument)
+    .where(and(...conditions))
+    .orderBy(asc(knowledgeDocument.createdAt))
+    .limit(Math.min(Math.max(1, limit), 100));
+}
+
+export async function updateKnowledgeDocumentIndexingStatus({
+  id,
+  userId,
+  indexingStatus,
+}: {
+  id: string;
+  userId: string;
+  indexingStatus: "pending" | "indexed" | "failed";
+}) {
+  const [updated] = await getDb()
+    .update(knowledgeDocument)
+    .set({ indexingStatus })
+    .where(
+      and(eq(knowledgeDocument.id, id), eq(knowledgeDocument.userId, userId))
+    )
+    .returning();
+  return updated ?? null;
 }
 
 export async function getKnowledgeDocumentsByUserId({
@@ -888,18 +932,21 @@ export async function updateKnowledgeDocumentById({
   folderId,
   title,
   content,
+  indexingStatus,
 }: {
   id: string;
   userId: string;
   folderId?: string | null;
   title?: string;
   content?: string;
+  indexingStatus?: "pending" | "indexed" | "failed";
 }) {
   try {
     const updates: Partial<{
       folderId: string | null;
       title: string;
       content: string;
+      indexingStatus: "pending" | "indexed" | "failed";
     }> = {};
     if (folderId !== undefined) {
       updates.folderId = folderId ?? null;
@@ -909,6 +956,9 @@ export async function updateKnowledgeDocumentById({
     }
     if (content !== undefined) {
       updates.content = content;
+    }
+    if (indexingStatus !== undefined) {
+      updates.indexingStatus = indexingStatus;
     }
     if (Object.keys(updates).length === 0) {
       return (await getKnowledgeDocumentById({ id, userId })) ?? null;
@@ -1323,11 +1373,13 @@ export async function createCustomAgent({
   name,
   instructions,
   baseAgentId,
+  knowledgeDocumentIds,
 }: {
   userId: string;
   name: string;
   instructions: string;
   baseAgentId?: string | null;
+  knowledgeDocumentIds?: string[];
 }) {
   try {
     const [created] = await getDb()
@@ -1337,6 +1389,7 @@ export async function createCustomAgent({
         name,
         instructions,
         baseAgentId: baseAgentId ?? null,
+        knowledgeDocumentIds: knowledgeDocumentIds ?? [],
       })
       .returning();
     if (!created) {
@@ -1363,18 +1416,21 @@ export async function updateCustomAgentById({
   name,
   instructions,
   baseAgentId,
+  knowledgeDocumentIds,
 }: {
   id: string;
   userId: string;
   name?: string;
   instructions?: string;
   baseAgentId?: string | null;
+  knowledgeDocumentIds?: string[];
 }) {
   try {
     const updates: {
       name?: string;
       instructions?: string;
       baseAgentId?: string | null;
+      knowledgeDocumentIds?: string[];
     } = {};
     if (name !== undefined) {
       updates.name = name;
@@ -1384,6 +1440,9 @@ export async function updateCustomAgentById({
     }
     if (baseAgentId !== undefined) {
       updates.baseAgentId = baseAgentId ?? null;
+    }
+    if (knowledgeDocumentIds !== undefined) {
+      updates.knowledgeDocumentIds = knowledgeDocumentIds;
     }
     if (Object.keys(updates).length === 0) {
       return (await getCustomAgentById({ id, userId })) ?? null;

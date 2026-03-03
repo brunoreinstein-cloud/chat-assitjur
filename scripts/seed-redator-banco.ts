@@ -11,8 +11,8 @@ import { config } from "dotenv";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { chunkText, embedChunks } from "../lib/ai/rag";
 import { knowledgeChunk, knowledgeDocument, user } from "../lib/db/schema";
+import { vectorizeContent } from "../lib/rag/vectorization";
 
 config({ path: ".env" });
 config({ path: ".env.local" });
@@ -103,33 +103,26 @@ async function main() {
     console.log("Documento banco criado.");
   }
 
-  const chunks = chunkText(content);
-  if (chunks.length === 0) {
+  const chunksWithEmbeddings = await vectorizeContent(content);
+  if (chunksWithEmbeddings.length === 0) {
     console.log("Nenhum chunk gerado. Terminado.");
     await connection.end();
     process.exit(0);
   }
 
-  const embedded = await embedChunks(chunks);
-  if (embedded == null || embedded.length !== chunks.length) {
-    console.error(
-      "Falha ao gerar embeddings (verifique AI_GATEWAY_API_KEY ou provider)."
-    );
-    await connection.end();
-    process.exit(1);
-  }
-
   await db.insert(knowledgeChunk).values(
-    chunks.map((text, i) => ({
+    chunksWithEmbeddings.map((c, i) => ({
       knowledgeDocumentId: REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID,
       chunkIndex: i,
-      text,
-      embedding: embedded[i]?.embedding ?? [],
+      text: c.text,
+      embedding: c.embedding,
     }))
   );
 
   await connection.end();
-  console.log(`✅ Banco de Teses Padrão indexado: ${chunks.length} chunks.`);
+  console.log(
+    `✅ Banco de Teses Padrão indexado: ${chunksWithEmbeddings.length} chunks.`
+  );
   process.exit(0);
 }
 

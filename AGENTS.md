@@ -8,7 +8,7 @@ Este documento orienta agentes de IA (Cursor, Codex, etc.) a trabalhar neste rep
 
 - **Nome:** Chatbot (template Next.js + AI SDK).
 - **Domínio:** Agente Revisor de Defesas Trabalhistas (auditor jurídico sênior — contencioso trabalhista). As instruções padrão do agente estão em `lib/ai/agent-revisor-defesas.ts` e são injetadas no system prompt quando o usuário não envia "Instruções do agente".
-- **Funcionalidades principais:** chat com LLM (streaming), histórico de conversas, base de conhecimento (documentos injetados no contexto), ferramentas (clima, criar/atualizar documento, sugestões), autenticação, **modo visitante (guest)** para usar o chat sem conta, upload de ficheiros (Vercel Blob ou Supabase Storage).
+- **Funcionalidades principais:** chat com LLM (streaming), histórico de conversas, base de conhecimento (documentos injetados no contexto), ferramentas (clima, criar/atualizar documento, sugestões), autenticação, **modo visitante (guest)** para usar o chat sem conta, upload de ficheiros (Vercel Blob ou Supabase Storage). A página **/ajuda** descreve o projeto e as funcionalidades para o utilizador final.
 
 ---
 
@@ -83,8 +83,31 @@ Referência em `.env.example`. Principais:
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` — Supabase (Auth, Storage).
 - `BLOB_READ_WRITE_TOKEN` — Vercel Blob (alternativa ao Storage).
 - `REDIS_URL` — opcional, para rate limiting.
+- `ADMIN_CREDITS_SECRET` — chave para aceder ao painel administrativo (agentes built-in, créditos). Ver secção abaixo.
+- `PROMPT_CACHING_ENABLED` — opcional (default: true). Desativar prompt caching Anthropic: `false`.
+- `PROMPT_CACHING_TTL` — opcional (`5m` ou `1h`). TTL do cache; `1h` custa mais na escrita, útil para pausas longas.
 
 Não hardcodar segredos; usar sempre variáveis de ambiente.
+
+---
+
+## Painel administrativo
+
+- **Rota:** `/admin/agents` (link na sidebar: "Administração — Agentes built-in").
+- **Função:** listar e editar instruções e etiquetas dos agentes built-in (Revisor de Defesas, Redator de Contestações, AssistJur Master). As alterações aplicam-se a todos os utilizadores.
+- **Acesso:** a página exige uma **chave de administrador**. Quem tiver essa chave pode ver a lista e editar; as APIs admin rejeitam pedidos sem o header `x-admin-key` correto.
+
+**Como criar/configurar a senha de acesso:**
+
+1. **Definir o valor da chave** na variável de ambiente `ADMIN_CREDITS_SECRET`:
+   - **Local:** em `.env.local` (não commitar): `ADMIN_CREDITS_SECRET=uma-string-secreta-forte`
+   - **Produção (Vercel):** em Settings → Environment Variables: criar `ADMIN_CREDITS_SECRET` com o mesmo valor.
+2. **Gerar uma chave segura** (recomendado): `openssl rand -base64 32` ou [generate-secret.vercel.app/32](https://generate-secret.vercel.app/32).
+3. Na página `/admin/agents`, no campo "Chave de administrador", introduzir **exatamente** o valor definido em `ADMIN_CREDITS_SECRET` e clicar em "Aceder".
+
+**APIs protegidas pela mesma chave:** `GET/POST /api/admin/credits` (listar utilizadores com saldo, adicionar créditos). Ver [docs/SPEC-CREDITOS-LLM.md](docs/SPEC-CREDITOS-LLM.md).
+
+Se `ADMIN_CREDITS_SECRET` não estiver definido no servidor, todas as requisições às rotas admin devolvem 401 Unauthorized.
 
 ---
 
@@ -145,6 +168,8 @@ Comandos: `npx skills list` | `npx skills find [query]` | `npx skills update`.
 - **[docs/AGENTES-IA-PERSONALIZADOS.md](docs/AGENTES-IA-PERSONALIZADOS.md)** — Agentes de IA personalizados: agentes pré-definidos (Revisor, Redator de Contestações), instruções customizadas e base de conhecimento; referência técnica e evolução futura.
 - **[docs/PLANO-PROXIMOS-PASSOS.md](docs/PLANO-PROXIMOS-PASSOS.md)** — Plano de próximos passos: tarefas imediatas (ex.: prebuild), curto prazo, índice do roadmap e onde a documentação descreve "próximos passos". Atualizar este ficheiro quando mudarem prioridades.
 - **[docs/OTIMIZACAO-CUSTO-TOKENS-LLM.md](docs/OTIMIZACAO-CUSTO-TOKENS-LLM.md)** — Revisão e otimização de custo de tokens e uso de LLM: onde se consome, limites atuais, checklist e ações recomendadas.
+- **[docs/PROMPT-LEAK-REDUCTION.md](docs/PROMPT-LEAK-REDUCTION.md)** — Estratégias para reduzir prompt leak (instruções sensíveis, base de conhecimento); o que o projeto já faz e melhorias opcionais (pós-processamento, auditorias).
+- **[docs/PDF-INPUTS-ESTADO-E-MELHORIAS.md](docs/PDF-INPUTS-ESTADO-E-MELHORIAS.md)** — Estado atual do tratamento de PDFs no chat (extração no servidor, partes `document` → texto) e melhorias possíveis com OpenRouter PDF (URL/base64, plugins, anotações).
 
 ---
 

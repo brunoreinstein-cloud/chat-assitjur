@@ -8,12 +8,14 @@ import {
   BookOpenIcon,
   CheckIcon,
   FileTextIcon,
+  LoaderIcon,
   MoreHorizontalIcon,
   PencilIcon,
   PlusIcon,
   Settings2Icon,
   SparklesIcon,
   Trash2Icon,
+  WandIcon,
 } from "lucide-react";
 import {
   type ChangeEvent,
@@ -34,6 +36,7 @@ interface CustomAgentRow {
   name: string;
   instructions: string;
   baseAgentId: string | null;
+  knowledgeDocumentIds?: string[];
   createdAt: string;
 }
 
@@ -89,10 +92,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "./ui/sheet";
 import { Textarea } from "./ui/textarea";
 import type { VisibilityType } from "./visibility-selector";
 
 const AGENT_INSTRUCTIONS_MAX_LENGTH = 4000;
+
+/** Tipos MIME aceites para anexos (chat e base de conhecimento). */
+const ACCEPTED_FILE_ACCEPT =
+  "image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/plain,application/vnd.oasis.opendocument.text";
+
+function isAcceptedAttachmentType(type: string): boolean {
+  return (
+    type.startsWith("image/") ||
+    type === "application/pdf" ||
+    type === "application/msword" ||
+    type ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    type ===
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    type === "application/vnd.ms-excel" ||
+    type === "text/csv" ||
+    type === "text/plain" ||
+    type === "application/vnd.oasis.opendocument.text"
+  );
+}
 
 function _setCookie(name: string, value: string) {
   const maxAge = 60 * 60 * 24 * 365; // 1 year
@@ -441,7 +471,7 @@ type PureMultimodalInputProps = Readonly<{
   ) => void;
   /** Instruções customizadas do agente; vazio = instruções do agente selecionado (validação PI+Contestação só para revisor-defesas) */
   agentInstructions?: string;
-  /** Id do agente (revisor-defesas | redator-contestacao). Validação PI+Contestação só quando revisor-defesas. */
+  /** Id do agente (revisor-defesas | redator-contestacao | assistjur-master). Validação PI+Contestação só quando revisor-defesas. */
   agentId?: string;
   /** Permite alterar o agente a partir do rodapé (composer). Quando omitido, o seletor de agente não é exibido. */
   setAgentId?: (value: string) => void;
@@ -470,7 +500,7 @@ function PureMultimodalInput({
   knowledgeDocumentIds = [],
   setKnowledgeDocumentIds,
   agentInstructions = "",
-  agentId = "revisor-defesas",
+  agentId = "",
   setAgentId,
   setAgentInstructions,
   onOpenKnowledgeSidebar,
@@ -487,9 +517,15 @@ function PureMultimodalInput({
   const [agentFormName, setAgentFormName] = useState("");
   const [agentFormInstructions, setAgentFormInstructions] = useState("");
   const [agentFormBaseId, setAgentFormBaseId] = useState<string>("");
+  const [agentFormKnowledgeIds, setAgentFormKnowledgeIds] = useState<string[]>(
+    []
+  );
   const [agentIdToDelete, setAgentIdToDelete] = useState<string | null>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [chipsExpanded, setChipsExpanded] = useState(false);
+  const [isImprovingPrompt, setIsImprovingPrompt] = useState(false);
+  const [isImprovingAgentInstructions, setIsImprovingAgentInstructions] =
+    useState(false);
 
   const { data: customAgents = [], mutate: mutateCustomAgents } = useSWR<
     CustomAgentRow[]
@@ -516,11 +552,120 @@ function PureMultimodalInput({
     setManageAgentsOpen(true);
   }, []);
 
+  const handleImprovePrompt = useCallback(async () => {
+    const text = input.trim();
+    if (text.length === 0) {
+      toast.error("Escreva um texto para melhorar.");
+      return;
+    }
+    setIsImprovingPrompt(true);
+    try {
+      const res = await fetch("/api/prompt/improve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: text }),
+      });
+      const data = (await res.json()) as
+        | { improvedPrompt: string; diagnosis?: string; notes?: string }
+        | { error?: string };
+      if (!res.ok) {
+        const msg =
+          "error" in data && typeof data.error === "string"
+            ? data.error
+            : "Não foi possível melhorar o prompt.";
+        toast.error(msg);
+        return;
+      }
+      if ("improvedPrompt" in data && typeof data.improvedPrompt === "string") {
+        setInput(data.improvedPrompt);
+        const parts: string[] = [];
+        if (data.diagnosis?.trim()) {
+          parts.push(data.diagnosis.trim());
+        }
+        if (data.notes?.trim()) {
+          parts.push(`Alterações: ${data.notes.trim()}`);
+        }
+        const description =
+          parts.length > 0
+            ? parts.join("\n\n").slice(0, 400) +
+              (parts.join("\n\n").length > 400 ? "…" : "")
+            : undefined;
+        toast.success("Prompt melhorado. Pode editar antes de enviar.", {
+          description,
+        });
+      }
+    } catch {
+      toast.error("Erro de ligação. Tente novamente.");
+    } finally {
+      setIsImprovingPrompt(false);
+    }
+  }, [input, setInput]);
+
+  /** Melhorar texto de instruções (formulário Meus agentes ou diálogo Instruções do agente) via API. */
+  const handleImproveInstructions = useCallback(
+    async (text: string, setResult: (value: string) => void) => {
+      const trimmed = text.trim();
+      if (trimmed.length === 0) {
+        toast.error("Escreva instruções para melhorar.");
+        return;
+      }
+      setIsImprovingAgentInstructions(true);
+      try {
+        const res = await fetch("/api/prompt/improve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: trimmed }),
+        });
+        const data = (await res.json()) as
+          | { improvedPrompt: string; diagnosis?: string; notes?: string }
+          | { error?: string };
+        if (!res.ok) {
+          const msg =
+            "error" in data && typeof data.error === "string"
+              ? data.error
+              : "Não foi possível melhorar as instruções.";
+          toast.error(msg);
+          return;
+        }
+        if (
+          "improvedPrompt" in data &&
+          typeof data.improvedPrompt === "string"
+        ) {
+          setResult(data.improvedPrompt);
+          const parts: string[] = [];
+          if (data.diagnosis?.trim()) {
+            parts.push(data.diagnosis.trim());
+          }
+          if (data.notes?.trim()) {
+            parts.push(`Alterações: ${data.notes.trim()}`);
+          }
+          const description =
+            parts.length > 0
+              ? parts.join("\n\n").slice(0, 400) +
+                (parts.join("\n\n").length > 400 ? "…" : "")
+              : undefined;
+          toast.success(
+            "Instruções melhoradas. Pode editar antes de guardar.",
+            {
+              description,
+            }
+          );
+        }
+      } catch {
+        toast.error("Erro de ligação. Tente novamente.");
+      } finally {
+        setIsImprovingAgentInstructions(false);
+      }
+    },
+    []
+  );
+
   const startCreateAgent = useCallback(() => {
     setAgentFormId(null);
     setAgentFormName("");
     setAgentFormInstructions("");
     setAgentFormBaseId("");
+    setAgentFormKnowledgeIds([]);
     setAgentFormVisible(true);
   }, []);
 
@@ -529,6 +674,11 @@ function PureMultimodalInput({
     setAgentFormName(agent.name);
     setAgentFormInstructions(agent.instructions);
     setAgentFormBaseId(agent.baseAgentId ?? "");
+    setAgentFormKnowledgeIds(
+      Array.isArray(agent.knowledgeDocumentIds)
+        ? agent.knowledgeDocumentIds
+        : []
+    );
     setAgentFormVisible(true);
     setManageAgentsOpen(true);
   }, []);
@@ -538,6 +688,7 @@ function PureMultimodalInput({
     setAgentFormName("");
     setAgentFormInstructions("");
     setAgentFormBaseId("");
+    setAgentFormKnowledgeIds([]);
     setAgentFormVisible(false);
   }, []);
 
@@ -551,13 +702,22 @@ function PureMultimodalInput({
     const baseAgentId =
       agentFormBaseId === "" || agentFormBaseId === "none"
         ? null
-        : (agentFormBaseId as "revisor-defesas" | "redator-contestacao");
+        : (agentFormBaseId as
+            | "revisor-defesas"
+            | "redator-contestacao"
+            | "assistjur-master");
+    const knowledgeIds = agentFormKnowledgeIds.slice(0, MAX_KNOWLEDGE_SELECT);
     try {
       if (agentFormId) {
         const res = await fetch(`/api/agents/custom/${agentFormId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, instructions, baseAgentId }),
+          body: JSON.stringify({
+            name,
+            instructions,
+            baseAgentId,
+            knowledgeDocumentIds: knowledgeIds,
+          }),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -568,7 +728,12 @@ function PureMultimodalInput({
         const res = await fetch("/api/agents/custom", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, instructions, baseAgentId }),
+          body: JSON.stringify({
+            name,
+            instructions,
+            baseAgentId,
+            knowledgeDocumentIds: knowledgeIds,
+          }),
         });
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
@@ -587,6 +752,7 @@ function PureMultimodalInput({
     agentFormName,
     agentFormBaseId,
     agentFormInstructions,
+    agentFormKnowledgeIds,
     cancelAgentForm,
     mutateCustomAgents,
   ]);
@@ -629,6 +795,13 @@ function PureMultimodalInput({
     Array<{ id: string; title: string }>
   >(
     atPopoverOpen && setKnowledgeDocumentIds ? "/api/knowledge" : null,
+    fetcher
+  );
+  const {
+    data: knowledgeDocsForAgentForm = [],
+    mutate: mutateKnowledgeForAgentForm,
+  } = useSWR<Array<{ id: string; title: string }>>(
+    agentFormVisible ? "/api/knowledge" : null,
     fetcher
   );
   const filteredKnowledgeDocs = atQuery.trim()
@@ -887,13 +1060,8 @@ function PureMultimodalInput({
       if (!items?.length) {
         return;
       }
-      const files = Array.from(items).filter(
-        (f) =>
-          f.type.startsWith("image/") ||
-          f.type === "application/pdf" ||
-          f.type === "application/msword" ||
-          f.type ===
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      const files = Array.from(items).filter((f) =>
+        isAcceptedAttachmentType(f.type)
       );
       if (files.length > 0) {
         processFiles(files);
@@ -922,13 +1090,8 @@ function PureMultimodalInput({
       if (!items?.length) {
         return;
       }
-      const files = Array.from(items).filter(
-        (f) =>
-          f.type.startsWith("image/") ||
-          f.type === "application/pdf" ||
-          f.type === "application/msword" ||
-          f.type ===
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      const files = Array.from(items).filter((f) =>
+        isAcceptedAttachmentType(f.type)
       );
       if (files.length > 0) {
         processFiles(files, preferredType);
@@ -1115,8 +1278,8 @@ function PureMultimodalInput({
       </AlertDialog>
 
       <input
-        accept="image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        aria-label="Anexar documentos (imagens, PDF, DOC, DOCX)"
+        accept={ACCEPTED_FILE_ACCEPT}
+        aria-label="Anexar documentos (imagens, PDF, DOC, DOCX, XLS, XLSX, CSV, TXT, ODT)"
         className="sr-only"
         id={fileInputId}
         multiple
@@ -1194,8 +1357,8 @@ function PureMultimodalInput({
             className="mb-2 flex flex-wrap items-center gap-2 rounded-lg bg-muted/30 px-3 py-2"
           >
             <span className="text-muted-foreground text-xs">
-              Para revisar defesas, anexe PI e Contestação (PDF/DOC/DOCX) ou
-              cole o texto.
+              Para revisar defesas, anexe PI e Contestação
+              (PDF/DOC/DOCX/Excel/CSV/TXT/ODT) ou cole o texto.
             </span>
             <div className="flex gap-1.5">
               <Button
@@ -1440,7 +1603,7 @@ function PureMultimodalInput({
                 setAtPopoverOpen(false);
               }
             }}
-            placeholder="Descreva o caso ou cole o texto… (@ para base)"
+            placeholder="Enviar mensagem…"
             ref={(el) => {
               textareaRef.current = el;
               if (inputRefProp) {
@@ -1529,6 +1692,25 @@ function PureMultimodalInput({
                 )}
               </Button>
             )}
+            <Button
+              aria-label="Melhorar prompt com IA"
+              className="size-11 shrink-0 rounded-full p-0"
+              disabled={
+                status === "submitted" ||
+                input.trim().length === 0 ||
+                isImprovingPrompt
+              }
+              onClick={handleImprovePrompt}
+              title="Melhorar prompt"
+              type="button"
+              variant="ghost"
+            >
+              {isImprovingPrompt ? (
+                <LoaderIcon aria-hidden className="size-[18px] animate-spin" />
+              ) : (
+                <WandIcon aria-hidden size={18} />
+              )}
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -1605,7 +1787,7 @@ function PureMultimodalInput({
             </DropdownMenu>
             {setAgentId && (
               <>
-                <Dialog
+                <Sheet
                   onOpenChange={(open) => {
                     setManageAgentsOpen(open);
                     if (!open) {
@@ -1614,14 +1796,18 @@ function PureMultimodalInput({
                   }}
                   open={manageAgentsOpen}
                 >
-                  <DialogContent className="max-h-[85vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>Meus agentes</DialogTitle>
-                      <DialogDescription>
+                  <SheetContent
+                    className="flex w-full flex-col overflow-y-auto sm:max-w-lg"
+                    side="left"
+                  >
+                    <SheetHeader>
+                      <SheetTitle>Meus agentes</SheetTitle>
+                      <SheetDescription>
                         Crie e edite agentes com instruções e base de
-                        conhecimento próprias.
-                      </DialogDescription>
-                    </DialogHeader>
+                        conhecimento próprias. Pode abrir a base de conhecimento
+                        à direita para adicionar documentos enquanto preenche.
+                      </SheetDescription>
+                    </SheetHeader>
                     {agentFormVisible ? (
                       <div className="grid gap-3">
                         <div className="grid gap-2">
@@ -1635,9 +1821,36 @@ function PureMultimodalInput({
                           />
                         </div>
                         <div className="grid gap-2">
-                          <Label htmlFor="custom-agent-instructions">
-                            Instruções
-                          </Label>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <Label htmlFor="custom-agent-instructions">
+                              Instruções
+                            </Label>
+                            <Button
+                              aria-label="Melhorar instruções com IA"
+                              disabled={isImprovingAgentInstructions}
+                              onClick={() =>
+                                handleImproveInstructions(
+                                  agentFormInstructions,
+                                  setAgentFormInstructions
+                                )
+                              }
+                              size="sm"
+                              type="button"
+                              variant="outline"
+                            >
+                              {isImprovingAgentInstructions ? (
+                                <LoaderIcon
+                                  aria-hidden
+                                  className="size-4 animate-spin"
+                                />
+                              ) : (
+                                <WandIcon aria-hidden className="size-4" />
+                              )}
+                              {isImprovingAgentInstructions
+                                ? "A melhorar…"
+                                : "Melhorar prompt"}
+                            </Button>
+                          </div>
                           <Textarea
                             className="min-h-[120px]"
                             id="custom-agent-instructions"
@@ -1668,8 +1881,108 @@ function PureMultimodalInput({
                               <SelectItem value="redator-contestacao">
                                 Redator de Contestações
                               </SelectItem>
+                              <SelectItem value="assistjur-master">
+                                AssistJur.IA Master
+                              </SelectItem>
                             </SelectContent>
                           </Select>
+                        </div>
+                        <div className="grid gap-2">
+                          <Label id="custom-agent-knowledge-label">
+                            Base de conhecimento
+                          </Label>
+                          <p className="text-muted-foreground text-xs">
+                            Documentos incluídos por defeito ao usar este agente
+                            no chat (máx. {MAX_KNOWLEDGE_SELECT}).
+                          </p>
+                          <fieldset
+                            aria-labelledby="custom-agent-knowledge-label"
+                            className="max-h-[180px] overflow-y-auto rounded-md border border-border bg-muted/20 p-2"
+                          >
+                            {knowledgeDocsForAgentForm.length === 0 ? (
+                              <div className="flex flex-col items-center gap-2 py-3 text-center">
+                                <p className="text-muted-foreground text-sm">
+                                  Ainda não tem documentos na base de
+                                  conhecimento.
+                                </p>
+                                <div className="flex flex-wrap justify-center gap-2">
+                                  {onOpenKnowledgeSidebar && (
+                                    <Button
+                                      onClick={onOpenKnowledgeSidebar}
+                                      size="sm"
+                                      type="button"
+                                      variant="outline"
+                                    >
+                                      Abrir base de conhecimento
+                                    </Button>
+                                  )}
+                                  <Button
+                                    onClick={() => {
+                                      mutateKnowledgeForAgentForm();
+                                    }}
+                                    size="sm"
+                                    type="button"
+                                    variant="ghost"
+                                  >
+                                    Atualizar lista
+                                  </Button>
+                                </div>
+                                <p className="text-muted-foreground text-xs">
+                                  Use «Abrir base de conhecimento» para abrir a
+                                  barra lateral à direita; adicione documentos e
+                                  depois «Atualizar lista» aqui.
+                                </p>
+                              </div>
+                            ) : (
+                              <ul className="flex flex-col gap-1">
+                                {knowledgeDocsForAgentForm.map((doc) => {
+                                  const isSelected =
+                                    agentFormKnowledgeIds.includes(doc.id);
+                                  const disabled =
+                                    !isSelected &&
+                                    agentFormKnowledgeIds.length >=
+                                      MAX_KNOWLEDGE_SELECT;
+                                  return (
+                                    <li key={doc.id}>
+                                      <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/50 has-disabled:cursor-not-allowed has-disabled:opacity-60">
+                                        <input
+                                          checked={isSelected}
+                                          className="size-4 rounded border-input"
+                                          disabled={disabled}
+                                          onChange={() => {
+                                            setAgentFormKnowledgeIds((prev) => {
+                                              if (isSelected) {
+                                                return prev.filter(
+                                                  (id) => id !== doc.id
+                                                );
+                                              }
+                                              if (
+                                                prev.length >=
+                                                MAX_KNOWLEDGE_SELECT
+                                              ) {
+                                                return prev;
+                                              }
+                                              return [...prev, doc.id];
+                                            });
+                                          }}
+                                          type="checkbox"
+                                        />
+                                        <span className="min-w-0 truncate">
+                                          {doc.title || doc.id}
+                                        </span>
+                                      </label>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
+                          </fieldset>
+                          {agentFormKnowledgeIds.length > 0 && (
+                            <span className="text-muted-foreground text-xs">
+                              {agentFormKnowledgeIds.length}/
+                              {MAX_KNOWLEDGE_SELECT} selecionados
+                            </span>
+                          )}
                         </div>
                         <div className="flex justify-end gap-2">
                           <Button
@@ -1736,8 +2049,8 @@ function PureMultimodalInput({
                         </Button>
                       </div>
                     )}
-                  </DialogContent>
-                </Dialog>
+                  </SheetContent>
+                </Sheet>
                 {setAgentInstructions && (
                   <Dialog
                     onOpenChange={handleAgentInstructionsDialogOpenChange}
@@ -1752,9 +2065,36 @@ function PureMultimodalInput({
                         </DialogDescription>
                       </DialogHeader>
                       <div className="grid gap-2">
-                        <Label htmlFor="agent-instructions-composer">
-                          Sobrescrever orientações (opcional)
-                        </Label>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <Label htmlFor="agent-instructions-composer">
+                            Sobrescrever orientações (opcional)
+                          </Label>
+                          <Button
+                            aria-label="Melhorar instruções com IA"
+                            disabled={isImprovingAgentInstructions}
+                            onClick={() =>
+                              handleImproveInstructions(
+                                localAgentInstructions,
+                                setLocalAgentInstructions
+                              )
+                            }
+                            size="sm"
+                            type="button"
+                            variant="outline"
+                          >
+                            {isImprovingAgentInstructions ? (
+                              <LoaderIcon
+                                aria-hidden
+                                className="size-4 animate-spin"
+                              />
+                            ) : (
+                              <WandIcon aria-hidden className="size-4" />
+                            )}
+                            {isImprovingAgentInstructions
+                              ? "A melhorar…"
+                              : "Melhorar prompt"}
+                          </Button>
+                        </div>
                         <Textarea
                           autoComplete="off"
                           id="agent-instructions-composer"
@@ -1795,7 +2135,7 @@ function PureMultimodalInput({
       </PromptInput>
       {messages.length === 0 && (
         <p className="text-muted-foreground/90 text-xs" id="revisor-input-hint">
-          PDF/DOC/DOCX • Auto-identificação • @ base
+          PDF/DOC/DOCX/Excel/CSV/TXT/ODT • Auto-identificação • @ base
         </p>
       )}
     </div>
@@ -1860,12 +2200,12 @@ function PureAttachmentsButton({
 
   return (
     <Button
-      aria-label="Anexar documentos (imagens, PDF, DOC, DOCX)"
+      aria-label="Anexar documentos (imagens, PDF, DOC, DOCX, XLS, XLSX, CSV, TXT, ODT)"
       className="aspect-square h-8 rounded-lg p-1 transition-colors hover:bg-accent"
       data-testid="attachments-button"
       disabled={disabled}
       onClick={openFileDialog}
-      title="Anexar documentos (imagens, PDF, DOCX)"
+      title="Anexar documentos (imagens, PDF, DOC, DOCX, Excel, CSV, TXT, ODT)"
       type="button"
       variant="ghost"
     >

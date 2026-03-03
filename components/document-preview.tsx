@@ -162,7 +162,7 @@ const PureHitboxLayer = ({
   result,
   setArtifact,
 }: {
-  hitboxRef: React.RefObject<HTMLDivElement>;
+  hitboxRef: React.RefObject<HTMLDivElement | null>;
   result: { id?: string; kind?: string; title?: string } & Record<
     string,
     unknown

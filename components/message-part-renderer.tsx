@@ -46,12 +46,19 @@ type RenderContext = Readonly<{
   message: ChatMessage;
 }>;
 
+type ReasoningPart = ChatMessage["parts"][number] & {
+  type: "reasoning";
+  steps?: string[];
+};
+
 function renderReasoningPart(
-  part: ChatMessage["parts"][number] & { type: "reasoning" },
+  part: ReasoningPart,
   key: string,
   ctx: RenderContext
 ): ReactNode {
-  const hasContent = (part.text?.trim().length ?? 0) > 0;
+  const steps = part.steps;
+  const hasSteps = Array.isArray(steps) && steps.length > 0;
+  const hasContent = hasSteps || (part.text?.trim().length ?? 0) > 0;
   const isStreaming =
     part != null && "state" in part && part?.state === "streaming";
   if (!(hasContent || isStreaming)) {
@@ -62,6 +69,7 @@ function renderReasoningPart(
       isLoading={ctx.isLoading || isStreaming}
       key={key}
       reasoning={part.text || ""}
+      steps={steps}
     />
   );
 }

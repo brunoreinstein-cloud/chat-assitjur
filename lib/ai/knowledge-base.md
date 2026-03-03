@@ -3,6 +3,7 @@
 A **base de conhecimento** é comum a **todos os agentes** (Revisor de Defesas, Redator de Contestações, etc.). Os documentos que o utilizador selecionar são injetados no system prompt e usados como contexto em qualquer conversa, por exemplo:
 
 - **@bancodetese** — teses e precedentes (Revisor de Defesas: quadro de teses na Avaliação da Defesa).
+- **Templates AssistJur.IA Master** — estrutura de relatórios (Relatório Processual Master, Carta de Prognóstico, DPSP, etc.). Os ficheiros oficiais em texto ficam em `lib/ai/templates/assistjur/`; o utilizador pode importá-los para a Base de conhecimento e selecioná-los no chat. O agente usa o conteúdo como estrutura obrigatória ao preencher relatórios. Ver `lib/ai/templates/assistjur/README.md`.
 - **Outros contextos** — cláusulas-modelo, jurisprudência, normas internas, etc., conforme o agente ativo.
 
 O assistente usa por padrão as instruções do **Agente Revisor de Defesas Trabalhistas** (auditor jurídico sênior — contencioso trabalhista). As instruções completas estão em `lib/ai/agent-revisor-defesas.ts`. Se o utilizador não enviar "Instruções do agente" no chat, o backend aplica esse bloco automaticamente.
@@ -29,7 +30,7 @@ O assistente usa por padrão as instruções do **Agente Revisor de Defesas Trab
 
 ## RAG com embeddings (implementado)
 
-**Implementação:** Tabela `KnowledgeChunk` (id, knowledgeDocumentId, chunkIndex, text, embedding vector(1536)); extensão pgvector; chunking e embeddings no POST /api/knowledge; no chat, embedding da última mensagem do utilizador e busca top-k por similaridade (cosine); fallback para injeção direta. Ver `lib/ai/rag.ts`, `lib/db/queries.ts` (getRelevantChunks, insertKnowledgeChunks), e `app/(chat)/api/chat/route.ts`.
+**Implementação:** Tabela `KnowledgeChunk` (id, knowledgeDocumentId, chunkIndex, text, embedding vector(1536)); extensão pgvector; chunking e embeddings no POST /api/knowledge; no chat, embedding da última mensagem do utilizador e busca top-k por similaridade (cosine); fallback para injeção direta. O pipeline está separado em etapas (ingestão, vetorização, indexação, recuperação, geração): ver **`docs/RAG-PIPELINE-SEPARATION.md`** e módulos em `lib/rag/` (vectorization, indexing, retrieval, pipeline). APIs e chat usam `vectorizeAndIndex` e `retrieveKnowledgeContext`.
 
 Para **melhorias futuras** (reranking, chunking semântico):
 

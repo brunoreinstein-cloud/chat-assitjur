@@ -217,24 +217,26 @@ Em modo desenvolvimento (`NODE_ENV=development`), a rota `POST /api/chat` regist
 | Label | O que mede |
 |-------|------------|
 | `auth` | Tempo de `auth()` (sessão). |
-| `getMessageCountByUserId` | Verificação de rate limit (24 h). |
-| `getChatById + getMessagesByChatId` | Carregar chat e histórico de mensagens. |
-| `getKnowledgeDocumentsByIds` | Carregar documentos da base de conhecimento (só se `knowledgeDocumentIds` enviados). |
+| `getMessageCount + ... + overrides + credits (paralelo)` | Rate limit, chat, mensagens, base de conhecimento, overrides dos agentes e saldo de créditos em um único `Promise.all`. |
+| `validação + RAG + getUserFiles (paralelo)` | Validação de mensagens (AI SDK), RAG (retrieveKnowledgeContext) e ficheiros do archivo em paralelo. |
 | `saveMessages(user) (agendado em background)` | Agendar a gravação da mensagem do utilizador na BD (não bloqueia o stream). |
 | `normalizeMessageParts + convertToModelMessages` | Normalizar partes (truncar docs) e converter para formato do modelo. |
 | `preStream (total antes do stream)` | Tempo total desde o início do pedido até à criação do stream (soma das fases acima). |
 | `execute started` | Quando o callback do stream começou (o modelo e as tools começam aqui). |
 | `onFinish (stream terminou) total request` | Tempo total do pedido até ao fim do stream (a maior parte costuma ser **modelo + tools**). |
-| `saveMessages(assistant)` / `saveMessages(tool-flow)` | Tempo a guardar as mensagens do assistente em `onFinish`. |
-| `onFinish completo` | Tempo total dentro de `onFinish`. |
+| `onFinish completo` | Tempo total dentro de `onFinish` (saveMessages e créditos em paralelo; `updateChatActiveStreamId` em background). |
 
 A diferença **total request − preStream** é o tempo em que o stream esteve ativo (geração do modelo, chamadas a tools e envio de dados ao cliente). Se `POST /api/chat` aparecer em 6+ minutos no log do Next, confirma no terminal os valores de `preStream` e `onFinish total request`: se `preStream` for baixo (ex.: &lt; 2 s), quase todo o tempo está no modelo e nas tools.
 
 **Otimizações aplicadas (sem perda de qualidade):**
 
-- **Queries em paralelo:** `getMessageCountByUserId`, `getChatById`, `getMessagesByChatId` e `getKnowledgeDocumentsByIds` correm em `Promise.all`, reduzindo o tempo total da fase de pré-stream.
-- **saveMessages(user) em background:** A gravação da mensagem do utilizador na BD é agendada com `after()` (Next.js) e não bloqueia a criação do stream, reduzindo o preStream em ~300–400 ms. Erros são registados em log; em caso de falha o utilizador pode reenviar.
-- **Limite de mensagens para contexto:** A API carrega apenas as últimas **80 mensagens** do chat para construir o contexto do modelo (`CHAT_MESSAGES_LIMIT` em `app/(chat)/api/chat/route.ts`). A UI da página do chat continua a carregar todas as mensagens para exibição; só o contexto enviado ao modelo é limitado, mantendo a qualidade com o contexto recente.
+- **Primeiro batch em paralelo:** `getMessageCountByUserId`, `getChatById`, `getMessagesByChatId`, `getKnowledgeDocumentsByIds`, `getBuiltInAgentOverrides` e `getOrCreateCreditBalance` correm num único `Promise.all`, reduzindo o preStream.
+- **Validação, RAG e archivo em paralelo:** `safeValidateUIMessages`, `retrieveKnowledgeContext` e `getUserFilesByIds` correm em paralelo quando aplicável.
+- **saveMessages(user) em background:** A gravação da mensagem do utilizador na BD é agendada com `after()` (Next.js) e não bloqueia a criação do stream. Erros são registados em log; em caso de falha o utilizador pode reenviar.
+- **onFinish:** Gravação das mensagens do assistente e dedução de créditos correm em paralelo; `updateChatActiveStreamId` é agendado com `after()` para não bloquear o fim da resposta.
+- **Limite de mensagens para contexto:** A API carrega apenas as últimas **80 mensagens** do chat (`CHAT_MESSAGES_LIMIT`). A UI continua a carregar todas as mensagens para exibição.
+
+**Nota sobre desenvolvimento:** Em dev, um `GET /chat/[id]` (ex.: ao abrir um chat na sidebar) pode demorar 15–20 s na primeira vez porque o Next.js (Turbopack) compila a rota sob pedido. Isso não ocorre em produção (build já está feito). A sensação de “página a recarregar” ao ver a resposta vem sobretudo do tempo do stream do modelo e do revalidate do SWR em `onFinish` (histórico e créditos); o streaming em si já mostra o texto à medida que chega.
 
 ### GET /api/document – 404 breve após criação por tool
 

@@ -7,9 +7,14 @@ const createBodySchema = z.object({
   name: z.string().min(1).max(256),
   instructions: z.string().min(1).max(30_000),
   baseAgentId: z
-    .enum(["revisor-defesas", "redator-contestacao"] as const)
+    .enum([
+      "revisor-defesas",
+      "redator-contestacao",
+      "assistjur-master",
+    ] as const)
     .optional()
     .nullable(),
+  knowledgeDocumentIds: z.array(z.string().uuid()).max(50).optional(),
 });
 
 const databaseErrorResponse = () =>
@@ -71,6 +76,7 @@ export async function POST(request: Request) {
       name: body.name,
       instructions: body.instructions,
       baseAgentId: body.baseAgentId ?? null,
+      knowledgeDocumentIds: body.knowledgeDocumentIds?.slice(0, 50),
     });
     return Response.json(agent, { status: 201 });
   } catch (error) {

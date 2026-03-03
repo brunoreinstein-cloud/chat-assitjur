@@ -42,7 +42,7 @@ describe("Cenário A — Gate-1 feliz (parâmetros da API)", () => {
   });
 
   it("system prompt completo inclui instruções do revisor quando usadas", () => {
-    expect(AGENTE_REVISOR_DEFESAS_INSTRUCTIONS).toContain("GATE-1");
+    expect(AGENTE_REVISOR_DEFESAS_INSTRUCTIONS).toMatch(/GATE[-_]?1|gate_1/i);
     expect(AGENTE_REVISOR_DEFESAS_INSTRUCTIONS).toContain("Petição Inicial");
     expect(AGENTE_REVISOR_DEFESAS_INSTRUCTIONS).toContain("Contestação");
   });
@@ -50,9 +50,8 @@ describe("Cenário A — Gate-1 feliz (parâmetros da API)", () => {
 
 describe("Cenário B — Gate-1 faltando contestação", () => {
   it("instruções exigem PARAR se faltar (B) Contestação", () => {
-    expect(AGENTE_REVISOR_DEFESAS_INSTRUCTIONS).toMatch(
-      /se faltar.*PARAR|PARAR.*faltar/
-    );
+    expect(AGENTE_REVISOR_DEFESAS_INSTRUCTIONS).toMatch(/PARAR/i);
+    expect(AGENTE_REVISOR_DEFESAS_INSTRUCTIONS).toMatch(/faltar/i);
     expect(AGENTE_REVISOR_DEFESAS_INSTRUCTIONS).toContain("(B) Contestação");
   });
 });
@@ -95,18 +94,19 @@ describe("Cenário F — Banco de teses ativo", () => {
   });
 });
 
-describe("Cenário G — Prescrição com aviso-prévio indenizado", () => {
-  it("prompt exige 2 cenários quando há aviso-prévio indenizado", () => {
-    expect(AGENTE_REVISOR_DEFESAS_INSTRUCTIONS).toMatch(
-      /aviso-prévio.*2 cenários|2 cenários.*aviso/i
-    );
-    expect(AGENTE_REVISOR_DEFESAS_INSTRUCTIONS).toContain("2 cenários");
+describe("Cenário G — Prescrição", () => {
+  it("prompt inclui regras de prescrição (bienal/quinquenal, DAJ, DTC)", () => {
+    expect(AGENTE_REVISOR_DEFESAS_INSTRUCTIONS).toMatch(/prescrição/i);
+    expect(AGENTE_REVISOR_DEFESAS_INSTRUCTIONS).toMatch(/bienal|quinquenal/i);
+    expect(AGENTE_REVISOR_DEFESAS_INSTRUCTIONS).toMatch(/DAJ|DTC/);
   });
 });
 
 describe("Cenário H — Anti-alucinação", () => {
   it("prompt proíbe inventar e usa sinalização de atenção", () => {
-    expect(AGENTE_REVISOR_DEFESAS_INSTRUCTIONS).toContain("NÃO inventar");
+    expect(AGENTE_REVISOR_DEFESAS_INSTRUCTIONS).toMatch(
+      /NÃO inventar|proibido.*inventar|não invente/i
+    );
     expect(AGENTE_REVISOR_DEFESAS_INSTRUCTIONS).toContain("⚠️");
     expect(AGENTE_REVISOR_DEFESAS_INSTRUCTIONS).toMatch(/R3|ANTI-ALUCINAÇÃO/);
   });

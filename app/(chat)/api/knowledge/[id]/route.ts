@@ -1,7 +1,31 @@
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
-import { updateKnowledgeDocumentById } from "@/lib/db/queries";
+import {
+  getKnowledgeDocumentById,
+  updateKnowledgeDocumentById,
+} from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
+
+/** GET: obter um documento da base de conhecimento (para visualização). */
+export async function GET(
+  _request: Request,
+  context: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session?.user) {
+    return new ChatbotError("unauthorized:chat").toResponse();
+  }
+
+  const { id } = await context.params;
+  const doc = await getKnowledgeDocumentById({
+    id,
+    userId: session.user.id,
+  });
+  if (!doc) {
+    return new ChatbotError("not_found:document").toResponse();
+  }
+  return Response.json(doc);
+}
 
 const patchBodySchema = z.object({
   folderId: z.string().uuid().nullable().optional(),

@@ -4,7 +4,9 @@ import { formatDistanceToNow } from "date-fns";
 import { pt } from "date-fns/locale";
 import {
   BookOpenIcon,
+  ChevronDownIcon,
   EllipsisVertical,
+  EyeIcon,
   FolderIcon,
   FolderInput,
   FolderOpenIcon,
@@ -12,6 +14,7 @@ import {
   Loader2,
   Pencil,
   SearchIcon,
+  SparklesIcon,
   Trash2,
   UploadIcon,
   XIcon,
@@ -32,6 +35,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -57,12 +65,12 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cn, fetcher } from "@/lib/utils";
 
 const KNOWLEDGE_FILES_ACCEPT =
-  ".pdf,.doc,.docx,.jpg,.jpeg,.png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png";
+  ".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx,.csv,.txt,.odt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/plain,application/vnd.oasis.opendocument.text,image/jpeg,image/png";
 /** Máximo de ficheiros por pedido à API (enviados em lotes se for mais). */
 const MAX_FILES_PER_BATCH = 50;
 const MAX_KNOWLEDGE_SELECT = 50;
 const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
-const ACCEPTED_EXTENSIONS = /\.(docx?|pdf|jpe?g|png)$/i;
+const ACCEPTED_EXTENSIONS = /\.(docx?|pdf|jpe?g|png|xlsx?|csv|txt|odt)$/i;
 const RECENT_DOCS_LIMIT = 8;
 
 interface KnowledgeDoc {
@@ -70,6 +78,8 @@ interface KnowledgeDoc {
   title: string;
   folderId?: string | null;
   createdAt?: string;
+  /** pending = só guardado; indexed = chunks disponíveis; failed = erro ao vetorizar. */
+  indexingStatus?: "pending" | "indexed" | "failed";
 }
 
 interface KnowledgeFolderType {
@@ -172,11 +182,19 @@ export function KnowledgeSidebarContent({
     id: string;
     title: string;
   } | null>(null);
+  const [docToView, setDocToView] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isPatchingDoc, setIsPatchingDoc] = useState(false);
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [isBulkMoving, setIsBulkMoving] = useState(false);
+  const [skipVectorize, setSkipVectorize] = useState(false);
+  const [isIndexingPending, setIsIndexingPending] = useState(false);
+  const [addSectionOpen, setAddSectionOpen] = useState(true);
+  const [shakeLimit, setShakeLimit] = useState(false);
   const filesInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const archivosSectionRef = useRef<HTMLElement>(null);
@@ -202,6 +220,10 @@ export function KnowledgeSidebarContent({
           doc.title.toLowerCase().includes(searchQuery.trim().toLowerCase())
         );
 
+  const pendingCount = knowledgeDocs.filter(
+    (d) => d.indexingStatus === "pending"
+  ).length;
+
   const idsForChat =
     knowledgeDocumentIds.length > 0
       ? `/api/knowledge?ids=${knowledgeDocumentIds.join(",")}`
@@ -212,6 +234,12 @@ export function KnowledgeSidebarContent({
   const { data: recentDocs = [], mutate: mutateRecent } = useSWR<
     KnowledgeDoc[]
   >(recentKey, fetcher);
+
+  const viewDocKey = docToView ? `/api/knowledge/${docToView.id}` : null;
+  const { data: viewedDoc } = useSWR<KnowledgeDoc & { content?: string }>(
+    viewDocKey,
+    fetcher
+  );
 
   const { data: userFiles = [], mutate: mutateArchivos } = useSWR<
     UserFileType[]
@@ -235,6 +263,7 @@ export function KnowledgeSidebarContent({
           title,
           content,
           folderId: currentFolderId ?? null,
+          skipVectorize,
         }),
       });
       if (!res.ok) {
@@ -295,7 +324,7 @@ export function KnowledgeSidebarContent({
     const allFiles = filterAcceptedFiles(Array.from(fileList));
     if (allFiles.length === 0) {
       toast.error(
-        "Nenhum ficheiro válido (PDF, DOC, DOCX, JPEG ou PNG, até 100 MB)."
+        "Nenhum ficheiro válido (PDF, DOC, DOCX, XLS, XLSX, CSV, TXT, ODT, JPEG ou PNG, até 100 MB)."
       );
       return;
     }
@@ -322,6 +351,9 @@ export function KnowledgeSidebarContent({
           "folderId",
           currentFolderId === null ? "root" : currentFolderId
         );
+        if (skipVectorize) {
+          formData.set("skipVectorize", "true");
+        }
         const res = await fetch("/api/knowledge/from-files", {
           method: "POST",
           body: formData,
@@ -394,6 +426,8 @@ export function KnowledgeSidebarContent({
       if (prev.length < MAX_KNOWLEDGE_SELECT) {
         return [...prev, id];
       }
+      setShakeLimit(true);
+      setTimeout(() => setShakeLimit(false), 400);
       return prev;
     });
   };
@@ -431,6 +465,7 @@ export function KnowledgeSidebarContent({
         body: JSON.stringify({
           fileIds: selectedArchivoIds,
           folderId: currentFolderId ?? "root",
+          skipVectorize,
         }),
       });
       const data = (await res.json()) as {
@@ -590,6 +625,39 @@ export function KnowledgeSidebarContent({
     setKnowledgeDocumentIds([]);
   };
 
+  const handleIndexPending = async () => {
+    if (pendingCount === 0) {
+      return;
+    }
+    setIsIndexingPending(true);
+    try {
+      const res = await fetch("/api/knowledge/index-pending", {
+        method: "POST",
+      });
+      const data = (await res.json()) as {
+        processed?: number;
+        results?: Array<{ id: string; status: string; indexed?: number }>;
+      };
+      if (!res.ok) {
+        toast.error("Erro ao indexar documentos pendentes.");
+        return;
+      }
+      const processed = data.processed ?? 0;
+      await mutate("/api/knowledge");
+      await mutate(docsKey);
+      await mutateRecent();
+      toast.success(
+        processed > 0
+          ? `${processed} documento(s) indexado(s). Já pode usar RAG nestes documentos.`
+          : "Nenhum documento pendente para indexar."
+      );
+    } catch {
+      toast.error("Erro ao indexar documentos pendentes.");
+    } finally {
+      setIsIndexingPending(false);
+    }
+  };
+
   const handleBulkMove = async (folderId: string | null) => {
     if (knowledgeDocumentIds.length === 0) {
       return;
@@ -691,15 +759,19 @@ export function KnowledgeSidebarContent({
                   locale: pt,
                 })
               : null;
+          const isSelected = knowledgeDocumentIds.includes(doc.id);
           return (
             <li
-              className="group flex min-w-0 flex-col gap-0.5 rounded-md py-0.5 pr-0.5"
+              className={cn(
+                "group flex min-w-0 flex-col gap-0.5 rounded-md py-0.5 pr-0.5 transition-colors",
+                isSelected && "border-primary border-l-2 bg-primary/5"
+              )}
               key={doc.id}
             >
-              <div className="flex min-w-0 items-center gap-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-1 rounded-md px-2 py-1 hover:bg-muted/40">
                 <input
                   aria-describedby={`kb-${doc.id}-title`}
-                  checked={knowledgeDocumentIds.includes(doc.id)}
+                  checked={isSelected}
                   className="shrink-0"
                   id={`kb-${doc.id}`}
                   onChange={() => toggleKnowledgeId(doc.id)}
@@ -714,6 +786,22 @@ export function KnowledgeSidebarContent({
                 >
                   {doc.title}
                 </Label>
+                {doc.indexingStatus === "pending" && (
+                  <span
+                    className="shrink-0 rounded bg-amber-500/20 px-1.5 py-0 text-[10px] text-amber-700 dark:text-amber-400"
+                    title="Ainda não indexado; use «Indexar pendentes» ou aguarde o job."
+                  >
+                    Pendente
+                  </span>
+                )}
+                {doc.indexingStatus === "failed" && (
+                  <span
+                    className="shrink-0 rounded bg-destructive/20 px-1.5 py-0 text-[10px] text-destructive"
+                    title="Erro ao vetorizar; pode reindexar depois."
+                  >
+                    Erro
+                  </span>
+                )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -727,6 +815,15 @@ export function KnowledgeSidebarContent({
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="min-w-[180px]">
+                    <DropdownMenuItem
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        setDocToView({ id: doc.id, title: doc.title });
+                      }}
+                    >
+                      <EyeIcon aria-hidden className="size-4" />
+                      Ver
+                    </DropdownMenuItem>
                     <DropdownMenuItem
                       onSelect={(e) => {
                         e.preventDefault();
@@ -801,6 +898,12 @@ export function KnowledgeSidebarContent({
         className
       )}
     >
+      <style
+        dangerouslySetInnerHTML={{
+          __html:
+            "@keyframes kb-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-4px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}.kb-shake{animation:kb-shake 0.4s ease}",
+        }}
+      />
       <header className="flex shrink-0 flex-col gap-0.5 border-b px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
@@ -823,9 +926,29 @@ export function KnowledgeSidebarContent({
           </Button>
         </div>
         <p className="text-muted-foreground text-xs">
-          Extraia, organize e use os seus documentos no chat — menos tempo a
-          arquivar manualmente.
+          Extraia, organize e use os seus documentos no chat.
         </p>
+        {pendingCount > 0 && (
+          <Button
+            aria-label="Indexar documentos pendentes para pesquisa semântica (RAG)"
+            className="mt-2 gap-1.5 text-xs"
+            disabled={isIndexingPending}
+            onClick={handleIndexPending}
+            size="sm"
+            title="Vetoriza e indexa documentos guardados sem indexar; permite usar RAG nesses documentos."
+            type="button"
+            variant="secondary"
+          >
+            {isIndexingPending ? (
+              <Loader2 aria-hidden className="size-3.5 animate-spin" />
+            ) : (
+              <SparklesIcon aria-hidden className="size-3.5" />
+            )}
+            {isIndexingPending
+              ? "A indexar…"
+              : `Indexar ${pendingCount} pendente(s)`}
+          </Button>
+        )}
         <div className="relative mt-2">
           <SearchIcon
             aria-hidden
@@ -863,17 +986,22 @@ export function KnowledgeSidebarContent({
           aria-label="Pastas da base de conhecimento"
           className="grid gap-1 border-b pb-3"
         >
-          <h3 className="font-medium text-muted-foreground text-xs">
+          <h3 className="font-medium text-muted-foreground text-xs uppercase tracking-wider">
             Pasta atual
           </h3>
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1.5">
             <Button
               aria-pressed={currentFolderId === null}
-              className="h-8 gap-1 px-2 text-xs"
+              className={cn(
+                "h-8 gap-1 rounded-full px-3 font-medium text-xs transition-colors",
+                currentFolderId === null
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border hover:bg-muted/50"
+              )}
               onClick={() => setCurrentFolderId(null)}
               size="sm"
               type="button"
-              variant={currentFolderId === null ? "secondary" : "ghost"}
+              variant="outline"
             >
               {currentFolderId === null ? (
                 <FolderOpenIcon aria-hidden className="size-3.5" />
@@ -887,13 +1015,18 @@ export function KnowledgeSidebarContent({
               return (
                 <Button
                   aria-pressed={isSelected}
-                  className="h-8 max-w-[180px] gap-1 truncate px-2 text-xs"
+                  className={cn(
+                    "h-8 max-w-[180px] gap-1 truncate rounded-full px-3 font-medium text-xs transition-colors",
+                    isSelected
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border hover:bg-muted/50"
+                  )}
                   key={folder.id}
                   onClick={() => setCurrentFolderId(folder.id)}
                   size="sm"
                   title={folder.name}
                   type="button"
-                  variant={isSelected ? "secondary" : "ghost"}
+                  variant="outline"
                 >
                   {isSelected ? (
                     <FolderOpenIcon aria-hidden className="size-3.5 shrink-0" />
@@ -928,39 +1061,83 @@ export function KnowledgeSidebarContent({
 
         <section
           aria-labelledby="kb-in-chat-heading"
-          className="grid gap-1 border-b pb-3"
+          className="grid gap-1 rounded-lg border border-primary/10 bg-primary/5 pb-3"
         >
           <h3
-            className="flex items-center justify-between font-medium text-muted-foreground text-xs"
+            className="flex items-center justify-between px-3 pt-3 font-medium text-xs"
             id="kb-in-chat-heading"
           >
-            <span>Neste chat</span>
+            <span className="text-primary">Neste chat</span>
             <span
               aria-live="polite"
-              className="tabular-nums"
+              className={cn(
+                "font-semibold tabular-nums transition-colors",
+                (() => {
+                  const n = knowledgeDocumentIds.length;
+                  if (n >= MAX_KNOWLEDGE_SELECT) {
+                    return "text-destructive";
+                  }
+                  if (n >= 0.8 * MAX_KNOWLEDGE_SELECT) {
+                    return "text-amber-600 dark:text-amber-500";
+                  }
+                  return "text-muted-foreground";
+                })()
+              )}
               title={`${knowledgeDocumentIds.length} de ${MAX_KNOWLEDGE_SELECT} selecionados`}
             >
               {knowledgeDocumentIds.length}/{MAX_KNOWLEDGE_SELECT}
             </span>
           </h3>
+          <progress
+            aria-label={`${knowledgeDocumentIds.length} de ${MAX_KNOWLEDGE_SELECT} documentos selecionados`}
+            className={cn(
+              "mx-3 h-1 w-[calc(100%-24px)] overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:rounded-full",
+              (() => {
+                const n = knowledgeDocumentIds.length;
+                if (n >= MAX_KNOWLEDGE_SELECT) {
+                  return "[&::-webkit-progress-value]:bg-destructive";
+                }
+                if (n >= 0.8 * MAX_KNOWLEDGE_SELECT) {
+                  return "[&::-webkit-progress-value]:bg-amber-500";
+                }
+                return "[&::-webkit-progress-value]:bg-primary";
+              })()
+            )}
+            max={MAX_KNOWLEDGE_SELECT}
+            value={knowledgeDocumentIds.length}
+          />
+          {shakeLimit && (
+            <p
+              aria-live="assertive"
+              className="kb-shake mx-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive text-xs"
+            >
+              Limite de {MAX_KNOWLEDGE_SELECT} documentos atingido.
+            </p>
+          )}
           {docsInChat.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              Nenhum documento selecionado. Marque documentos abaixo para usar
-              como contexto.
+            <p className="px-3 text-muted-foreground text-sm italic">
+              Nenhum documento selecionado. Marque documentos abaixo.
             </p>
           ) : (
-            <ul className="grid gap-1">
+            <ul className="grid gap-0.5 px-1 pb-2">
               {docsInChat.map((doc) => (
-                <li className="flex min-w-0 items-center gap-2" key={doc.id}>
+                <li
+                  className={cn(
+                    "flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-primary/10",
+                    "border-primary border-l-2 bg-primary/5"
+                  )}
+                  key={doc.id}
+                >
                   <input
                     aria-describedby={`kb-chat-${doc.id}-title`}
                     checked
+                    className="shrink-0"
                     id={`kb-chat-${doc.id}`}
                     onChange={() => toggleKnowledgeId(doc.id)}
                     type="checkbox"
                   />
                   <Label
-                    className="min-w-0 cursor-pointer truncate font-normal"
+                    className="min-w-0 flex-1 cursor-pointer truncate font-normal"
                     htmlFor={`kb-chat-${doc.id}`}
                     id={`kb-chat-${doc.id}-title`}
                     title={doc.title}
@@ -988,26 +1165,36 @@ export function KnowledgeSidebarContent({
               Ainda não há documentos. Adicione por ficheiros ou crie abaixo.
             </p>
           ) : (
-            <ul className="grid gap-1">
-              {recentDocs.map((doc) => (
-                <li className="flex min-w-0 items-center gap-2" key={doc.id}>
-                  <input
-                    aria-describedby={`kb-recent-${doc.id}-title`}
-                    checked={knowledgeDocumentIds.includes(doc.id)}
-                    id={`kb-recent-${doc.id}`}
-                    onChange={() => toggleKnowledgeId(doc.id)}
-                    type="checkbox"
-                  />
-                  <Label
-                    className="min-w-0 cursor-pointer truncate font-normal"
-                    htmlFor={`kb-recent-${doc.id}`}
-                    id={`kb-recent-${doc.id}-title`}
-                    title={doc.title}
+            <ul className="grid gap-0.5">
+              {recentDocs.map((doc) => {
+                const isSelected = knowledgeDocumentIds.includes(doc.id);
+                return (
+                  <li
+                    className={cn(
+                      "flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-muted/40",
+                      isSelected && "border-primary border-l-2 bg-primary/5"
+                    )}
+                    key={doc.id}
                   >
-                    {doc.title}
-                  </Label>
-                </li>
-              ))}
+                    <input
+                      aria-describedby={`kb-recent-${doc.id}-title`}
+                      checked={isSelected}
+                      className="shrink-0"
+                      id={`kb-recent-${doc.id}`}
+                      onChange={() => toggleKnowledgeId(doc.id)}
+                      type="checkbox"
+                    />
+                    <Label
+                      className="min-w-0 flex-1 cursor-pointer truncate font-normal"
+                      htmlFor={`kb-recent-${doc.id}`}
+                      id={`kb-recent-${doc.id}-title`}
+                      title={doc.title}
+                    >
+                      {doc.title}
+                    </Label>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
@@ -1024,13 +1211,13 @@ export function KnowledgeSidebarContent({
             Arquivos
           </h3>
           <p className="text-muted-foreground text-xs">
-            Ficheiros guardados a partir do chat. Pode usar neste chat (sem
-            guardar na base) ou adicionar à base de conhecimento.
+            Ficheiros guardados a partir do chat. Podem ser usados neste chat ou
+            adicionados à base.
           </p>
           {userFiles.length === 0 ? (
-            <p className="text-muted-foreground text-sm">
-              Nenhum ficheiro guardado. Use «Guardar em Arquivos» nos anexos do
-              chat.
+            <p className="text-muted-foreground text-sm italic">
+              Nenhum ficheiro guardado ainda. Use «Guardar em Arquivos» nos
+              anexos do chat.
             </p>
           ) : (
             <>
@@ -1197,164 +1384,231 @@ export function KnowledgeSidebarContent({
           </div>
         </section>
 
-        <section
+        <Collapsible
           aria-labelledby="kb-add-heading"
           className="grid shrink-0 gap-2 border-t pt-4"
+          onOpenChange={setAddSectionOpen}
+          open={addSectionOpen}
         >
-          <h3
-            className="font-medium text-muted-foreground text-xs"
-            id="kb-add-heading"
-          >
-            Adicionar documentos
-          </h3>
-          <input
-            accept={KNOWLEDGE_FILES_ACCEPT}
-            aria-label="Selecionar ficheiros para a base de conhecimento"
-            className="sr-only"
-            multiple
-            onChange={(e) => handleKnowledgeFiles(e.target.files)}
-            ref={filesInputRef}
-            type="file"
-          />
-          <input
-            accept={KNOWLEDGE_FILES_ACCEPT}
-            aria-label="Selecionar pasta para importar todos os ficheiros"
-            className="sr-only"
-            multiple
-            onChange={(e) => handleKnowledgeFiles(e.target.files)}
-            ref={folderInputRef}
-            type="file"
-            {...({
-              webkitdirectory: "",
-            } as React.InputHTMLAttributes<HTMLInputElement>)}
-          />
-          <button
-            aria-label="Adicionar documentos por ficheiros ou pasta"
-            className={dropzoneClassName}
-            onDragLeave={() => setIsDraggingOver(false)}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setIsDraggingOver(true);
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              setIsDraggingOver(false);
-              handleKnowledgeFiles(e.dataTransfer.files);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                filesInputRef.current?.click();
-              }
-            }}
-            type="button"
-          >
-            {isAddingFromFiles ? (
-              <div
-                aria-live="polite"
-                className="flex w-full max-w-[240px] flex-col items-center gap-2"
-              >
-                <span className="flex items-center gap-2 text-muted-foreground text-sm">
-                  <Loader2
-                    aria-hidden
-                    className="size-4 shrink-0 animate-spin"
-                  />
-                  A adicionar ficheiros…
-                </span>
-                {uploadProgress && (
-                  <>
-                    <output
-                      aria-label={`${uploadProgress.processed} de ${uploadProgress.total} ficheiros processados`}
-                      className="text-muted-foreground/90 text-xs tabular-nums"
-                    >
-                      {uploadProgress.processed}/{uploadProgress.total}{" "}
-                      ficheiros
-                    </output>
-                    <progress
-                      aria-label={`${uploadProgress.processed} de ${uploadProgress.total} ficheiros`}
-                      className="h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-primary"
-                      max={uploadProgress.total}
-                      value={uploadProgress.processed}
-                    />
-                  </>
-                )}
-              </div>
-            ) : (
-              <>
-                <button
-                  aria-label="Selecionar ficheiros para adicionar à base de conhecimento"
-                  className="flex flex-col items-center gap-1 bg-transparent p-0 text-inherit outline-none focus-visible:ring-0 disabled:pointer-events-none disabled:opacity-70"
-                  disabled={isAddingFromFiles}
-                  onClick={() => filesInputRef.current?.click()}
-                  type="button"
-                >
-                  <UploadIcon
-                    aria-hidden
-                    className="size-5 text-muted-foreground"
-                  />
-                  <span className="text-muted-foreground text-sm">
-                    Arraste ficheiros ou clique para selecionar
-                  </span>
-                  <span className="text-muted-foreground/80 text-xs">
-                    PDF, DOC, DOCX, JPEG ou PNG (até {MAX_FILES_PER_BATCH} por
-                    envio, enviados em lotes)
-                  </span>
-                </button>
-                <button
-                  aria-label="Importar pasta (selecionar pasta para adicionar todos os ficheiros)"
-                  className="mt-0.5 inline-flex items-center gap-1 text-primary text-xs underline underline-offset-2 outline-none hover:no-underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
-                  disabled={isAddingFromFiles}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    folderInputRef.current?.click();
-                  }}
-                  type="button"
-                >
-                  <FolderIcon aria-hidden className="size-3.5" />
-                  Ou importar pasta
-                </button>
-              </>
-            )}
-          </button>
-
-          <form className="grid gap-2" onSubmit={handleAddDocument}>
-            <Label htmlFor="kb-new-title">Ou criar manualmente</Label>
-            <Input
-              autoComplete="off"
-              id="kb-new-title"
-              maxLength={512}
-              name="kb-new-title"
-              onChange={(e) => setNewDocTitle(e.target.value)}
-              placeholder="Título…"
-              value={newDocTitle}
-            />
-            <Label htmlFor="kb-new-content">Conteúdo</Label>
-            <Textarea
-              autoComplete="off"
-              className="min-h-[80px]"
-              id="kb-new-content"
-              name="kb-new-content"
-              onChange={(e) => setNewDocContent(e.target.value)}
-              placeholder="Texto que o assistente usará como contexto…"
-              value={newDocContent}
-            />
-            {addDocError && (
-              <p aria-live="polite" className="text-destructive text-sm">
-                {addDocError}
-              </p>
-            )}
-            <Button
-              disabled={
-                isAddingDoc || !newDocTitle.trim() || !newDocContent.trim()
-              }
-              type="submit"
-              variant="secondary"
+          <CollapsibleTrigger asChild>
+            <button
+              aria-expanded={addSectionOpen}
+              className="flex w-full items-center justify-between py-2 text-left font-medium text-muted-foreground text-xs uppercase tracking-wider outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              id="kb-add-heading"
+              type="button"
             >
-              {isAddingDoc ? "Adicionando…" : "Adicionar documento"}
-            </Button>
-          </form>
-        </section>
+              <span>Adicionar documentos</span>
+              <ChevronDownIcon
+                aria-hidden
+                className={cn(
+                  "size-4 shrink-0 transition-transform duration-200",
+                  addSectionOpen && "rotate-180"
+                )}
+              />
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="grid gap-2">
+            <div className="flex items-center gap-2">
+              <input
+                aria-describedby="kb-skip-vectorize-desc"
+                checked={skipVectorize}
+                id="kb-skip-vectorize"
+                onChange={(e) => setSkipVectorize(e.target.checked)}
+                type="checkbox"
+              />
+              <Label
+                className="cursor-pointer font-normal text-muted-foreground text-xs"
+                htmlFor="kb-skip-vectorize"
+                id="kb-skip-vectorize-desc"
+              >
+                Guardar sem indexar (vetorizar depois)
+              </Label>
+            </div>
+            <input
+              accept={KNOWLEDGE_FILES_ACCEPT}
+              aria-label="Selecionar ficheiros para a base de conhecimento"
+              className="sr-only"
+              multiple
+              onChange={(e) => handleKnowledgeFiles(e.target.files)}
+              ref={filesInputRef}
+              type="file"
+            />
+            <input
+              accept={KNOWLEDGE_FILES_ACCEPT}
+              aria-label="Selecionar pasta para importar todos os ficheiros"
+              className="sr-only"
+              multiple
+              onChange={(e) => handleKnowledgeFiles(e.target.files)}
+              ref={folderInputRef}
+              type="file"
+              {...({
+                webkitdirectory: "",
+              } as React.InputHTMLAttributes<HTMLInputElement>)}
+            />
+            {/* biome-ignore lint/a11y/useSemanticElements: dropzone is a custom drag-and-drop widget; group groups the drop area for assistive tech */}
+            <div
+              aria-label="Adicionar documentos por ficheiros ou pasta"
+              className={dropzoneClassName}
+              onDragLeave={() => setIsDraggingOver(false)}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDraggingOver(true);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDraggingOver(false);
+                handleKnowledgeFiles(e.dataTransfer.files);
+              }}
+              role="group"
+            >
+              {isAddingFromFiles ? (
+                <div
+                  aria-live="polite"
+                  className="flex w-full max-w-[240px] flex-col items-center gap-2"
+                >
+                  <span className="flex items-center gap-2 text-muted-foreground text-sm">
+                    <Loader2
+                      aria-hidden
+                      className="size-4 shrink-0 animate-spin"
+                    />
+                    A adicionar ficheiros…
+                  </span>
+                  {uploadProgress && (
+                    <>
+                      <output
+                        aria-label={`${uploadProgress.processed} de ${uploadProgress.total} ficheiros processados`}
+                        className="text-muted-foreground/90 text-xs tabular-nums"
+                      >
+                        {uploadProgress.processed}/{uploadProgress.total}{" "}
+                        ficheiros
+                      </output>
+                      <progress
+                        aria-label={`${uploadProgress.processed} de ${uploadProgress.total} ficheiros`}
+                        className="h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-primary"
+                        max={uploadProgress.total}
+                        value={uploadProgress.processed}
+                      />
+                    </>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <button
+                    aria-label="Selecionar ficheiros para adicionar à base de conhecimento"
+                    className="flex flex-col items-center gap-1 bg-transparent p-0 text-inherit outline-none focus-visible:ring-0 disabled:pointer-events-none disabled:opacity-70"
+                    disabled={isAddingFromFiles}
+                    onClick={() => filesInputRef.current?.click()}
+                    type="button"
+                  >
+                    <UploadIcon
+                      aria-hidden
+                      className="size-5 text-muted-foreground"
+                    />
+                    <span className="text-muted-foreground text-sm">
+                      Arraste ficheiros ou clique para selecionar
+                    </span>
+                    <span className="text-muted-foreground/80 text-xs">
+                      PDF, DOC, DOCX, XLS, XLSX, CSV, TXT, ODT, JPEG ou PNG (até{" "}
+                      {MAX_FILES_PER_BATCH} por envio, enviados em lotes)
+                    </span>
+                  </button>
+                  <button
+                    aria-label="Importar pasta (selecionar pasta para adicionar todos os ficheiros)"
+                    className="mt-0.5 inline-flex items-center gap-1 text-primary text-xs underline underline-offset-2 outline-none hover:no-underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                    disabled={isAddingFromFiles}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      folderInputRef.current?.click();
+                    }}
+                    type="button"
+                  >
+                    <FolderIcon aria-hidden className="size-3.5" />
+                    Ou importar pasta
+                  </button>
+                </>
+              )}
+            </div>
+
+            <form className="grid gap-2" onSubmit={handleAddDocument}>
+              <Label htmlFor="kb-new-title">Ou criar manualmente</Label>
+              <Input
+                autoComplete="off"
+                id="kb-new-title"
+                maxLength={512}
+                name="kb-new-title"
+                onChange={(e) => setNewDocTitle(e.target.value)}
+                placeholder="Título…"
+                value={newDocTitle}
+              />
+              <Label htmlFor="kb-new-content">Conteúdo</Label>
+              <Textarea
+                autoComplete="off"
+                className="min-h-[80px]"
+                id="kb-new-content"
+                name="kb-new-content"
+                onChange={(e) => setNewDocContent(e.target.value)}
+                placeholder="Texto que o assistente usará como contexto…"
+                value={newDocContent}
+              />
+              {addDocError && (
+                <p aria-live="polite" className="text-destructive text-sm">
+                  {addDocError}
+                </p>
+              )}
+              <Button
+                disabled={
+                  isAddingDoc || !newDocTitle.trim() || !newDocContent.trim()
+                }
+                type="submit"
+                variant="secondary"
+              >
+                {isAddingDoc ? "Adicionando…" : "Adicionar documento"}
+              </Button>
+            </form>
+          </CollapsibleContent>
+        </Collapsible>
       </div>
+
+      <Dialog
+        onOpenChange={(open) => {
+          if (!open) {
+            setDocToView(null);
+          }
+        }}
+        open={docToView !== null}
+      >
+        <DialogContent
+          aria-describedby="view-doc-content"
+          className="flex max-h-[85vh] max-w-2xl flex-col gap-2"
+        >
+          <DialogTitle id="view-doc-title">
+            {docToView ? `Ver — ${docToView.title}` : "Documento"}
+          </DialogTitle>
+          <div
+            className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap rounded border border-border bg-muted/30 p-3 font-mono text-xs"
+            id="view-doc-content"
+          >
+            {(() => {
+              if (viewedDoc == null && docToView != null) {
+                return (
+                  <span className="text-muted-foreground">A carregar…</span>
+                );
+              }
+              if (viewedDoc && typeof viewedDoc.content === "string") {
+                return viewedDoc.content;
+              }
+              if (viewedDoc) {
+                return (
+                  <span className="text-muted-foreground">
+                    Documento sem conteúdo.
+                  </span>
+                );
+              }
+              return null;
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         onOpenChange={(open) => {

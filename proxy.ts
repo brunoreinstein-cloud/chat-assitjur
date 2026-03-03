@@ -16,6 +16,27 @@ function shouldShowConfigRequired(pathname: string): boolean {
   return !(process.env.POSTGRES_URL && process.env.AUTH_SECRET);
 }
 
+function handleNoToken(request: NextRequest, pathname: string): NextResponse {
+  const isChat = pathname === "/chat" || pathname.startsWith("/chat/");
+  const isAdmin = pathname.startsWith("/admin");
+  if (isAdmin) {
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set(
+      "callbackUrl",
+      pathname + (request.nextUrl.search || "")
+    );
+    return NextResponse.redirect(loginUrl);
+  }
+  if (isChat) {
+    return NextResponse.next();
+  }
+  const path = request.nextUrl.pathname + (request.nextUrl.search || "");
+  const redirectUrl = encodeURIComponent(path || "/chat");
+  return NextResponse.redirect(
+    new URL(`/api/auth/guest?redirectUrl=${redirectUrl}`, request.url)
+  );
+}
+
 /**
  * Proxy (Next.js 16): redirecionamento para /config-required na Vercel quando faltam
  * AUTH_SECRET ou POSTGRES_URL; auth de visitantes (guest) e proteção de rotas.
@@ -32,10 +53,6 @@ export async function proxy(request: NextRequest) {
       : NextResponse.next();
   }
 
-  /*
-   * Playwright starts the dev server and requires a 200 status to
-   * begin the tests, so this ensures that the tests can start
-   */
   if (pathname.startsWith("/ping")) {
     return new Response("pong", { status: 200 });
   }
@@ -52,25 +69,13 @@ export async function proxy(request: NextRequest) {
     });
 
     if (!token) {
-      // Não redirecionar no proxy para /chat: deixa a página fazer um único redirect
-      // ao guest. Evita loop (proxy → guest → /chat → proxy → guest).
-      const isChat = pathname === "/chat" || pathname.startsWith("/chat/");
-      if (isChat) {
-        return NextResponse.next();
-      }
-      // Usar apenas path para evitar problemas de cookie com URL absoluta no redirect
-      const path = request.nextUrl.pathname + (request.nextUrl.search || "");
-      const redirectUrl = encodeURIComponent(path || "/chat");
-
-      return NextResponse.redirect(
-        new URL(`/api/auth/guest?redirectUrl=${redirectUrl}`, request.url)
-      );
+      return handleNoToken(request, pathname);
     }
 
     const isGuest = guestRegex.test(token?.email ?? "");
-
-    if (token && !isGuest && ["/login", "/register"].includes(pathname)) {
-      return NextResponse.redirect(new URL("/", request.url));
+    const isAuthPage = pathname === "/login" || pathname === "/register";
+    if (!isGuest && isAuthPage) {
+      return NextResponse.redirect(new URL("/chat", request.url));
     }
 
     return NextResponse.next();
@@ -89,9 +94,11 @@ export const config = {
     "/",
     "/chat",
     "/chat/:path*",
-    "/api/:path*",
     "/login",
     "/register",
-    "/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)",
+    "/admin",
+    "/admin/:path*",
+    // Exclui /api para não invocar o proxy em pedidos a /api/auth/session e restantes APIs
+    "/((?!api|_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)",
   ],
 };

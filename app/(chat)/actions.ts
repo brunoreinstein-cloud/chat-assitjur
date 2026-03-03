@@ -1,16 +1,21 @@
 "use server";
 
 import { generateText, type UIMessage } from "ai";
+import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { signIn } from "@/app/(auth)/auth";
 import type { VisibilityType } from "@/components/visibility-selector";
 import { titlePrompt } from "@/lib/ai/prompts";
 import { getTitleModel } from "@/lib/ai/providers";
 import {
+  deleteAllChatsByUserId,
+  deleteChatById,
   deleteMessagesByChatIdAfterTimestamp,
+  getChatById,
   getMessageById,
   updateChatVisibilityById,
 } from "@/lib/db/queries";
+import { ChatbotError } from "@/lib/errors";
 import { getTextFromMessage } from "@/lib/utils";
 
 /** Aciona o sign-in como visitante (guest). Deve ser usado via form POST para o cookie de sessão ser definido antes do redirect. */
@@ -64,4 +69,59 @@ export async function updateChatVisibility({
   visibility: VisibilityType;
 }) {
   await updateChatVisibilityById({ chatId, visibility });
+}
+
+export type DeleteChatResult =
+  | { success: true; deleted: { id: string } }
+  | { success: false; error: string };
+
+/** Apaga um chat do utilizador atual. Falha se o chat não existir ou não pertencer à sessão. */
+export async function deleteChat(id: string): Promise<DeleteChatResult> {
+  try {
+    const { auth } = await import("@/app/(auth)/auth");
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { success: false, error: "unauthorized" };
+    }
+    const chat = await getChatById({ id });
+    if (!chat) {
+      return { success: false, error: "not_found" };
+    }
+    if (chat.userId !== session.user.id) {
+      return { success: false, error: "forbidden" };
+    }
+    const deleted = await deleteChatById({ id });
+    revalidatePath("/chat");
+    revalidatePath("/");
+    return { success: true, deleted: { id: deleted?.id ?? id } };
+  } catch (error) {
+    if (error instanceof ChatbotError) {
+      return { success: false, error: error.type ?? "error" };
+    }
+    return { success: false, error: "error" };
+  }
+}
+
+export type DeleteAllChatsResult =
+  | { success: true; deletedCount: number }
+  | { success: false; error: string };
+
+/** Apaga todos os chats do utilizador atual (histórico). */
+export async function deleteAllMyChats(): Promise<DeleteAllChatsResult> {
+  try {
+    const { auth } = await import("@/app/(auth)/auth");
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { success: false, error: "unauthorized" };
+    }
+    const result = await deleteAllChatsByUserId({ userId: session.user.id });
+    revalidatePath("/chat");
+    revalidatePath("/");
+    return { success: true, deletedCount: result.deletedCount };
+  } catch (error) {
+    if (error instanceof ChatbotError) {
+      return { success: false, error: error.type ?? "error" };
+    }
+    return { success: false, error: "error" };
+  }
 }

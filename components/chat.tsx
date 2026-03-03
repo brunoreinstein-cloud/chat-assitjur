@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
 import { ChatComposerHeader } from "@/components/chat-composer-header";
-import { ChatHeader } from "@/components/chat-header";
+import { ChatTopbar } from "@/components/chat-topbar";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,6 +33,11 @@ import {
   getDefaultModelForAgent,
   isModelAllowedForAgent,
 } from "@/lib/ai/agent-models";
+import {
+  AGENT_IDS,
+  type AgentId,
+  DEFAULT_AGENT_ID_WHEN_EMPTY,
+} from "@/lib/ai/agents-registry-metadata";
 import type { Vote } from "@/lib/db/schema";
 import { ChatbotError } from "@/lib/errors";
 import type { Attachment, ChatMessage } from "@/lib/types";
@@ -63,7 +68,7 @@ type ChatProps = Readonly<{
   initialMessages: ChatMessage[];
   initialChatModel: string;
   initialVisibilityType: VisibilityType;
-  /** Agente ao carregar o chat (restaurado da BD); omitido = revisor-defesas. */
+  /** Agente ao carregar o chat (restaurado da BD); omitido = nenhum (novo chat). */
   initialAgentId?: string;
   isReadonly: boolean;
   autoResume: boolean;
@@ -79,6 +84,7 @@ export function Chat({
   autoResume,
 }: ChatProps) {
   const router = useRouter();
+  const pathname = usePathname();
 
   const { visibilityType } = useChatVisibility({
     chatId: id,
@@ -103,9 +109,7 @@ export function Chat({
   const [showCreditCardAlert, setShowCreditCardAlert] = useState(false);
   const [currentModelId, setCurrentModelId] = useState(initialChatModel);
   const [agentInstructions, setAgentInstructions] = useState<string>("");
-  const [agentId, setAgentId] = useState<string>(
-    initialAgentId ?? "revisor-defesas"
-  );
+  const [agentId, setAgentId] = useState<string>(initialAgentId ?? "");
   const [knowledgeDocumentIds, setKnowledgeDocumentIds] = useState<string[]>(
     []
   );
@@ -132,8 +136,9 @@ export function Chat({
   }, [agentId]);
 
   useEffect(() => {
-    if (!isModelAllowedForAgent(agentId, currentModelId)) {
-      setCurrentModelId(getDefaultModelForAgent(agentId));
+    const effectiveAgentId = agentId?.trim() || DEFAULT_AGENT_ID_WHEN_EMPTY;
+    if (!isModelAllowedForAgent(effectiveAgentId, currentModelId)) {
+      setCurrentModelId(getDefaultModelForAgent(effectiveAgentId));
     }
   }, [agentId, currentModelId]); // only when agent changes; currentModelId intentionally omitted to avoid loops
 
@@ -144,6 +149,37 @@ export function Chat({
   useEffect(() => {
     archivoIdsForChatRef.current = archivoIdsForChat;
   }, [archivoIdsForChat]);
+
+  // Sincroniza o agente selecionado com a URL na página de novo chat (sidebar reflete o estado)
+  useEffect(() => {
+    if (pathname !== "/chat" || typeof globalThis.window === "undefined") {
+      return;
+    }
+    const expectedSearch = agentId
+      ? `?agent=${encodeURIComponent(agentId)}`
+      : "";
+    if (globalThis.window.location.search !== expectedSearch) {
+      router.replace(`/chat${expectedSearch}`);
+    }
+  }, [agentId, pathname, router]);
+
+  // Ao selecionar um agente personalizado, preencher a base de conhecimento com a do agente
+  useEffect(() => {
+    if (!agentId || AGENT_IDS.includes(agentId as AgentId)) {
+      return;
+    }
+    fetch(`/api/agents/custom/${agentId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((agent: { knowledgeDocumentIds?: string[] } | null) => {
+        const ids = Array.isArray(agent?.knowledgeDocumentIds)
+          ? agent.knowledgeDocumentIds.slice(0, MAX_KNOWLEDGE_SELECT)
+          : [];
+        setKnowledgeDocumentIds(ids);
+      })
+      .catch(() => {
+        // Ignore fetch errors (e.g. no agent config)
+      });
+  }, [agentId]);
 
   const {
     messages,
@@ -207,7 +243,7 @@ export function Chat({
             ...(archivoIdsForChatRef.current.length > 0
               ? { archivoIds: archivoIdsForChatRef.current }
               : {}),
-            agentId: agentIdRef.current,
+            agentId: agentIdRef.current?.trim() || DEFAULT_AGENT_ID_WHEN_EMPTY,
             ...request.body,
           },
         };
@@ -227,6 +263,30 @@ export function Chat({
         error instanceof Error && error.cause instanceof ChatbotError
           ? error.cause
           : error;
+      const errMessage =
+        unwrapped instanceof Error ? unwrapped.message : String(unwrapped);
+      const cause =
+        unwrapped instanceof Error && "cause" in unwrapped
+          ? (unwrapped as { cause?: unknown }).cause
+          : undefined;
+      const causeStr =
+        cause instanceof Error
+          ? cause.message
+          : typeof cause === "string"
+            ? cause
+            : "";
+      const isContextLimit =
+        errMessage.includes("context_limit") ||
+        errMessage.includes("excede o limite") ||
+        causeStr.includes("context_limit");
+      if (isContextLimit) {
+        toast({
+          type: "error",
+          description:
+            "O contexto desta conversa excede o limite do modelo. Por favor, inicia um novo chat.",
+        });
+        return;
+      }
       if (unwrapped instanceof ChatbotError) {
         if (
           unwrapped.message?.includes("AI Gateway requires a valid credit card")
@@ -250,7 +310,6 @@ export function Chat({
   });
 
   const searchParams = useSearchParams();
-  const pathname = usePathname();
   const query = searchParams.get("query");
   const [knowledgeOpen, setKnowledgeOpen] = useState(false);
 
@@ -420,26 +479,34 @@ export function Chat({
     }
   };
 
+  const effectiveAgentId =
+    agentId && AGENT_IDS.includes(agentId as (typeof AGENT_IDS)[number])
+      ? agentId
+      : AGENT_IDS[0];
+
   return (
     <>
-      <div className="flex h-dvh w-full min-w-0">
-        <div className="overscroll-behavior-contain flex min-w-0 flex-1 touch-pan-y flex-col bg-background">
-          <ChatHeader
+      <div className="flex h-dvh w-full min-w-0 bg-background dark:bg-[#0d0f12]">
+        <div className="overscroll-behavior-contain flex min-w-0 flex-1 touch-pan-y flex-col">
+          <ChatTopbar
+            activeAgent={effectiveAgentId}
             chatId={id}
             hasAssistantMessage={hasAssistantMessage}
             isReadonly={isReadonly}
-            onOpenKnowledgeSidebar={openKnowledgeSidebar}
+            onKnowledgeBase={openKnowledgeSidebar}
             onSaveToKnowledge={openSaveToKnowledgeDialog}
-            selectedVisibilityType={initialVisibilityType}
+            selectedVisibilityType={visibilityType}
           />
 
           {!isReadonly && (
-            <ChatComposerHeader
-              agentId={agentId}
-              onModelChange={setCurrentModelId}
-              selectedModelId={currentModelId}
-              setAgentId={setAgentId}
-            />
+            <div className="border-border bg-muted/30 dark:border-white/8 dark:bg-[#13161b] [&_*]:text-muted-foreground dark:[&_*]:text-[#6b7280] [&_button]:border-border [&_button]:bg-transparent [&_button]:text-foreground [&_button]:hover:bg-muted dark:[&_button]:border-white/8 dark:[&_button]:text-[#e8eaf0] dark:[&_button]:hover:bg-[#1a1e26]">
+              <ChatComposerHeader
+                agentId={agentId}
+                onModelChange={setCurrentModelId}
+                selectedModelId={currentModelId}
+                setAgentId={setAgentId}
+              />
+            </div>
           )}
 
           <Messages
@@ -452,6 +519,7 @@ export function Chat({
             isReadonly={isReadonly}
             knowledgeDocumentIds={knowledgeDocumentIds}
             messages={messages}
+            onAgentSelect={isReadonly ? undefined : setAgentId}
             onFocusInput={
               isReadonly
                 ? undefined
@@ -460,6 +528,7 @@ export function Chat({
                   }
             }
             onOpenKnowledge={isReadonly ? undefined : openKnowledgeSidebar}
+            onQuickPrompt={isReadonly ? undefined : setInput}
             regenerate={regenerate}
             selectedModelId={initialChatModel}
             sendMessage={sendMessage}

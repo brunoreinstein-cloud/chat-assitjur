@@ -1,21 +1,34 @@
 import { auth } from "@/app/(auth)/auth";
 import { docxCache } from "@/lib/cache/document-cache";
 import { getDocumentById } from "@/lib/db/queries";
-import { createDocxBuffer, sanitizeDocxFilename } from "@/lib/document-to-docx";
+import {
+  createDocxBuffer,
+  type DocxLayout,
+  sanitizeDocxFilename,
+  toByteStringSafe,
+} from "@/lib/document-to-docx";
 import { ChatbotError } from "@/lib/errors";
 
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
+const LAYOUT_VALUES = new Set<DocxLayout>(["default", "assistjur-master"]);
+
 /**
- * GET /api/document/export?id=xxx
+ * GET /api/document/export?id=xxx&layout=assistjur-master
  * Devolve o documento (versão mais recente) como ficheiro DOCX para download.
  * Apenas documentos do tipo "text" são exportados como DOCX.
+ * layout=assistjur-master aplica paleta cinza/dourado, cabeçalho e rodapé BR Consultoria.
  * Resposta em cache 30s para repetidos downloads do mesmo documento.
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
+  const layoutParam = searchParams.get("layout");
+  const layout: DocxLayout =
+    layoutParam && LAYOUT_VALUES.has(layoutParam as DocxLayout)
+      ? (layoutParam as DocxLayout)
+      : "default";
 
   if (!id) {
     return new ChatbotError(
@@ -31,13 +44,15 @@ export async function GET(request: Request) {
   }
 
   const userId = session.user.id;
-  const cached = docxCache.get(userId, id);
+  const cacheKey = `${id}:${layout}`;
+  const cached = docxCache.get(userId, cacheKey);
   if (cached !== undefined) {
-    return new Response(cached.buffer, {
+    const safeFilename = toByteStringSafe(cached.filename);
+    return new Response(new Uint8Array(cached.buffer), {
       status: 200,
       headers: {
         "Content-Type": DOCX_MIME,
-        "Content-Disposition": `attachment; filename="${cached.filename}"`,
+        "Content-Disposition": `attachment; filename="${safeFilename}"`,
         "Cache-Control": "private, max-age=15",
       },
     });
@@ -61,15 +76,16 @@ export async function GET(request: Request) {
   }
 
   const content = doc.content ?? "";
-  const buffer = await createDocxBuffer(doc.title, content);
+  const buffer = await createDocxBuffer(doc.title, content, layout);
   const filename = sanitizeDocxFilename(doc.title);
-  docxCache.set(userId, id, buffer, filename);
+  docxCache.set(userId, cacheKey, buffer, filename);
 
-  return new Response(buffer, {
+  const safeFilename = toByteStringSafe(filename);
+  return new Response(new Uint8Array(buffer), {
     status: 200,
     headers: {
       "Content-Type": DOCX_MIME,
-      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Disposition": `attachment; filename="${safeFilename}"`,
       "Cache-Control": "private, max-age=15",
     },
   });

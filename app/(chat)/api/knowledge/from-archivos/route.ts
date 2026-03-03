@@ -1,37 +1,15 @@
 import { auth } from "@/app/(auth)/auth";
-import {
-  contentTypeFromFilename,
-  runExtractionAndClassification,
-} from "@/app/(chat)/api/files/upload/route";
-import { extractDocumentMetadata } from "@/lib/ai/extract-metadata";
-import { chunkText, embedChunks } from "@/lib/ai/rag";
-import {
-  createKnowledgeDocument,
-  deleteChunksByKnowledgeDocumentId,
-  getUserFilesByIds,
-  insertKnowledgeChunks,
-} from "@/lib/db/queries";
+import { contentTypeFromFilename } from "@/app/(chat)/api/files/upload/route";
+import { createKnowledgeDocument, getUserFilesByIds } from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
+import { vectorizeAndIndex } from "@/lib/rag";
+import { ingestFromBuffer, ingestFromContent } from "@/lib/rag/ingestion";
 
 export const maxDuration = 300;
 
-const TITLE_MAX_LENGTH = 512;
-const FALLBACK_CONTENT =
-  "(Texto não extraído. Pode colar o conteúdo manualmente ao editar o documento.)";
 const MAX_ARCHIVOS_PER_REQUEST = 50;
 const MAX_FETCH_SIZE = 100 * 1024 * 1024; // 100 MB
 const FETCH_TIMEOUT_MS = 120_000; // 2 min
-
-function sanitizeTitleFromFilename(filename: string): string {
-  const base = filename.replace(/\.[^.]+$/i, "").trim() || filename;
-  const sanitized = base
-    .replaceAll(/[^\p{L}\p{N}\s._-]/gu, " ")
-    .replaceAll(/\s+/g, " ")
-    .trim();
-  return (
-    sanitized.slice(0, TITLE_MAX_LENGTH) || filename.slice(0, TITLE_MAX_LENGTH)
-  );
-}
 
 function parseFolderId(value: string | null): string | null {
   if (value === null || value === "" || value === "root") {
@@ -63,7 +41,12 @@ export async function POST(request: Request): Promise<Response> {
     ).toResponse();
   }
 
-  let body: { fileIds?: unknown; folderId?: string | null };
+  let body: {
+    fileIds?: unknown;
+    folderId?: string | null;
+    /** Se true, cria documentos sem vetorizar (indexingStatus = pending). */
+    skipVectorize?: boolean;
+  };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -84,6 +67,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const folderId =
     typeof body.folderId === "string" ? parseFolderId(body.folderId) : null;
+  const skipVectorize = Boolean(body.skipVectorize);
 
   const userFiles = await getUserFilesByIds({
     ids: fileIds,
@@ -105,12 +89,15 @@ export async function POST(request: Request): Promise<Response> {
       continue;
     }
 
-    let content: string;
+    let ingested: Awaited<ReturnType<typeof ingestFromBuffer>>;
     if (
       typeof uf.extractedTextCache === "string" &&
       uf.extractedTextCache.trim().length > 0
     ) {
-      content = uf.extractedTextCache.trim();
+      ingested = await ingestFromContent(
+        uf.extractedTextCache.trim(),
+        uf.filename
+      );
     } else {
       try {
         const res = await fetch(uf.url, {
@@ -141,13 +128,7 @@ export async function POST(request: Request): Promise<Response> {
         const buffer = await res.arrayBuffer();
         const contentType =
           uf.contentType || contentTypeFromFilename(uf.filename);
-        const { extractedText } = await runExtractionAndClassification(
-          buffer,
-          contentType
-        );
-        const hasText =
-          typeof extractedText === "string" && extractedText.trim().length > 0;
-        content = hasText ? extractedText.trim() : FALLBACK_CONTENT;
+        ingested = await ingestFromBuffer(buffer, contentType, uf.filename);
       } catch (err) {
         failed.push({
           fileId,
@@ -161,37 +142,18 @@ export async function POST(request: Request): Promise<Response> {
       }
     }
 
-    let title = sanitizeTitleFromFilename(uf.filename);
-    if (content !== FALLBACK_CONTENT) {
-      const extracted = await extractDocumentMetadata(content, uf.filename);
-      if (extracted?.title?.trim()) {
-        title = extracted.title.slice(0, TITLE_MAX_LENGTH).trim();
-      }
-    }
-
     try {
       const doc = await createKnowledgeDocument({
         userId: session.user.id,
         folderId,
-        title,
-        content,
+        title: ingested.title,
+        content: ingested.content,
+        indexingStatus: skipVectorize ? "pending" : "indexed",
       });
-      const chunks = chunkText(content);
-      if (chunks.length > 0) {
-        const embedded = await embedChunks(chunks);
-        if (embedded !== null && embedded.length === chunks.length) {
-          try {
-            await insertKnowledgeChunks({
-              knowledgeDocumentId: doc.id,
-              chunksWithEmbeddings: chunks.map((text, i) => ({
-                text,
-                embedding: embedded[i]?.embedding ?? [],
-              })),
-            });
-          } catch {
-            await deleteChunksByKnowledgeDocumentId(doc.id);
-          }
-        }
+      if (!skipVectorize) {
+        await vectorizeAndIndex(doc.id, ingested.content, {
+          meta: { userId: doc.userId, title: doc.title },
+        });
       }
       created.push({ id: doc.id, title: doc.title });
     } catch (err) {

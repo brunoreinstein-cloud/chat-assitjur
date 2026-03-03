@@ -26,11 +26,22 @@ const ACCEPTED_DOC_TYPE = "application/msword" as const;
 /** Word Open XML (.docx) */
 const ACCEPTED_DOCX_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document" as const;
+/** Excel (.xlsx) */
+const ACCEPTED_XLSX_TYPE =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" as const;
+/** Excel 97-2003 (.xls) */
+const ACCEPTED_XLS_TYPE = "application/vnd.ms-excel" as const;
+/** CSV */
+const ACCEPTED_CSV_TYPE = "text/csv" as const;
+/** Texto plano */
+const ACCEPTED_TXT_TYPE = "text/plain" as const;
+/** OpenDocument Text (.odt) */
+const ACCEPTED_ODT_TYPE = "application/vnd.oasis.opendocument.text" as const;
 const OCTET_STREAM = "application/octet-stream";
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
 /** Extensões aceites para fallback quando o browser envia type vazio ou octet-stream (comum em produção). */
-const ACCEPTED_EXTENSIONS = /\.(docx?|pdf|jpe?g|png)$/i;
+const ACCEPTED_EXTENSIONS = /\.(docx?|pdf|jpe?g|png|xlsx?|csv|txt|odt)$/i;
 
 export function contentTypeFromFilename(filename: string): string {
   const lower = filename.toLowerCase();
@@ -48,6 +59,21 @@ export function contentTypeFromFilename(filename: string): string {
   }
   if (lower.endsWith(".png")) {
     return "image/png";
+  }
+  if (lower.endsWith(".xlsx")) {
+    return ACCEPTED_XLSX_TYPE;
+  }
+  if (lower.endsWith(".xls")) {
+    return ACCEPTED_XLS_TYPE;
+  }
+  if (lower.endsWith(".csv")) {
+    return ACCEPTED_CSV_TYPE;
+  }
+  if (lower.endsWith(".txt")) {
+    return ACCEPTED_TXT_TYPE;
+  }
+  if (lower.endsWith(".odt")) {
+    return ACCEPTED_ODT_TYPE;
   }
   return OCTET_STREAM;
 }
@@ -183,7 +209,12 @@ function isAcceptedFileType(file: Blob): boolean {
     ) ||
     type === ACCEPTED_PDF_TYPE ||
     type === ACCEPTED_DOC_TYPE ||
-    type === ACCEPTED_DOCX_TYPE
+    type === ACCEPTED_DOCX_TYPE ||
+    type === ACCEPTED_XLSX_TYPE ||
+    type === ACCEPTED_XLS_TYPE ||
+    type === ACCEPTED_CSV_TYPE ||
+    type === ACCEPTED_TXT_TYPE ||
+    type === ACCEPTED_ODT_TYPE
   ) {
     return true;
   }
@@ -205,7 +236,8 @@ const FileSchema = z.object({
       message: "O arquivo deve ter no máximo 100 MB",
     })
     .refine(isAcceptedFileType, {
-      message: "Tipos aceitos: JPEG, PNG, PDF, DOC ou DOCX",
+      message:
+        "Tipos aceitos: JPEG, PNG, PDF, DOC, DOCX, XLS, XLSX, CSV, TXT ou ODT",
     }),
 });
 
@@ -452,6 +484,83 @@ async function extractTextFromImage(buffer: ArrayBuffer): Promise<string> {
   }
 }
 
+/** Texto plano: decodificar UTF-8. */
+function extractTextFromTxt(buffer: ArrayBuffer): string {
+  const decoder = new TextDecoder("utf-8", { fatal: false });
+  const text = decoder.decode(buffer);
+  return text.length > MAX_EXTRACTED_TEXT_LENGTH
+    ? `${text.slice(0, MAX_EXTRACTED_TEXT_LENGTH)}\n\n[... texto truncado ...]`
+    : text;
+}
+
+/** CSV: usar papaparse e devolver texto legível (linhas com valores separados por tab). */
+async function extractTextFromCsv(buffer: ArrayBuffer): Promise<string> {
+  const Papa = (await import("papaparse")).default;
+  const decoder = new TextDecoder("utf-8", { fatal: false });
+  const csvString = decoder.decode(buffer);
+  const parsed = Papa.parse<string[]>(csvString, {
+    skipEmptyLines: true,
+    dynamicTyping: false,
+  });
+  const lines =
+    parsed.data?.map((row) =>
+      Array.isArray(row) ? row.join("\t") : String(row)
+    ) ?? [];
+  const text = lines.join("\n");
+  return text.length > MAX_EXTRACTED_TEXT_LENGTH
+    ? `${text.slice(0, MAX_EXTRACTED_TEXT_LENGTH)}\n\n[... texto truncado ...]`
+    : text;
+}
+
+/** Excel (.xlsx / .xls): extrair texto de todas as folhas com xlsx. */
+async function extractTextFromExcel(buffer: ArrayBuffer): Promise<string> {
+  const XLSX = await import("xlsx");
+  const workbook = XLSX.read(new Uint8Array(buffer), { type: "array" });
+  const parts: string[] = [];
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) {
+      continue;
+    }
+    const csv = XLSX.utils.sheet_to_csv(sheet, {
+      FS: "\t",
+      RS: "\n",
+      blankrows: false,
+    });
+    if (csv.trim().length > 0) {
+      parts.push(`[Folha: ${sheetName}]`, csv.trim());
+    }
+  }
+  const text = parts.join("\n");
+  return text.length > MAX_EXTRACTED_TEXT_LENGTH
+    ? `${text.slice(0, MAX_EXTRACTED_TEXT_LENGTH)}\n\n[... texto truncado ...]`
+    : text;
+}
+
+/** ODT: ZIP com content.xml; extrair texto do XML (tags removidas). */
+async function extractTextFromOdt(buffer: ArrayBuffer): Promise<string> {
+  const JSZip = (await import("jszip")).default;
+  const zip = await JSZip.loadAsync(buffer);
+  const contentFile = zip.file("content.xml");
+  if (!contentFile) {
+    return "";
+  }
+  const xmlString = await contentFile.async("string");
+  // Extrair texto: remover tags e decodificar entidades comuns
+  const text = xmlString
+    .replaceAll(/<[^>]+>/g, " ")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&amp;", "&")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#39;", "'")
+    .replaceAll(/\s+/g, " ")
+    .trim();
+  return text.length > MAX_EXTRACTED_TEXT_LENGTH
+    ? `${text.slice(0, MAX_EXTRACTED_TEXT_LENGTH)}\n\n[... texto truncado ...]`
+    : text;
+}
+
 function storageErrorHint(message?: string): string {
   const isNotFound =
     message?.includes("Bucket not found") || message?.includes("not found");
@@ -480,11 +589,25 @@ export async function runExtractionAndClassification(
   const isDoc = contentType === ACCEPTED_DOC_TYPE;
   const isDocx = contentType === ACCEPTED_DOCX_TYPE;
   const isImage = isImageContentType(contentType);
+  const isTxt = contentType === ACCEPTED_TXT_TYPE;
+  const isCsv = contentType === ACCEPTED_CSV_TYPE;
+  const isExcel =
+    contentType === ACCEPTED_XLSX_TYPE || contentType === ACCEPTED_XLS_TYPE;
+  const isOdt = contentType === ACCEPTED_ODT_TYPE;
   let extractedText: string | undefined;
   let extractionFailed = false;
   let extractionDetail: string | undefined;
   let documentType: "pi" | "contestacao" | undefined;
-  if (isPdf || isDoc || isDocx || isImage) {
+  if (
+    isPdf ||
+    isDoc ||
+    isDocx ||
+    isImage ||
+    isTxt ||
+    isCsv ||
+    isExcel ||
+    isOdt
+  ) {
     try {
       if (isPdf) {
         const result = await extractTextFromPdf(fileBuffer);
@@ -496,6 +619,14 @@ export async function runExtractionAndClassification(
         extractedText = await extractTextFromDocx(fileBuffer);
       } else if (isImage) {
         extractedText = await extractTextFromImage(fileBuffer);
+      } else if (isTxt) {
+        extractedText = extractTextFromTxt(fileBuffer);
+      } else if (isCsv) {
+        extractedText = await extractTextFromCsv(fileBuffer);
+      } else if (isExcel) {
+        extractedText = await extractTextFromExcel(fileBuffer);
+      } else if (isOdt) {
+        extractedText = await extractTextFromOdt(fileBuffer);
       }
       if (
         typeof extractedText === "string" &&
@@ -668,17 +799,23 @@ export async function POST(request: Request) {
     const isDoc = contentType === ACCEPTED_DOC_TYPE;
     const isDocx = contentType === ACCEPTED_DOCX_TYPE;
     const isImage = isImageContentType(contentType);
+    const isTxt = contentType === ACCEPTED_TXT_TYPE;
+    const isCsv = contentType === ACCEPTED_CSV_TYPE;
+    const isExcel =
+      contentType === ACCEPTED_XLSX_TYPE || contentType === ACCEPTED_XLS_TYPE;
+    const isOdt = contentType === ACCEPTED_ODT_TYPE;
+    const runsExtraction =
+      isPdf || isDoc || isDocx || isImage || isTxt || isCsv || isExcel || isOdt;
 
     // Upload e extração em paralelo: o tempo total é o máximo dos dois, não a soma.
-    const extractionPromise =
-      isPdf || isDoc || isDocx || isImage
-        ? runExtractionAndClassification(fileBuffer, contentType)
-        : Promise.resolve({
-            extractedText: undefined,
-            extractionFailed: false,
-            documentType: undefined as "pi" | "contestacao" | undefined,
-            extractionDetail: undefined,
-          });
+    const extractionPromise = runsExtraction
+      ? runExtractionAndClassification(fileBuffer, contentType)
+      : Promise.resolve({
+          extractedText: undefined,
+          extractionFailed: false,
+          documentType: undefined as "pi" | "contestacao" | undefined,
+          extractionDetail: undefined,
+        });
 
     const uploadPromise = uploadToStorage(
       session.user.id,
@@ -736,7 +873,7 @@ export async function POST(request: Request) {
     const message =
       err instanceof Error && err.message.length > 0
         ? err.message
-        : "Erro ao processar o upload. Verifique o tamanho e o tipo do ficheiro (JPEG, PNG, PDF, DOC ou DOCX até 100 MB).";
+        : "Erro ao processar o upload. Verifique o tamanho e o tipo do ficheiro (até 100 MB).";
     const detail = isDev && err instanceof Error ? err.message : undefined;
     return NextResponse.json(
       {

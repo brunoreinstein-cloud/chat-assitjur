@@ -8,20 +8,16 @@ import { useActionState, useEffect, useState } from "react";
 import { AuthForm } from "@/components/auth-form";
 import { SubmitButton } from "@/components/submit-button";
 import { toast } from "@/components/toast";
-import { Button } from "@/components/ui/button";
 import { type LoginActionState, login } from "../actions";
 
 export default function Page() {
   const router = useRouter();
-
   const [email, setEmail] = useState("");
   const [isSuccessful, setIsSuccessful] = useState(false);
 
   const [state, formAction] = useActionState<LoginActionState, FormData>(
     login,
-    {
-      status: "idle",
-    }
+    { status: "idle" }
   );
 
   const { update: updateSession } = useSession();
@@ -53,38 +49,39 @@ export default function Page() {
   };
 
   return (
-    <div className="flex h-dvh w-screen items-start justify-center bg-background pt-12 md:items-center md:pt-0">
-      <div className="flex w-full max-w-md flex-col gap-12 overflow-hidden rounded-2xl">
-        <div className="flex flex-col items-center justify-center gap-2 px-4 text-center sm:px-16">
-          <h3 className="font-semibold text-xl dark:text-zinc-50">Entrar</h3>
-          <p className="text-gray-500 text-sm dark:text-zinc-400">
+    <div className="w-full max-w-md">
+      <div className="rounded-2xl border border-assistjur-purple/20 bg-white/95 px-4 py-8 shadow-black/10 shadow-xl sm:px-10 sm:py-10">
+        <div className="mb-8 flex flex-col items-center gap-2 text-center">
+          <h1 className="font-bold text-2xl text-assistjur-purple-darker">
+            Entrar
+          </h1>
+          <p className="text-assistjur-gray text-sm">
             Use seu e-mail e senha. Primeira vez? Cadastre-se abaixo.
           </p>
         </div>
         <AuthForm action={handleSubmit} defaultEmail={email}>
           <SubmitButton isSuccessful={isSuccessful}>Entrar</SubmitButton>
-          <p className="mt-4 text-center text-gray-600 text-sm dark:text-zinc-400">
-            {"Não tem uma conta? "}
+          <p className="mt-5 text-center text-assistjur-gray text-sm">
+            Não tem uma conta?{" "}
             <Link
-              className="font-semibold text-gray-800 hover:underline dark:text-zinc-200"
+              className="font-semibold text-assistjur-purple-dark underline underline-offset-2 hover:no-underline focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold focus-visible:ring-offset-2 focus-visible:ring-offset-white"
               href="/register"
             >
               Cadastre-se
-            </Link>
-            {" gratuitamente."}
+            </Link>{" "}
+            gratuitamente.
           </p>
-          <Button
-            className="mt-4 w-full"
+          <button
+            className="mt-4 flex min-h-[44px] w-full items-center justify-center rounded-xl border-2 border-assistjur-purple-dark/40 bg-transparent font-medium text-assistjur-purple-dark text-sm transition-colors hover:border-assistjur-purple-dark/60 hover:bg-assistjur-purple-dark/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold focus-visible:ring-offset-2 focus-visible:ring-offset-white"
             onClick={async () => {
               await signOut({ redirect: false });
               globalThis.window.location.href =
                 "/api/auth/guest?redirectUrl=/chat";
             }}
             type="button"
-            variant="outline"
           >
             Continuar como visitante
-          </Button>
+          </button>
         </AuthForm>
       </div>
     </div>

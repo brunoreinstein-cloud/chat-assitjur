@@ -1,21 +1,21 @@
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
-import { chunkText, embedChunks } from "@/lib/ai/rag";
 import {
   createKnowledgeDocument,
-  deleteChunksByKnowledgeDocumentId,
   deleteKnowledgeDocumentById,
   getKnowledgeDocumentsByIds,
   getKnowledgeDocumentsByUserId,
   getKnowledgeDocumentsRecentByUserId,
-  insertKnowledgeChunks,
 } from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
+import { vectorizeAndIndex } from "@/lib/rag";
 
 const createBodySchema = z.object({
   title: z.string().min(1).max(512),
   content: z.string().min(1),
   folderId: z.string().uuid().nullable().optional(),
+  /** Se true, cria documento sem vetorizar (indexingStatus = pending); vetorizar depois via POST /api/knowledge/index-pending ou job. */
+  skipVectorize: z.boolean().optional().default(false),
 });
 
 const databaseErrorResponse = () =>
@@ -117,24 +117,13 @@ export async function POST(request: Request) {
       folderId: body.folderId,
       title: body.title,
       content: body.content,
+      indexingStatus: body.skipVectorize ? "pending" : "indexed",
     });
 
-    const chunks = chunkText(body.content);
-    if (chunks.length > 0) {
-      const embedded = await embedChunks(chunks);
-      if (embedded !== null && embedded.length === chunks.length) {
-        try {
-          await insertKnowledgeChunks({
-            knowledgeDocumentId: doc.id,
-            chunksWithEmbeddings: chunks.map((text, i) => ({
-              text,
-              embedding: embedded[i]?.embedding ?? [],
-            })),
-          });
-        } catch {
-          await deleteChunksByKnowledgeDocumentId(doc.id);
-        }
-      }
+    if (!body.skipVectorize) {
+      await vectorizeAndIndex(doc.id, body.content, {
+        meta: { userId: doc.userId, title: doc.title },
+      });
     }
 
     return Response.json(doc, { status: 201 });
