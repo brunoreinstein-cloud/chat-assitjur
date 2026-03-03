@@ -255,11 +255,13 @@ const PurePreviewMessage = ({
                 seguida.
               </p>
             ) : (
-              !processedParts.some(
-                (p) =>
-                  p.type === "text" &&
-                  ((p as { text?: string }).text?.trim().length ?? 0) > 0
-              ) && (
+              !processedParts.some((p) => {
+                const part = p as { type: string; text?: string };
+                return (
+                  part.type === "text" &&
+                  (part.text?.trim().length ?? 0) > 0
+                );
+              }) && (
                 <p
                   className="text-muted-foreground text-sm"
                   data-testid="reasoning-no-text-fallback"
