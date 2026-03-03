@@ -21,7 +21,7 @@ export async function GET() {
     const { text } = await generateText({
       model,
       prompt: HEALTH_PROMPT,
-      maxTokens: HEALTH_MAX_TOKENS,
+      maxOutputTokens: HEALTH_MAX_TOKENS,
     });
     const latencyMs = Date.now() - start;
     const trimmed = text?.trim().toUpperCase();

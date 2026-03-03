@@ -28,7 +28,7 @@ async function run() {
     const { text } = await generateText({
       model,
       prompt: HEALTH_PROMPT,
-      maxTokens: HEALTH_MAX_TOKENS,
+      maxOutputTokens: HEALTH_MAX_TOKENS,
     });
     const ms = Date.now() - start;
     const trimmed = text?.trim().toUpperCase();
