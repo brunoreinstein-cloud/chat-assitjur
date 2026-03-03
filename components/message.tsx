@@ -321,12 +321,11 @@ export const PreviewMessage = PurePreviewMessage;
 
 export const ThinkingMessage = () => {
   return (
-    <div
+    <output
       aria-live="polite"
       className="group/message fade-in w-full animate-in duration-300"
       data-role="assistant"
       data-testid="message-assistant-loading"
-      role="status"
     >
       <div className="flex items-start justify-start gap-3">
         <div
@@ -342,9 +341,11 @@ export const ThinkingMessage = () => {
           <div className="flex items-center gap-1 p-0 text-muted-foreground text-sm">
             <Shimmer duration={1.2}>A pensar</Shimmer>
           </div>
-          <span className="sr-only">O assistente está a processar a sua mensagem.</span>
+          <span className="sr-only">
+            O assistente está a processar a sua mensagem.
+          </span>
         </div>
       </div>
-    </div>
+    </output>
   );
 };

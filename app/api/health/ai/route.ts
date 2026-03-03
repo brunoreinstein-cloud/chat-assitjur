@@ -45,8 +45,7 @@ export async function GET() {
     );
   } catch (err) {
     const latencyMs = Date.now() - start;
-    const message =
-      err instanceof Error ? err.message : String(err);
+    const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json(
       {
         ok: false,

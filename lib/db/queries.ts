@@ -47,9 +47,7 @@ import { generateHashedPassword } from "./utils";
 /** Converte erro de BD em ChatbotError; reconhece statement timeout (57014) para mensagem clara. */
 function toDatabaseError(error: unknown, fallbackMessage: string): never {
   const code =
-    error &&
-    typeof error === "object" &&
-    "code" in error
+    error && typeof error === "object" && "code" in error
       ? (error as { code: string }).code
       : undefined;
   if (code === "57014") {
@@ -81,7 +79,9 @@ function getDb() {
   }
   if (!dbInstance) {
     if (!url.includes("search_path")) {
-      url = url.includes("?") ? `${url}&${CONNECTION_OPTS}` : `${url}?${CONNECTION_OPTS}`;
+      url = url.includes("?")
+        ? `${url}&${CONNECTION_OPTS}`
+        : `${url}?${CONNECTION_OPTS}`;
     }
     clientInstance = postgres(url, {
       max: 1,
@@ -109,7 +109,7 @@ export async function ensureStatementTimeout(): Promise<void> {
       throw err;
     }
   })();
-  return statementTimeoutPromise;
+  return await statementTimeoutPromise;
 }
 
 export async function getUser(email: string): Promise<User[]> {

@@ -4,8 +4,9 @@
  *
  * Requer AI_GATEWAY_API_KEY (ou config do Vercel AI Gateway) no .env.local.
  */
-import { config } from "dotenv";
+
 import { generateText } from "ai";
+import { config } from "dotenv";
 import { getTitleModel } from "../lib/ai/providers";
 
 config({ path: ".env" });
@@ -15,7 +16,7 @@ const HEALTH_PROMPT = "Reply with exactly: OK";
 const HEALTH_MAX_TOKENS = 5;
 
 async function run() {
-  if (!process.env.AI_GATEWAY_API_KEY && !process.env.VERCEL) {
+  if (!(process.env.AI_GATEWAY_API_KEY || process.env.VERCEL)) {
     console.warn(
       "⚠️  AI_GATEWAY_API_KEY não definida (em local é necessária para o AI Gateway)."
     );

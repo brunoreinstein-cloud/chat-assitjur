@@ -25,17 +25,17 @@ import {
   getAgentConfigWithOverrides,
 } from "@/lib/ai/agents-registry";
 import {
+  createChatDebugTracker,
+  isChatDebugEnabled,
+  logChatDebug,
+} from "@/lib/ai/chat-debug";
+import {
   applyContextEditing,
   CONTEXT_WINDOW_INPUT_TARGET_TOKENS,
   estimateInputTokens,
 } from "@/lib/ai/context-window";
 import { MIN_CREDITS_TO_START_CHAT, tokensToCredits } from "@/lib/ai/credits";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
-import {
-  createChatDebugTracker,
-  isChatDebugEnabled,
-  logChatDebug,
-} from "@/lib/ai/chat-debug";
 import { getPromptCachingCacheControl } from "@/lib/ai/prompt-caching-config";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
@@ -51,9 +51,9 @@ import { improvePromptTool } from "@/lib/ai/tools/improve-prompt";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
 import { updateDocument } from "@/lib/ai/tools/update-document";
 import { validationToolsForValidate } from "@/lib/ai/tools/validation-tools";
+import { getCachedBuiltInAgentOverrides } from "@/lib/cache/agent-overrides-cache";
 import { creditsCache } from "@/lib/cache/credits-cache";
 import { isProductionEnvironment } from "@/lib/constants";
-import { getCachedBuiltInAgentOverrides } from "@/lib/cache/agent-overrides-cache";
 import {
   addCreditsToUser,
   createStreamId,
@@ -931,7 +931,7 @@ export async function POST(request: Request) {
                 anthropic: {
                   thinking: {
                     type: "enabled",
-                    budgetTokens: 4_000,
+                    budgetTokens: 4000,
                   },
                 },
               }
@@ -998,7 +998,10 @@ export async function POST(request: Request) {
                 }
               }
             })().catch((err: unknown) => {
-              logOnFinishDbError("saveMessages (tool-approval) em onFinish falhou", err);
+              logOnFinishDbError(
+                "saveMessages (tool-approval) em onFinish falhou",
+                err
+              );
             });
           } else if (finishedMessages.length > 0) {
             saveMessagesPromise = saveMessages({
@@ -1030,7 +1033,8 @@ export async function POST(request: Request) {
                   const completionTokens =
                     "completionTokens" in usage
                       ? (usage as { completionTokens: number }).completionTokens
-                      : ((usage as { outputTokens?: number }).outputTokens ?? 0);
+                      : ((usage as { outputTokens?: number }).outputTokens ??
+                        0);
                   const creditsConsumed = tokensToCredits(
                     promptTokens,
                     completionTokens
@@ -1056,7 +1060,7 @@ export async function POST(request: Request) {
           await Promise.all([saveMessagesPromise, creditsPromise]);
 
           after(() => {
-            void updateChatActiveStreamId({
+            updateChatActiveStreamId({
               chatId: id,
               activeStreamId: null,
             }).catch((err: unknown) => {
