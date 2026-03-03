@@ -258,8 +258,7 @@ const PurePreviewMessage = ({
               !processedParts.some((p) => {
                 const part = p as { type: string; text?: string };
                 return (
-                  part.type === "text" &&
-                  (part.text?.trim().length ?? 0) > 0
+                  part.type === "text" && (part.text?.trim().length ?? 0) > 0
                 );
               }) && (
                 <p
