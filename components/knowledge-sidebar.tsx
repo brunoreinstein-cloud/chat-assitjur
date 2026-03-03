@@ -105,7 +105,7 @@ function useKnowledgeFolderFromUrl(): [
 
   useEffect(() => {
     setFolderState(undefined);
-  }, [pathname]);
+  }, []);
 
   const setFolder = useCallback(
     (folderId: string | null) => {
@@ -343,7 +343,10 @@ export function KnowledgeSidebarContent({
         totalCreated.push(...created);
         totalFailed.push(...failed);
         processedSoFar += batch.length;
-        setUploadProgress({ processed: processedSoFar, total: allFiles.length });
+        setUploadProgress({
+          processed: processedSoFar,
+          total: allFiles.length,
+        });
       }
       await mutate("/api/knowledge");
       await mutate(docsKey);
@@ -1225,7 +1228,7 @@ export function KnowledgeSidebarContent({
               webkitdirectory: "",
             } as React.InputHTMLAttributes<HTMLInputElement>)}
           />
-          <div
+          <button
             aria-label="Adicionar documentos por ficheiros ou pasta"
             className={dropzoneClassName}
             onDragLeave={() => setIsDraggingOver(false)}
@@ -1238,6 +1241,13 @@ export function KnowledgeSidebarContent({
               setIsDraggingOver(false);
               handleKnowledgeFiles(e.dataTransfer.files);
             }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                filesInputRef.current?.click();
+              }
+            }}
+            type="button"
           >
             {isAddingFromFiles ? (
               <div
@@ -1253,13 +1263,13 @@ export function KnowledgeSidebarContent({
                 </span>
                 {uploadProgress && (
                   <>
-                    <span
+                    <output
                       aria-label={`${uploadProgress.processed} de ${uploadProgress.total} ficheiros processados`}
                       className="text-muted-foreground/90 text-xs tabular-nums"
                     >
                       {uploadProgress.processed}/{uploadProgress.total}{" "}
                       ficheiros
-                    </span>
+                    </output>
                     <progress
                       aria-label={`${uploadProgress.processed} de ${uploadProgress.total} ficheiros`}
                       className="h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-primary"
@@ -1292,7 +1302,7 @@ export function KnowledgeSidebarContent({
                 </button>
                 <button
                   aria-label="Importar pasta (selecionar pasta para adicionar todos os ficheiros)"
-                  className="mt-0.5 inline-flex items-center gap-1 text-xs text-primary underline underline-offset-2 outline-none hover:no-underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                  className="mt-0.5 inline-flex items-center gap-1 text-primary text-xs underline underline-offset-2 outline-none hover:no-underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
                   disabled={isAddingFromFiles}
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1305,7 +1315,7 @@ export function KnowledgeSidebarContent({
                 </button>
               </>
             )}
-          </div>
+          </button>
 
           <form className="grid gap-2" onSubmit={handleAddDocument}>
             <Label htmlFor="kb-new-title">Ou criar manualmente</Label>

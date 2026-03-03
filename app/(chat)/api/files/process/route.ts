@@ -143,8 +143,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const extraction = await runExtractionAndClassification(buffer, contentType);
   const documentType =
-    extraction.documentType ??
-    classifyDocumentTypeFromFilename(filenameStr);
+    extraction.documentType ?? classifyDocumentTypeFromFilename(filenameStr);
 
   return persistAndRespond(
     session.user.id,

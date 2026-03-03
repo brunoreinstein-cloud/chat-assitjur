@@ -255,7 +255,9 @@ export function Chat({
   const [knowledgeOpen, setKnowledgeOpen] = useState(false);
 
   useEffect(() => {
-    if (searchParams.get("knowledge") === "open") setKnowledgeOpen(true);
+    if (searchParams.get("knowledge") === "open") {
+      setKnowledgeOpen(true);
+    }
   }, [searchParams]);
 
   const closeKnowledgeSidebar = useCallback(() => {
