@@ -495,7 +495,7 @@ export async function POST(request: Request) {
       }),
       isBuiltInAgent
         ? Promise.resolve(
-            null as Awaited<ReturnType<typeof getCustomAgentById>>
+            null as unknown as Awaited<ReturnType<typeof getCustomAgentById>>
           )
         : getCustomAgentById({
             id: agentId,
