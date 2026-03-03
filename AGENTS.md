@@ -90,7 +90,7 @@ Não hardcodar segredos; usar sempre variáveis de ambiente.
 
 ## Base de conhecimento
 
-- **Comum a todos os agentes:** Revisor de Defesas, Análise de contratos, Redator de Contestações, etc. Usar para @bancodetese (teses, precedentes) ou outros contextos (cláusulas, jurisprudência, etc.). O agente **Redator de Contestações** opera em modo Modelo (template) ou modo **@bancodetese** (montagem por teses do banco).
+- **Comum a todos os agentes:** Revisor de Defesas, Redator de Contestações, etc. Usar para @bancodetese (teses, precedentes) ou outros contextos (cláusulas, jurisprudência, etc.). O agente **Redator de Contestações** opera em modo Modelo (template) ou modo **@bancodetese** (montagem por teses do banco).
 - **Tabela:** `KnowledgeDocument` (id, userId, title, content, createdAt).
 - **APIs:** `GET/POST/DELETE /api/knowledge`; `GET /api/knowledge?ids=...` para buscar por ids.
 - **Chat:** o cliente pode enviar `knowledgeDocumentIds` no body do `POST /api/chat`. O servidor busca os documentos, concatena título e conteúdo e injeta no system prompt em "Base de conhecimento".
@@ -105,6 +105,7 @@ pnpm install
 pnpm dev              # dev em http://localhost:3300 (--turbo)
 pnpm run prebuild     # lint + test:unit (corre antes do build)
 pnpm build            # prebuild → migrate → next build
+pnpm run prepush      # alias de build; usar antes de push para evitar falha no deploy
 pnpm db:migrate       # aplicar migrações
 pnpm db:studio        # Drizzle Studio
 pnpm db:push          # drizzle-kit push
@@ -141,7 +142,7 @@ Comandos: `npx skills list` | `npx skills find [query]` | `npx skills update`.
 
 - **[docs/PROJETO-REVISOR-DEFESAS.md](docs/PROJETO-REVISOR-DEFESAS.md)** — Documentação completa do Agente Revisor: o que é, stack, arquitetura do agente, fluxo (GATE-1 → FASE A → GATE 0.5 → FASE B), API, base de conhecimento, formato dos 3 DOCX, UX/UI, env e comandos.
 - **[docs/SPEC-AI-DRIVE-JURIDICO.md](docs/SPEC-AI-DRIVE-JURIDICO.md)** — Spec completa do produto "AI Drive Jurídico": visão, personas, domínios jurídicos, capacidades, arquitetura, segurança, UX, roadmap e métricas.
-- **[docs/AGENTES-IA-PERSONALIZADOS.md](docs/AGENTES-IA-PERSONALIZADOS.md)** — Agentes de IA personalizados: agentes pré-definidos (Revisor, Análise de contratos, Redator de Contestações), instruções customizadas e base de conhecimento; referência técnica e evolução futura.
+- **[docs/AGENTES-IA-PERSONALIZADOS.md](docs/AGENTES-IA-PERSONALIZADOS.md)** — Agentes de IA personalizados: agentes pré-definidos (Revisor, Redator de Contestações), instruções customizadas e base de conhecimento; referência técnica e evolução futura.
 - **[docs/PLANO-PROXIMOS-PASSOS.md](docs/PLANO-PROXIMOS-PASSOS.md)** — Plano de próximos passos: tarefas imediatas (ex.: prebuild), curto prazo, índice do roadmap e onde a documentação descreve "próximos passos". Atualizar este ficheiro quando mudarem prioridades.
 - **[docs/OTIMIZACAO-CUSTO-TOKENS-LLM.md](docs/OTIMIZACAO-CUSTO-TOKENS-LLM.md)** — Revisão e otimização de custo de tokens e uso de LLM: onde se consome, limites atuais, checklist e ações recomendadas.
 

@@ -92,6 +92,35 @@ function mapMetadataDocumentType(
 }
 
 /**
+ * Classifica o tipo de documento (PI ou Contestação) pelo nome do ficheiro.
+ * Usado como preferência quando o utilizador nomeia o ficheiro de forma explícita (ex.: "Contestação - RO.pdf").
+ * Exportado para uso na rota de processamento (ficheiros grandes).
+ */
+export function classifyDocumentTypeFromFilename(
+  filename: string
+): "pi" | "contestacao" | undefined {
+  const n = filename.toLowerCase().replace(/\s+/g, " ");
+  const looksLikeContestacao =
+    n.includes("contest") ||
+    n.includes("defesa") ||
+    n.includes("reclamado") ||
+    n.includes("impugna");
+  const looksLikePi =
+    (n.includes("inicial") ||
+      n.includes("petição") ||
+      n.includes("peticao") ||
+      n.includes("reclamante")) &&
+    !looksLikeContestacao;
+  if (looksLikeContestacao) {
+    return "contestacao";
+  }
+  if (looksLikePi) {
+    return "pi";
+  }
+  return undefined;
+}
+
+/**
  * Classifica o tipo de documento (PI ou Contestação) por padrões no texto.
  * Usa apenas o início do documento; retorna undefined se não houver indício claro.
  */
@@ -685,8 +714,11 @@ export async function POST(request: Request) {
       }
     }
 
-    // Tipo de documento: regex primeiro; se não identificou, usa o tipo devolvido pela IA
-    const finalDocumentType = extraction.documentType ?? documentTypeFromMeta;
+    // Tipo de documento: nome do ficheiro primeiro (ex.: "Contestação - RO.pdf"), depois regex no texto, depois IA
+    const finalDocumentType =
+      classifyDocumentTypeFromFilename(filename) ??
+      extraction.documentType ??
+      documentTypeFromMeta;
 
     return respondUploadSuccess(
       uploadResult,

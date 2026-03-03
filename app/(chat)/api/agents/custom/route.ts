@@ -7,11 +7,7 @@ const createBodySchema = z.object({
   name: z.string().min(1).max(256),
   instructions: z.string().min(1).max(30_000),
   baseAgentId: z
-    .enum([
-      "revisor-defesas",
-      "analise-contratos",
-      "redator-contestacao",
-    ] as const)
+    .enum(["revisor-defesas", "redator-contestacao"] as const)
     .optional()
     .nullable(),
 });

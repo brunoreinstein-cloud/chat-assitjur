@@ -3,7 +3,7 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
 import { ChatComposerHeader } from "@/components/chat-composer-header";
@@ -252,14 +252,41 @@ export function Chat({
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const query = searchParams.get("query");
-  const knowledgeOpen = searchParams.get("knowledge") === "open";
-  const closeKnowledgeSidebar = () => {
-    router.replace(pathname ?? "/chat");
-  };
-  const openKnowledgeSidebar = () => {
-    const base = pathname ?? "/chat";
-    router.replace(`${base}${base.includes("?") ? "&" : "?"}knowledge=open`);
-  };
+  const [knowledgeOpen, setKnowledgeOpen] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get("knowledge") === "open") setKnowledgeOpen(true);
+  }, [searchParams]);
+
+  const closeKnowledgeSidebar = useCallback(() => {
+    setKnowledgeOpen(false);
+    if (globalThis.window !== undefined) {
+      const base = pathname ?? "/chat";
+      const params = new URLSearchParams(globalThis.window.location.search);
+      params.delete("knowledge");
+      params.delete("folder");
+      const q = params.toString();
+      globalThis.window.history.replaceState(
+        null,
+        "",
+        q ? `${base}?${q}` : base
+      );
+    }
+  }, [pathname]);
+
+  const openKnowledgeSidebar = useCallback(() => {
+    setKnowledgeOpen(true);
+    if (globalThis.window !== undefined) {
+      const base = pathname ?? "/chat";
+      const params = new URLSearchParams(globalThis.window.location.search);
+      params.set("knowledge", "open");
+      globalThis.window.history.replaceState(
+        null,
+        "",
+        `${base}?${params.toString()}`
+      );
+    }
+  }, [pathname]);
 
   const [hasAppendedQuery, setHasAppendedQuery] = useState(false);
 

@@ -37,7 +37,7 @@ O script valida variáveis obrigatórias, a porta da `POSTGRES_URL` (Supabase = 
 
 ### Build e qualidade
 
-- [ ] Build local sem erros: `pnpm run build`
+- [ ] **Build local sem erros antes de fazer push:** `pnpm run build` (ou `pnpm run prepush`). Isto replica o que a Vercel executa (lint + test:unit + next build) e evita falhas no deploy.
 - [ ] Lint sem erros: `pnpm run lint`
 - [ ] (Opcional) Testes E2E: `pnpm test`
 
@@ -60,12 +60,14 @@ O script valida variáveis obrigatórias, a porta da `POSTGRES_URL` (Supabase = 
 
 ---
 
-## 4. Integração com CI (opcional)
+## 4. Integração com CI
 
-Para correr a revisão em cada push (sem expor segredos):
+Em cada push para `main` (e em pull requests para `main`):
 
-- **Lint:** já existe em `.github/workflows/lint.yml`.
-- **Build:** pode adicionar um job que faz `pnpm run build` (com `POSTGRES_URL` e `AUTH_SECRET` em secrets se quiser validar também a DB no CI; caso contrário o build pode ser feito sem DB para validar código).
-- **Pré-deploy completo:** num job que só corre com secrets (por exemplo antes de deploy para produção), chamar `pnpm run vercel:env:prod` (ou injetar env) e depois `pnpm run predeploy`.
+- **Lint:** `.github/workflows/lint.yml` — executa `pnpm run lint`.
+- **Build:** `.github/workflows/build.yml` — executa o mesmo que a Vercel: `pnpm run prebuild` (lint + test:unit) e `next build` (migrações são saltadas com `VERCEL=1`, como na Vercel). Se este job falhar, o deploy na Vercel falharia também; corrige antes de fazer merge.
+- **Pré-deploy completo (opcional):** com secrets configurados, pode adicionar um job que chama `pnpm run predeploy` antes de deploy para produção.
+
+Recomendação: correr `pnpm run build` ou `pnpm run prepush` localmente antes de cada push, para não depender só do CI.
 
 Documentação de deploy: [vercel-setup.md](./vercel-setup.md).

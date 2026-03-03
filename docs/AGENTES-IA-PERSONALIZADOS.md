@@ -15,12 +15,11 @@ No header do chat pode escolher um dos agentes especializados:
 | Agente | Uso principal |
 |--------|----------------|
 | **Revisor de Defesas** | Auditoria de contestação trabalhista: fluxo GATE-1 → FASE A → GATE 0.5 → FASE B; geração dos 3 DOCX (Avaliação, Roteiro Advogado, Roteiro Preposto); validação PI + Contestação. |
-| **Análise de contratos** | Análise de contratos (PDF/DOCX): tipo de contrato, partes, obrigações, riscos, prazos; extração de cláusulas e resumos; sem juízo de valor económico. |
 | **Redator de Contestações** | Redação de contestação trabalhista em modo Modelo (template) ou modo **@bancodetese** (montagem por teses do banco). |
 
 - **Onde:** selector no header do chat (dropdown).
 - **Backend:** `lib/ai/agents-registry.ts` mapeia `agentId` → instruções e conjunto de tools.
-- **API:** o body do `POST /api/chat` aceita `agentId` (`revisor-defesas` | `analise-contratos` | `redator-contestacao`). Em falta, usa `revisor-defesas`.
+- **API:** o body do `POST /api/chat` aceita `agentId` (`revisor-defesas` | `redator-contestacao`). Em falta, usa `revisor-defesas`.
 
 ### 2. Instruções personalizadas (override por conversa)
 
@@ -46,7 +45,7 @@ Assim, o mesmo agente pode ser “personalizado” por escritório ou por matér
 
 ## Resumo do fluxo
 
-1. **Selecionar o agente** no dropdown (Revisor de Defesas, Análise de contratos, Redator de Contestações).
+1. **Selecionar o agente** no dropdown (Revisor de Defesas, Redator de Contestações).
 2. **Opcional:** preencher “Instruções do agente” para esta conversa.
 3. **Opcional:** escolher documentos da base de conhecimento para o contexto.
 4. Enviar mensagens normalmente; o system prompt inclui instruções do agente + base de conhecimento.
@@ -58,7 +57,7 @@ Assim, o mesmo agente pode ser “personalizado” por escritório ou por matér
 | Tema | Ficheiro / doc |
 |------|----------------|
 | Registry de agentes | `lib/ai/agents-registry.ts` |
-| Instruções por agente | `lib/ai/agent-revisor-defesas.ts`, `lib/ai/agent-analise-contratos.ts`, `lib/ai/agent-redator-contestacao.ts` |
+| Instruções por agente | `lib/ai/agent-revisor-defesas.ts`, `lib/ai/agent-redator-contestacao.ts` |
 | System prompt e base de conhecimento | `lib/ai/prompts.ts` |
 | Schema do chat (agentId, agentInstructions, knowledgeDocumentIds) | `app/(chat)/api/chat/schema.ts` |
 | Handler do chat | `app/(chat)/api/chat/route.ts` |
@@ -74,7 +73,7 @@ Pode **criar agentes personalizados** com nome e instruções próprias. Cada ag
 - **API:** `GET/POST /api/agents/custom` (listar, criar); `GET/PATCH/DELETE /api/agents/custom/[id]`.
 - **BD:** tabela `CustomAgent` (id, userId, name, instructions, baseAgentId, createdAt).
 
-O selector mostra os 3 agentes pré-definidos e a secção **"Meus agentes"**. Ao escolher um agente personalizado, o chat usa as suas instruções e (se definido) as tools do agente base.
+O selector mostra os agentes pré-definidos e a secção **"Meus agentes"**. Ao escolher um agente personalizado, o chat usa as suas instruções e (se definido) as tools do agente base.
 
 ---
 

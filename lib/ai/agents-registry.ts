@@ -3,17 +3,14 @@
  * Mapeia agentId → instruções e conjunto de tools para o chat.
  */
 
-import { AGENTE_ANALISE_CONTRATOS_INSTRUCTIONS } from "@/lib/ai/agent-analise-contratos";
 import { AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS } from "@/lib/ai/agent-redator-contestacao";
 import { AGENTE_REVISOR_DEFESAS_INSTRUCTIONS } from "@/lib/ai/agent-revisor-defesas";
 
 export const AGENT_ID_REVISOR_DEFESAS = "revisor-defesas";
-export const AGENT_ID_ANALISE_CONTRATOS = "analise-contratos";
 export const AGENT_ID_REDATOR_CONTESTACAO = "redator-contestacao";
 
 export const AGENT_IDS = [
   AGENT_ID_REVISOR_DEFESAS,
-  AGENT_ID_ANALISE_CONTRATOS,
   AGENT_ID_REDATOR_CONTESTACAO,
 ] as const;
 
@@ -49,14 +46,6 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
     label: "Revisor de Defesas",
     instructions: AGENTE_REVISOR_DEFESAS_INSTRUCTIONS,
     useRevisorDefesaTools: true,
-    useRedatorContestacaoTool: false,
-    // todos os modelos permitidos (omitido)
-  },
-  [AGENT_ID_ANALISE_CONTRATOS]: {
-    id: AGENT_ID_ANALISE_CONTRATOS,
-    label: "Análise de contratos",
-    instructions: AGENTE_ANALISE_CONTRATOS_INSTRUCTIONS,
-    useRevisorDefesaTools: false,
     useRedatorContestacaoTool: false,
     // todos os modelos permitidos (omitido)
   },

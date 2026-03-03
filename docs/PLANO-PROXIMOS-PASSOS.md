@@ -2,7 +2,7 @@
 
 Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. Atualizar este ficheiro quando prioridades ou estado mudarem.
 
-**Última atualização:** 2026-03-01 (Fase 3 implementada: multi-agente com Revisor de Defesas e Análise de contratos, selector no header).
+**Última atualização:** 2026-03-03 (Multi-agente: Revisor de Defesas e Redator de Contestações; agente Análise de contratos removido.)
 
 ---
 
@@ -24,7 +24,7 @@ Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. 
 | —   | **OCR** | Já implementado em `app/(chat)/api/files/upload/route.ts` (até 50 páginas); `/api/files/process` usa `runExtractionAndClassification`. |
 | —   | **RAG (Fase 2)** | Tabela `KnowledgeChunk` com pgvector; chunking e embeddings no POST /api/knowledge; no chat, embedding da pergunta e busca top-k; fallback para injeção direta. Ver [lib/ai/knowledge-base.md](../lib/ai/knowledge-base.md). |
 | —   | **UX etapas / DOCX (Fase 2)** | Banner com "FASE A — Extração e mapeamento"; "FASE B" com nomes dos 3 documentos; instruções do agente a indicar os 3 nomes na ENTREGA. |
-| —   | **Multi-agente (Fase 3)** | Registry em `lib/ai/agents-registry.ts`; agente "Análise de contratos" em `lib/ai/agent-analise-contratos.ts`; `agentId` no body do chat; selector no header (Revisor de Defesas | Análise de contratos). Export .docx ficou opcional. |
+| —   | **Multi-agente (Fase 3)** | Registry em `lib/ai/agents-registry.ts`; agentes Revisor de Defesas e Redator de Contestações; `agentId` no body do chat; selector no header. Export .docx ficou opcional. |
 
 **Referência:** Validação pré-envio — secção 6 de [processo-revisor-upload-validacao.md](processo-revisor-upload-validacao.md); checklist em [PROJETO-REVISOR-DEFESAS.md](PROJETO-REVISOR-DEFESAS.md).
 
@@ -34,7 +34,7 @@ Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. 
 
 | # | Tarefa | Detalhe | Referência |
 |---|--------|---------|------------|
-| 1 | **Lint e qualidade** | Manter `pnpm run format` e `pnpm run lint` antes de commits; considerar pre-commit hook (Ultracite). | — |
+| 1 | **Lint e qualidade** | Manter `pnpm run format` e `pnpm run lint` antes de commits. Antes de push: `pnpm run build` ou `pnpm run prepush`. CI: `.github/workflows/build.yml` replica o build da Vercel em cada push/PR para `main`. | [pre-deploy-checklist.md](pre-deploy-checklist.md) |
 | 2 | **CredentialsSignin em produção** | Seguir passos da secção “Próximos passos quando vês CredentialsSignin em produção” (passos 1–3). | [vercel-setup.md § CredentialsSignin](vercel-setup.md#credentialssignin-login--guest) |
 | 3 | **Deploy** | Usar checklist antes de cada deploy; incluir `pnpm run prebuild` (lint + test:unit) no fluxo. | [pre-deploy-checklist.md](pre-deploy-checklist.md) |
 | 4 | **Skills (.agents)** | Executar `npx skills update` periodicamente; CI já faz `npx skills check` em push em main e semanalmente (.github/workflows/skills-check.yml). | [.agents/README.md](../.agents/README.md), [SKILLS_REPORT.md](SKILLS_REPORT.md) |
@@ -52,7 +52,7 @@ O roadmap detalhado está em **[SPEC-AI-DRIVE-JURIDICO.md § 11. Roadmap](SPEC-A
 |-------------|--------------------------------------------------------------------------------------------------------------------------------------|
 | **Fase 1**  | Revisor sólido (v1): validação pré-envio, checklist "Antes de executar", CONFIRMAR/CORRIGIR no GATE 0.5, política de dados, OCR opcional. |
 | **Fase 2**  | Base de conhecimento e escala: RAG (chunking, embeddings), UX (etapas FASE A/B, nomes dos DOCX).                                       |
-| **Fase 3**  | Multi-agente e novos domínios: segundo agente (ex. Análise de contratos), selector na UI, export .docx nativo opcional.                |
+| **Fase 3**  | Multi-agente: Revisor de Defesas e Redator de Contestações; selector na UI; export .docx nativo opcional.                |
 | **Fase 4**  | Produto e escala: multi-inquilino, integração processual (PJe/e-SAJ), certificações.                                                   |
 
 Priorizar itens da Fase 1 conforme [PROJETO-REVISOR-DEFESAS.md](PROJETO-REVISOR-DEFESAS.md) e [processo-revisor-upload-validacao.md](processo-revisor-upload-validacao.md).

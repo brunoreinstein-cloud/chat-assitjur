@@ -35,7 +35,7 @@ export const chat = pgTable("Chat", {
     .default("private"),
   /** ID do stream ativo no Redis (resumable-stream); limpo em onFinish. Usado pelo GET /api/chat/[id]/stream para retomar. */
   activeStreamId: text("activeStreamId"),
-  /** Agente do chat: built-in (revisor-defesas, analise-contratos, redator-contestacao) ou UUID de agente personalizado. Default revisor-defesas. */
+  /** Agente do chat: built-in (revisor-defesas, redator-contestacao) ou UUID de agente personalizado. Default revisor-defesas. */
   agentId: varchar("agentId", { length: 64 }).default("revisor-defesas"),
 });
 
@@ -271,7 +271,7 @@ export const customAgent = pgTable("CustomAgent", {
     .references(() => user.id, { onDelete: "cascade" }),
   name: varchar("name", { length: 256 }).notNull(),
   instructions: text("instructions").notNull(),
-  /** Id do agente base (revisor-defesas | analise-contratos | redator-contestacao); se definido, usa as tools desse agente. */
+  /** Id do agente base (revisor-defesas | redator-contestacao); se definido, usa as tools desse agente. */
   baseAgentId: varchar("baseAgentId", { length: 64 }),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });

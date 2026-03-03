@@ -29,7 +29,7 @@ export async function PATCH(
     return NextResponse.json(
       {
         error:
-          "Invalid agent id. Must be one of: revisor-defesas, analise-contratos, redator-contestacao",
+          "Invalid agent id. Must be one of: revisor-defesas, redator-contestacao",
       },
       { status: 400 }
     );

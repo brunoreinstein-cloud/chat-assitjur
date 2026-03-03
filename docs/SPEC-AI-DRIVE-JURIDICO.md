@@ -12,7 +12,7 @@ Especificação completa de produto e sistema para uma plataforma de **inteligê
 
 ### 1.1 Visão
 
-> **AI Drive Jurídico** é uma plataforma que transforma documentos jurídicos (petições, contratos, peças processuais, anexos) em **conversas inteligentes** e **entregas estruturadas**, com agentes de IA especializados por domínio (contencioso trabalhista, análise de contratos, due diligence, pesquisa jurisprudencial), segurança adequada ao sigilo profissional e integração natural ao fluxo de trabalho do advogado.
+> **AI Drive Jurídico** é uma plataforma que transforma documentos jurídicos (petições, contratos, peças processuais, anexos) em **conversas inteligentes** e **entregas estruturadas**, com agentes de IA especializados por domínio (contencioso trabalhista, redação de contestações, due diligence, pesquisa jurisprudencial), segurança adequada ao sigilo profissional e integração natural ao fluxo de trabalho do advogado.
 
 ### 1.2 Proposta de valor
 
@@ -32,7 +32,7 @@ Especificação completa de produto e sistema para uma plataforma de **inteligê
 
 ### 1.4 Diferenciação
 
-- **Especialização jurídica** — não é um chat genérico com prompt jurídico; são **workflows e agentes** desenhados para tarefas concretas (revisão de contestação, análise de contratos, extração de cláusulas).
+- **Especialização jurídica** — não é um chat genérico com prompt jurídico; são **workflows e agentes** desenhados para tarefas concretas (revisão de contestação, redação de contestações, extração de cláusulas).
 - **Integração com o processo** — entradas e saídas alinhadas às peças reais (PI, Contestação, DOCX operacionais).
 - **Extensível** — base de conhecimento, múltiplos agentes e (futuro) RAG permitem evoluir para mais domínios sem reescrever o núcleo.
 
@@ -59,7 +59,7 @@ Especificação completa de produto e sistema para uma plataforma de **inteligê
 - Instrução de testemunha ou perguntas capciosas (art. 342 CP).
 - Integração com sistemas processuais (PJe, e-SAJ) além de upload manual.
 - Multi-inquilino empresarial (RBAC, quotas por escritório) — pode ser v2.
-- Agente Análise de contratos já implementado; due diligence e outros — em fases futuras.
+- Due diligence, análise de contratos e outros domínios — em fases futuras.
 
 ---
 
@@ -92,19 +92,13 @@ Especificação completa de produto e sistema para uma plataforma de **inteligê
 - **Saídas:** Doc 1 — Avaliação da defesa (parecer executivo); Doc 2 — Roteiro Advogado; Doc 3 — Roteiro Preposto.
 - **Regras:** Prescrição (bienal/quinquenal), mapeamento de pedidos, anti-alucinação, sinalização (🔴🟡🟢, ✅❌⚠️), siglas só internas.
 
-### 4.2 Análise de contratos (implementado)
-
-- **Entradas:** Um ou mais contratos (PDF/DOCX); perguntas em linguagem natural.
-- **Saídas:** Resumos, cláusulas relevantes, extração de termos (prazos, valores, rescisão), comparação entre contratos (quando múltiplos).
-- **Agente:** `lib/ai/agent-analise-contratos.ts`; selector no header do chat ("Análise de contratos"); especializado em identificar tipo de contrato, partes, obrigações, riscos e prazos; sem juízo de valor económico.
-
-### 4.3 Due diligence (futuro)
+### 4.2 Due diligence (futuro)
 
 - **Entradas:** Conjunto de documentos (contratos, atos societários, laudos).
 - **Saídas:** Lista de documentos analisados, pontos de atenção, resumos por documento, timeline de eventos.
 - **Agente:** Focado em extração e estruturação; sem conclusões de mérito.
 
-### 4.4 Pesquisa jurisprudencial (futuro)
+### 4.3 Pesquisa jurisprudencial (futuro)
 
 - **Entradas:** Pergunta + base de conhecimento (jurisprudência selecionada) ou link para repositório interno.
 - **Saídas:** Citações relevantes, súmulas e teses aplicáveis, sem inventar números de processo ou decisões.
@@ -140,7 +134,7 @@ Especificação completa de produto e sistema para uma plataforma de **inteligê
 | **Agente padrão** | Revisor de Defesas (instruções em `lib/ai/agent-revisor-defesas.ts`); aplicado quando `agentInstructions` não é enviado. | ✅ Já existe |
 | **Instruções customizadas** | `agentInstructions` (até 4000 caracteres) para sobrescrever/complementar o agente (ex.: outro domínio). | ✅ Já existe |
 | **Base de conhecimento** | `knowledgeDocumentIds` (até 50); servidor busca documentos e injeta no system prompt em "Base de conhecimento". | ✅ Já existe |
-| **Multi-agente (escolha na UI)** | Selector "Revisor de Defesas" / "Análise de contratos" no header; mapeia para conjunto de instruções + tools via `agentId` no body do chat. | ✅ Já existe |
+| **Multi-agente (escolha na UI)** | Selector "Revisor de Defesas" / "Redator de Contestações" no header; mapeia para conjunto de instruções + tools via `agentId` no body do chat. | ✅ Já existe |
 | **Multi-modelo** | Utilizador escolhe modelo (ex.: melhor para análise vs. escrita); enviado em `selectedChatModel`. | ✅ Já existe (selector de modelo) |
 
 ### 5.4 RAG e base de conhecimento
@@ -186,7 +180,7 @@ Especificação completa de produto e sistema para uma plataforma de **inteligê
 ### 6.2 Chat e conversa
 
 - [x] **Streaming** de respostas; histórico de mensagens; suporte a partes `text`, `file`, `document`.
-- [x] **Selector de agente** no header (Revisor de Defesas | Análise de contratos); enviado em `agentId`.
+- [x] **Selector de agente** no header (Revisor de Defesas | Redator de Contestações); enviado em `agentId`.
 - [x] **Selector de modelo** (`selectedChatModel`).
 - [x] **Instruções do agente** opcionais (`agentInstructions`).
 - [x] **Base de conhecimento** no header (seleção de até 50 documentos); envio em `knowledgeDocumentIds`.
@@ -247,7 +241,7 @@ Cliente (useChat)
 |------------|-------------------|
 | Registry de agentes | `lib/ai/agents-registry.ts` → mapeia `agentId` a instruções e tools |
 | Instruções do Revisor | `lib/ai/agent-revisor-defesas.ts` → `AGENTE_REVISOR_DEFESAS_INSTRUCTIONS` |
-| Instruções Análise de contratos | `lib/ai/agent-analise-contratos.ts` → agente segundo domínio |
+| Instruções Redator de Contestações | `lib/ai/agent-redator-contestacao.ts` → agente segundo domínio |
 | System prompt | `lib/ai/prompts.ts` → `systemPrompt()` |
 | Handler do chat | `app/(chat)/api/chat/route.ts` |
 | Schema do body | `app/(chat)/api/chat/schema.ts` (inclui `agentId`) |
@@ -261,7 +255,7 @@ Cliente (useChat)
 - **Validação pré-envio:** Frontend (`validateRevisorPiContestacao`) e backend em `POST /api/chat` quando agente Revisor e mensagem tem partes `document`; verifica pelo menos um doc `pi` e um `contestacao`.
 - **OCR:** Pipeline em `/api/files/upload` e processamento (ex.: Tesseract); até 50 páginas; resultado usado como texto da parte `document`.
 - **RAG:** Tabela `KnowledgeChunk` com pgvector; chunking e embeddings no `POST /api/knowledge`; no chat, embedding da pergunta → busca top-k → montar contexto; fallback para injeção direta.
-- **Multi-agente:** Registry em `lib/ai/agents-registry.ts`; selector no header (Revisor de Defesas | Análise de contratos); body do chat envia `agentId`.
+- **Multi-agente:** Registry em `lib/ai/agents-registry.ts`; selector no header (Revisor de Defesas | Redator de Contestações); body do chat envia `agentId`.
 
 ---
 
@@ -371,9 +365,9 @@ Cliente (useChat)
 
 ### Fase 3 — Multi-agente e novos domínios
 
-- Segundo agente (ex.: Análise de contratos) com instruções e tools próprios.
-- Selector de agente na UI ("Revisor de Defesas" | "Análise de contratos").
+- Segundo agente (Redator de Contestações) com instruções e tools próprios; selector na UI ("Revisor de Defesas" | "Redator de Contestações").
 - (Opcional) Export dos artefactos para .docx nativo.
+- Novos domínios (ex.: análise de contratos, due diligence) em fases futuras.
 
 ### Fase 4 — Produto e escala
 

@@ -1,0 +1,34 @@
+# Replica o build da Vercel (prebuild + migrate skip + next build).
+# Falha no CI = falha no deploy; evita surpresas após push.
+name: Build
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (same as Vercel)
+        env:
+          VERCEL: "1"
+          BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA: "true"
+        run: pnpm run build

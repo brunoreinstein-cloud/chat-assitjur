@@ -11,7 +11,7 @@ O **OCR automático** extrai texto de:
 - **PDFs digitalizados** — quando o PDF não tem camada de texto (só imagens), o sistema renderiza cada página e aplica OCR (até 50 páginas por documento).
 - **Imagens JPEG e PNG** — fotos ou digitalizações de páginas (petições, contratos, recibos) são processadas por OCR e o texto resultante é usado no chat e na base de conhecimento.
 
-O texto extraído é usado como conteúdo da parte `document` no chat (Revisor de Defesas, Análise de contratos) e, na base de conhecimento, como conteúdo pesquisável (incluindo RAG quando ativo).
+O texto extraído é usado como conteúdo da parte `document` no chat (Revisor de Defesas, Redator de Contestações) e, na base de conhecimento, como conteúdo pesquisável (incluindo RAG quando ativo).
 
 ---
 

@@ -9,15 +9,16 @@ import {
   FolderInput,
   FolderOpenIcon,
   FolderPlusIcon,
+  Loader2,
   Pencil,
   SearchIcon,
   Trash2,
   UploadIcon,
   XIcon,
 } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import useSWR, { useSWRConfig } from "swr";
 import {
@@ -85,24 +86,42 @@ interface UserFileType {
   createdAt: string;
 }
 
-/** Pasta selecionada: null = raiz. Estado no URL ?folder=root ou ?folder=uuid. */
+/** Pasta selecionada: null = raiz. Estado no URL ?folder=root ou ?folder=uuid. Usa history.replaceState para não provocar remount do Chat (preserva agente selecionado). */
 function useKnowledgeFolderFromUrl(): [
   string | null,
   (folderId: string | null) => void,
 ] {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const raw = searchParams.get("folder");
-  const current = raw === "root" || raw === "" || !raw ? null : raw;
+  const rawFromUrl = searchParams.get("folder");
+  const fromUrl =
+    rawFromUrl === "root" || rawFromUrl === "" || !rawFromUrl
+      ? null
+      : rawFromUrl;
+  const [folderState, setFolderState] = useState<string | null | undefined>(
+    undefined
+  );
+  const current = folderState === undefined ? fromUrl : folderState;
+
+  useEffect(() => {
+    setFolderState(undefined);
+  }, [pathname]);
+
   const setFolder = useCallback(
     (folderId: string | null) => {
-      const params = new URLSearchParams(searchParams);
-      params.set("knowledge", "open");
-      params.set("folder", folderId ?? "root");
-      router.replace(`${pathname}?${params.toString()}`);
+      setFolderState(folderId);
+      if (globalThis.window !== undefined) {
+        const params = new URLSearchParams(globalThis.window.location.search);
+        params.set("knowledge", "open");
+        params.set("folder", folderId ?? "root");
+        globalThis.window.history.replaceState(
+          null,
+          "",
+          `${pathname ?? "/chat"}?${params.toString()}`
+        );
+      }
     },
-    [pathname, router, searchParams]
+    [pathname]
   );
   return [current, setFolder];
 }
@@ -134,6 +153,10 @@ export function KnowledgeSidebarContent({
   const [isAddingDoc, setIsAddingDoc] = useState(false);
   const [addDocError, setAddDocError] = useState<string | null>(null);
   const [isAddingFromFiles, setIsAddingFromFiles] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{
+    processed: number;
+    total: number;
+  } | null>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [isAddingFolder, setIsAddingFolder] = useState(false);
@@ -277,6 +300,7 @@ export function KnowledgeSidebarContent({
       return;
     }
     setIsAddingFromFiles(true);
+    setUploadProgress({ processed: 0, total: allFiles.length });
     setAddDocError(null);
     const totalCreated: Array<{ id: string; title: string }> = [];
     const totalFailed: Array<{ filename: string; error: string }> = [];
@@ -288,6 +312,7 @@ export function KnowledgeSidebarContent({
       return b;
     })();
     try {
+      let processedSoFar = 0;
       for (const batch of batches) {
         const formData = new FormData();
         for (const f of batch) {
@@ -317,6 +342,8 @@ export function KnowledgeSidebarContent({
         const failed = data.failed ?? [];
         totalCreated.push(...created);
         totalFailed.push(...failed);
+        processedSoFar += batch.length;
+        setUploadProgress({ processed: processedSoFar, total: allFiles.length });
       }
       await mutate("/api/knowledge");
       await mutate(docsKey);
@@ -351,6 +378,7 @@ export function KnowledgeSidebarContent({
       );
     } finally {
       setIsAddingFromFiles(false);
+      setUploadProgress(null);
       setIsDraggingOver(false);
     }
   };
@@ -1197,30 +1225,59 @@ export function KnowledgeSidebarContent({
               webkitdirectory: "",
             } as React.InputHTMLAttributes<HTMLInputElement>)}
           />
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <button
-              aria-label="Selecionar ficheiros para adicionar à base de conhecimento"
-              className={dropzoneClassName}
-              disabled={isAddingFromFiles}
-              onClick={() => filesInputRef.current?.click()}
-              onDragLeave={() => setIsDraggingOver(false)}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDraggingOver(true);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                setIsDraggingOver(false);
-                handleKnowledgeFiles(e.dataTransfer.files);
-              }}
-              type="button"
-            >
-              {isAddingFromFiles ? (
-                <span className="text-muted-foreground text-sm">
+          <div
+            aria-label="Adicionar documentos por ficheiros ou pasta"
+            className={dropzoneClassName}
+            onDragLeave={() => setIsDraggingOver(false)}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDraggingOver(true);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDraggingOver(false);
+              handleKnowledgeFiles(e.dataTransfer.files);
+            }}
+          >
+            {isAddingFromFiles ? (
+              <div
+                aria-live="polite"
+                className="flex w-full max-w-[240px] flex-col items-center gap-2"
+              >
+                <span className="flex items-center gap-2 text-muted-foreground text-sm">
+                  <Loader2
+                    aria-hidden
+                    className="size-4 shrink-0 animate-spin"
+                  />
                   A adicionar ficheiros…
                 </span>
-              ) : (
-                <>
+                {uploadProgress && (
+                  <>
+                    <span
+                      aria-label={`${uploadProgress.processed} de ${uploadProgress.total} ficheiros processados`}
+                      className="text-muted-foreground/90 text-xs tabular-nums"
+                    >
+                      {uploadProgress.processed}/{uploadProgress.total}{" "}
+                      ficheiros
+                    </span>
+                    <progress
+                      aria-label={`${uploadProgress.processed} de ${uploadProgress.total} ficheiros`}
+                      className="h-1.5 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:bg-muted [&::-webkit-progress-value]:rounded-full [&::-webkit-progress-value]:bg-primary"
+                      max={uploadProgress.total}
+                      value={uploadProgress.processed}
+                    />
+                  </>
+                )}
+              </div>
+            ) : (
+              <>
+                <button
+                  aria-label="Selecionar ficheiros para adicionar à base de conhecimento"
+                  className="flex flex-col items-center gap-1 bg-transparent p-0 text-inherit outline-none focus-visible:ring-0 disabled:pointer-events-none disabled:opacity-70"
+                  disabled={isAddingFromFiles}
+                  onClick={() => filesInputRef.current?.click()}
+                  type="button"
+                >
                   <UploadIcon
                     aria-hidden
                     className="size-5 text-muted-foreground"
@@ -1232,20 +1289,22 @@ export function KnowledgeSidebarContent({
                     PDF, DOC, DOCX, JPEG ou PNG (até {MAX_FILES_PER_BATCH} por
                     envio, enviados em lotes)
                   </span>
-                </>
-              )}
-            </button>
-            <Button
-              aria-label="Selecionar pasta para importar ficheiros"
-              className="shrink-0 gap-1 text-xs"
-              disabled={isAddingFromFiles}
-              onClick={() => folderInputRef.current?.click()}
-              type="button"
-              variant="outline"
-            >
-              <FolderIcon aria-hidden className="size-4" />
-              Importar pasta
-            </Button>
+                </button>
+                <button
+                  aria-label="Importar pasta (selecionar pasta para adicionar todos os ficheiros)"
+                  className="mt-0.5 inline-flex items-center gap-1 text-xs text-primary underline underline-offset-2 outline-none hover:no-underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+                  disabled={isAddingFromFiles}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    folderInputRef.current?.click();
+                  }}
+                  type="button"
+                >
+                  <FolderIcon aria-hidden className="size-3.5" />
+                  Ou importar pasta
+                </button>
+              </>
+            )}
           </div>
 
           <form className="grid gap-2" onSubmit={handleAddDocument}>

@@ -111,8 +111,7 @@ export default function AdminAgentsPage() {
         <h1 className="font-semibold text-xl">Painel de agentes built-in</h1>
         <p className="text-center text-muted-foreground text-sm">
           Introduza a chave de administrador para editar as instruções e
-          etiquetas dos agentes (Revisor de Defesas, Análise de contratos,
-          Redator de Contestações).
+          etiquetas dos agentes (Revisor de Defesas, Redator de Contestações).
         </p>
         <form
           className="flex w-full max-w-sm flex-col gap-2"

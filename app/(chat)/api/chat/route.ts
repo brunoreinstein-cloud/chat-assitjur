@@ -551,10 +551,16 @@ export async function POST(request: Request) {
             : archivosBlock;
       }
     }
+    const redatorBancoIntendedButEmpty =
+      agentId === AGENT_ID_REDATOR_CONTESTACAO &&
+      effectiveKnowledgeIds.includes(REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID) &&
+      rawKnowledgeContext.length === 0;
     const knowledgeContext =
       rawKnowledgeContext.length > MAX_KNOWLEDGE_CONTEXT_CHARS
         ? `${rawKnowledgeContext.slice(0, MAX_KNOWLEDGE_CONTEXT_CHARS)}\n\n[... base de conhecimento truncada para caber no limite ...]`
-        : rawKnowledgeContext || undefined;
+        : redatorBancoIntendedButEmpty
+          ? "[Banco de Teses Padrão não disponível. Para satisfazer (B), o utilizador deve selecionar documentos na Base de conhecimento (sidebar) ou anexar modelo/banco de teses.]"
+          : rawKnowledgeContext || undefined;
 
     if (message?.role === "user") {
       const t4 = Date.now();

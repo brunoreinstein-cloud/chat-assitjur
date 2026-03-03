@@ -42,6 +42,7 @@
     "skills:list": "npx skills list",
     "vercel:logs": "npx vercel logs",
     "predeploy": "tsx scripts/pre-deploy.ts",
+    "prepush": "pnpm run build",
     "config:check": "tsx scripts/check-config.ts",
     "analyze": "tsx lib/db/migrate && cross-env ANALYZE=true BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true next build --webpack",
     "test": "export PLAYWRIGHT=True && pnpm exec playwright test",

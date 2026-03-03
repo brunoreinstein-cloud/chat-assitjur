@@ -441,7 +441,7 @@ type PureMultimodalInputProps = Readonly<{
   ) => void;
   /** Instruções customizadas do agente; vazio = instruções do agente selecionado (validação PI+Contestação só para revisor-defesas) */
   agentInstructions?: string;
-  /** Id do agente (revisor-defesas | analise-contratos). Validação PI+Contestação só quando revisor-defesas. */
+  /** Id do agente (revisor-defesas | redator-contestacao). Validação PI+Contestação só quando revisor-defesas. */
   agentId?: string;
   /** Permite alterar o agente a partir do rodapé (composer). Quando omitido, o seletor de agente não é exibido. */
   setAgentId?: (value: string) => void;
@@ -551,10 +551,7 @@ function PureMultimodalInput({
     const baseAgentId =
       agentFormBaseId === "" || agentFormBaseId === "none"
         ? null
-        : (agentFormBaseId as
-            | "revisor-defesas"
-            | "analise-contratos"
-            | "redator-contestacao");
+        : (agentFormBaseId as "revisor-defesas" | "redator-contestacao");
     try {
       if (agentFormId) {
         const res = await fetch(`/api/agents/custom/${agentFormId}`, {
@@ -838,10 +835,11 @@ function PureMultimodalInput({
           const file = files[i];
           const attachment = await uploadFile(file);
           if (attachment !== undefined && typeof attachment.url === "string") {
+            // Preferir tipo pelo nome do ficheiro quando explícito (ex.: "Contestação - RO.pdf") para evitar classificação errada pelo conteúdo
             const docType =
+              inferDocumentTypeFromFilename(file.name) ??
               attachment.documentType ??
-              (i === 0 ? preferredTypeForFirst : undefined) ??
-              inferDocumentTypeFromFilename(file.name);
+              (i === 0 ? preferredTypeForFirst : undefined);
             const a: Attachment = {
               name: attachment.name,
               url: attachment.url,
@@ -1666,9 +1664,6 @@ function PureMultimodalInput({
                               <SelectItem value="none">Nenhum</SelectItem>
                               <SelectItem value="revisor-defesas">
                                 Revisor de Defesas
-                              </SelectItem>
-                              <SelectItem value="analise-contratos">
-                                Análise de contratos
                               </SelectItem>
                               <SelectItem value="redator-contestacao">
                                 Redator de Contestações

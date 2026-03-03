@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/app/(auth)/auth";
 import {
+  classifyDocumentTypeFromFilename,
   contentTypeFromFilename,
   persistAndRespond,
   runExtractionAndClassification,
@@ -140,17 +141,19 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
   }
 
-  const { extractedText, extractionFailed, documentType, extractionDetail } =
-    await runExtractionAndClassification(buffer, contentType);
+  const extraction = await runExtractionAndClassification(buffer, contentType);
+  const documentType =
+    extraction.documentType ??
+    classifyDocumentTypeFromFilename(filenameStr);
 
   return persistAndRespond(
     session.user.id,
     filenameStr,
     buffer,
     contentType,
-    extractedText,
-    extractionFailed,
+    extraction.extractedText,
+    extraction.extractionFailed,
     documentType,
-    extractionDetail
+    extraction.extractionDetail
   );
 }

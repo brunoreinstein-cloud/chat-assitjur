@@ -1,6 +1,6 @@
 # Base de conhecimento
 
-A **base de conhecimento** é comum a **todos os agentes** (Revisor de Defesas, Análise de contratos, etc.). Os documentos que o utilizador selecionar são injetados no system prompt e usados como contexto em qualquer conversa, por exemplo:
+A **base de conhecimento** é comum a **todos os agentes** (Revisor de Defesas, Redator de Contestações, etc.). Os documentos que o utilizador selecionar são injetados no system prompt e usados como contexto em qualquer conversa, por exemplo:
 
 - **@bancodetese** — teses e precedentes (Revisor de Defesas: quadro de teses na Avaliação da Defesa).
 - **Outros contextos** — cláusulas-modelo, jurisprudência, normas internas, etc., conforme o agente ativo.
