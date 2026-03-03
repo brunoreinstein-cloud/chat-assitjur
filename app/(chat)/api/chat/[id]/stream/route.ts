@@ -2,7 +2,7 @@ import { UI_MESSAGE_STREAM_HEADERS } from "ai";
 import { after } from "next/server";
 import { createResumableStreamContext } from "resumable-stream";
 import { auth } from "@/app/(auth)/auth";
-import { getChatById } from "@/lib/db/queries";
+import { ensureStatementTimeout, getChatById } from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
 
 function getStreamContext() {
@@ -21,6 +21,8 @@ export async function GET(
   if (!session?.user) {
     return new ChatbotError("unauthorized:chat").toResponse();
   }
+
+  await ensureStatementTimeout();
 
   const { id } = await context.params;
   const chat = await getChatById({ id });

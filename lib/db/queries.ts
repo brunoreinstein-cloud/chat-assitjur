@@ -44,6 +44,23 @@ import {
 } from "./schema";
 import { generateHashedPassword } from "./utils";
 
+/** Converte erro de BD em ChatbotError; reconhece statement timeout (57014) para mensagem clara. */
+function toDatabaseError(error: unknown, fallbackMessage: string): never {
+  const code =
+    error &&
+    typeof error === "object" &&
+    "code" in error
+      ? (error as { code: string }).code
+      : undefined;
+  if (code === "57014") {
+    throw new ChatbotError(
+      "bad_request:database",
+      "Query exceeded time limit (statement timeout)."
+    );
+  }
+  throw new ChatbotError("bad_request:database", fallbackMessage);
+}
+
 // Optionally, if not using email/pass login, you can
 // use the Drizzle adapter for Auth.js / NextAuth
 // https://authjs.dev/reference/adapter/drizzle
@@ -51,7 +68,8 @@ import { generateHashedPassword } from "./utils";
 let dbInstance: ReturnType<typeof drizzle> | null = null;
 let clientInstance: ReturnType<typeof postgres> | null = null;
 
-const PUBLIC_SCHEMA_OPT = "options=-c%20search_path%3Dpublic";
+/** Opções de conexão: schema (statement_timeout na URL é ignorado pelo Supabase; usamos ensureStatementTimeout()). */
+const CONNECTION_OPTS = "options=-c%20search_path%3Dpublic";
 
 function getDb() {
   let url = process.env.POSTGRES_URL;
@@ -63,9 +81,7 @@ function getDb() {
   }
   if (!dbInstance) {
     if (!url.includes("search_path")) {
-      url = url.includes("?")
-        ? `${url}&${PUBLIC_SCHEMA_OPT}`
-        : `${url}?${PUBLIC_SCHEMA_OPT}`;
+      url = url.includes("?") ? `${url}&${CONNECTION_OPTS}` : `${url}?${CONNECTION_OPTS}`;
     }
     clientInstance = postgres(url, {
       max: 1,
@@ -74,6 +90,26 @@ function getDb() {
     dbInstance = drizzle(clientInstance);
   }
   return dbInstance;
+}
+
+/** Promessa única para SET statement_timeout na sessão (Supabase não aplica o parâmetro na URL). */
+let statementTimeoutPromise: Promise<void> | null = null;
+
+/**
+ * Garante que a sessão Postgres tem statement_timeout = 2min.
+ * Chamar no início de rotas que usam a BD (ex.: /api/chat, /api/history).
+ * Supabase ignora options na connection string; SET na sessão funciona em port 5432 (session mode).
+ */
+export async function ensureStatementTimeout(): Promise<void> {
+  statementTimeoutPromise ??= (async () => {
+    try {
+      await getDb().execute(sql`SET statement_timeout = '120s'`);
+    } catch (err) {
+      statementTimeoutPromise = null;
+      throw err;
+    }
+  })();
+  return statementTimeoutPromise;
 }
 
 export async function getUser(email: string): Promise<User[]> {
@@ -304,8 +340,10 @@ export async function getChatsByUserId({
     if (error instanceof ChatbotError) {
       throw error;
     }
-    const cause = error instanceof Error ? error.message : String(error);
-    throw new ChatbotError("bad_request:database", cause);
+    toDatabaseError(
+      error,
+      error instanceof Error ? error.message : String(error)
+    );
   }
 }
 
@@ -325,16 +363,18 @@ export async function getChatById({ id }: { id: string }) {
 
     return selectedChat;
   } catch (error) {
-    const cause = error instanceof Error ? error.message : String(error);
-    throw new ChatbotError("bad_request:database", cause);
+    toDatabaseError(
+      error,
+      error instanceof Error ? error.message : String(error)
+    );
   }
 }
 
 export async function saveMessages({ messages }: { messages: DBMessage[] }) {
   try {
     return await getDb().insert(message).values(messages);
-  } catch (_error) {
-    throw new ChatbotError("bad_request:database", "Failed to save messages");
+  } catch (err) {
+    toDatabaseError(err, "Failed to save messages");
   }
 }
 
@@ -374,11 +414,8 @@ export async function getMessagesByChatId({
       return rows.reverse();
     }
     return await base.orderBy(asc(message.createdAt));
-  } catch (_error) {
-    throw new ChatbotError(
-      "bad_request:database",
-      "Failed to get messages by chat id"
-    );
+  } catch (err) {
+    toDatabaseError(err, "Failed to get messages by chat id");
   }
 }
 
@@ -695,11 +732,8 @@ export async function getMessageCountByUserId({
       .execute();
 
     return stats?.count ?? 0;
-  } catch (_error) {
-    throw new ChatbotError(
-      "bad_request:database",
-      "Failed to get message count by user id"
-    );
+  } catch (err) {
+    toDatabaseError(err, "Failed to get message count by user id");
   }
 }
 
@@ -918,11 +952,8 @@ export async function getKnowledgeDocumentsByIds({
       .from(knowledgeDocument)
       .where(and(inArray(knowledgeDocument.id, ids), userIdCondition))
       .orderBy(asc(knowledgeDocument.title));
-  } catch (_error) {
-    throw new ChatbotError(
-      "bad_request:database",
-      "Failed to get knowledge documents by ids"
-    );
+  } catch (err) {
+    toDatabaseError(err, "Failed to get knowledge documents by ids");
   }
 }
 
@@ -1338,11 +1369,8 @@ export async function getCustomAgentsByUserId(userId: string) {
       .from(customAgent)
       .where(eq(customAgent.userId, userId))
       .orderBy(asc(customAgent.name));
-  } catch (_error) {
-    throw new ChatbotError(
-      "bad_request:database",
-      "Failed to get custom agents by user id"
-    );
+  } catch (err) {
+    toDatabaseError(err, "Failed to get custom agents by user id");
   }
 }
 
@@ -1560,11 +1588,8 @@ export async function getCreditBalance(userId: string) {
       .where(eq(userCreditBalance.userId, userId))
       .limit(1);
     return row ?? null;
-  } catch (_error) {
-    throw new ChatbotError(
-      "bad_request:database",
-      "Failed to get credit balance"
-    );
+  } catch (err) {
+    toDatabaseError(err, "Failed to get credit balance");
   }
 }
 

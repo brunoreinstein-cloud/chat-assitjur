@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
-import { createCustomAgent, getCustomAgentsByUserId } from "@/lib/db/queries";
+import {
+  createCustomAgent,
+  ensureStatementTimeout,
+  getCustomAgentsByUserId,
+} from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
 
 const createBodySchema = z.object({
@@ -36,6 +40,7 @@ export async function GET() {
       return new ChatbotError("unauthorized:chat").toResponse();
     }
 
+    await ensureStatementTimeout();
     const agents = await getCustomAgentsByUserId(session.user.id);
     return Response.json(agents);
   } catch (error) {

@@ -31,6 +31,11 @@ import {
 } from "@/lib/ai/context-window";
 import { MIN_CREDITS_TO_START_CHAT, tokensToCredits } from "@/lib/ai/credits";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
+import {
+  createChatDebugTracker,
+  isChatDebugEnabled,
+  logChatDebug,
+} from "@/lib/ai/chat-debug";
 import { getPromptCachingCacheControl } from "@/lib/ai/prompt-caching-config";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
@@ -48,12 +53,13 @@ import { updateDocument } from "@/lib/ai/tools/update-document";
 import { validationToolsForValidate } from "@/lib/ai/tools/validation-tools";
 import { creditsCache } from "@/lib/cache/credits-cache";
 import { isProductionEnvironment } from "@/lib/constants";
+import { getCachedBuiltInAgentOverrides } from "@/lib/cache/agent-overrides-cache";
 import {
   addCreditsToUser,
   createStreamId,
   deductCreditsAndRecordUsage,
   deleteChatById,
-  getBuiltInAgentOverrides,
+  ensureStatementTimeout,
   getChatById,
   getCustomAgentById,
   getKnowledgeDocumentsByIds,
@@ -120,6 +126,9 @@ function withPromptCachingForAnthropic<T extends { providerOptions?: unknown }>(
 function logTiming(label: string, ms: number): void {
   if (isDev) {
     console.info(`[chat-timing] ${label}: ${Math.round(ms)}ms`);
+  }
+  if (isChatDebugEnabled()) {
+    logChatDebug(`timing: ${label}`, ms);
   }
 }
 
@@ -368,6 +377,7 @@ export async function POST(request: Request) {
   }
 
   const requestStart = Date.now();
+  const debugTracker = createChatDebugTracker();
 
   try {
     const {
@@ -387,13 +397,28 @@ export async function POST(request: Request) {
         ? agentIdFromBody.trim() || DEFAULT_AGENT_ID_WHEN_EMPTY
         : DEFAULT_AGENT_ID_WHEN_EMPTY;
 
+    if (isChatDebugEnabled()) {
+      logChatDebug("request", {
+        chatId: id,
+        agentId,
+        model: selectedChatModel,
+        knowledgeIds: knowledgeDocumentIds?.length ?? 0,
+        archivoIds: archivoIds?.length ?? 0,
+        hasMessage: Boolean(message),
+        messageParts: message?.parts?.length ?? 0,
+      });
+    }
+
     const t0 = Date.now();
     const session = await auth();
+    debugTracker.phase("auth", t0);
     logTiming("auth", Date.now() - t0);
 
     if (!session?.user) {
       return new ChatbotError("unauthorized:chat").toResponse();
     }
+
+    await ensureStatementTimeout();
 
     if (message?.role === "user" && message.parts) {
       const hasContent = message.parts.some((p) => {
@@ -431,6 +456,9 @@ export async function POST(request: Request) {
         ? [REDATOR_BANCO_SYSTEM_USER_ID]
         : undefined;
 
+    const isBuiltInAgent = AGENT_IDS.includes(
+      agentId as (typeof AGENT_IDS)[number]
+    );
     const t1 = Date.now();
     const [
       messageCount,
@@ -439,6 +467,7 @@ export async function POST(request: Request) {
       knowledgeDocsResult,
       builtInOverridesFromBatch,
       balanceFromDb,
+      customAgentFromBatch,
     ] = await Promise.all([
       getMessageCountByUserId({
         id: session.user.id,
@@ -455,7 +484,7 @@ export async function POST(request: Request) {
         : Promise.resolve(
             [] as Awaited<ReturnType<typeof getKnowledgeDocumentsByIds>>
           ),
-      getBuiltInAgentOverrides().catch(() => ({})),
+      getCachedBuiltInAgentOverrides(),
       getOrCreateCreditBalance(session.user.id, initialCredits).catch(() => {
         if (process.env.NODE_ENV === "development") {
           console.warn(
@@ -464,6 +493,14 @@ export async function POST(request: Request) {
         }
         return initialCredits;
       }),
+      isBuiltInAgent
+        ? Promise.resolve(
+            null as Awaited<ReturnType<typeof getCustomAgentById>>
+          )
+        : getCustomAgentById({
+            id: agentId,
+            userId: session.user.id,
+          }),
     ]);
     const builtInOverrides = builtInOverridesFromBatch as Record<
       string,
@@ -471,13 +508,10 @@ export async function POST(request: Request) {
     >;
 
     let agentConfig: AgentConfig;
-    if (AGENT_IDS.includes(agentId as (typeof AGENT_IDS)[number])) {
+    if (isBuiltInAgent) {
       agentConfig = getAgentConfigWithOverrides(agentId, builtInOverrides);
     } else {
-      const customAgent = await getCustomAgentById({
-        id: agentId,
-        userId: session.user.id,
-      });
+      const customAgent = customAgentFromBatch;
       agentConfig = customAgent
         ? getAgentConfigForCustomAgent(customAgent)
         : getAgentConfigWithOverrides(
@@ -516,6 +550,7 @@ export async function POST(request: Request) {
       }
     }
 
+    debugTracker.phase("dbBatch", t1);
     logTiming(
       "getMessageCount + getChat + getMessages + knowledge + overrides + credits (paralelo)",
       Date.now() - t1
@@ -635,6 +670,7 @@ export async function POST(request: Request) {
             })
           : Promise.resolve<Awaited<ReturnType<typeof getUserFilesByIds>>>([]),
       ]);
+    debugTracker.phase("validationRag", t2);
     logTiming("validação + RAG + getUserFiles (paralelo)", Date.now() - t2);
 
     if (validationResult.success) {
@@ -710,25 +746,30 @@ export async function POST(request: Request) {
 
     if (message?.role === "user") {
       const t4 = Date.now();
-      after(async () => {
-        try {
-          await saveMessages({
-            messages: [
-              {
-                chatId: id,
-                id: message.id,
-                role: "user",
-                parts: message.parts,
-                attachments: [],
-                createdAt: new Date(),
-              },
-            ],
-          });
-        } catch (err) {
-          console.error("[chat] saveMessages(user) em background falhou:", err);
+      try {
+        await saveMessages({
+          messages: [
+            {
+              chatId: id,
+              id: message.id,
+              role: "user",
+              parts: message.parts,
+              attachments: [],
+              createdAt: new Date(),
+            },
+          ],
+        });
+      } catch (err) {
+        if (isDev) {
+          console.error("[chat] saveMessages(user) falhou:", err);
         }
-      });
-      logTiming("saveMessages(user) (agendado em background)", Date.now() - t4);
+        return new ChatbotError(
+          "bad_request:database",
+          "Não foi possível guardar a mensagem. Tenta novamente."
+        ).toResponse();
+      }
+      debugTracker.phase("saveMessages", t4);
+      logTiming("saveMessages(user)", Date.now() - t4);
     }
 
     const isReasoningModel =
@@ -778,6 +819,7 @@ export async function POST(request: Request) {
           : normalizedMessages.slice(-1);
       modelMessages = await convertToModelMessages(fallbackMessages);
     }
+    debugTracker.phase("contextConvert", t5);
     logTiming(
       "contextEditing + estimateTokens + normalizeMessageParts + convertToModelMessages",
       Date.now() - t5
@@ -789,6 +831,7 @@ export async function POST(request: Request) {
     );
 
     const preStreamEnd = Date.now();
+    debugTracker.flush("preStreamPhases");
     logTiming("preStream (total antes do stream)", preStreamEnd - requestStart);
 
     type StreamTextResult = Awaited<ReturnType<typeof streamText>>;
@@ -797,9 +840,19 @@ export async function POST(request: Request) {
     const stream = createUIMessageStream({
       originalMessages: isToolApprovalFlow ? uiMessages : undefined,
       execute: async ({ writer: dataStream }) => {
+        const executeStartedAt = Date.now();
+        if (isChatDebugEnabled()) {
+          dataStream.write({
+            type: "data-chat-debug",
+            data: {
+              preStreamMs: preStreamEnd - requestStart,
+              executeStartedMs: executeStartedAt - requestStart,
+            },
+          });
+        }
         logTiming(
           "execute started (modelo + tools a correr)",
-          Date.now() - requestStart
+          executeStartedAt - requestStart
         );
         const effectiveAgentInstructions =
           agentInstructions?.trim() || agentConfig.instructions;
@@ -876,7 +929,10 @@ export async function POST(request: Request) {
           providerOptions: isReasoningModel
             ? {
                 anthropic: {
-                  thinking: { type: "enabled", budgetTokens: 10_000 },
+                  thinking: {
+                    type: "enabled",
+                    budgetTokens: 4_000,
+                  },
                 },
               }
             : undefined,
@@ -904,90 +960,122 @@ export async function POST(request: Request) {
           onFinishStart - requestStart
         );
 
-        let saveMessagesPromise: Promise<void>;
-        if (isToolApprovalFlow) {
-          saveMessagesPromise = (async () => {
-            for (const finishedMsg of finishedMessages) {
-              const existingMsg = uiMessages.find(
-                (m) => m.id === finishedMsg.id
-              );
-              if (existingMsg) {
-                await updateMessage({
-                  id: finishedMsg.id,
-                  parts: finishedMsg.parts,
-                });
-              } else {
-                await saveMessages({
-                  messages: [
-                    {
-                      id: finishedMsg.id,
-                      role: finishedMsg.role,
-                      parts: finishedMsg.parts,
-                      createdAt: new Date(),
-                      attachments: [],
-                      chatId: id,
-                    },
-                  ],
-                });
-              }
+        try {
+          const logOnFinishDbError = (label: string, err: unknown) => {
+            const msg = err instanceof Error ? err.message : String(err);
+            const isTimeout =
+              typeof (err as { code?: string })?.code === "string" &&
+              (err as { code: string }).code === "57014";
+            if (isDev || isTimeout) {
+              console.warn(`[chat] ${label}:`, msg);
             }
-          })();
-        } else if (finishedMessages.length > 0) {
-          saveMessagesPromise = saveMessages({
-            messages: finishedMessages.map((currentMessage) => ({
-              id: currentMessage.id,
-              role: currentMessage.role,
-              parts: currentMessage.parts,
-              createdAt: new Date(),
-              attachments: [],
-              chatId: id,
-            })),
-          }).then(() => undefined);
-        } else {
-          saveMessagesPromise = Promise.resolve();
-        }
-
-        const creditsPromise = streamTextResult
-          ? (async () => {
-              try {
-                const usage = await streamTextResult.totalUsage;
-                const promptTokens =
-                  "promptTokens" in usage
-                    ? (usage as { promptTokens: number }).promptTokens
-                    : ((usage as { inputTokens?: number }).inputTokens ?? 0);
-                const completionTokens =
-                  "completionTokens" in usage
-                    ? (usage as { completionTokens: number }).completionTokens
-                    : ((usage as { outputTokens?: number }).outputTokens ?? 0);
-                const creditsConsumed = tokensToCredits(
-                  promptTokens,
-                  completionTokens
+          };
+          let saveMessagesPromise: Promise<void>;
+          if (isToolApprovalFlow) {
+            saveMessagesPromise = (async () => {
+              for (const finishedMsg of finishedMessages) {
+                const existingMsg = uiMessages.find(
+                  (m) => m.id === finishedMsg.id
                 );
-                await deductCreditsAndRecordUsage({
-                  userId: session.user.id,
-                  chatId: id,
-                  promptTokens,
-                  completionTokens,
-                  model: effectiveModel,
-                  creditsConsumed,
-                });
-                creditsCache.delete(session.user.id);
-              } catch (error_) {
-                if (isDev) {
-                  console.warn(
-                    "[chat] Falha ao registar uso/créditos em onFinish:",
+                if (existingMsg) {
+                  await updateMessage({
+                    id: finishedMsg.id,
+                    parts: finishedMsg.parts,
+                  });
+                } else {
+                  await saveMessages({
+                    messages: [
+                      {
+                        id: finishedMsg.id,
+                        role: finishedMsg.role,
+                        parts: finishedMsg.parts,
+                        createdAt: new Date(),
+                        attachments: [],
+                        chatId: id,
+                      },
+                    ],
+                  });
+                }
+              }
+            })().catch((err: unknown) => {
+              logOnFinishDbError("saveMessages (tool-approval) em onFinish falhou", err);
+            });
+          } else if (finishedMessages.length > 0) {
+            saveMessagesPromise = saveMessages({
+              messages: finishedMessages.map((currentMessage) => ({
+                id: currentMessage.id,
+                role: currentMessage.role,
+                parts: currentMessage.parts,
+                createdAt: new Date(),
+                attachments: [],
+                chatId: id,
+              })),
+            })
+              .then(() => undefined)
+              .catch((err: unknown) => {
+                logOnFinishDbError("saveMessages em onFinish falhou", err);
+              });
+          } else {
+            saveMessagesPromise = Promise.resolve();
+          }
+
+          const creditsPromise = streamTextResult
+            ? (async () => {
+                try {
+                  const usage = await streamTextResult.totalUsage;
+                  const promptTokens =
+                    "promptTokens" in usage
+                      ? (usage as { promptTokens: number }).promptTokens
+                      : ((usage as { inputTokens?: number }).inputTokens ?? 0);
+                  const completionTokens =
+                    "completionTokens" in usage
+                      ? (usage as { completionTokens: number }).completionTokens
+                      : ((usage as { outputTokens?: number }).outputTokens ?? 0);
+                  const creditsConsumed = tokensToCredits(
+                    promptTokens,
+                    completionTokens
+                  );
+                  await deductCreditsAndRecordUsage({
+                    userId: session.user.id,
+                    chatId: id,
+                    promptTokens,
+                    completionTokens,
+                    model: effectiveModel,
+                    creditsConsumed,
+                  });
+                  creditsCache.delete(session.user.id);
+                } catch (error_) {
+                  logOnFinishDbError(
+                    "Falha ao registar uso/créditos em onFinish",
                     error_
                   );
                 }
+              })()
+            : Promise.resolve();
+
+          await Promise.all([saveMessagesPromise, creditsPromise]);
+
+          after(() => {
+            void updateChatActiveStreamId({
+              chatId: id,
+              activeStreamId: null,
+            }).catch((err: unknown) => {
+              const isTimeout =
+                typeof (err as { code?: string })?.code === "string" &&
+                (err as { code: string }).code === "57014";
+              if (isDev || isTimeout) {
+                console.warn(
+                  "[chat] updateChatActiveStreamId em after falhou:",
+                  err instanceof Error ? err.message : err
+                );
               }
-            })()
-          : Promise.resolve();
-
-        await Promise.all([saveMessagesPromise, creditsPromise]);
-
-        after(() =>
-          updateChatActiveStreamId({ chatId: id, activeStreamId: null })
-        );
+            });
+          });
+        } catch (err) {
+          if (isDev) {
+            console.warn("[chat] onFinish falhou:", err);
+          }
+        }
         logTiming("onFinish completo", Date.now() - onFinishStart);
       },
       onError: (error: unknown) => {

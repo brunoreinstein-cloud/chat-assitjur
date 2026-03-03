@@ -2,6 +2,7 @@ import { auth, type UserType } from "@/app/(auth)/auth";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import { creditsCache } from "@/lib/cache/credits-cache";
 import {
+  ensureStatementTimeout,
   getCreditBalance,
   getOrCreateCreditBalance,
   getRecentUsageByUserId,
@@ -48,6 +49,7 @@ export async function GET(request: Request) {
   const lowBalanceThreshold = Math.max(10, Math.ceil(initialCredits * 0.2));
 
   try {
+    await ensureStatementTimeout();
     const [balanceRow, recentUsage] = await Promise.all([
       getCreditBalance(userId),
       getRecentUsageByUserId(userId, limit),

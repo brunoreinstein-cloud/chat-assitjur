@@ -45,6 +45,7 @@
     "predeploy": "tsx scripts/pre-deploy.ts",
     "prepush": "pnpm run build",
     "config:check": "tsx scripts/check-config.ts",
+    "health:ai": "tsx scripts/check-ai-connection.ts",
     "analyze": "tsx lib/db/migrate && cross-env ANALYZE=true BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true next build --webpack",
     "test": "export PLAYWRIGHT=True && pnpm exec playwright test",
     "validate:prompt": "tsx lib/prompts/agente-trabalhista/run-validate.ts",

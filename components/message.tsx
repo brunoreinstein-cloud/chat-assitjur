@@ -96,6 +96,7 @@ function getMessagePartKey(
   return `${messageId}-part-${part.type}-${index}`;
 }
 
+import { Shimmer } from "@/components/ai-elements/shimmer";
 import { useDataStream } from "./data-stream-provider";
 import { SparklesIcon } from "./icons";
 import { MessageActions } from "./message-actions";
@@ -242,6 +243,33 @@ const PurePreviewMessage = ({
             />
           ))}
 
+          {message.role === "assistant" &&
+            processedParts.length > 0 &&
+            processedParts.every((p) => p.type === "reasoning") &&
+            (isLoading ? (
+              <p
+                className="text-muted-foreground text-sm"
+                data-testid="reasoning-wait-hint"
+              >
+                O modelo está a raciocinar; a resposta em texto surgirá em
+                seguida.
+              </p>
+            ) : (
+              !processedParts.some(
+                (p) =>
+                  p.type === "text" &&
+                  ((p as { text?: string }).text?.trim().length ?? 0) > 0
+              ) && (
+                <p
+                  className="text-muted-foreground text-sm"
+                  data-testid="reasoning-no-text-fallback"
+                >
+                  O modelo concluiu o raciocínio mas não devolveu texto. Tenta
+                  novamente ou escolhe outro modelo.
+                </p>
+              )
+            ))}
+
           {gate05ConfirmInline && onConfirmGate05 && onCorrigirGate05 && (
             <section
               aria-label="Confirmação dos dados do resumo"
@@ -294,26 +322,27 @@ export const PreviewMessage = PurePreviewMessage;
 export const ThinkingMessage = () => {
   return (
     <div
+      aria-live="polite"
       className="group/message fade-in w-full animate-in duration-300"
       data-role="assistant"
       data-testid="message-assistant-loading"
+      role="status"
     >
       <div className="flex items-start justify-start gap-3">
-        <div className="-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border">
-          <div className="animate-pulse">
+        <div
+          aria-hidden
+          className="-mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/5 ring-1 ring-primary/20"
+        >
+          <div className="animate-pulse text-primary/80">
             <SparklesIcon size={14} />
           </div>
         </div>
 
         <div className="flex w-full flex-col gap-2 md:gap-4">
           <div className="flex items-center gap-1 p-0 text-muted-foreground text-sm">
-            <span className="animate-pulse">Thinking</span>
-            <span className="inline-flex">
-              <span className="animate-bounce [animation-delay:0ms]">.</span>
-              <span className="animate-bounce [animation-delay:150ms]">.</span>
-              <span className="animate-bounce [animation-delay:300ms]">.</span>
-            </span>
+            <Shimmer duration={1.2}>A pensar</Shimmer>
           </div>
+          <span className="sr-only">O assistente está a processar a sua mensagem.</span>
         </div>
       </div>
     </div>

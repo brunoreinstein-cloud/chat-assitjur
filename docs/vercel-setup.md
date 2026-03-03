@@ -219,7 +219,7 @@ Em modo desenvolvimento (`NODE_ENV=development`), a rota `POST /api/chat` regist
 | `auth` | Tempo de `auth()` (sessão). |
 | `getMessageCount + ... + overrides + credits (paralelo)` | Rate limit, chat, mensagens, base de conhecimento, overrides dos agentes e saldo de créditos em um único `Promise.all`. |
 | `validação + RAG + getUserFiles (paralelo)` | Validação de mensagens (AI SDK), RAG (retrieveKnowledgeContext) e ficheiros do archivo em paralelo. |
-| `saveMessages(user) (agendado em background)` | Agendar a gravação da mensagem do utilizador na BD (não bloqueia o stream). |
+| `saveMessages(user)` | Gravação da mensagem do utilizador na BD antes de iniciar o stream (garante persistência em serverless). |
 | `normalizeMessageParts + convertToModelMessages` | Normalizar partes (truncar docs) e converter para formato do modelo. |
 | `preStream (total antes do stream)` | Tempo total desde o início do pedido até à criação do stream (soma das fases acima). |
 | `execute started` | Quando o callback do stream começou (o modelo e as tools começam aqui). |
@@ -232,7 +232,7 @@ A diferença **total request − preStream** é o tempo em que o stream esteve a
 
 - **Primeiro batch em paralelo:** `getMessageCountByUserId`, `getChatById`, `getMessagesByChatId`, `getKnowledgeDocumentsByIds`, `getBuiltInAgentOverrides` e `getOrCreateCreditBalance` correm num único `Promise.all`, reduzindo o preStream.
 - **Validação, RAG e archivo em paralelo:** `safeValidateUIMessages`, `retrieveKnowledgeContext` e `getUserFilesByIds` correm em paralelo quando aplicável.
-- **saveMessages(user) em background:** A gravação da mensagem do utilizador na BD é agendada com `after()` (Next.js) e não bloqueia a criação do stream. Erros são registados em log; em caso de falha o utilizador pode reenviar.
+- **saveMessages(user) antes do stream:** A mensagem do utilizador é gravada na BD com `await` antes de criar o stream, garantindo que o histórico fica persistido mesmo em ambiente serverless (Vercel). Em caso de falha na BD, a API devolve erro e o utilizador pode reenviar.
 - **onFinish:** Gravação das mensagens do assistente e dedução de créditos correm em paralelo; `updateChatActiveStreamId` é agendado com `after()` para não bloquear o fim da resposta.
 - **Limite de mensagens para contexto:** A API carrega apenas as últimas **80 mensagens** do chat (`CHAT_MESSAGES_LIMIT`). A UI continua a carregar todas as mensagens para exibição.
 

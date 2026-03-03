@@ -7,6 +7,7 @@ import { AGENTE_ASSISTENTE_GERAL_INSTRUCTIONS } from "@/lib/ai/agent-assistente-
 import { AGENTE_ASSISTJUR_MASTER_INSTRUCTIONS } from "@/lib/ai/agent-assistjur-master";
 import { AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS } from "@/lib/ai/agent-redator-contestacao";
 import { AGENTE_REVISOR_DEFESAS_INSTRUCTIONS } from "@/lib/ai/agent-revisor-defesas";
+import { nonReasoningChatModelIds } from "@/lib/ai/models";
 
 export const AGENT_ID_ASSISTENTE_GERAL = "assistente-geral";
 export const AGENT_ID_REVISOR_DEFESAS = "revisor-defesas";
@@ -63,7 +64,8 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
     instructions: AGENTE_REVISOR_DEFESAS_INSTRUCTIONS,
     useRevisorDefesaTools: true,
     useRedatorContestacaoTool: false,
-    // todos os modelos permitidos (omitido)
+    /** Apenas modelos sem extended thinking: ferramentas ativas e primeira resposta rápida (evita "Thinking" prolongado). */
+    allowedModelIds: nonReasoningChatModelIds,
   },
   [AGENT_ID_REDATOR_CONTESTACAO]: {
     id: AGENT_ID_REDATOR_CONTESTACAO,

@@ -9,7 +9,11 @@ import { DataStreamHandler } from "@/components/data-stream-handler";
 import { DEFAULT_AGENT_ID_WHEN_EMPTY } from "@/lib/ai/agents-registry";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { CHAT_PAGE_MESSAGES_LIMIT } from "@/lib/constants";
-import { getChatById, getMessagesByChatId } from "@/lib/db/queries";
+import {
+  ensureStatementTimeout,
+  getChatById,
+  getMessagesByChatId,
+} from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
 import { convertToUIMessages, isUUID } from "@/lib/utils";
 
@@ -57,6 +61,8 @@ async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
   if (!session) {
     redirect("/chat");
   }
+
+  await ensureStatementTimeout();
 
   let chat: Awaited<ReturnType<typeof getChatById>>;
   try {

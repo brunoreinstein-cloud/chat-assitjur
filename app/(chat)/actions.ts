@@ -11,6 +11,7 @@ import {
   deleteAllChatsByUserId,
   deleteChatById,
   deleteMessagesByChatIdAfterTimestamp,
+  ensureStatementTimeout,
   getChatById,
   getMessageById,
   updateChatVisibilityById,
@@ -83,6 +84,7 @@ export async function deleteChat(id: string): Promise<DeleteChatResult> {
     if (!session?.user?.id) {
       return { success: false, error: "unauthorized" };
     }
+    await ensureStatementTimeout();
     const chat = await getChatById({ id });
     if (!chat) {
       return { success: false, error: "not_found" };

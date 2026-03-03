@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { AGENT_IDS, type AgentId } from "@/lib/ai/agents-registry";
+import { invalidateAgentOverridesCache } from "@/lib/cache/agent-overrides-cache";
 import { upsertBuiltInAgentOverride } from "@/lib/db/queries";
 
 const ADMIN_SECRET = process.env.ADMIN_CREDITS_SECRET;
@@ -78,6 +79,7 @@ export async function PATCH(
       instructions: instructions ?? null,
       label: label ?? null,
     });
+    invalidateAgentOverridesCache();
     return NextResponse.json({ ok: true, agentId });
   } catch {
     return NextResponse.json(

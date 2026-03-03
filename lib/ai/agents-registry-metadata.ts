@@ -3,6 +3,8 @@
  * Não importa instruções nem módulos que usem node:fs.
  */
 
+import { nonReasoningChatModelIds } from "@/lib/ai/models";
+
 export const AGENT_ID_ASSISTENTE_GERAL = "assistente-geral";
 export const AGENT_ID_REVISOR_DEFESAS = "revisor-defesas";
 export const AGENT_ID_REDATOR_CONTESTACAO = "redator-contestacao";
@@ -58,6 +60,8 @@ const DESCRIPTIONS: Record<AgentId, string> = {
 
 const ALLOWED_MODEL_IDS: Partial<Record<AgentId, string[]>> = {
   [AGENT_ID_REDATOR_CONTESTACAO]: REDATOR_ALLOWED_MODEL_IDS,
+  /** Revisor usa apenas modelos sem extended thinking para ter ferramentas ativas e resposta rápida. */
+  [AGENT_ID_REVISOR_DEFESAS]: nonReasoningChatModelIds,
 };
 
 export function getAgentConfig(agentId: string): AgentConfigMetadata {

@@ -131,7 +131,7 @@ export const ReasoningTrigger = memo(
 
     let label: string;
     if (isStreaming || duration === 0) {
-      label = stepCount > 1 ? `${stepCount} passos` : "Thinking steps";
+      label = stepCount > 1 ? `${stepCount} passos` : "Passos de pensamento";
     } else {
       label = `${duration}s`;
     }

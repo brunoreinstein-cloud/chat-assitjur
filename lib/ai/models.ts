@@ -89,6 +89,11 @@ export const chatModels: ChatModel[] = [
   },
 ];
 
+/** IDs de modelos sem extended thinking (reasoning). Usado pelo Revisor de Defesas para garantir ferramentas ativas e primeira resposta rápida. */
+export const nonReasoningChatModelIds = chatModels
+  .filter((m) => !(m.id.includes("reasoning") || m.id.includes("thinking")))
+  .map((m) => m.id);
+
 // Group models by provider for UI
 export const modelsByProvider = chatModels.reduce(
   (acc, model) => {

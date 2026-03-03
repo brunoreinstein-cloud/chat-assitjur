@@ -1,5 +1,10 @@
 import { auth } from "@/app/(auth)/auth";
-import { getChatById, getVotesByChatId, voteMessage } from "@/lib/db/queries";
+import {
+  ensureStatementTimeout,
+  getChatById,
+  getVotesByChatId,
+  voteMessage,
+} from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
 
 /** GET: lista votos do chat. Resposta em cache 2s para reduzir refetch; lentidão ~2s pode ser cold start ou auth(). */
@@ -20,6 +25,7 @@ export async function GET(request: Request) {
     return new ChatbotError("unauthorized:vote").toResponse();
   }
 
+  await ensureStatementTimeout();
   const [chat, votes] = await Promise.all([
     getChatById({ id: chatId }),
     getVotesByChatId({ id: chatId }),
@@ -62,6 +68,7 @@ export async function PATCH(request: Request) {
     return new ChatbotError("unauthorized:vote").toResponse();
   }
 
+  await ensureStatementTimeout();
   const chat = await getChatById({ id: chatId });
 
   if (!chat) {
