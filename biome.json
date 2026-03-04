@@ -1,16 +1,33 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "extends": ["ultracite/biome/core"],
+  "vcs": {
+    "enabled": false
+  },
   "files": {
     "includes": [
       "!!.pnpm-store",
       "!!**/.pnpm-store",
+      "!!node_modules",
+      "!!**/node_modules",
       "!!.next",
       "!!**/.next",
       "!!.agents",
       "!!.vercel",
       "!!.vscode",
-      "!!vercel.json"
+      "!!vercel.json",
+      "!!coverage",
+      "!!**/coverage",
+      "!!.turbo",
+      "!!**/.turbo",
+      "!!out",
+      "!!**/out",
+      "!!build",
+      "!!**/build",
+      "!!playwright-report",
+      "!!**/playwright-report",
+      "!!test-results",
+      "!!**/test-results"
     ]
   },
   "css": { "parser": { "tailwindDirectives": true } },
