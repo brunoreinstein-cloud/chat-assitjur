@@ -23,7 +23,7 @@ export type ErrorCode = `${ErrorType}:${Surface}`;
 export type ErrorVisibility = "response" | "log" | "none";
 
 export const visibilityBySurface: Record<Surface, ErrorVisibility> = {
-  database: "log",
+  database: "response",
   chat: "response",
   auth: "response",
   stream: "response",
@@ -77,9 +77,64 @@ export class ChatbotError extends Error {
   }
 }
 
+/** Códigos/errno do driver postgres.js em falhas de conexão. */
+const DB_CONNECTION_ERROR_CODES = new Set([
+  "CONNECT_TIMEOUT",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "ENOTFOUND",
+]);
+
+/**
+ * Indica se o erro é de conexão/timeout à base de dados (ex.: Supabase pooler).
+ * Usado nas rotas para devolver 503 em vez de 500 quando a BD está indisponível.
+ */
+export function isDatabaseConnectionError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  const obj = error as { code?: string; errno?: string };
+  const code = obj.code ?? obj.errno;
+  return typeof code === "string" && DB_CONNECTION_ERROR_CODES.has(code);
+}
+
+/** Código PostgreSQL para statement timeout (query cancelada por exceder o limite). */
+const PG_STATEMENT_TIMEOUT_CODE = "57014";
+
+/**
+ * Indica se o erro é de statement timeout do PostgreSQL.
+ * Útil para devolver 503 com mensagem específica em vez de 500.
+ */
+export function isStatementTimeoutError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  const code = (error as { code?: string }).code;
+  return code === PG_STATEMENT_TIMEOUT_CODE;
+}
+
+/** Resposta 503 padrão para indisponibilidade da base de dados. */
+export function databaseUnavailableResponse() {
+  return Response.json(
+    {
+      code: "bad_request:database",
+      message:
+        "Base de dados indisponível. Verifique POSTGRES_URL no .env.local.",
+    },
+    { status: 503 }
+  );
+}
+
 export function getMessageByErrorCode(errorCode: ErrorCode): string {
+  if (errorCode === "not_found:database") {
+    return "The requested resource was not found in the database.";
+  }
+  if (errorCode === "bad_request:database") {
+    return "A base de dados não respondeu a tempo ou ocorreu um erro. Tenta novamente; se for a primeira vez, pode ser demora de ligação (cold start).";
+  }
   if (errorCode.includes("database")) {
-    return "An error occurred while executing a database query.";
+    return "Ocorreu um erro ao aceder à base de dados. Tenta novamente.";
   }
 
   switch (errorCode) {

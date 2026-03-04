@@ -74,7 +74,12 @@ import {
   updateChatTitleById,
   updateMessage,
 } from "@/lib/db/queries";
-import { ChatbotError } from "@/lib/errors";
+import {
+  ChatbotError,
+  databaseUnavailableResponse,
+  isDatabaseConnectionError,
+  isStatementTimeoutError,
+} from "@/lib/errors";
 import { retrieveKnowledgeContext } from "@/lib/rag";
 import type { ChatMessage } from "@/lib/types";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
@@ -130,6 +135,46 @@ function logTiming(label: string, ms: number): void {
   if (isChatDebugEnabled()) {
     logChatDebug(`timing: ${label}`, ms);
   }
+}
+
+/** Em dev, envolve uma promise e regista quando resolve (para localizar travagens no batch). */
+function withTimingLog<T>(label: string, p: Promise<T>): Promise<T> {
+  if (!isDev) {
+    return p;
+  }
+  const start = Date.now();
+  return p.finally(() => {
+    console.info(
+      `[chat-timing] dbBatch: ${label} done in ${Math.round(Date.now() - start)}ms`
+    );
+  });
+}
+
+/** Evita que uma query lenta bloqueie o batch: após ms resolve com fallback. Cold start pode deixar várias queries à espera. */
+function withFallbackTimeout<T>(
+  label: string,
+  p: Promise<T>,
+  ms: number,
+  fallback: T
+): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((resolve) =>
+      setTimeout(() => {
+        if (isDev) {
+          console.warn(
+            `[chat-timing] dbBatch: ${label} timeout após ${ms}ms, a usar fallback`
+          );
+        }
+        resolve(fallback);
+      }, ms)
+    ),
+  ]).catch(() => {
+    if (isDev) {
+      console.warn(`[chat-timing] dbBatch: ${label} erro, a usar fallback`);
+    }
+    return fallback;
+  });
 }
 
 interface DocumentPartLike {
@@ -397,6 +442,14 @@ export async function POST(request: Request) {
         ? agentIdFromBody.trim() || DEFAULT_AGENT_ID_WHEN_EMPTY
         : DEFAULT_AGENT_ID_WHEN_EMPTY;
 
+    if (isDev) {
+      console.info(
+        "[chat-timing] POST /api/chat request started",
+        "(agentId:",
+        agentId,
+        ")"
+      );
+    }
     if (isChatDebugEnabled()) {
       logChatDebug("request", {
         chatId: id,
@@ -418,7 +471,34 @@ export async function POST(request: Request) {
       return new ChatbotError("unauthorized:chat").toResponse();
     }
 
-    await ensureStatementTimeout();
+    const DB_TIMEOUT_MS = 15_000;
+    try {
+      await Promise.race([
+        ensureStatementTimeout(),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  `ensureStatementTimeout did not complete within ${DB_TIMEOUT_MS}ms`
+                )
+              ),
+            DB_TIMEOUT_MS
+          )
+        ),
+      ]);
+    } catch (dbInitErr) {
+      if (isDev) {
+        console.error("[chat] DB init/timeout:", dbInitErr);
+      }
+      return new ChatbotError(
+        "bad_request:database",
+        "A ligação à base de dados está a demorar demasiado. Verifica POSTGRES_URL em .env.local e que a base de dados está acessível. Tenta novamente."
+      ).toResponse();
+    }
+    if (isDev) {
+      console.info("[chat-timing] ensureStatementTimeout: done");
+    }
 
     if (message?.role === "user" && message.parts) {
       const hasContent = message.parts.some((p) => {
@@ -460,48 +540,141 @@ export async function POST(request: Request) {
       agentId as (typeof AGENT_IDS)[number]
     );
     const t1 = Date.now();
-    const [
-      messageCount,
-      chat,
-      messagesFromDb,
-      knowledgeDocsResult,
-      builtInOverridesFromBatch,
-      balanceFromDb,
-      customAgentFromBatch,
-    ] = await Promise.all([
-      getMessageCountByUserId({
-        id: session.user.id,
-        differenceInHours: 24,
-      }),
-      getChatById({ id }),
-      getMessagesByChatId({ id, limit: CHAT_MESSAGES_LIMIT }),
+    if (isDev) {
+      console.info("[chat-timing] dbBatch: starting…");
+    }
+    /** Timeout do batch de queries (rede de segurança). Ver docs/DB-TIMEOUT-TROUBLESHOOTING.md */
+    const DB_BATCH_TIMEOUT_MS = 120_000;
+    /** Timeout por query: evita que uma query lenta (ex. cold start) bloqueie o batch; usa fallback e continua. */
+    const PER_QUERY_TIMEOUT_MS = 45_000;
+    /** Se os créditos não responderem a tempo, usamos saldo inicial para não bloquear o chat. */
+    const CREDITS_IN_BATCH_TIMEOUT_MS = 25_000;
+    const creditsPromise = Promise.race([
+      getOrCreateCreditBalance(session.user.id, initialCredits),
+      new Promise<number>((resolve) =>
+        setTimeout(() => resolve(initialCredits), CREDITS_IN_BATCH_TIMEOUT_MS)
+      ),
+    ]).catch(() => {
+      if (process.env.NODE_ENV === "development") {
+        console.warn(
+          "[chat] Credit balance unavailable (tabela de créditos?), a usar saldo inicial."
+        );
+      }
+      return initialCredits;
+    });
+    const dbBatchPromise = Promise.all([
+      withTimingLog(
+        "getMessageCount",
+        withFallbackTimeout(
+          "getMessageCount",
+          getMessageCountByUserId({
+            id: session.user.id,
+            differenceInHours: 24,
+          }),
+          PER_QUERY_TIMEOUT_MS,
+          0
+        )
+      ),
+      withTimingLog(
+        "getChatById",
+        withFallbackTimeout("getChatById", getChatById({ id }), PER_QUERY_TIMEOUT_MS, null)
+      ),
+      withTimingLog(
+        "getMessagesByChatId",
+        withFallbackTimeout(
+          "getMessagesByChatId",
+          getMessagesByChatId({ id, limit: CHAT_MESSAGES_LIMIT }),
+          PER_QUERY_TIMEOUT_MS,
+          [] as Awaited<ReturnType<typeof getMessagesByChatId>>
+        )
+      ),
       effectiveKnowledgeIds.length > 0
-        ? getKnowledgeDocumentsByIds({
-            ids: effectiveKnowledgeIds,
-            userId: session.user.id,
-            allowedUserIds: redatorBancoAllowedUserIds,
-          })
+        ? withTimingLog(
+            "getKnowledgeDocumentsByIds",
+            withFallbackTimeout(
+              "getKnowledgeDocumentsByIds",
+              getKnowledgeDocumentsByIds({
+                ids: effectiveKnowledgeIds,
+                userId: session.user.id,
+                allowedUserIds: redatorBancoAllowedUserIds,
+              }),
+              PER_QUERY_TIMEOUT_MS,
+              [] as Awaited<ReturnType<typeof getKnowledgeDocumentsByIds>>
+            )
+          )
         : Promise.resolve(
             [] as Awaited<ReturnType<typeof getKnowledgeDocumentsByIds>>
           ),
-      getCachedBuiltInAgentOverrides(),
-      getOrCreateCreditBalance(session.user.id, initialCredits).catch(() => {
-        if (process.env.NODE_ENV === "development") {
-          console.warn(
-            "[chat] Credit balance unavailable (tabela de créditos?), a usar saldo inicial."
-          );
-        }
-        return initialCredits;
-      }),
+      withTimingLog(
+        "getCachedBuiltInAgentOverrides",
+        withFallbackTimeout(
+          "getCachedBuiltInAgentOverrides",
+          getCachedBuiltInAgentOverrides(),
+          PER_QUERY_TIMEOUT_MS,
+          {} as Awaited<ReturnType<typeof getCachedBuiltInAgentOverrides>>
+        )
+      ),
+      withTimingLog("getOrCreateCreditBalance", creditsPromise),
       isBuiltInAgent
         ? Promise.resolve(
             null as unknown as Awaited<ReturnType<typeof getCustomAgentById>>
           )
-        : getCustomAgentById({
-            id: agentId,
-            userId: session.user.id,
-          }),
+        : withTimingLog(
+            "getCustomAgentById",
+            withFallbackTimeout(
+              "getCustomAgentById",
+              getCustomAgentById({
+                id: agentId,
+                userId: session.user.id,
+              }),
+              PER_QUERY_TIMEOUT_MS,
+              null as Awaited<ReturnType<typeof getCustomAgentById>>
+            )
+          ),
     ]);
+    let messageCount: Awaited<ReturnType<typeof getMessageCountByUserId>>;
+    let chat: Awaited<ReturnType<typeof getChatById>>;
+    let messagesFromDb: Awaited<ReturnType<typeof getMessagesByChatId>>;
+    let knowledgeDocsResult: Awaited<
+      ReturnType<typeof getKnowledgeDocumentsByIds>
+    >;
+    let builtInOverridesFromBatch: Awaited<
+      ReturnType<typeof getCachedBuiltInAgentOverrides>
+    >;
+    let balanceFromDb: number;
+    let customAgentFromBatch: Awaited<ReturnType<typeof getCustomAgentById>>;
+    try {
+      [
+        messageCount,
+        chat,
+        messagesFromDb,
+        knowledgeDocsResult,
+        builtInOverridesFromBatch,
+        balanceFromDb,
+        customAgentFromBatch,
+      ] = await Promise.race([
+        dbBatchPromise,
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error("DB_BATCH_TIMEOUT")),
+            DB_BATCH_TIMEOUT_MS
+          )
+        ),
+      ]);
+    } catch (error_) {
+      const isTimeout =
+        error_ instanceof Error && error_.message === "DB_BATCH_TIMEOUT";
+      if (isDev) {
+        console.error("[chat] dbBatch timeout or error:", error_);
+      }
+      const timeoutSec = Math.round(DB_BATCH_TIMEOUT_MS / 1000);
+      return new ChatbotError(
+        "bad_request:database",
+        isTimeout
+          ? `A base de dados não respondeu a tempo (cancelado após ${timeoutSec}s). Pode ser cold start do Supabase/Neon — tenta enviar a mensagem novamente. Se continuar, verifica POSTGRES_URL e rede.`
+          : "Erro ao aceder à base de dados. Tenta novamente."
+      ).toResponse();
+    }
     const builtInOverrides = builtInOverridesFromBatch as Record<
       string,
       { instructions: string | null; label: string | null }
@@ -551,6 +724,11 @@ export async function POST(request: Request) {
     }
 
     debugTracker.phase("dbBatch", t1);
+    if (isDev) {
+      console.info(
+        `[chat-timing] dbBatch: all done in ${Math.round(Date.now() - t1)}ms`
+      );
+    }
     logTiming(
       "getMessageCount + getChat + getMessages + knowledge + overrides + credits (paralelo)",
       Date.now() - t1
@@ -574,6 +752,10 @@ export async function POST(request: Request) {
           creditsCache.delete(session.user.id);
           balance += initialCredits;
         } catch {
+          balance = initialCredits;
+        }
+        // Em dev nunca bloquear por créditos: garantir saldo mínimo para testar o chat.
+        if (balance < MIN_CREDITS_TO_START_CHAT) {
           balance = initialCredits;
         }
       }
@@ -603,13 +785,36 @@ export async function POST(request: Request) {
         // No tool-approval flow o cliente envia as mensagens; não usamos as da BD
       }
     } else if (message?.role === "user") {
-      await saveChat({
+      const saveChatPromise = saveChat({
         id,
         userId: session.user.id,
         title: "New chat",
         visibility: selectedVisibilityType,
         agentId,
+      }).catch((err) => {
+        if (isDev) {
+          console.warn(
+            "[chat] saveChat (novo chat) falhou, a continuar para o modelo:",
+            err instanceof Error ? err.message : err
+          );
+        }
       });
+      if (isDev) {
+        const SAVE_CHAT_TIMEOUT_MS = 15_000;
+        await Promise.race([
+          saveChatPromise,
+          new Promise<void>((resolve) =>
+            setTimeout(() => {
+              console.warn(
+                `[chat] saveChat (novo chat) timeout após ${SAVE_CHAT_TIMEOUT_MS}ms, a continuar para o modelo.`
+              );
+              resolve();
+            }, SAVE_CHAT_TIMEOUT_MS)
+          ),
+        ]);
+      } else {
+        await saveChatPromise;
+      }
       titlePromise = generateTitleFromUserMessage({
         message: normalizeMessageParts([message as ChatMessage])[0],
       });
@@ -640,34 +845,46 @@ export async function POST(request: Request) {
         .trim() ?? "";
 
     const t2 = Date.now();
+    if (isDev) {
+      console.info("[chat-timing] validationRag: starting…");
+    }
     const [validationResult, ragChunks, userFilesFromArchivos] =
       await Promise.all([
         !isToolApprovalFlow && normalizedForValidation.length > 0
-          ? safeValidateUIMessages({
-              messages: normalizedForValidation,
-              tools: validationToolsForValidate,
-            })
+          ? withTimingLog(
+              "safeValidateUIMessages",
+              safeValidateUIMessages({
+                messages: normalizedForValidation,
+                tools: validationToolsForValidate,
+              })
+            )
           : Promise.resolve({
               success: false as const,
               data: normalizedForValidation,
               error: undefined,
             }),
         knowledgeDocsResult.length > 0 && lastUserText.length > 0
-          ? retrieveKnowledgeContext({
-              userId: session.user.id,
-              documentIds: effectiveKnowledgeIds,
-              queryText: lastUserText,
-              limit: agentId === AGENT_ID_REDATOR_CONTESTACAO ? 24 : 12,
-              allowedUserIds: redatorBancoAllowedUserIds,
-            })
+          ? withTimingLog(
+              "retrieveKnowledgeContext",
+              retrieveKnowledgeContext({
+                userId: session.user.id,
+                documentIds: effectiveKnowledgeIds,
+                queryText: lastUserText,
+                limit: agentId === AGENT_ID_REDATOR_CONTESTACAO ? 24 : 12,
+                allowedUserIds: redatorBancoAllowedUserIds,
+              })
+            )
           : Promise.resolve<
               Awaited<ReturnType<typeof retrieveKnowledgeContext>>
             >([]),
         archivoIds != null && archivoIds.length > 0 && session.user.id != null
-          ? getUserFilesByIds({
-              ids: archivoIds,
-              userId: session.user.id,
-            })
+          ? withTimingLog(
+              "getUserFilesByIds",
+              getUserFilesByIds({
+                ids: archivoIds,
+                userId: session.user.id,
+              })
+            )
           : Promise.resolve<Awaited<ReturnType<typeof getUserFilesByIds>>>([]),
       ]);
     debugTracker.phase("validationRag", t2);
@@ -1138,6 +1355,10 @@ export async function POST(request: Request) {
 
     if (error instanceof ChatbotError) {
       return error.toResponse();
+    }
+
+    if (isDatabaseConnectionError(error) || isStatementTimeoutError(error)) {
+      return databaseUnavailableResponse();
     }
 
     if (

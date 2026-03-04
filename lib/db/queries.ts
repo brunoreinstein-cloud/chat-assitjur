@@ -19,7 +19,7 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import type { ArtifactKind } from "@/components/artifact";
 import type { VisibilityType } from "@/components/visibility-selector";
-import { ChatbotError } from "../errors";
+import { ChatbotError, isStatementTimeoutError } from "../errors";
 import { generateUUID, isUUID } from "../utils";
 import {
   builtInAgentOverride,
@@ -46,11 +46,7 @@ import { generateHashedPassword } from "./utils";
 
 /** Converte erro de BD em ChatbotError; reconhece statement timeout (57014) para mensagem clara. */
 function toDatabaseError(error: unknown, fallbackMessage: string): never {
-  const code =
-    error && typeof error === "object" && "code" in error
-      ? (error as { code: string }).code
-      : undefined;
-  if (code === "57014") {
+  if (isStatementTimeoutError(error)) {
     throw new ChatbotError(
       "bad_request:database",
       "Query exceeded time limit (statement timeout)."
@@ -92,24 +88,44 @@ function getDb() {
   return dbInstance;
 }
 
-/** Promessa única para SET statement_timeout na sessão (Supabase não aplica o parâmetro na URL). */
-let statementTimeoutPromise: Promise<void> | null = null;
+const STATEMENT_TIMEOUT_MS = 5000;
 
 /**
  * Garante que a sessão Postgres tem statement_timeout = 2min.
- * Chamar no início de rotas que usam a BD (ex.: /api/chat, /api/history).
+ * Chamar no início de rotas/páginas que usam a BD (ex.: /api/chat, /api/history, /chat/[id]).
  * Supabase ignora options na connection string; SET na sessão funciona em port 5432 (session mode).
+ * Executado em cada chamada para que conexões recém-criadas (após idle/erro) também recebam o timeout.
+ * Se o SET falhar ou demorar mais de 5s (ex.: pooler que não suporta SET), continua sem travar.
  */
 export async function ensureStatementTimeout(): Promise<void> {
-  statementTimeoutPromise ??= (async () => {
-    try {
-      await getDb().execute(sql`SET statement_timeout = '120s'`);
-    } catch (err) {
-      statementTimeoutPromise = null;
+  const setPromise = getDb()
+    .execute(sql`SET statement_timeout = '120s'`)
+    .then(() => {})
+    .catch((err: unknown) => {
+      const code =
+        err && typeof err === "object" && "code" in err
+          ? (err as { code: string }).code
+          : undefined;
+      if (code === "57014") {
+        return;
+      }
       throw err;
+    });
+  const timeoutPromise = new Promise<void>((resolve) => {
+    setTimeout(() => resolve(), STATEMENT_TIMEOUT_MS);
+  });
+  try {
+    await Promise.race([setPromise, timeoutPromise]);
+  } catch (err) {
+    const code =
+      err && typeof err === "object" && "code" in err
+        ? (err as { code: string }).code
+        : undefined;
+    if (code === "57014") {
+      return;
     }
-  })();
-  return await statementTimeoutPromise;
+    throw err;
+  }
 }
 
 export async function getUser(email: string): Promise<User[]> {
@@ -188,16 +204,23 @@ export async function saveChat({
         agentId: agentId ?? DEFAULT_CHAT_AGENT_ID,
       });
   } catch (error: unknown) {
-    const err = error as { code?: string; constraint_name?: string };
+    const err = error as {
+      code?: string;
+      constraint?: string;
+      constraint_name?: string;
+    };
     if (err.code === "23505") {
       const existing = await getChatById({ id });
       if (existing?.userId === userId) {
         return existing;
       }
     }
+    const fkConstraint =
+      err.constraint === "Chat_userId_User_id_fk" ||
+      err.constraint_name === "Chat_userId_User_id_fk";
     const isUserFk =
       err.code === "23503" &&
-      (err.constraint_name === "Chat_userId_User_id_fk" ||
+      (fkConstraint ||
         (error instanceof Error &&
           error.message.includes("Chat_userId_User_id_fk")));
     if (isUserFk) {
@@ -208,9 +231,6 @@ export async function saveChat({
     }
     const detail = error instanceof Error ? error.message : String(error);
     const isDev = process.env.NODE_ENV === "development";
-    if (isDev) {
-      console.error("[saveChat] Erro na base de dados:", error);
-    }
     throw new ChatbotError(
       "bad_request:database",
       isDev ? `Failed to save chat: ${detail}` : "Failed to save chat"
@@ -669,8 +689,7 @@ export async function updateChatTitleById({
 }) {
   try {
     return await getDb().update(chat).set({ title }).where(eq(chat.id, chatId));
-  } catch (error) {
-    console.warn("Failed to update title for chat", chatId, error);
+  } catch {
     return;
   }
 }
@@ -687,8 +706,8 @@ export async function updateChatActiveStreamId({
       .update(chat)
       .set({ activeStreamId })
       .where(eq(chat.id, chatId));
-  } catch (error) {
-    console.warn("Failed to update activeStreamId for chat", chatId, error);
+  } catch {
+    // Ignorar falha de atualização de metadado do stream
   }
 }
 
@@ -701,8 +720,8 @@ export async function updateChatAgentId({
 }) {
   try {
     await getDb().update(chat).set({ agentId }).where(eq(chat.id, chatId));
-  } catch (error) {
-    console.warn("Failed to update agentId for chat", chatId, error);
+  } catch {
+    // Ignorar falha de atualização de agentId
   }
 }
 

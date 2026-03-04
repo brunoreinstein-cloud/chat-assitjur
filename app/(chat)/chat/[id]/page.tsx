@@ -14,7 +14,7 @@ import {
   getChatById,
   getMessagesByChatId,
 } from "@/lib/db/queries";
-import { ChatbotError } from "@/lib/errors";
+import { ChatbotError, isStatementTimeoutError } from "@/lib/errors";
 import { convertToUIMessages, isUUID } from "@/lib/utils";
 
 function DatabaseUnavailable() {
@@ -71,6 +71,9 @@ async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
     if (error instanceof ChatbotError && error.surface === "database") {
       return <DatabaseUnavailable />;
     }
+    if (isStatementTimeoutError(error)) {
+      return <DatabaseUnavailable />;
+    }
     throw error;
   }
 
@@ -96,6 +99,9 @@ async function ChatPage({ params }: { params: Promise<{ id: string }> }) {
     });
   } catch (error) {
     if (error instanceof ChatbotError && error.surface === "database") {
+      return <DatabaseUnavailable />;
+    }
+    if (isStatementTimeoutError(error)) {
       return <DatabaseUnavailable />;
     }
     throw error;
