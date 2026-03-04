@@ -14,10 +14,13 @@ config({
 const PORT = process.env.PORT ?? 3301;
 
 /**
- * Set webServer.url and use.baseURL with the location
- * of the WebServer respecting the correct set port
+ * Se PLAYWRIGHT_TEST_BASE_URL estiver definido, usa esse servidor (ex.: pnpm dev já a correr em 3300).
+ * Evita "Unable to acquire lock" quando há outro next dev ativo. Caso contrário, o webServer inicia dev:test na porta 3301.
  */
-const baseURL = `http://localhost:${PORT}`;
+const baseURL =
+  process.env.PLAYWRIGHT_TEST_BASE_URL ?? `http://localhost:${PORT}`;
+
+const useExistingServer = Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL);
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -31,13 +34,16 @@ export default defineConfig({
   /* Retry on CI only */
   retries: 0,
   /* Limit workers to prevent browser crashes */
-  workers: process.env.CI ? 2 : 2,
+  workers: 2,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: "html",
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
     baseURL,
+
+    /* Fail navigation sooner if server is down (e.g. test:with-dev without pnpm dev). */
+    navigationTimeout: 60_000,
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: "retain-on-failure",
@@ -90,11 +96,15 @@ export default defineConfig({
     // },
   ],
 
-  /* Run your local dev server before starting the tests (port 3301 to not clash with dev) */
-  webServer: {
-    command: "pnpm run dev:test",
-    url: baseURL,
-    timeout: 120 * 1000,
-    reuseExistingServer: !process.env.CI,
-  },
+  /* Run your local dev server before starting the tests (port 3301). Se PLAYWRIGHT_TEST_BASE_URL estiver definido, não inicia servidor (usa o que já está a correr). */
+  ...(useExistingServer
+    ? {}
+    : {
+        webServer: {
+          command: "pnpm run dev:test",
+          url: baseURL,
+          timeout: 180 * 1000,
+          reuseExistingServer: !process.env.CI,
+        },
+      }),
 });

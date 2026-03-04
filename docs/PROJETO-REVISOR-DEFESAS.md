@@ -237,6 +237,7 @@ Deploy: ver `docs/vercel-setup.md` e `docs/vercel-cli.md`.
 
 - **Spec produto (AI Drive Jurídico):** `docs/SPEC-AI-DRIVE-JURIDICO.md` — visão, capacidades, roadmap e métricas da plataforma jurídica.
 - **Instruções do agente:** `lib/ai/agent-revisor-defesas.ts`
+- **Revisão completa do agente:** `docs/REVISAO-AGENTE-REVISOR-DEFESAS.md`
 - **Checklist revisor:** `.agents/skills/revisor-defesas-context/SKILL.md`
 - **Guia para agentes de IA:** `AGENTS.md`
 - **UX/UI Revisor:** `docs/ux-ui-revisor-defesas.md`

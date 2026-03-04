@@ -3,11 +3,14 @@ import { expect, test } from "@playwright/test";
 const CHAT_URL_REGEX = /\/chat\/[\w-]+/;
 const ERROR_TEXT_REGEX = /error|failed|trouble/i;
 
+const CHAT_PAGE = "/chat";
+
 test.describe("Chat API Integration", () => {
   test("sends message and receives AI response", async ({ page }) => {
-    await page.goto("/");
+    await page.goto(CHAT_PAGE, { waitUntil: "domcontentloaded" });
 
     const input = page.getByTestId("multimodal-input");
+    await expect(input).toBeVisible();
     await input.fill("Hello");
     await page.getByTestId("send-button").click();
 
@@ -21,7 +24,7 @@ test.describe("Chat API Integration", () => {
   });
 
   test("redirects to /chat/:id after sending message", async ({ page }) => {
-    await page.goto("/");
+    await page.goto(CHAT_PAGE, { waitUntil: "domcontentloaded" });
 
     const input = page.getByTestId("multimodal-input");
     await input.fill("Test redirect");
@@ -32,7 +35,7 @@ test.describe("Chat API Integration", () => {
   });
 
   test("clears input after sending", async ({ page }) => {
-    await page.goto("/");
+    await page.goto(CHAT_PAGE, { waitUntil: "domcontentloaded" });
 
     const input = page.getByTestId("multimodal-input");
     await input.fill("Test message");
@@ -43,7 +46,7 @@ test.describe("Chat API Integration", () => {
   });
 
   test("shows stop button during generation", async ({ page }) => {
-    await page.goto("/");
+    await page.goto(CHAT_PAGE, { waitUntil: "domcontentloaded" });
     const input = page.getByTestId("multimodal-input");
     await input.fill("Test");
     await page.getByTestId("send-button").click();
@@ -64,7 +67,7 @@ test.describe("Chat Error Handling", () => {
       });
     });
 
-    await page.goto("/");
+    await page.goto(CHAT_PAGE, { waitUntil: "domcontentloaded" });
     const input = page.getByTestId("multimodal-input");
     await input.fill("Test error");
     await page.getByTestId("send-button").click();
@@ -78,7 +81,7 @@ test.describe("Chat Error Handling", () => {
 
 test.describe("Prompt selector", () => {
   test("prompt selector sends message and redirects", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/", { waitUntil: "domcontentloaded" });
 
     const trigger = page.getByTestId("prompt-selector-trigger");
     await trigger.click();

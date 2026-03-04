@@ -46,7 +46,7 @@ async function parseErrorBody(
 }
 
 export const fetcher = async (url: string) => {
-  const response = await fetch(url);
+  const response = await fetch(url, { credentials: "include" });
 
   if (!response.ok) {
     const { code, cause } = await parseErrorBody(response);
@@ -95,6 +95,20 @@ export const documentFetcher = async (url: string): Promise<unknown> => {
   throw new ChatbotError(code as ErrorCode, cause);
 };
 
+/** Mensagens de falha de rede do fetch nativo (convertidas em offline:chat). */
+const NETWORK_FAILURE_PATTERNS = [
+  "failed to fetch",
+  "network request failed",
+  "load failed",
+  "networkerror",
+];
+
+function isNetworkFailure(error: unknown): boolean {
+  const msg =
+    error instanceof Error ? error.message.toLowerCase() : String(error);
+  return NETWORK_FAILURE_PATTERNS.some((p) => msg.includes(p));
+}
+
 export async function fetchWithErrorHandlers(
   input: RequestInfo | URL,
   init?: RequestInit
@@ -109,11 +123,27 @@ export async function fetchWithErrorHandlers(
 
     return response;
   } catch (error: unknown) {
+    if (error instanceof ChatbotError) {
+      throw error;
+    }
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       throw new ChatbotError("offline:chat");
     }
-
-    throw error;
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new ChatbotError(
+        "offline:chat",
+        "Pedido cancelado ou expirou. Tente novamente."
+      );
+    }
+    if (isNetworkFailure(error)) {
+      throw new ChatbotError(
+        "offline:chat",
+        "Não foi possível contactar o servidor. Verifique a ligação e tente novamente."
+      );
+    }
+    const message =
+      error instanceof Error ? error.message : "Erro ao enviar mensagem.";
+    throw new ChatbotError("offline:chat", message);
   }
 }
 

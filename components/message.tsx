@@ -6,7 +6,11 @@ import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { Button } from "@/components/ui/button";
 import type { Vote } from "@/lib/db/schema";
-import type { ChatMessage, ChatMessagePart } from "@/lib/types";
+import type {
+  ChatMessage,
+  ChatMessagePart,
+  CreditsResponse,
+} from "@/lib/types";
 import { cn, fetcher } from "@/lib/utils";
 
 /** Part sintética para reasoning agregado (várias parts reasoning → uma com steps). */
@@ -102,15 +106,6 @@ import { SparklesIcon } from "./icons";
 import { MessageActions } from "./message-actions";
 import { MessagePartRenderer } from "./message-part-renderer";
 import { PreviewAttachment } from "./preview-attachment";
-
-interface CreditsResponse {
-  balance: number;
-  recentUsage: Array<{
-    promptTokens: number;
-    completionTokens: number;
-    creditsConsumed: number;
-  }>;
-}
 
 function LastMessageUsage() {
   const { data } = useSWR<CreditsResponse>("/api/credits", fetcher);

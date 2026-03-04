@@ -577,7 +577,12 @@ export async function POST(request: Request) {
       ),
       withTimingLog(
         "getChatById",
-        withFallbackTimeout("getChatById", getChatById({ id }), PER_QUERY_TIMEOUT_MS, null)
+        withFallbackTimeout(
+          "getChatById",
+          getChatById({ id }),
+          PER_QUERY_TIMEOUT_MS,
+          null
+        )
       ),
       withTimingLog(
         "getMessagesByChatId",

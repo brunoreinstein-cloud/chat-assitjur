@@ -1445,8 +1445,7 @@ export function KnowledgeSidebarContent({
                 webkitdirectory: "",
               } as React.InputHTMLAttributes<HTMLInputElement>)}
             />
-            {/* biome-ignore lint/a11y/useSemanticElements: dropzone is a custom drag-and-drop widget; group groups the drop area for assistive tech */}
-            <div
+            <button
               aria-label="Adicionar documentos por ficheiros ou pasta"
               className={dropzoneClassName}
               onDragLeave={() => setIsDraggingOver(false)}
@@ -1459,7 +1458,13 @@ export function KnowledgeSidebarContent({
                 setIsDraggingOver(false);
                 handleKnowledgeFiles(e.dataTransfer.files);
               }}
-              role="group"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  filesInputRef.current?.click();
+                }
+              }}
+              type="button"
             >
               {isAddingFromFiles ? (
                 <div
@@ -1527,7 +1532,7 @@ export function KnowledgeSidebarContent({
                   </button>
                 </>
               )}
-            </div>
+            </button>
 
             <form className="grid gap-2" onSubmit={handleAddDocument}>
               <Label htmlFor="kb-new-title">Ou criar manualmente</Label>

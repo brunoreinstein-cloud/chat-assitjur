@@ -100,7 +100,9 @@ const STATEMENT_TIMEOUT_MS = 5000;
 export async function ensureStatementTimeout(): Promise<void> {
   const setPromise = getDb()
     .execute(sql`SET statement_timeout = '120s'`)
-    .then(() => {})
+    .then(() => {
+      /* SET applied */
+    })
     .catch((err: unknown) => {
       const code =
         err && typeof err === "object" && "code" in err

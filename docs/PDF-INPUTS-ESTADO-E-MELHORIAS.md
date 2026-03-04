@@ -1,6 +1,6 @@
 # PDF no chat: estado atual e melhorias (OpenRouter + Anthropic Files API)
 
-Resumo de como os PDFs são tratados hoje no projeto e como podemos evoluir usando **OpenRouter PDF Inputs** (URL/base64 + plugins) ou **Anthropic Files API** (quando o modelo for Claude).
+Resumo de como os PDFs são tratados hoje no projeto e como podemos evoluir usando **OpenRouter PDF Inputs** (URL/base64 + plugins) ou **Anthropic Files API** (quando o modelo for Claude). A **secção 4** reúne alternativas de OCR, arquitetura e modelos para análise futura.
 
 ---
 
@@ -133,7 +133,103 @@ Quando o modelo selecionado for Anthropic (ex.: Claude 3.5+ / 4.x) e quisermos e
 
 ---
 
-## 4. Referências
+## 4. Análise futura: OCR, arquitetura e modelos
+
+Secção para apoio a decisões futuras: alternativas ao Tesseract, formas de o PDF chegar ao LLM e quem processa o documento. Não substitui a secção 3 (melhorias imediatas/OpenRouter/Anthropic).
+
+### 4.1 Alternativas de OCR/Extração (substituindo ou complementando Tesseract)
+
+| Alternativa | Descrição | Custo / Notas |
+|-------------|-----------|----------------|
+| **Google Document AI** | Melhor custo-benefício para documentos jurídicos em português. Entende layout, tabelas, modelos pré-treinados para documentos estruturados. API REST, integra no route handler sem mudar arquitetura. | ~\$0,001/página (OCR básico), ~\$0,01 (form parsing). 30 páginas ≈ centavos. |
+| **Azure AI Document Intelligence** (antigo Form Recognizer) | Mesma proposta que o Document AI. Tier gratuito: 500 páginas/mês. Útil para validação e primeiros clientes sem custo. | Modelo `prebuilt-read` extrai texto com alta fidelidade posicional. |
+| **Marker** (Datalab, open source) | Converte PDF para Markdown preservando estrutura (títulos, listas, tabelas). Para jurídico é valioso: o LLM recebe texto já estruturado. Roda no servidor, sem custo de API. | Exige mais CPU/memória que o Tesseract. |
+| **LlamaParse** (LlamaIndex) | Parsing inteligente de PDFs com contexto semântico. Free tier: 1000 páginas/dia. Qualidade superior ao unpdf em documentos complexos (cabeçalhos, rodapés, numeração). | Bom para reduzir “poluição” do texto extraído. |
+
+### 4.2 Alternativas de arquitetura (como o PDF chega ao LLM)
+
+- **Chunking semântico em vez de truncagem linear**  
+  Em vez de cortar nos primeiros 35k caracteres, dividir o documento em seções lógicas (qualificação das partes, dos fatos, do direito, dos pedidos) e enviar apenas as seções relevantes por pergunta. Exige um passo de classificação de seções (ex.: LLM barato como Haiku); o ganho de qualidade é grande.
+
+- **RAG sobre o documento**  
+  Fazer embedding das seções do PDF e guardar no Supabase (pgvector). Na pergunta do utilizador, buscar os chunks mais relevantes e enviar só esses ao modelo. Para documentos longos (100+ páginas) é a abordagem que escala sem estourar contexto ou custo. Desvantagens: latência adicional e complexidade.
+
+- **Cache de extração no Supabase**  
+  Guardar o texto extraído (e opcionalmente chunks/embeddings) associado ao **hash do ficheiro**. Se o mesmo PDF for referenciado em várias conversas, evita reprocessamento. Confirmar se hoje a extração já é reaproveitada entre conversas; se não, este cache é prioritário.
+
+### 4.3 Alternativas de modelo (quem processa o PDF)
+
+- **Gemini 2.5 via OpenRouter**  
+  Contexto de 1M tokens, aceita PDFs nativamente. Para “analisar documento jurídico inteiro” simplifica: envia-se o PDF e o modelo trata de tudo. Custo por token competitivo. Desvantagem: dependência do Gemini para este caso de uso.
+
+- **Claude com janela de contexto grande**  
+  Uma contestação típica cabe no contexto sem truncagem. A extração server-side continua a ser o caminho, mas sem necessidade de cortar.
+
+- **Modelo local para pré-processamento**  
+  Usar modelo pequeno (Phi-3, Qwen2) via Ollama para: classificar seções, extrair entidades jurídicas (partes, valores, prazos), gerar “resumo estruturado” antes de enviar ao modelo principal. Reduz tokens no modelo caro e pode melhorar a qualidade da resposta.
+
+### 4.4 Sequência pragmática recomendada
+
+Considerando o Ofício em construção e a necessidade de entregar valor rápido:
+
+1. **Agora**  
+   Trocar o Tesseract por **Google Document AI** ou **LlamaParse** para extração. Ganho de qualidade imediato, custo marginal, mudança cirúrgica (só o route handler de upload). Guardar o texto extraído no Supabase vinculado ao hash do ficheiro.
+
+2. **Próximo ciclo**  
+   Implementar **chunking semântico** dos documentos jurídicos: identificar seções padrão (qualificação, fatos, direito, pedidos, documentos) e permitir que o chat referencie seções específicas. Melhora UX e reduz custo de tokens.
+
+3. **Quando escalar**  
+   **RAG com pgvector** no Supabase. Quando clientes subirem processos inteiros (dezenas de documentos por caso), a busca vetorial passa a ser necessária para performance e custo.
+
+A rota **OpenRouter PDF nativa** (secção 3.2) pode ficar como opção futura, não como prioridade: adiciona dependência de provider e não resolve o problema de fundo (qualidade da extração e inteligência no que é enviado ao modelo).
+
+---
+
+## 5. Comparação com o cookbook AI SDK “Chat with PDFs”
+
+O exemplo [Chat with PDFs](https://ai-sdk.dev/cookbook/next/chat-with-pdf) do AI SDK mostra um fluxo mais simples, focado em modelos que entendem PDF nativamente.
+
+### 5.1 O que o cookbook faz
+
+- **Cliente:** Converte ficheiros (incl. PDF) em data URLs com `FileReader.readAsDataURL()` e envia nas mensagens como partes `type: 'file'` com `filename`, `mediaType`, `url` (data URL).
+- **Servidor:** Usa `convertToModelMessages(messages)` diretamente, sem extração nem normalização. O modelo recebe o PDF como anexo (o provider precisa suportar PDF, ex.: Claude, Gemini).
+- **Requisito:** Provider com suporte nativo a PDF (ex.: Anthropic Claude, Google Gemini 2.0).
+
+### 5.2 Vantagens do cookbook para nós
+
+| Aspecto | Cookbook | Nosso projeto atual |
+|--------|----------|----------------------|
+| **Complexidade** | Cliente lê ficheiro → data URL → envia; servidor só chama `convertToModelMessages`. | Upload → extração (unpdf/OCR) → armazenamento → partes `document` → `normalizeMessageParts` → texto truncado. |
+| **PDFs digitalizados** | Depende do modelo (ex.: visão do Claude). Sem OCR nosso. | OCR com Tesseract no servidor; pode falhar ou ser fraco. |
+| **Custo de extração** | Zero no nosso servidor. | CPU/memória (unpdf, Tesseract), tempo de upload/process. |
+| **Qualidade do “texto”** | O modelo interpreta o PDF diretamente (layout, tabelas, imagens). | Só texto extraído; truncagem 35k/100k; perda de estrutura. |
+| **Compatibilidade** | Apenas com modelos que suportam PDF. | Qualquer modelo (só texto). |
+
+### 5.3 O que podemos adoptar do cookbook
+
+1. **Opção “enviar PDF ao modelo” (modo nativo)**  
+   Quando o modelo selecionado suportar PDF (ex.: Claude via AI Gateway):
+   - No cliente: para anexos PDF já em Blob/Storage, enviar também (ou em vez de) uma parte `file` com `mediaType: 'application/pdf'` e `url` (URL pública ou data URL).
+   - No servidor: alargar o schema para aceitar `file` com `application/pdf`; em vez de converter esse PDF em `document` → texto, deixar a parte `file` passar para `convertToModelMessages` (e não a transformar em texto em `normalizeMessageParts`).
+   - Referência de implementação: [Chat with PDFs](https://ai-sdk.dev/cookbook/next/chat-with-pdf) (conversão para data URL no cliente; no nosso caso podemos usar URL do Blob se o provider aceitar).
+
+2. **Fallback mantido**  
+   Se o modelo não suportar PDF ou se a extração for preferida (ex.: controlo de custo, truncagem), manter o fluxo actual: extração → partes `document` → `normalizeMessageParts` → texto.
+
+3. **Híbrido (recomendado)**  
+   - Por defeito: fluxo actual (texto extraído, truncagem, qualquer modelo).
+   - Opção na UI ou por agente: “Usar PDF nativo quando o modelo suportar” — nesse caso enviar parte `file` com PDF (URL ou data URL) e não substituir por texto quando o provider for compatível.
+
+### 5.4 Alterações técnicas sugeridas (inspiradas no cookbook)
+
+- **Schema** (`app/(chat)/api/chat/schema.ts`): alargar `filePartSchema` para aceitar `mediaType: 'application/pdf'` além de `image/jpeg` e `image/png`.
+- **Cliente** (`components/multimodal-input.tsx`): em `buildAttachmentParts`, para anexos PDF com `url` (ex.: Blob público), incluir opcionalmente uma parte `file` com `application/pdf` quando a opção “PDF nativo” estiver activa; caso contrário manter só `document` com texto extraído.
+- **Servidor** (`app/(chat)/api/chat/route.ts`): em `normalizeMessageParts`, não converter em texto as partes `file` cujo `mediaType` seja `application/pdf` (deixá-las passar para `convertToModelMessages`). Garantir que `isPartValidForModel` aceite `file` com `application/pdf`.
+- **Provider:** Confirmar no AI Gateway / provider que o modelo escolhido recebe e processa partes file com PDF (ex.: Anthropic, Google). Se o gateway não encaminhar PDF, o caminho “PDF nativo” só funcionará com chamada directa ao provider que suportar.
+
+---
+
+## 6. Referências
 
 - Estado atual do chat: `app/(chat)/api/chat/route.ts` (`normalizeMessageParts`, uso de `convertToModelMessages`).
 - Schema do chat: `app/(chat)/api/chat/schema.ts` (partes `text`, `file` só imagens, `document`).
@@ -141,3 +237,4 @@ Quando o modelo selecionado for Anthropic (ex.: Claude 3.5+ / 4.x) e quisermos e
 - OpenRouter PDF: https://openrouter.ai/docs/guides/overview/multimodal/pdfs
 - Anthropic Files API: https://docs.anthropic.com/en/docs/build-with-claude/files-api (beta; header `anthropic-beta: files-api-2025-04-14`; tipos de bloco `document`/`image`, limites, erros e download descritos na doc).
 - Custo e limites: `docs/OTIMIZACAO-CUSTO-TOKENS-LLM.md`
+- AI SDK cookbook “Chat with PDFs”: https://ai-sdk.dev/cookbook/next/chat-with-pdf (envio de PDF como parte `file` com data URL; uso directo de `convertToModelMessages`).

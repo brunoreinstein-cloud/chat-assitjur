@@ -529,6 +529,7 @@ export function Chat({
             }
             onOpenKnowledge={isReadonly ? undefined : openKnowledgeSidebar}
             onQuickPrompt={isReadonly ? undefined : setInput}
+            onStop={isReadonly ? undefined : stop}
             regenerate={regenerate}
             selectedModelId={initialChatModel}
             sendMessage={sendMessage}

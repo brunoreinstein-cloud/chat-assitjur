@@ -135,7 +135,8 @@ pnpm db:push          # drizzle-kit push
 pnpm run format       # Ultracite fix
 pnpm run lint         # Ultracite check
 pnpm run vercel:env   # puxar env da Vercel
-pnpm test             # Playwright E2E (PLAYWRIGHT=True)
+pnpm test             # Playwright E2E (inicia dev:test na porta 3301)
+pnpm run test:with-dev # E2E usando servidor já a correr (pnpm dev em 3300); evita "Unable to acquire lock"
 pnpm run test:unit    # Vitest (unitários)
 ```
 

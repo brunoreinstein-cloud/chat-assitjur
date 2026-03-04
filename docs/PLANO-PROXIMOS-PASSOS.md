@@ -76,6 +76,7 @@ Priorizar itens da Fase 1 conforme [PROJETO-REVISOR-DEFESAS.md](PROJETO-REVISOR-
 | **.agents/SKILLS_ARCHITECTURE.md** | Categorias e mapa de dependências das skills. |
 | **ux-ui-revisor-defesas.md** | Acessibilidade e próximo passo na mensagem de erro. |
 | **AVALIACAO-UPLOAD-ARQUIVOS-CONHECIMENTO.md** | Avaliação da proposta: guardar anexos em “Arquivos”, Arquivos → Conhecimento, Chat → Conhecimento; conclusões e próximos passos. |
+| **SUGESTOES-FUTURO.md** | Sugestões técnicas para o futuro: RAG (try/catch + toDatabaseError), rotas com BD e tratamento 503, logger centralizado em vez de console. |
 
 **Sugestão:** Manter este plano como índice; alterações de prioridade ou novas tarefas imediatas devem ser atualizadas na secção 1 e, se relevante, no roadmap da SPEC.
 

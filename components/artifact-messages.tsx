@@ -92,17 +92,11 @@ function areEqual(
   prevProps: ArtifactMessagesProps,
   nextProps: ArtifactMessagesProps
 ) {
-  if (
-    prevProps.artifactStatus === "streaming" &&
-    nextProps.artifactStatus === "streaming"
-  ) {
-    return true;
-  }
-
   if (prevProps.status !== nextProps.status) {
     return false;
   }
-  if (prevProps.status && nextProps.status) {
+  // Durante streaming as mensagens são atualizadas a cada chunk; não bloquear re-render.
+  if (nextProps.status === "streaming") {
     return false;
   }
   if (prevProps.messages.length !== nextProps.messages.length) {
@@ -111,7 +105,9 @@ function areEqual(
   if (!equal(prevProps.votes, nextProps.votes)) {
     return false;
   }
-
+  if (!equal(prevProps.messages, nextProps.messages)) {
+    return false;
+  }
   return true;
 }
 

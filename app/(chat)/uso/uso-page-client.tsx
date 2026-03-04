@@ -4,8 +4,10 @@ import { format } from "date-fns";
 import { pt } from "date-fns/locale";
 import { AlertCircleIcon, CoinsIcon, MessageSquareIcon } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import useSWR from "swr";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -14,27 +16,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { fetcher } from "@/lib/utils";
+import type { CreditsResponse, CreditsUsageItem } from "@/lib/types";
 
 const USAGE_LIMIT = 50;
 
-interface UsageItem {
-  id: string;
-  chatId: string | null;
-  promptTokens: number;
-  completionTokens: number;
-  model: string | null;
-  creditsConsumed: number;
-  createdAt: string;
-}
-
-interface CreditsResponse {
-  balance: number;
-  recentUsage: UsageItem[];
-  lowBalanceThreshold: number;
-}
-
-function UsageRow({ item }: Readonly<{ item: UsageItem }>) {
+function UsageRow({ item }: Readonly<{ item: CreditsUsageItem }>) {
   const totalTokens = item.promptTokens + item.completionTokens;
   const date = new Date(item.createdAt);
 
@@ -68,24 +54,94 @@ function UsageRow({ item }: Readonly<{ item: UsageItem }>) {
   );
 }
 
+/** Timeout do fetch: a API pode demorar >20s na primeira vez (BD fria). */
+const CREDITS_FETCH_TIMEOUT_MS = 35_000;
+
+function renderBalanceContent(
+  isLoading: boolean,
+  data: CreditsResponse | undefined
+): ReactNode {
+  if (isLoading) {
+    return (
+      <div className="flex h-16 items-center gap-2">
+        <span className="size-5 animate-pulse rounded bg-muted" />
+        <span className="text-muted-foreground text-sm">A carregar…</span>
+      </div>
+    );
+  }
+  if (!data) {
+    return null;
+  }
+  const isLow = data.balance < data.lowBalanceThreshold;
+  return (
+    <div className="flex flex-wrap items-baseline gap-2">
+      <span
+        className={
+          isLow
+            ? "font-semibold text-3xl text-amber-600 tabular-nums dark:text-amber-400"
+            : "font-semibold text-3xl tabular-nums"
+        }
+      >
+        {data.balance}
+      </span>
+      <span className="text-muted-foreground text-sm">
+        créditos disponíveis
+      </span>
+    </div>
+  );
+}
+
+function creditsFetcher(url: string): Promise<CreditsResponse> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    CREDITS_FETCH_TIMEOUT_MS
+  );
+  return fetch(url, { credentials: "include", signal: controller.signal })
+    .then((res) => {
+      clearTimeout(timeoutId);
+      if (!res.ok) {
+        return res.json().then((body: { message?: string }) => {
+          throw new Error(body.message ?? `HTTP ${res.status}`);
+        });
+      }
+      return res.json() as Promise<CreditsResponse>;
+    })
+    .catch((err) => {
+      clearTimeout(timeoutId);
+      throw err;
+    });
+}
+
 export function UsoPageClient() {
-  const { data, error, isLoading } = useSWR<CreditsResponse>(
+  const { data, error, isLoading, mutate } = useSWR<CreditsResponse>(
     `/api/credits?limit=${USAGE_LIMIT}`,
-    fetcher,
+    creditsFetcher,
     {
       revalidateOnFocus: true,
+      revalidateOnReconnect: true,
     }
   );
 
   if (error) {
     return (
-      <Alert variant="destructive">
-        <AlertCircleIcon className="size-4" />
-        <AlertTitle>Erro ao carregar</AlertTitle>
-        <AlertDescription>
-          Não foi possível obter o saldo e o histórico. Tente novamente.
-        </AlertDescription>
-      </Alert>
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
+        <Alert variant="destructive">
+          <AlertCircleIcon className="size-4" />
+          <AlertTitle>Erro ao carregar</AlertTitle>
+          <AlertDescription>
+            Não foi possível obter o saldo e o histórico. Tente novamente.
+          </AlertDescription>
+        </Alert>
+        <Button
+          className="self-start"
+          onClick={() => mutate()}
+          type="button"
+          variant="outline"
+        >
+          Tente novamente
+        </Button>
+      </div>
     );
   }
 
@@ -112,29 +168,7 @@ export function UsoPageClient() {
             enviar mensagens no chat.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex h-16 items-center gap-2">
-              <span className="size-5 animate-pulse rounded bg-muted" />
-              <span className="text-muted-foreground text-sm">A carregar…</span>
-            </div>
-          ) : data ? (
-            <div className="flex flex-wrap items-baseline gap-2">
-              <span
-                className={
-                  data.balance < data.lowBalanceThreshold
-                    ? "font-semibold text-3xl text-amber-600 tabular-nums dark:text-amber-400"
-                    : "font-semibold text-3xl tabular-nums"
-                }
-              >
-                {data.balance}
-              </span>
-              <span className="text-muted-foreground text-sm">
-                créditos disponíveis
-              </span>
-            </div>
-          ) : null}
-        </CardContent>
+        <CardContent>{renderBalanceContent(isLoading, data)}</CardContent>
       </Card>
 
       {data && data.balance < data.lowBalanceThreshold && (
@@ -164,17 +198,36 @@ export function UsoPageClient() {
               A carregar histórico…
             </div>
           )}
-          {!isLoading && data?.recentUsage && data.recentUsage.length > 0 && (
-            <ScrollArea className="h-[min(50vh,24rem)] pr-4">
-              <div className="divide-y-0">
-                {data.recentUsage.map((item) => (
-                  <UsageRow item={item} key={item.id} />
-                ))}
-              </div>
-            </ScrollArea>
+          {!isLoading && data?._partial && (
+            <div className="flex flex-col items-center gap-3 py-8">
+              <p className="text-center text-amber-600 text-sm dark:text-amber-400">
+                Histórico temporariamente indisponível (base de dados lenta).
+                Tente novamente em instantes.
+              </p>
+              <button
+                className="rounded-md border border-amber-500/50 bg-amber-500/10 px-4 py-2 font-medium text-amber-700 text-sm hover:bg-amber-500/20 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:text-amber-300 dark:hover:bg-amber-500/30"
+                onClick={() => mutate()}
+                type="button"
+              >
+                Tente novamente
+              </button>
+            </div>
           )}
           {!isLoading &&
+            data?.recentUsage &&
+            data.recentUsage.length > 0 &&
+            !data._partial && (
+              <ScrollArea className="h-[min(50vh,24rem)] pr-4">
+                <div className="divide-y-0">
+                  {data.recentUsage.map((item) => (
+                    <UsageRow item={item} key={item.id} />
+                  ))}
+                </div>
+              </ScrollArea>
+            )}
+          {!isLoading &&
             data &&
+            !data._partial &&
             (!data.recentUsage || data.recentUsage.length === 0) && (
               <p className="py-8 text-center text-muted-foreground text-sm">
                 Ainda não há registos de uso. O consumo será listado aqui após

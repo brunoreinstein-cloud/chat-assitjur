@@ -5,7 +5,12 @@ import {
   ensureStatementTimeout,
   getChatsByUserId,
 } from "@/lib/db/queries";
-import { ChatbotError } from "@/lib/errors";
+import {
+  ChatbotError,
+  databaseUnavailableResponse,
+  isDatabaseConnectionError,
+  isStatementTimeoutError,
+} from "@/lib/errors";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -64,6 +69,19 @@ export async function GET(request: NextRequest) {
       }
       return error.toResponse();
     }
+    if (isDatabaseConnectionError(error)) {
+      return databaseUnavailableResponse();
+    }
+    if (isStatementTimeoutError(error)) {
+      return Response.json(
+        {
+          code: "bad_request:database",
+          message:
+            "A consulta demorou demasiado. Tente novamente em instantes.",
+        },
+        { status: 503, headers: { "Retry-After": "5" } }
+      );
+    }
     return Response.json(
       {
         code: "bad_request:api",
@@ -89,6 +107,9 @@ export async function DELETE() {
   } catch (error) {
     if (error instanceof ChatbotError) {
       return error.toResponse();
+    }
+    if (isDatabaseConnectionError(error)) {
+      return databaseUnavailableResponse();
     }
     return Response.json(
       {

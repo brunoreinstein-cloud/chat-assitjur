@@ -40,10 +40,12 @@ interface CustomAgentRow {
   createdAt: string;
 }
 
+import { MIN_CREDITS_TO_START_CHAT } from "@/lib/ai/credits";
 import type {
   Attachment,
   ChatMessage,
   ChatTools,
+  CreditsResponse,
   CustomUIDataTypes,
 } from "@/lib/types";
 import { cn, fetcher } from "@/lib/utils";
@@ -1237,12 +1239,18 @@ function PureMultimodalInput({
 
   const fileInputId = "chat-file-input";
 
+  const { data: creditsData } = useSWR<CreditsResponse>(
+    "/api/credits",
+    fetcher
+  );
   const revisorFirstMessage = isRevisorAgent && messages.length === 0;
   const sendButtonDisabled =
     (revisorFirstMessage
       ? !hasPiAndContestacao && input.trim() === ""
       : attachments.length === 0 && input.trim() === "") ||
-    uploadQueue.length > 0;
+    uploadQueue.length > 0 ||
+    (creditsData !== undefined &&
+      creditsData.balance < MIN_CREDITS_TO_START_CHAT);
 
   return (
     <div className={cn("relative flex w-full flex-col gap-4", className)}>

@@ -9,19 +9,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import type { CreditsResponse } from "@/lib/types";
 import { fetcher } from "@/lib/utils";
-
-interface CreditsResponse {
-  balance: number;
-  recentUsage: Array<{
-    id: string;
-    creditsConsumed: number;
-    promptTokens: number;
-    completionTokens: number;
-    createdAt: string;
-  }>;
-  lowBalanceThreshold: number;
-}
 
 export function CreditsBalance() {
   const { data, error } = useSWR<CreditsResponse>("/api/credits", fetcher, {
@@ -30,7 +19,27 @@ export function CreditsBalance() {
   });
 
   if (error) {
-    return null;
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <output
+              aria-label="Saldo temporariamente indisponível"
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border bg-muted/50 px-2 text-muted-foreground text-sm"
+            >
+              <CoinsIcon aria-hidden className="size-4 shrink-0" />
+              <span>—</span>
+            </output>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            <p className="text-sm">
+              Não foi possível carregar o saldo. Tente novamente ou veja a
+              página Uso e créditos.
+            </p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
   }
   if (data === undefined) {
     return (

@@ -1,5 +1,6 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
 import { ArrowDownIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useMessages } from "@/hooks/use-messages";
 import type { AgentId } from "@/lib/ai/agents-registry-metadata";
 import type { Vote } from "@/lib/db/schema";
@@ -14,6 +15,7 @@ import {
   findLastAssistantIndexWithGate05,
   getUserMessageText,
 } from "./revisor-phase-banner";
+import { Button } from "./ui/button";
 
 interface MessagesProps {
   addToolApprovalResponse: UseChatHelpers<ChatMessage>["addToolApprovalResponse"];
@@ -43,6 +45,8 @@ interface MessagesProps {
   /** Quando definidos, usa ChatEmptyState em vez de Greeting no estado vazio */
   onAgentSelect?: (id: AgentId) => void;
   onQuickPrompt?: (text: string) => void;
+  /** Opcional: chamado para cancelar o pedido em curso (mostrado no aviso de espera longa) */
+  onStop?: () => void;
 }
 
 function PureMessages({
@@ -65,6 +69,7 @@ function PureMessages({
   agentId,
   onAgentSelect,
   onQuickPrompt,
+  onStop,
 }: MessagesProps) {
   const {
     containerRef: messagesContainerRef,
@@ -75,6 +80,19 @@ function PureMessages({
   } = useMessages({
     status,
   });
+
+  const [submittedElapsedMs, setSubmittedElapsedMs] = useState(0);
+  useEffect(() => {
+    if (status !== "submitted") {
+      setSubmittedElapsedMs(0);
+      return;
+    }
+    const start = Date.now();
+    const interval = setInterval(() => {
+      setSubmittedElapsedMs(Date.now() - start);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [status]);
 
   useDataStream();
 
@@ -191,7 +209,24 @@ function PureMessages({
                   "state" in part &&
                   part?.state === "approval-responded"
               )
-            ) && <ThinkingMessage />}
+            ) && (
+              <div className="flex flex-col gap-2">
+                <ThinkingMessage />
+                {submittedElapsedMs >= 50_000 && onStop && !isReadonly && (
+                  <p className="text-muted-foreground text-sm">
+                    A demorar mais do que o habitual.{" "}
+                    <Button
+                      className="h-auto p-0 font-normal text-sm underline"
+                      onClick={onStop}
+                      type="button"
+                      variant="link"
+                    >
+                      Cancelar pedido
+                    </Button>
+                  </p>
+                )}
+              </div>
+            )}
 
           <div
             className="min-h-[24px] min-w-[24px] shrink-0"

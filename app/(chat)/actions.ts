@@ -53,9 +53,12 @@ export async function generateTitleFromUserMessage({
     .trim();
 }
 
+/** Remove mensagens do chat posteriores à mensagem com o id dado. Se a mensagem não existir, não faz nada (idempotente). */
 export async function deleteTrailingMessages({ id }: { id: string }) {
   const [message] = await getMessageById({ id });
-
+  if (!message) {
+    return;
+  }
   await deleteMessagesByChatIdAfterTimestamp({
     chatId: message.chatId,
     timestamp: message.createdAt,

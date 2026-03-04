@@ -53,13 +53,22 @@ async function ping() {
     }
     process.exit(0);
   } catch (err) {
-    const code = err && typeof err === "object" && "code" in err ? (err as { code: string }).code : undefined;
+    const code =
+      err && typeof err === "object" && "code" in err
+        ? (err as { code: string }).code
+        : undefined;
     if (code === "57014") {
       console.error("❌ O servidor cancelou a query (statement timeout).");
-      console.error("   O pooler Supabase/Neon pode ter statement_timeout curto (ex.: 8s); em cold start a ligação demora mais.");
+      console.error(
+        "   O pooler Supabase/Neon pode ter statement_timeout curto (ex.: 8s); em cold start a ligação demora mais."
+      );
       console.error("   Opções:");
-      console.error("   1) Correr de novo: pnpm db:ping (a 2.ª vez costuma ser rápida, ligação já quente).");
-      console.error("   2) Para este script só: em .env.local usa a connection string em modo Session (porta 5432) em vez do pooler (6543). Supabase: Settings → Database → Connection string → Session.");
+      console.error(
+        "   1) Correr de novo: pnpm db:ping (a 2.ª vez costuma ser rápida, ligação já quente)."
+      );
+      console.error(
+        "   2) Para este script só: em .env.local usa a connection string em modo Session (porta 5432) em vez do pooler (6543). Supabase: Settings → Database → Connection string → Session."
+      );
       console.error("   Ver docs/DB-TIMEOUT-TROUBLESHOOTING.md");
     } else {
       console.error("❌ Erro ao ligar à base de dados:");

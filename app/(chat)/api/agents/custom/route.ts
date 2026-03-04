@@ -5,7 +5,11 @@ import {
   ensureStatementTimeout,
   getCustomAgentsByUserId,
 } from "@/lib/db/queries";
-import { ChatbotError } from "@/lib/errors";
+import {
+  ChatbotError,
+  databaseUnavailableResponse,
+  isDatabaseConnectionError,
+} from "@/lib/errors";
 
 const createBodySchema = z.object({
   name: z.string().min(1).max(256),
@@ -20,16 +24,6 @@ const createBodySchema = z.object({
     .nullable(),
   knowledgeDocumentIds: z.array(z.string().uuid()).max(50).optional(),
 });
-
-const databaseErrorResponse = () =>
-  Response.json(
-    {
-      code: "bad_request:database",
-      message:
-        "Base de dados indisponível. Verifique POSTGRES_URL no .env.local.",
-    },
-    { status: 503 }
-  );
 
 /** GET: listar agentes personalizados do utilizador. */
 export async function GET() {
@@ -46,9 +40,12 @@ export async function GET() {
   } catch (error) {
     if (error instanceof ChatbotError) {
       if (error.surface === "database") {
-        return databaseErrorResponse();
+        return databaseUnavailableResponse();
       }
       return error.toResponse();
+    }
+    if (isDatabaseConnectionError(error)) {
+      return databaseUnavailableResponse();
     }
     return Response.json(
       { code: "bad_request:api", message: "Algo correu mal. Tente novamente." },
@@ -87,9 +84,12 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof ChatbotError) {
       if (error.surface === "database") {
-        return databaseErrorResponse();
+        return databaseUnavailableResponse();
       }
       return error.toResponse();
+    }
+    if (isDatabaseConnectionError(error)) {
+      return databaseUnavailableResponse();
     }
     return Response.json(
       { code: "bad_request:api", message: "Algo correu mal. Tente novamente." },

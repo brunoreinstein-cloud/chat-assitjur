@@ -78,6 +78,26 @@ export interface ChatMessage
 /** Rótulo opcional para documentos (PI/Contestação) no Revisor de Defesas */
 export type DocumentTypeLabel = "pi" | "contestacao";
 
+/** Item de uso recente devolvido por GET /api/credits */
+export interface CreditsUsageItem {
+  id: string;
+  chatId: string | null;
+  promptTokens: number;
+  completionTokens: number;
+  model: string | null;
+  creditsConsumed: number;
+  createdAt: string;
+}
+
+/** Resposta de GET /api/credits (saldo + histórico + threshold). */
+export interface CreditsResponse {
+  balance: number;
+  recentUsage: CreditsUsageItem[];
+  lowBalanceThreshold: number;
+  /** true quando a BD demorou ou falhou e a API devolveu fallback */
+  _partial?: boolean;
+}
+
 export interface Attachment {
   name: string;
   url: string;
