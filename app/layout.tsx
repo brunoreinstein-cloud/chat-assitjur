@@ -71,10 +71,10 @@ export default function RootLayout({
       <head>
         <script
           // Inline script: aplica tema antes da hidratação para evitar flash (next-themes).
-          // Deve correr antes de qualquer conteúdo visível.
+          // Padrão: modo claro; dark só se tema guardado for 'dark' ou for 'system' e o sistema preferir escuro.
           // biome-ignore lint/security/noDangerouslySetInnerHtml: required for theme FOUC prevention
           dangerouslySetInnerHTML={{
-            __html: `(function(){var t=localStorage.getItem('theme');var d=t==='dark'||(t!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);})();`,
+            __html: `(function(){var t=localStorage.getItem('theme');var d=t==='dark'||(t==='system'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);})();`,
           }}
         />
         <script
@@ -87,7 +87,7 @@ export default function RootLayout({
       <body className="antialiased">
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
+          defaultTheme="light"
           disableTransitionOnChange
           enableSystem
         >
