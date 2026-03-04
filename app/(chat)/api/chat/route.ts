@@ -633,7 +633,7 @@ export async function POST(request: Request) {
                 userId: session.user.id,
               }),
               PER_QUERY_TIMEOUT_MS,
-              null as Awaited<ReturnType<typeof getCustomAgentById>>
+              null as unknown as Awaited<ReturnType<typeof getCustomAgentById>>
             )
           ),
     ]);
