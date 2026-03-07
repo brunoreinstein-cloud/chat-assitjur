@@ -397,18 +397,20 @@ async function parsePostBody(
     return postRequestBodySchema.parse(json);
   } catch (error: unknown) {
     let cause: string | undefined;
-    if (isDev && error instanceof Error) {
-      if (error instanceof ZodError && error.issues.length > 0) {
-        const first = error.issues[0];
-        const path = first.path.join(".");
-        cause = path ? `${path}: ${first.message}` : first.message;
+    if (error instanceof ZodError && error.issues.length > 0) {
+      const first = error.issues[0];
+      const path = first.path.join(".");
+      cause = path ? `${path}: ${first.message}` : first.message;
+      if (isDev) {
         console.error(
           "[POST /api/chat] Validação falhou:",
           cause,
           error.issues
         );
-      } else {
-        cause = error.message;
+      }
+    } else if (error instanceof Error) {
+      cause = error.message;
+      if (isDev) {
         console.error("[POST /api/chat] Erro ao processar corpo:", cause);
       }
     }

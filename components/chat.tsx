@@ -232,8 +232,9 @@ export function Chat({
             ...(isToolApprovalContinuation
               ? { messages: request.messages }
               : { message: lastMessage }),
-            selectedChatModel: currentModelIdRef.current,
-            selectedVisibilityType: visibilityType,
+            selectedChatModel:
+              currentModelIdRef.current?.trim() || initialChatModel,
+            selectedVisibilityType: visibilityType ?? "private",
             ...(agentInstructionsRef.current?.trim()
               ? { agentInstructions: agentInstructionsRef.current.trim() }
               : {}),
