@@ -34,6 +34,63 @@ function withTimeout<T>(
 const DEFAULT_USAGE_LIMIT = 10;
 const MAX_USAGE_LIMIT = 50;
 const CACHE_MAX_AGE_SECONDS = 30;
+const BALANCE_TIMEOUT_MS = 5000;
+/** Histórico de uso: timeout maior para reduzir "base de dados lenta" em BDs lentas mas respondíveis. */
+const USAGE_TIMEOUT_MS = 18_000;
+
+function parseUsageLimit(searchParams: URLSearchParams): number {
+  const limitParam = searchParams.get("limit");
+  if (limitParam === null || limitParam === "") {
+    return DEFAULT_USAGE_LIMIT;
+  }
+  const parsed = Number.parseInt(limitParam, 10);
+  if (!Number.isFinite(parsed) || parsed < 1 || parsed > MAX_USAGE_LIMIT) {
+    return DEFAULT_USAGE_LIMIT;
+  }
+  return parsed;
+}
+
+function getInitialCreditsAndThreshold(user: { type?: string }): {
+  initialCredits: number;
+  lowBalanceThreshold: number;
+} {
+  const rawType = user.type;
+  const userType: UserType =
+    rawType === "guest" || rawType === "regular" ? rawType : "regular";
+  const initialCredits = entitlementsByUserType[userType].initialCredits;
+  const lowBalanceThreshold = Math.max(10, Math.ceil(initialCredits * 0.2));
+  return { initialCredits, lowBalanceThreshold };
+}
+
+async function resolveBalance(
+  userId: string,
+  balanceResult: TimeoutResult<Awaited<ReturnType<typeof getCreditBalance>>>,
+  initialCredits: number
+): Promise<{ balance: number; partial: boolean }> {
+  const balanceRow = balanceResult.ok ? balanceResult.value : null;
+  const balanceTimedOut = !balanceResult.ok;
+  if (balanceTimedOut) {
+    return { balance: initialCredits, partial: true };
+  }
+  if (balanceRow === null) {
+    const createResult = await withTimeout(
+      getOrCreateCreditBalance(userId, initialCredits),
+      BALANCE_TIMEOUT_MS
+    );
+    const balance = createResult.ok ? createResult.value : initialCredits;
+    return { balance, partial: !createResult.ok };
+  }
+  return { balance: balanceRow.balance, partial: false };
+}
+
+function creditsJsonResponse(body: object) {
+  return Response.json(body, {
+    status: 200,
+    headers: {
+      "Cache-Control": `private, max-age=${CACHE_MAX_AGE_SECONDS}`,
+    },
+  });
+}
 
 /** GET: saldo de créditos e uso recente do utilizador (transparência). Query: ?limit= (opcional, 10–50). */
 export async function GET(request: Request) {
@@ -43,66 +100,46 @@ export async function GET(request: Request) {
     return new ChatbotError("unauthorized:chat").toResponse();
   }
 
-  let limit = DEFAULT_USAGE_LIMIT;
-  const { searchParams } = new URL(request.url);
-  const limitParam = searchParams.get("limit");
-  if (limitParam !== null && limitParam !== "") {
-    const parsed = Number.parseInt(limitParam, 10);
-    if (Number.isFinite(parsed) && parsed >= 1 && parsed <= MAX_USAGE_LIMIT) {
-      limit = parsed;
-    }
-  }
-
+  const limit = parseUsageLimit(new URL(request.url).searchParams);
   const userId = session.user.id;
   const cached = creditsCache.get(userId, limit);
   if (cached !== undefined) {
-    return Response.json(cached, {
-      status: 200,
-      headers: {
-        "Cache-Control": `private, max-age=${CACHE_MAX_AGE_SECONDS}`,
-      },
-    });
+    return creditsJsonResponse(cached);
   }
 
-  const rawType = session.user.type;
-  const userType: UserType =
-    rawType === "guest" || rawType === "regular" ? rawType : "regular";
-  const initialCredits = entitlementsByUserType[userType].initialCredits;
-  const lowBalanceThreshold = Math.max(10, Math.ceil(initialCredits * 0.2));
-
-  const BALANCE_TIMEOUT_MS = 5000;
-  /** Histórico de uso: timeout maior para reduzir "base de dados lenta" em BDs lentas mas respondíveis. */
-  const USAGE_TIMEOUT_MS = 18_000;
+  const { initialCredits, lowBalanceThreshold } = getInitialCreditsAndThreshold(
+    session.user
+  );
+  const isDev = process.env.NODE_ENV === "development";
+  const t0 = Date.now();
 
   try {
     await ensureStatementTimeout();
+    if (isDev) {
+      console.info(
+        `[credits-timing] ensureStatementTimeout: ${Date.now() - t0}ms`
+      );
+    }
 
+    const t1 = Date.now();
     const [balanceResult, usageResult] = await Promise.all([
       withTimeout(getCreditBalance(userId), BALANCE_TIMEOUT_MS),
       withTimeout(getRecentUsageByUserId(userId, limit), USAGE_TIMEOUT_MS),
     ]);
+    if (isDev) {
+      console.info(
+        `[credits-timing] getCreditBalance + getRecentUsage: ${Date.now() - t1}ms (total desde início: ${Date.now() - t0}ms)`
+      );
+    }
 
-    const balanceRow = balanceResult.ok ? balanceResult.value : null;
-    const balanceTimedOut = !balanceResult.ok;
     const usageTimedOut = !usageResult.ok;
     const recentUsage = usageResult.ok ? usageResult.value : [];
-
-    let balance: number;
-    let partial = balanceTimedOut || usageTimedOut;
-    if (balanceTimedOut) {
-      balance = initialCredits;
-    } else if (balanceRow === null) {
-      const createResult = await withTimeout(
-        getOrCreateCreditBalance(userId, initialCredits),
-        BALANCE_TIMEOUT_MS
-      );
-      balance = createResult.ok ? createResult.value : initialCredits;
-      if (!createResult.ok) {
-        partial = true;
-      }
-    } else {
-      balance = balanceRow.balance;
-    }
+    const { balance, partial: balancePartial } = await resolveBalance(
+      userId,
+      balanceResult,
+      initialCredits
+    );
+    const partial = balancePartial || usageTimedOut;
 
     const body = {
       balance,
@@ -123,17 +160,12 @@ export async function GET(request: Request) {
       creditsCache.set(userId, limit, body);
     }
 
-    return Response.json(body, {
-      status: 200,
-      headers: {
-        "Cache-Control": `private, max-age=${CACHE_MAX_AGE_SECONDS}`,
-      },
-    });
+    return creditsJsonResponse(body);
   } catch (error) {
     if (isDatabaseConnectionError(error) || isStatementTimeoutError(error)) {
       return databaseUnavailableResponse();
     }
-    return Response.json({
+    return creditsJsonResponse({
       balance: initialCredits,
       recentUsage: [],
       lowBalanceThreshold,

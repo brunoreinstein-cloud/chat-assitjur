@@ -1,33 +1,32 @@
 import { expect, test } from "@playwright/test";
-
-const CHAT_PAGE = "/chat";
+import { ensureChatPageWithGuest } from "../helpers";
 
 test.describe("Chat Page", () => {
   test("chat page loads with input field", async ({ page }) => {
-    await page.goto(CHAT_PAGE, { waitUntil: "domcontentloaded" });
+    await ensureChatPageWithGuest(page);
     await expect(page.getByTestId("multimodal-input")).toBeVisible();
   });
 
   test("can type in the input field", async ({ page }) => {
-    await page.goto(CHAT_PAGE, { waitUntil: "domcontentloaded" });
+    await ensureChatPageWithGuest(page);
     const input = page.getByTestId("multimodal-input");
     await input.fill("Hello world");
     await expect(input).toHaveValue("Hello world");
   });
 
   test("submit button is visible", async ({ page }) => {
-    await page.goto(CHAT_PAGE, { waitUntil: "domcontentloaded" });
+    await ensureChatPageWithGuest(page);
     await expect(page.getByTestId("send-button")).toBeVisible();
   });
 
   test("prompt selector is visible on empty chat", async ({ page }) => {
-    await page.goto(CHAT_PAGE, { waitUntil: "domcontentloaded" });
+    await ensureChatPageWithGuest(page);
     const trigger = page.getByTestId("prompt-selector-trigger");
     await expect(trigger).toBeVisible();
   });
 
   test("can stop generation with stop button", async ({ page }) => {
-    await page.goto(CHAT_PAGE, { waitUntil: "domcontentloaded" });
+    await ensureChatPageWithGuest(page);
 
     // Type and send a message
     await page.getByTestId("multimodal-input").fill("Hello");
@@ -45,7 +44,7 @@ test.describe("Chat Page", () => {
 
 test.describe("Chat Input Features", () => {
   test("input clears after sending", async ({ page }) => {
-    await page.goto(CHAT_PAGE, { waitUntil: "domcontentloaded" });
+    await ensureChatPageWithGuest(page);
     const input = page.getByTestId("multimodal-input");
     await input.fill("Test message");
     await page.getByTestId("send-button").click();
@@ -55,9 +54,10 @@ test.describe("Chat Input Features", () => {
   });
 
   test("input supports multiline text", async ({ page }) => {
-    await page.goto(CHAT_PAGE, { waitUntil: "domcontentloaded" });
+    await ensureChatPageWithGuest(page);
     const input = page.getByTestId("multimodal-input");
-    await input.fill("Line 1\nLine 2\nLine 3");
-    await expect(input).toContainText("Line 1");
+    const multiline = "Line 1\nLine 2\nLine 3";
+    await input.fill(multiline);
+    await expect(input).toHaveValue(multiline);
   });
 });

@@ -1,0 +1,5 @@
+# Não enviar para o build (reduz tamanho e evita lint em output de testes)
+test-results
+playwright-report
+blob-report
+.playwright

@@ -1,11 +1,25 @@
 # Resolução de problemas: timeout da base de dados no chat
 
-Quando o chat devolve **400** com a mensagem *"A base de dados não respondeu a tempo"* ou no terminal aparece `[chat] dbBatch timeout or error: DB_BATCH_TIMEOUT`, o batch de queries à BD excedeu o limite (atualmente **120s**). Segue estes passos.
+Quando o chat devolve **400** com a mensagem *"A base de dados não respondeu a tempo"*, a **resposta do chat não carrega** (stream nunca começa ou demora demasiado), ou no terminal aparece `[chat] dbBatch timeout or error: DB_BATCH_TIMEOUT`, o batch de queries à BD excedeu o limite (atualmente **120s**). Segue estes passos.
+
+---
+
+## Checklist rápido (resposta não carregou / muito lento)
+
+1. **Ligação com pooler** — Em `POSTGRES_URL` usa a porta **6543** (Supabase: *Settings → Database* → Connection string → **Transaction**). Em produção (Vercel) é obrigatório; em dev reduz cold start.
+2. **Aquecer a BD** — Antes de enviar mensagens: abre a página do chat (o `DbWarmup` chama `GET /api/health/db` em background) ou corre `pnpm db:ping` no terminal. O primeiro pedido fica “quente”.
+3. **Reenviar a mensagem** — O segundo pedido costuma ser bem mais rápido. Se a primeira resposta não carregou, envia de novo.
+
+Detalhes e valores de timeout nas secções abaixo.
+
+---
 
 **Timeouts atuais (referência):**
-- **Batch global:** 120s (`DB_BATCH_TIMEOUT_MS`). Rede de segurança; com timeouts por query o batch tende a completar em ≤45s.
-- **Por query:** 45s (`PER_QUERY_TIMEOUT_MS`). Se uma query (chat, mensagens, conhecimento, etc.) não responder a tempo, usa-se um fallback (ex.: chat null, mensagens []) e o chat continua; evita que cold start bloqueie o pedido.
+- **Ligação ao iniciar (ensureDbReady):** 10s por tentativa, com **1 retry** (máx. ~20s antes de devolver erro). Reduz contenção ao falhar cedo e pedir "tenta novamente".
+- **Batch global:** 120s (`DB_BATCH_TIMEOUT_MS`). Rede de segurança; com timeouts por query o batch tende a completar em ≤25s.
+- **Por query:** 25s (`PER_QUERY_TIMEOUT_MS`). Se uma query (chat, mensagens, conhecimento, etc.) não responder a tempo, usa-se um fallback (ex.: chat null, mensagens []) e o chat continua; reduz contenção ao completar o pedido mais cedo quando a BD está lenta.
 - **Créditos no batch:** 25s (`CREDITS_IN_BATCH_TIMEOUT_MS`). Se a query de créditos não responder a tempo, a app usa o saldo inicial.
+- **Em desenvolvimento:** o `saveChat` (novo chat) é fire-and-forget (não bloqueia o handler), para não segurar a conexão à BD; em produção continua a ser aguardado.
 
 ---
 
@@ -90,7 +104,8 @@ O limite está em `app/(chat)/api/chat/route.ts`:
 | O quê | Onde | Valor atual / sugestão |
 |-------|------|-------------------------|
 | Timeout do batch de queries do chat | `app/(chat)/api/chat/route.ts` → `DB_BATCH_TIMEOUT_MS` | 120_000 (120s). Rede de segurança. |
-| Timeout por query (fallback) | `app/(chat)/api/chat/route.ts` → `PER_QUERY_TIMEOUT_MS` | 45_000 (45s). Por query (chat, mensagens, conhecimento, overrides, etc.); em timeout usa fallback e o chat continua. |
+| Timeout por query (fallback) | `app/(chat)/api/chat/route.ts` → `PER_QUERY_TIMEOUT_MS` | 25_000 (25s). Por query (chat, mensagens, conhecimento, overrides, etc.); em timeout usa fallback e o chat continua (reduz contenção). |
+| Timeout da ligação ao iniciar o chat | `app/(chat)/api/chat/route.ts` → `ensureDbReady()` | 10s por tentativa, 1 retry (máx. ~20s). |
 | Timeout da query de créditos dentro do batch | `app/(chat)/api/chat/route.ts` → `CREDITS_IN_BATCH_TIMEOUT_MS` | 25_000 (25s). Após este tempo usa-se saldo inicial. |
 | Statement timeout (por sessão SQL) | `lib/db/queries.ts` → `ensureStatementTimeout()` | 120s. A app define na sessão ao iniciar o chat. |
 | Timeout de ligação ao Postgres | `lib/db/queries.ts` → `getDb()` (opções do driver) | `connect_timeout: 10` (10s). |
@@ -109,10 +124,10 @@ Com `pnpm dev`, cada POST /api/chat regista no terminal:
 
 - `[chat-timing] dbBatch: starting…` — início do batch.
 - `[chat-timing] dbBatch: getMessageCount done in Xms` (e o mesmo para getChatById, getMessagesByChatId, etc.) — **a query que tiver o X mais alto é a mais lenta**. A última a aparecer antes de "dbBatch: all done" é o gargalo do batch.
-- `[chat-timing] dbBatch: getXXX timeout após 45000ms, a usar fallback` — essa query excedeu 45s e usou fallback; é um candidato a gargalo (cold start ou query pesada).
+- `[chat-timing] dbBatch: getXXX timeout após 25000ms, a usar fallback` — essa query excedeu 25s e usou fallback; é um candidato a gargalo (cold start ou query pesada).
 - `[chat-timing] dbBatch: all done in Xms` — tempo total do batch.
 
-**Como usar:** Reproduz o problema (envia uma mensagem após um tempo sem usar). No terminal, anota qual query tem o maior "done in Xms" ou qual fez "timeout após 45000ms". Se várias fizerem timeout, o gargalo é provavelmente a **primeira ligação à BD** (cold start), que atrasa todas.
+**Como usar:** Reproduz o problema (envia uma mensagem após um tempo sem usar). No terminal, anota qual query tem o maior "done in Xms" ou qual fez "timeout após 25000ms". Se várias fizerem timeout, o gargalo é provavelmente a **primeira ligação à BD** (cold start), que atrasa todas.
 
 ### 7.2 Medir cold start vs ligação quente
 
@@ -137,13 +152,22 @@ Em `.env.local` define `DEBUG_CHAT=true`, reinicia e envia uma mensagem. No term
 - **dbBatch** alto (ex.: 40000) → o batch de BD é o gargalo; usa os logs do ponto 7.1 para ver qual query dentro do batch.
 - **validationRag** ou **saveMessages** altos → o gargalo está noutra fase (RAG, gravação), não na BD do batch.
 
-### 7.4 Resumo: o que é normalmente o gargalo
+### 7.4 GET /api/credits lento (ex.: 19s+)
+
+Se **GET /api/credits** demorar 15–20s, o tempo está quase todo na **primeira ligação à BD** (cold start) ou nas queries de saldo/uso. Em **desenvolvimento** (`pnpm dev`) o endpoint regista no terminal:
+
+- `[credits-timing] ensureStatementTimeout: Xms` — tempo até a ligação estar pronta e o SET aplicado. Se X for > 10s, o gargalo é a conexão/cold start.
+- `[credits-timing] getCreditBalance + getRecentUsage: Xms (total desde início: Yms)` — tempo das duas queries em paralelo. Se Y ≈ 19s e "ensureStatementTimeout" foi ~18s, o problema é a ligação; se "ensureStatementTimeout" foi rápido e o total alto, é uma das duas queries (ex.: `getRecentUsageByUserId`).
+
+**Solução:** igual ao chat — usar **pooler** (porta 6543 no Supabase), reenviar o pedido (2.ª vez = ligação quente) ou aquecer com `GET /api/health/db` ao carregar a app.
+
+### 7.5 Resumo: o que é normalmente o gargalo
 
 | Cenário | Gargalo provável | Confirmação |
 |--------|-------------------|-------------|
-| Primeira mensagem após muito tempo sem usar | Cold start da BD (Supabase/Neon) | db:ping lento na 1.ª vez, rápido na 2.ª; várias queries com "timeout após 45s" ou tempos ~25–45s |
+| Primeira mensagem após muito tempo sem usar | Cold start da BD (Supabase/Neon) | db:ping lento na 1.ª vez, rápido na 2.ª; várias queries com "timeout após 25s" ou tempos ~10–25s |
 | Sempre lento, mesmo em pedidos seguidos | Query específica pesada ou rede/URL | Uma query com "done in Xms" muito maior que as outras; ou db:ping sempre lento |
-| GET /api/credits também demora 20s+ | Conexão à BD (ou cold start) | Mesmo processo: a primeira ligação do processo está lenta |
+| GET /api/credits também demora 20s+ | Conexão à BD (ou cold start) | Ver 7.4: logs `[credits-timing]` em dev; primeira ligação do processo está lenta |
 
 ---
 
@@ -159,9 +183,10 @@ Em `.env.local` define `DEBUG_CHAT=true`, reinicia e envia uma mensagem. No term
 - Resposta em ~45s com alguns dados em fallback (ex.: sem histórico na primeira mensagem), ou
 - Se a BD responder a tempo, dados completos.
 
-**Se quiseres reduzir a sensação de lentidão no primeiro uso (opcional):**
+**Aquecimento da ligação (recomendado):**
 
-- **Aquecer a ligação antes do primeiro chat:** por exemplo, chamar `GET /api/credits` ou abrir a página do chat (que chama auth/session e pode tocar na BD) uns segundos antes de enviar a primeira mensagem; ou correr `pnpm db:ping` antes de abrir a app.
+- **Automático:** Ao entrar na área do chat, o componente `DbWarmup` chama `GET /api/health/db` uma vez em background. Assim a primeira ligação à BD é feita ao carregar a página, e o primeiro `GET /api/credits` ou `POST /api/chat` tende a ser mais rápido. Ver `components/db-warmup.tsx` e layout em `app/(chat)/layout.tsx`.
+- **Manual (opcional):** Chamar `GET /api/health/db` ou `GET /api/credits` ao abrir a app; ou correr `pnpm db:ping` antes de abrir a app.
 - **Manter o projeto Supabase/Neon “acordado”:** em planos com pausa automática, um cron job que faça um pedido leve à BD de X em X minutos reduz cold starts (configuração no teu lado, fora do código do chat).
 
 ---

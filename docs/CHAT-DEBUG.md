@@ -221,7 +221,33 @@ Requer `AI_GATEWAY_API_KEY` em local (ou config do Vercel em produção). A rota
 
 ---
 
-## 11. Referências
+## 11. Carregamento inicial da página /chat (ordem e chamadas)
+
+Ao abrir `/chat` (ou `/chat?agent=...`), o cliente faz várias chamadas em paralelo. Ordem sugerida e como reduzir duplicados:
+
+### Chamadas na carga inicial
+
+| Recurso | Quem | Prioridade / nota |
+|--------|------|-------------------|
+| **GET /api/auth/session** | SessionProvider (next-auth) no root layout | Uma vez por carga. Evitar 2.ª chamada: `refetchOnWindowFocus={false}` no SessionProvider; na sidebar usar `user`/`isGuest` do servidor em vez de `useSession()`. |
+| **GET /api/health/db** | DbWarmup (layout do chat) | Baixa; fire-and-forget para aquecer a BD. Não bloqueia a UI. |
+| **GET /api/credits** | Sidebar + MultimodalInput (SWR com a mesma key) | Uma única request partilhada pelo SWR. Só quando há sessão. |
+| **GET /api/agents/custom** | Header/input (SWR) | Uma request partilhada; só quando o utilizador pode editar agentes. |
+
+### Por que pode haver 2× GET /api/auth/session
+
+- **React Strict Mode (dev):** o SessionProvider monta duas vezes → dois pedidos.
+- **Refetch ao focar o separador:** por defeito o next-auth refaz a sessão ao regressar ao tab; desativar com `refetchOnWindowFocus={false}`.
+
+### Por que alguns pedidos são lentos
+
+- **Primeira chamada a /api/credits ou /api/health/db:** cold start da ligação à BD (até ~10s com `connect_timeout: 10`). O DbWarmup chama `/api/health/db` ao montar para aquecer; o primeiro `/api/credits` ou POST /api/chat tende a ser mais rápido depois.
+- **GET /api/credits 15–20s:** ver **docs/DB-TIMEOUT-TROUBLESHOOTING.md** sec. 7.4 (logs `[credits-timing]` em dev).
+- **GET /api/auth/session:** normalmente rápido (lê cookies e valida sessão no servidor).
+
+---
+
+## 12. Referências
 
 - Rota: `app/(chat)/api/chat/route.ts`
 - Módulo debug: `lib/ai/chat-debug.ts`
@@ -230,3 +256,4 @@ Requer `AI_GATEWAY_API_KEY` em local (ou config do Vercel em produção). A rota
 - Latência e timeout: `docs/API-CHAT-LATENCY.md`
 - Modelos (reasoning vs não-reasoning): `lib/ai/models.ts`
 - Healthcheck AI: `app/api/health/ai/route.ts`, `scripts/check-ai-connection.ts`, `pnpm run health:ai`
+- Carregamento inicial: SessionProvider em `app/layout.tsx`, DbWarmup em `app/(chat)/layout.tsx`, SWR para credits/agents em `components/agent-sidebar.tsx` e `components/multimodal-input.tsx`

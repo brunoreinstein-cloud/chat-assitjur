@@ -9,6 +9,7 @@ import {
   streamText,
 } from "ai";
 import { after } from "next/server";
+import type { Session } from "next-auth";
 import { createResumableStreamContext } from "resumable-stream";
 import { ZodError } from "zod";
 import { auth, type UserType } from "@/app/(auth)/auth";
@@ -116,13 +117,14 @@ function withPromptCachingForAnthropic<T extends { providerOptions?: unknown }>(
   }
   const lastIndex = messages.length - 1;
   const last = messages[lastIndex];
+  const baseOptions =
+    typeof last.providerOptions === "object" && last.providerOptions !== null
+      ? last.providerOptions
+      : {};
   const augmented: T = {
     ...last,
     providerOptions: {
-      ...(typeof last.providerOptions === "object" &&
-      last.providerOptions !== null
-        ? (last.providerOptions as object)
-        : {}),
+      ...baseOptions,
       anthropic: { cacheControl },
     },
   };
@@ -339,8 +341,8 @@ function normalizeMessageParts(messages: ChatMessage[]): ChatMessage[] {
     const normalizedParts = [...docTextParts, ...normalizedOther].filter(
       isPartValidForModel
     );
-    return { ...msg, parts: normalizedParts } as ChatMessage;
-  }) as ChatMessage[];
+    return { ...msg, parts: normalizedParts };
+  });
 }
 
 function getStreamContext() {
@@ -386,14 +388,14 @@ function buildKnowledgeContext(
   return rawKnowledgeContext || undefined;
 }
 
-export async function POST(request: Request) {
-  let requestBody: PostRequestBody;
-
+/** Parseia e valida o body do POST; devolve Response em caso de erro. */
+async function parsePostBody(
+  request: Request
+): Promise<PostRequestBody | Response> {
   try {
     const json = await request.json();
-    requestBody = postRequestBodySchema.parse(json);
+    return postRequestBodySchema.parse(json);
   } catch (error: unknown) {
-    const isDev = process.env.NODE_ENV === "development";
     let cause: string | undefined;
     if (isDev && error instanceof Error) {
       if (error instanceof ZodError && error.issues.length > 0) {
@@ -420,601 +422,642 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
+}
 
-  const requestStart = Date.now();
-  const debugTracker = createChatDebugTracker();
+/** Timeout para o SET statement_timeout na sessão (ligação lenta = falhar cedo e pedir retry). */
+const ENSURE_DB_READY_TIMEOUT_MS = 10_000;
 
+/** Garante que a ligação à BD está pronta; devolve Response em caso de erro. Com um retry para cold start. */
+async function ensureDbReady(): Promise<Response | null> {
+  const attempt = async (): Promise<void> => {
+    await Promise.race([
+      ensureStatementTimeout(),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                `ensureStatementTimeout did not complete within ${ENSURE_DB_READY_TIMEOUT_MS}ms`
+              )
+            ),
+          ENSURE_DB_READY_TIMEOUT_MS
+        )
+      ),
+    ]);
+  };
   try {
-    const {
-      id,
-      message,
-      messages,
-      selectedChatModel,
-      selectedVisibilityType,
-      agentInstructions,
-      knowledgeDocumentIds,
-      archivoIds,
-      agentId: agentIdFromBody,
-    } = requestBody;
-
-    const agentId =
-      agentIdFromBody && typeof agentIdFromBody === "string"
-        ? agentIdFromBody.trim() || DEFAULT_AGENT_ID_WHEN_EMPTY
-        : DEFAULT_AGENT_ID_WHEN_EMPTY;
-
+    await attempt();
+  } catch (dbInitErr) {
     if (isDev) {
-      console.info(
-        "[chat-timing] POST /api/chat request started",
-        "(agentId:",
-        agentId,
-        ")"
-      );
+      console.warn("[chat] DB init/timeout (1.ª tentativa), a repetir:", dbInitErr);
     }
-    if (isChatDebugEnabled()) {
-      logChatDebug("request", {
-        chatId: id,
-        agentId,
-        model: selectedChatModel,
-        knowledgeIds: knowledgeDocumentIds?.length ?? 0,
-        archivoIds: archivoIds?.length ?? 0,
-        hasMessage: Boolean(message),
-        messageParts: message?.parts?.length ?? 0,
-      });
-    }
-
-    const t0 = Date.now();
-    const session = await auth();
-    debugTracker.phase("auth", t0);
-    logTiming("auth", Date.now() - t0);
-
-    if (!session?.user) {
-      return new ChatbotError("unauthorized:chat").toResponse();
-    }
-
-    const DB_TIMEOUT_MS = 15_000;
     try {
-      await Promise.race([
-        ensureStatementTimeout(),
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () =>
-              reject(
-                new Error(
-                  `ensureStatementTimeout did not complete within ${DB_TIMEOUT_MS}ms`
-                )
-              ),
-            DB_TIMEOUT_MS
-          )
-        ),
-      ]);
-    } catch (dbInitErr) {
+      await attempt();
+    } catch (retryErr) {
       if (isDev) {
-        console.error("[chat] DB init/timeout:", dbInitErr);
+        console.error("[chat] DB init/timeout após retry:", retryErr);
       }
       return new ChatbotError(
         "bad_request:database",
         "A ligação à base de dados está a demorar demasiado. Verifica POSTGRES_URL em .env.local e que a base de dados está acessível. Tenta novamente."
       ).toResponse();
     }
-    if (isDev) {
-      console.info("[chat-timing] ensureStatementTimeout: done");
+  }
+  if (isDev) {
+    console.info("[chat-timing] ensureStatementTimeout: done");
+  }
+  return null;
+}
+
+/** Valida que a mensagem do utilizador tem conteúdo; devolve Response se inválida. */
+function validateUserMessageContent(
+  message: PostRequestBody["message"]
+): Response | null {
+  if (message?.role !== "user" || !message.parts) {
+    return null;
+  }
+  const hasContent = message.parts.some((p) => {
+    const part = p as { type?: string; text?: string };
+    if (part.type === "text") {
+      return (part.text?.trim().length ?? 0) > 0;
     }
-
-    if (message?.role === "user" && message.parts) {
-      const hasContent = message.parts.some((p) => {
-        const part = p as { type?: string; text?: string };
-        if (part.type === "text") {
-          return (part.text?.trim().length ?? 0) > 0;
-        }
-        return part.type === "file" || part.type === "document";
-      });
-      if (!hasContent) {
-        return Response.json(
-          {
-            code: "bad_request:api",
-            message: "Corpo do pedido inválido.",
-            cause:
-              "A mensagem não pode estar vazia. Escreve texto ou anexa um ficheiro.",
-          },
-          { status: 400 }
-        );
-      }
-    }
-
-    const userType: UserType = session.user.type;
-    const isToolApprovalFlow = Boolean(messages);
-    const initialCredits = entitlementsByUserType[userType].initialCredits;
-
-    const effectiveKnowledgeIds = resolveEffectiveKnowledgeIds(
-      knowledgeDocumentIds,
-      session.user.id,
-      agentId
+    return part.type === "file" || part.type === "document";
+  });
+  if (!hasContent) {
+    return Response.json(
+      {
+        code: "bad_request:api",
+        message: "Corpo do pedido inválido.",
+        cause:
+          "A mensagem não pode estar vazia. Escreve texto ou anexa um ficheiro.",
+      },
+      { status: 400 }
     );
-    const redatorBancoAllowedUserIds =
-      agentId === AGENT_ID_REDATOR_CONTESTACAO &&
-      effectiveKnowledgeIds.includes(REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID)
-        ? [REDATOR_BANCO_SYSTEM_USER_ID]
-        : undefined;
+  }
+  return null;
+}
 
-    const isBuiltInAgent = AGENT_IDS.includes(
-      agentId as (typeof AGENT_IDS)[number]
-    );
-    const t1 = Date.now();
-    if (isDev) {
-      console.info("[chat-timing] dbBatch: starting…");
+/** Resultado do batch de queries da BD para o chat. */
+interface ChatDbBatchResult {
+  messageCount: Awaited<ReturnType<typeof getMessageCountByUserId>>;
+  chat: Awaited<ReturnType<typeof getChatById>>;
+  messagesFromDb: Awaited<ReturnType<typeof getMessagesByChatId>>;
+  knowledgeDocsResult: Awaited<ReturnType<typeof getKnowledgeDocumentsByIds>>;
+  builtInOverrides: Record<
+    string,
+    { instructions: string | null; label: string | null }
+  >;
+  balanceFromDb: number;
+  customAgentFromBatch: Awaited<ReturnType<typeof getCustomAgentById>>;
+}
+
+/** Executa o batch de queries da BD com timeouts; devolve resultado ou Response. */
+async function runChatDbBatch(
+  session: { user: { id: string } },
+  id: string,
+  agentId: string,
+  isBuiltInAgent: boolean,
+  effectiveKnowledgeIds: string[],
+  redatorBancoAllowedUserIds: string[] | undefined,
+  initialCredits: number
+): Promise<ChatDbBatchResult | Response> {
+  const DB_BATCH_TIMEOUT_MS = 120_000;
+  /** Fallback por query: reduz contenção — em BD lenta o pedido completa em ~25s com fallback em vez de 45s. */
+  const PER_QUERY_TIMEOUT_MS = 25_000;
+  const CREDITS_IN_BATCH_TIMEOUT_MS = 25_000;
+
+  const creditsPromise = Promise.race([
+    getOrCreateCreditBalance(session.user.id, initialCredits),
+    new Promise<number>((resolve) =>
+      setTimeout(() => resolve(initialCredits), CREDITS_IN_BATCH_TIMEOUT_MS)
+    ),
+  ]).catch(() => {
+    if (process.env.NODE_ENV === "development") {
+      console.warn(
+        "[chat] Credit balance unavailable (tabela de créditos?), a usar saldo inicial."
+      );
     }
-    /** Timeout do batch de queries (rede de segurança). Ver docs/DB-TIMEOUT-TROUBLESHOOTING.md */
-    const DB_BATCH_TIMEOUT_MS = 120_000;
-    /** Timeout por query: evita que uma query lenta (ex. cold start) bloqueie o batch; usa fallback e continua. */
-    const PER_QUERY_TIMEOUT_MS = 45_000;
-    /** Se os créditos não responderem a tempo, usamos saldo inicial para não bloquear o chat. */
-    const CREDITS_IN_BATCH_TIMEOUT_MS = 25_000;
-    const creditsPromise = Promise.race([
-      getOrCreateCreditBalance(session.user.id, initialCredits),
-      new Promise<number>((resolve) =>
-        setTimeout(() => resolve(initialCredits), CREDITS_IN_BATCH_TIMEOUT_MS)
-      ),
-    ]).catch(() => {
-      if (process.env.NODE_ENV === "development") {
-        console.warn(
-          "[chat] Credit balance unavailable (tabela de créditos?), a usar saldo inicial."
-        );
-      }
-      return initialCredits;
-    });
-    const dbBatchPromise = Promise.all([
-      withTimingLog(
+    return initialCredits;
+  });
+
+  const dbBatchPromise = Promise.all([
+    withTimingLog(
+      "getMessageCount",
+      withFallbackTimeout(
         "getMessageCount",
-        withFallbackTimeout(
-          "getMessageCount",
-          getMessageCountByUserId({
-            id: session.user.id,
-            differenceInHours: 24,
-          }),
-          PER_QUERY_TIMEOUT_MS,
-          0
-        )
-      ),
-      withTimingLog(
+        getMessageCountByUserId({
+          id: session.user.id,
+          differenceInHours: 24,
+        }),
+        PER_QUERY_TIMEOUT_MS,
+        0
+      )
+    ),
+    withTimingLog(
+      "getChatById",
+      withFallbackTimeout(
         "getChatById",
-        withFallbackTimeout(
-          "getChatById",
-          getChatById({ id }),
-          PER_QUERY_TIMEOUT_MS,
-          null
-        )
-      ),
-      withTimingLog(
+        getChatById({ id }),
+        PER_QUERY_TIMEOUT_MS,
+        null
+      )
+    ),
+    withTimingLog(
+      "getMessagesByChatId",
+      withFallbackTimeout(
         "getMessagesByChatId",
-        withFallbackTimeout(
-          "getMessagesByChatId",
-          getMessagesByChatId({ id, limit: CHAT_MESSAGES_LIMIT }),
-          PER_QUERY_TIMEOUT_MS,
-          [] as Awaited<ReturnType<typeof getMessagesByChatId>>
-        )
-      ),
-      effectiveKnowledgeIds.length > 0
-        ? withTimingLog(
+        getMessagesByChatId({ id, limit: CHAT_MESSAGES_LIMIT }),
+        PER_QUERY_TIMEOUT_MS,
+        [] as Awaited<ReturnType<typeof getMessagesByChatId>>
+      )
+    ),
+    effectiveKnowledgeIds.length > 0
+      ? withTimingLog(
+          "getKnowledgeDocumentsByIds",
+          withFallbackTimeout(
             "getKnowledgeDocumentsByIds",
-            withFallbackTimeout(
-              "getKnowledgeDocumentsByIds",
-              getKnowledgeDocumentsByIds({
-                ids: effectiveKnowledgeIds,
-                userId: session.user.id,
-                allowedUserIds: redatorBancoAllowedUserIds,
-              }),
-              PER_QUERY_TIMEOUT_MS,
-              [] as Awaited<ReturnType<typeof getKnowledgeDocumentsByIds>>
-            )
-          )
-        : Promise.resolve(
+            getKnowledgeDocumentsByIds({
+              ids: effectiveKnowledgeIds,
+              userId: session.user.id,
+              allowedUserIds: redatorBancoAllowedUserIds,
+            }),
+            PER_QUERY_TIMEOUT_MS,
             [] as Awaited<ReturnType<typeof getKnowledgeDocumentsByIds>>
-          ),
-      withTimingLog(
-        "getCachedBuiltInAgentOverrides",
-        withFallbackTimeout(
-          "getCachedBuiltInAgentOverrides",
-          getCachedBuiltInAgentOverrides(),
-          PER_QUERY_TIMEOUT_MS,
-          {} as Awaited<ReturnType<typeof getCachedBuiltInAgentOverrides>>
+          )
         )
-      ),
-      withTimingLog("getOrCreateCreditBalance", creditsPromise),
-      isBuiltInAgent
-        ? Promise.resolve(
+      : Promise.resolve(
+          [] as Awaited<ReturnType<typeof getKnowledgeDocumentsByIds>>
+        ),
+    withTimingLog(
+      "getCachedBuiltInAgentOverrides",
+      withFallbackTimeout(
+        "getCachedBuiltInAgentOverrides",
+        getCachedBuiltInAgentOverrides(),
+        PER_QUERY_TIMEOUT_MS,
+        {} as Awaited<ReturnType<typeof getCachedBuiltInAgentOverrides>>
+      )
+    ),
+    withTimingLog("getOrCreateCreditBalance", creditsPromise),
+    isBuiltInAgent
+      ? Promise.resolve(
+          null as unknown as Awaited<ReturnType<typeof getCustomAgentById>>
+        )
+      : withTimingLog(
+          "getCustomAgentById",
+          withFallbackTimeout(
+            "getCustomAgentById",
+            getCustomAgentById({
+              id: agentId,
+              userId: session.user.id,
+            }),
+            PER_QUERY_TIMEOUT_MS,
             null as unknown as Awaited<ReturnType<typeof getCustomAgentById>>
           )
-        : withTimingLog(
-            "getCustomAgentById",
-            withFallbackTimeout(
-              "getCustomAgentById",
-              getCustomAgentById({
-                id: agentId,
-                userId: session.user.id,
-              }),
-              PER_QUERY_TIMEOUT_MS,
-              null as Awaited<ReturnType<typeof getCustomAgentById>>
-            )
-          ),
-    ]);
-    let messageCount: Awaited<ReturnType<typeof getMessageCountByUserId>>;
-    let chat: Awaited<ReturnType<typeof getChatById>>;
-    let messagesFromDb: Awaited<ReturnType<typeof getMessagesByChatId>>;
-    let knowledgeDocsResult: Awaited<
-      ReturnType<typeof getKnowledgeDocumentsByIds>
-    >;
-    let builtInOverridesFromBatch: Awaited<
-      ReturnType<typeof getCachedBuiltInAgentOverrides>
-    >;
-    let balanceFromDb: number;
-    let customAgentFromBatch: Awaited<ReturnType<typeof getCustomAgentById>>;
-    try {
-      [
-        messageCount,
-        chat,
-        messagesFromDb,
-        knowledgeDocsResult,
-        builtInOverridesFromBatch,
-        balanceFromDb,
-        customAgentFromBatch,
-      ] = await Promise.race([
-        dbBatchPromise,
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error("DB_BATCH_TIMEOUT")),
-            DB_BATCH_TIMEOUT_MS
-          )
         ),
-      ]);
-    } catch (error_) {
-      const isTimeout =
-        error_ instanceof Error && error_.message === "DB_BATCH_TIMEOUT";
-      if (isDev) {
-        console.error("[chat] dbBatch timeout or error:", error_);
-      }
-      const timeoutSec = Math.round(DB_BATCH_TIMEOUT_MS / 1000);
-      return new ChatbotError(
-        "bad_request:database",
-        isTimeout
-          ? `A base de dados não respondeu a tempo (cancelado após ${timeoutSec}s). Pode ser cold start do Supabase/Neon — tenta enviar a mensagem novamente. Se continuar, verifica POSTGRES_URL e rede.`
-          : "Erro ao aceder à base de dados. Tenta novamente."
-      ).toResponse();
-    }
-    const builtInOverrides = builtInOverridesFromBatch as Record<
-      string,
-      { instructions: string | null; label: string | null }
-    >;
+  ]);
 
-    let agentConfig: AgentConfig;
-    if (isBuiltInAgent) {
-      agentConfig = getAgentConfigWithOverrides(agentId, builtInOverrides);
-    } else {
-      const customAgent = customAgentFromBatch;
-      agentConfig = customAgent
-        ? getAgentConfigForCustomAgent(customAgent)
-        : getAgentConfigWithOverrides(
-            DEFAULT_AGENT_ID_WHEN_EMPTY,
-            builtInOverrides
-          );
-    }
-
-    const effectiveModel = isModelAllowedForAgent(agentId, selectedChatModel)
-      ? selectedChatModel
-      : getDefaultModelForAgent(agentId);
-
-    if (message?.role === "user" && message.parts) {
-      const isRevisorAgent = agentConfig.useRevisorDefesaTools;
-      if (isRevisorAgent) {
-        const documentParts = message.parts.filter(
-          (p) => (p as { type?: string }).type === "document"
-        ) as DocumentPartLike[];
-        const hasDocParts = documentParts.length > 0;
-        if (hasDocParts) {
-          const hasPi = documentParts.some((p) => p.documentType === "pi");
-          const hasContestacao = documentParts.some(
-            (p) => p.documentType === "contestacao"
-          );
-          if (!(hasPi && hasContestacao)) {
-            return Response.json(
-              {
-                code: "bad_request:api",
-                message:
-                  "Para auditar a contestação, anexe a Petição Inicial e a Contestação (arraste para os slots ou use o anexo). O tipo é identificado automaticamente quando possível; pode ajustar no menu de cada documento.",
-              },
-              { status: 400 }
-            );
-          }
-        }
-      }
-    }
-
-    debugTracker.phase("dbBatch", t1);
+  try {
+    const [
+      messageCount,
+      chat,
+      messagesFromDb,
+      knowledgeDocsResult,
+      builtInOverridesFromBatch,
+      balanceFromDb,
+      customAgentFromBatch,
+    ] = await Promise.race([
+      dbBatchPromise,
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error("DB_BATCH_TIMEOUT")),
+          DB_BATCH_TIMEOUT_MS
+        )
+      ),
+    ]);
+    return {
+      messageCount,
+      chat,
+      messagesFromDb,
+      knowledgeDocsResult,
+      builtInOverrides:
+        builtInOverridesFromBatch as ChatDbBatchResult["builtInOverrides"],
+      balanceFromDb,
+      customAgentFromBatch,
+    };
+  } catch (error_) {
+    const isTimeout =
+      error_ instanceof Error && error_.message === "DB_BATCH_TIMEOUT";
     if (isDev) {
-      console.info(
-        `[chat-timing] dbBatch: all done in ${Math.round(Date.now() - t1)}ms`
-      );
+      console.error("[chat] dbBatch timeout or error:", error_);
     }
-    logTiming(
-      "getMessageCount + getChat + getMessages + knowledge + overrides + credits (paralelo)",
-      Date.now() - t1
+    const timeoutSec = Math.round(DB_BATCH_TIMEOUT_MS / 1000);
+    return new ChatbotError(
+      "bad_request:database",
+      isTimeout
+        ? `A base de dados não respondeu a tempo (cancelado após ${timeoutSec}s). Pode ser cold start do Supabase/Neon — tenta enviar a mensagem novamente. Se continuar, verifica POSTGRES_URL e rede.`
+        : "Erro ao aceder à base de dados. Tenta novamente."
+    ).toResponse();
+  }
+}
+
+/** Valida partes de documento do Revisor (PI + Contestação); devolve Response se inválido. */
+function validateRevisorDocumentParts(
+  message: PostRequestBody["message"],
+  agentConfig: AgentConfig
+): Response | null {
+  if (
+    message?.role !== "user" ||
+    !message.parts ||
+    !agentConfig.useRevisorDefesaTools
+  ) {
+    return null;
+  }
+  const documentParts = message.parts.filter(
+    (p) => (p as { type?: string }).type === "document"
+  ) as DocumentPartLike[];
+  if (documentParts.length === 0) {
+    return null;
+  }
+  const hasPi = documentParts.some((p) => p.documentType === "pi");
+  const hasContestacao = documentParts.some(
+    (p) => p.documentType === "contestacao"
+  );
+  if (!(hasPi && hasContestacao)) {
+    return Response.json(
+      {
+        code: "bad_request:api",
+        message:
+          "Para auditar a contestação, anexe a Petição Inicial e a Contestação (arraste para os slots ou use o anexo). O tipo é identificado automaticamente quando possível; pode ajustar no menu de cada documento.",
+      },
+      { status: 400 }
     );
+  }
+  return null;
+}
 
-    if (
-      process.env.NODE_ENV !== "development" &&
-      messageCount > entitlementsByUserType[userType].maxMessagesPerDay
-    ) {
-      return new ChatbotError("rate_limit:chat").toResponse();
-    }
-
-    let balance = balanceFromDb;
-    if (balance < MIN_CREDITS_TO_START_CHAT) {
-      if (process.env.NODE_ENV === "development") {
-        try {
-          await addCreditsToUser({
-            userId: session.user.id,
-            delta: initialCredits,
-          });
-          creditsCache.delete(session.user.id);
-          balance += initialCredits;
-        } catch {
-          balance = initialCredits;
-        }
-        // Em dev nunca bloquear por créditos: garantir saldo mínimo para testar o chat.
-        if (balance < MIN_CREDITS_TO_START_CHAT) {
-          balance = initialCredits;
-        }
+/** Verifica rate limit e créditos; devolve Response se bloquear, ou null e atualiza balance. */
+async function checkRateLimitAndCredits(
+  messageCount: number,
+  userType: UserType,
+  balanceFromDb: number,
+  session: { user: { id: string } },
+  initialCredits: number
+): Promise<{ balance: number } | Response> {
+  if (
+    process.env.NODE_ENV !== "development" &&
+    messageCount > entitlementsByUserType[userType].maxMessagesPerDay
+  ) {
+    return new ChatbotError("rate_limit:chat").toResponse();
+  }
+  let balance = balanceFromDb;
+  if (balance < MIN_CREDITS_TO_START_CHAT) {
+    if (process.env.NODE_ENV === "development") {
+      try {
+        await addCreditsToUser({
+          userId: session.user.id,
+          delta: initialCredits,
+        });
+        creditsCache.delete(session.user.id);
+        balance += initialCredits;
+      } catch {
+        balance = initialCredits;
       }
       if (balance < MIN_CREDITS_TO_START_CHAT) {
-        return new ChatbotError(
-          "rate_limit:chat",
-          `Sem créditos suficientes para enviar mensagens. Saldo atual: ${balance} créditos. Contacte o administrador para recarregar.`
-        ).toResponse();
+        balance = initialCredits;
       }
     }
-
-    let titlePromise: Promise<string> | null = null;
-
-    if (chat) {
-      if (chat.userId !== session.user.id) {
-        return new ChatbotError("forbidden:chat").toResponse();
-      }
-      // Persistir alteração de agente quando o utilizador envia mensagem com outro agente selecionado
-      if (
-        message?.role === "user" &&
-        (chat.agentId ?? DEFAULT_AGENT_ID_WHEN_EMPTY) !== agentId
-      ) {
-        await updateChatAgentId({ chatId: id, agentId });
-      }
-      // messagesFromDb já vem do Promise.all (últimas CHAT_MESSAGES_LIMIT mensagens quando chat existe)
-      if (isToolApprovalFlow) {
-        // No tool-approval flow o cliente envia as mensagens; não usamos as da BD
-      }
-    } else if (message?.role === "user") {
-      const saveChatPromise = saveChat({
-        id,
-        userId: session.user.id,
-        title: "New chat",
-        visibility: selectedVisibilityType,
-        agentId,
-      }).catch((err) => {
-        if (isDev) {
-          console.warn(
-            "[chat] saveChat (novo chat) falhou, a continuar para o modelo:",
-            err instanceof Error ? err.message : err
-          );
-        }
-      });
-      if (isDev) {
-        const SAVE_CHAT_TIMEOUT_MS = 15_000;
-        await Promise.race([
-          saveChatPromise,
-          new Promise<void>((resolve) =>
-            setTimeout(() => {
-              console.warn(
-                `[chat] saveChat (novo chat) timeout após ${SAVE_CHAT_TIMEOUT_MS}ms, a continuar para o modelo.`
-              );
-              resolve();
-            }, SAVE_CHAT_TIMEOUT_MS)
-          ),
-        ]);
-      } else {
-        await saveChatPromise;
-      }
-      titlePromise = generateTitleFromUserMessage({
-        message: normalizeMessageParts([message as ChatMessage])[0],
-      });
+    if (balance < MIN_CREDITS_TO_START_CHAT) {
+      return new ChatbotError(
+        "rate_limit:chat",
+        `Sem créditos suficientes para enviar mensagens. Saldo atual: ${balance} créditos. Contacte o administrador para recarregar.`
+      ).toResponse();
     }
+  }
+  return { balance };
+}
 
-    const effectiveMessagesFromDb =
-      chat && !isToolApprovalFlow ? messagesFromDb : [];
-
-    let uiMessages: ChatMessage[] = isToolApprovalFlow
-      ? (messages as ChatMessage[])
-      : [
-          ...convertToUIMessages(effectiveMessagesFromDb),
-          message as ChatMessage,
-        ];
-
-    // Normalizar antes da validação: partes "document" (PI/Contestação) passam a "text",
-    // para a validação do AI SDK aceitar e para preservar histórico na conversa (memória).
-    const normalizedForValidation =
-      !isToolApprovalFlow && uiMessages.length > 0
-        ? normalizeMessageParts(uiMessages)
-        : uiMessages;
-
-    const lastUserText =
-      message?.parts
-        ?.filter((p) => (p as { type?: string }).type === "text")
-        .map((p) => (p as { text?: string }).text ?? "")
-        .join(" ")
-        .trim() ?? "";
-
-    const t2 = Date.now();
+/** Persiste chat (ownership, agentId, novo chat) e devolve titlePromise ou Response. */
+async function persistChatAndGetTitlePromise(
+  chat: Awaited<ReturnType<typeof getChatById>>,
+  session: { user: { id: string } },
+  id: string,
+  message: PostRequestBody["message"],
+  agentId: string,
+  selectedVisibilityType: PostRequestBody["selectedVisibilityType"],
+  _isToolApprovalFlow: boolean
+): Promise<{ titlePromise: Promise<string> | null } | Response> {
+  if (chat) {
+    if (chat.userId !== session.user.id) {
+      return new ChatbotError("forbidden:chat").toResponse();
+    }
+    if (
+      message?.role === "user" &&
+      (chat.agentId ?? DEFAULT_AGENT_ID_WHEN_EMPTY) !== agentId
+    ) {
+      await updateChatAgentId({ chatId: id, agentId });
+    }
+    return { titlePromise: null };
+  }
+  if (message?.role !== "user") {
+    return { titlePromise: null };
+  }
+  const saveChatPromise = saveChat({
+    id,
+    userId: session.user.id,
+    title: "New chat",
+    visibility: selectedVisibilityType,
+    agentId,
+  }).catch((err) => {
     if (isDev) {
-      console.info("[chat-timing] validationRag: starting…");
-    }
-    const [validationResult, ragChunks, userFilesFromArchivos] =
-      await Promise.all([
-        !isToolApprovalFlow && normalizedForValidation.length > 0
-          ? withTimingLog(
-              "safeValidateUIMessages",
-              safeValidateUIMessages({
-                messages: normalizedForValidation,
-                tools: validationToolsForValidate,
-              })
-            )
-          : Promise.resolve({
-              success: false as const,
-              data: normalizedForValidation,
-              error: undefined,
-            }),
-        knowledgeDocsResult.length > 0 && lastUserText.length > 0
-          ? withTimingLog(
-              "retrieveKnowledgeContext",
-              retrieveKnowledgeContext({
-                userId: session.user.id,
-                documentIds: effectiveKnowledgeIds,
-                queryText: lastUserText,
-                limit: agentId === AGENT_ID_REDATOR_CONTESTACAO ? 24 : 12,
-                allowedUserIds: redatorBancoAllowedUserIds,
-              })
-            )
-          : Promise.resolve<
-              Awaited<ReturnType<typeof retrieveKnowledgeContext>>
-            >([]),
-        archivoIds != null && archivoIds.length > 0 && session.user.id != null
-          ? withTimingLog(
-              "getUserFilesByIds",
-              getUserFilesByIds({
-                ids: archivoIds,
-                userId: session.user.id,
-              })
-            )
-          : Promise.resolve<Awaited<ReturnType<typeof getUserFilesByIds>>>([]),
-      ]);
-    debugTracker.phase("validationRag", t2);
-    logTiming("validação + RAG + getUserFiles (paralelo)", Date.now() - t2);
-
-    if (validationResult.success) {
-      uiMessages = validationResult.data as ChatMessage[];
-    } else if (!isToolApprovalFlow && normalizedForValidation.length > 0) {
-      if (isDev) {
-        console.warn(
-          "[chat] Validação de mensagens da BD falhou, a manter histórico normalizado:",
-          validationResult.error?.message ?? validationResult.error
-        );
-      }
-      uiMessages = normalizedForValidation;
-    }
-
-    const { longitude, latitude, city, country } = geolocation(request);
-
-    const requestHints: RequestHints = {
-      longitude,
-      latitude,
-      city,
-      country,
-    };
-
-    const knowledgeDocParts: string[] = [];
-    if (ragChunks.length > 0) {
-      const byDoc = new Map<string, { title: string; texts: string[] }>();
-      for (const c of ragChunks) {
-        const cur = byDoc.get(c.knowledgeDocumentId);
-        if (cur) {
-          cur.texts.push(c.text);
-        } else {
-          byDoc.set(c.knowledgeDocumentId, {
-            title: c.title,
-            texts: [c.text],
-          });
-        }
-      }
-      for (const [docId, { title, texts }] of byDoc.entries()) {
-        knowledgeDocParts.push(
-          wrapKnowledgeDocument(docId, title, texts.join("\n\n"))
-        );
-      }
-    }
-    if (knowledgeDocsResult.length > 0) {
-      fillKnowledgeFromFullDocsWhenEmpty(
-        knowledgeDocParts,
-        knowledgeDocsResult
+      console.warn(
+        "[chat] saveChat (novo chat) falhou, a continuar para o modelo:",
+        err instanceof Error ? err.message : err
       );
     }
-    for (const uf of userFilesFromArchivos) {
-      if (
-        typeof uf.extractedTextCache === "string" &&
-        uf.extractedTextCache.trim().length > 0
-      ) {
-        knowledgeDocParts.push(
-          wrapKnowledgeDocument(
-            uf.id,
-            uf.filename,
-            uf.extractedTextCache.trim()
+  });
+  if (isDev) {
+    // Em dev: fire-and-forget para não bloquear o handler nem segurar conexão à BD.
+    // O chat fica guardado em background; em produção esperamos para garantir persistência.
+  } else {
+    await saveChatPromise;
+  }
+  const titlePromise = generateTitleFromUserMessage({
+    message: normalizeMessageParts([message as ChatMessage])[0],
+  });
+  return { titlePromise };
+}
+
+/** Resultado de validação + RAG + getUserFiles. */
+interface ValidationRagResult {
+  uiMessages: ChatMessage[];
+  ragChunks: Awaited<ReturnType<typeof retrieveKnowledgeContext>>;
+  userFilesFromArchivos: Awaited<ReturnType<typeof getUserFilesByIds>>;
+}
+
+/** Opções para runValidationRagUserFiles. */
+interface ValidationRagOptions {
+  normalizedForValidation: ChatMessage[];
+  isToolApprovalFlow: boolean;
+  knowledgeDocsResult: Awaited<ReturnType<typeof getKnowledgeDocumentsByIds>>;
+  lastUserText: string;
+  session: Session;
+  effectiveKnowledgeIds: string[];
+  agentId: string;
+  redatorBancoAllowedUserIds: string[] | undefined;
+  archivoIds: PostRequestBody["archivoIds"];
+}
+
+/** Executa validação de mensagens, RAG e getUserFiles em paralelo; devolve uiMessages atualizadas. */
+async function runValidationRagUserFiles(
+  opts: ValidationRagOptions
+): Promise<ValidationRagResult> {
+  const {
+    normalizedForValidation,
+    isToolApprovalFlow,
+    knowledgeDocsResult,
+    lastUserText,
+    session,
+    effectiveKnowledgeIds,
+    agentId,
+    redatorBancoAllowedUserIds,
+    archivoIds,
+  } = opts;
+  const t2 = Date.now();
+  if (isDev) {
+    console.info("[chat-timing] validationRag: starting…");
+  }
+  const [validationResult, ragChunks, userFilesFromArchivos] =
+    await Promise.all([
+      !isToolApprovalFlow && normalizedForValidation.length > 0
+        ? withTimingLog(
+            "safeValidateUIMessages",
+            safeValidateUIMessages({
+              messages: normalizedForValidation,
+              tools: validationToolsForValidate,
+            })
           )
-        );
-      }
-    }
-    const rawKnowledgeContext =
-      knowledgeDocParts.length > 0
-        ? `<knowledge_base>\n${knowledgeDocParts.join("\n\n")}\n</knowledge_base>`
-        : "";
-    const knowledgeContext = buildKnowledgeContext(
-      rawKnowledgeContext,
-      agentId,
-      effectiveKnowledgeIds
-    );
+        : Promise.resolve({
+            success: false as const,
+            data: normalizedForValidation,
+            error: undefined,
+          }),
+      knowledgeDocsResult.length > 0 && lastUserText.length > 0
+        ? withTimingLog(
+            "retrieveKnowledgeContext",
+            retrieveKnowledgeContext({
+              userId: session.user.id,
+              documentIds: effectiveKnowledgeIds,
+              queryText: lastUserText,
+              limit: agentId === AGENT_ID_REDATOR_CONTESTACAO ? 24 : 12,
+              allowedUserIds: redatorBancoAllowedUserIds,
+            })
+          )
+        : Promise.resolve<Awaited<ReturnType<typeof retrieveKnowledgeContext>>>(
+            []
+          ),
+      archivoIds != null && archivoIds.length > 0 && session.user.id != null
+        ? withTimingLog(
+            "getUserFilesByIds",
+            getUserFilesByIds({
+              ids: archivoIds,
+              userId: session.user.id,
+            })
+          )
+        : Promise.resolve<Awaited<ReturnType<typeof getUserFilesByIds>>>([]),
+    ]);
+  logTiming("validação + RAG + getUserFiles (paralelo)", Date.now() - t2);
 
-    if (message?.role === "user") {
-      const t4 = Date.now();
-      try {
-        await saveMessages({
-          messages: [
-            {
-              chatId: id,
-              id: message.id,
-              role: "user",
-              parts: message.parts,
-              attachments: [],
-              createdAt: new Date(),
-            },
-          ],
+  let uiMessages: ChatMessage[] = normalizedForValidation;
+  if (validationResult.success) {
+    uiMessages = validationResult.data as ChatMessage[];
+  } else if (!isToolApprovalFlow && normalizedForValidation.length > 0) {
+    if (isDev) {
+      console.warn(
+        "[chat] Validação de mensagens da BD falhou, a manter histórico normalizado:",
+        validationResult.error?.message ?? validationResult.error
+      );
+    }
+    uiMessages = normalizedForValidation;
+  }
+  return { uiMessages, ragChunks, userFilesFromArchivos };
+}
+
+/** Constrói knowledgeContext a partir de RAG chunks, docs e ficheiros do utilizador. */
+function buildKnowledgeContextFromParts(
+  ragChunks: Awaited<ReturnType<typeof retrieveKnowledgeContext>>,
+  knowledgeDocsResult: Awaited<ReturnType<typeof getKnowledgeDocumentsByIds>>,
+  userFilesFromArchivos: Awaited<ReturnType<typeof getUserFilesByIds>>,
+  agentId: string,
+  effectiveKnowledgeIds: string[]
+): string | undefined {
+  const knowledgeDocParts: string[] = [];
+  if (ragChunks.length > 0) {
+    const byDoc = new Map<string, { title: string; texts: string[] }>();
+    for (const c of ragChunks) {
+      const cur = byDoc.get(c.knowledgeDocumentId);
+      if (cur) {
+        cur.texts.push(c.text);
+      } else {
+        byDoc.set(c.knowledgeDocumentId, {
+          title: c.title,
+          texts: [c.text],
         });
-      } catch (err) {
-        if (isDev) {
-          console.error("[chat] saveMessages(user) falhou:", err);
-        }
-        return new ChatbotError(
-          "bad_request:database",
-          "Não foi possível guardar a mensagem. Tenta novamente."
-        ).toResponse();
       }
-      debugTracker.phase("saveMessages", t4);
-      logTiming("saveMessages(user)", Date.now() - t4);
     }
+    for (const [docId, { title, texts }] of byDoc.entries()) {
+      knowledgeDocParts.push(
+        wrapKnowledgeDocument(docId, title, texts.join("\n\n"))
+      );
+    }
+  }
+  if (knowledgeDocsResult.length > 0) {
+    fillKnowledgeFromFullDocsWhenEmpty(knowledgeDocParts, knowledgeDocsResult);
+  }
+  for (const uf of userFilesFromArchivos) {
+    if (
+      typeof uf.extractedTextCache === "string" &&
+      uf.extractedTextCache.trim().length > 0
+    ) {
+      knowledgeDocParts.push(
+        wrapKnowledgeDocument(uf.id, uf.filename, uf.extractedTextCache.trim())
+      );
+    }
+  }
+  const rawKnowledgeContext =
+    knowledgeDocParts.length > 0
+      ? `<knowledge_base>\n${knowledgeDocParts.join("\n\n")}\n</knowledge_base>`
+      : "";
+  return buildKnowledgeContext(
+    rawKnowledgeContext,
+    agentId,
+    effectiveKnowledgeIds
+  );
+}
 
-    const isReasoningModel =
-      effectiveModel.includes("reasoning") ||
-      effectiveModel.includes("thinking");
-
-    const t5 = Date.now();
-    const normalizedMessages = normalizeMessageParts(uiMessages);
-    const effectiveAgentInstructionsForContext =
-      agentInstructions?.trim() || agentConfig.instructions;
-    const systemStrForEstimate = systemPrompt({
-      selectedChatModel: effectiveModel,
-      requestHints,
-      agentInstructions: effectiveAgentInstructionsForContext,
-      knowledgeContext,
+/** Guarda a mensagem do utilizador na BD; devolve Response em caso de erro. */
+async function saveUserMessageToDb(
+  message: PostRequestBody["message"],
+  id: string
+): Promise<Response | null> {
+  if (message?.role !== "user") {
+    return null;
+  }
+  try {
+    await saveMessages({
+      messages: [
+        {
+          chatId: id,
+          id: message.id,
+          role: "user",
+          parts: message.parts,
+          attachments: [],
+          createdAt: new Date(),
+        },
+      ],
     });
-    const messagesToSend = applyContextEditing(normalizedMessages);
-    const estimatedInputTokens = estimateInputTokens(
-      systemStrForEstimate.length,
-      messagesToSend
-    );
-    if (estimatedInputTokens > CONTEXT_WINDOW_INPUT_TARGET_TOKENS) {
-      return Response.json(
+  } catch (err) {
+    if (isDev) {
+      console.error("[chat] saveMessages(user) falhou:", err);
+    }
+    return new ChatbotError(
+      "bad_request:database",
+      "Não foi possível guardar a mensagem. Tenta novamente."
+    ).toResponse();
+  }
+  return null;
+}
+
+/** Trata erros do POST /api/chat e devolve Response apropriada. */
+function handleChatPostError(error: unknown, request: Request): Response {
+  if (error instanceof ChatbotError) {
+    return error.toResponse();
+  }
+  if (isDatabaseConnectionError(error) || isStatementTimeoutError(error)) {
+    return databaseUnavailableResponse();
+  }
+  if (
+    error instanceof Error &&
+    error.message?.includes(
+      "AI Gateway requires a valid credit card on file to service requests"
+    )
+  ) {
+    return new ChatbotError("bad_request:activate_gateway").toResponse();
+  }
+  const status =
+    error instanceof Error && "status" in error
+      ? (error as { status?: number }).status
+      : undefined;
+  if (status === 529) {
+    return new ChatbotError(
+      "offline:chat",
+      "Serviço de IA temporariamente sobrecarregado. Tente novamente em instantes."
+    ).toResponse();
+  }
+  const vercelId = request.headers.get("x-vercel-id");
+  console.error("Unhandled error in chat API:", error, { vercelId });
+  return new ChatbotError("offline:chat").toResponse();
+}
+
+/** Parâmetros para buildChatStreamResponse. */
+interface ChatStreamParams {
+  requestStart: number;
+  debugTracker: ReturnType<typeof createChatDebugTracker>;
+  id: string;
+  message: PostRequestBody["message"];
+  session: Session;
+  agentInstructions: PostRequestBody["agentInstructions"];
+  agentConfig: AgentConfig;
+  effectiveModel: string;
+  titlePromise: Promise<string> | null;
+  isToolApprovalFlow: boolean;
+  uiMessages: ChatMessage[];
+  requestHints: RequestHints;
+  knowledgeContext: string | undefined;
+}
+
+/** Resultado da preparação de mensagens para o modelo. */
+type PrepareModelMessagesResult =
+  | {
+      messagesForModel: Awaited<
+        ReturnType<typeof withPromptCachingForAnthropic>
+      >;
+      preStreamEnd: number;
+    }
+  | { response: Response };
+
+/** Prepara mensagens para o modelo; devolve mensagens + preStreamEnd ou Response 413. */
+async function prepareModelMessagesForStream(
+  params: ChatStreamParams,
+  debugTracker: ReturnType<typeof createChatDebugTracker>
+): Promise<PrepareModelMessagesResult> {
+  const {
+    requestStart,
+    message,
+    agentInstructions,
+    agentConfig,
+    effectiveModel,
+    uiMessages,
+    requestHints,
+    knowledgeContext,
+  } = params;
+  const t5 = Date.now();
+  const normalizedMessages = normalizeMessageParts(uiMessages);
+  const effectiveAgentInstructionsForContext =
+    agentInstructions?.trim() || agentConfig.instructions;
+  const systemStrForEstimate = systemPrompt({
+    selectedChatModel: effectiveModel,
+    requestHints,
+    agentInstructions: effectiveAgentInstructionsForContext,
+    knowledgeContext,
+  });
+  const messagesToSend = applyContextEditing(normalizedMessages);
+  const estimatedInputTokens = estimateInputTokens(
+    systemStrForEstimate.length,
+    messagesToSend
+  );
+  if (estimatedInputTokens > CONTEXT_WINDOW_INPUT_TARGET_TOKENS) {
+    return {
+      response: Response.json(
         {
           code: "context_limit",
           message:
@@ -1023,372 +1066,822 @@ export async function POST(request: Request) {
           limit: CONTEXT_WINDOW_INPUT_TARGET_TOKENS,
         },
         { status: 413 }
+      ),
+    };
+  }
+  let modelMessages: Awaited<ReturnType<typeof convertToModelMessages>>;
+  try {
+    modelMessages = await convertToModelMessages(messagesToSend);
+  } catch (convertError) {
+    if (isDev) {
+      console.warn(
+        "[chat] convertToModelMessages falhou (partes inválidas?), a usar apenas a última mensagem:",
+        convertError
       );
     }
-    let modelMessages: Awaited<ReturnType<typeof convertToModelMessages>>;
-    try {
-      modelMessages = await convertToModelMessages(messagesToSend);
-    } catch (convertError) {
-      if (isDev) {
-        console.warn(
-          "[chat] convertToModelMessages falhou (partes inválidas?), a usar apenas a última mensagem:",
-          convertError
-        );
-      }
-      const fallbackMessages =
-        message?.role === "user"
-          ? normalizeMessageParts([message as ChatMessage])
-          : normalizedMessages.slice(-1);
-      modelMessages = await convertToModelMessages(fallbackMessages);
+    const fallbackMessages =
+      message?.role === "user"
+        ? normalizeMessageParts([message as ChatMessage])
+        : normalizedMessages.slice(-1);
+    modelMessages = await convertToModelMessages(fallbackMessages);
+  }
+  debugTracker.phase("contextConvert", t5);
+  logTiming(
+    "contextEditing + estimateTokens + normalizeMessageParts + convertToModelMessages",
+    Date.now() - t5
+  );
+  const messagesForModel = withPromptCachingForAnthropic(
+    effectiveModel,
+    modelMessages
+  );
+  const preStreamEnd = Date.now();
+  debugTracker.flush("preStreamPhases");
+  logTiming("preStream (total antes do stream)", preStreamEnd - requestStart);
+  return { messagesForModel, preStreamEnd };
+}
+
+type StreamTextResult = Awaited<ReturnType<typeof streamText>>;
+
+/** Contexto para o handler execute do stream. */
+interface StreamExecuteContext {
+  session: ChatStreamParams["session"];
+  agentInstructions: ChatStreamParams["agentInstructions"];
+  agentConfig: AgentConfig;
+  effectiveModel: string;
+  requestHints: RequestHints;
+  knowledgeContext: string | undefined;
+  messagesForModel: Awaited<ReturnType<typeof withPromptCachingForAnthropic>>;
+  isReasoningModel: boolean;
+  titlePromise: Promise<string> | null;
+  id: string;
+  requestStart: number;
+  preStreamEnd: number;
+}
+
+/** Cria o callback execute para createUIMessageStream; escreve streamTextResult em ref. */
+function createStreamExecuteHandler(
+  ctx: StreamExecuteContext,
+  streamTextResultRef: { current: StreamTextResult | null }
+) {
+  return async ({
+    writer: dataStream,
+  }: {
+    writer: Parameters<
+      Parameters<typeof createUIMessageStream>[0]["execute"]
+    >[0]["writer"];
+  }) => {
+    const executeStartedAt = Date.now();
+    if (isChatDebugEnabled()) {
+      dataStream.write({
+        type: "data-chat-debug",
+        data: {
+          preStreamMs: ctx.preStreamEnd - ctx.requestStart,
+          executeStartedMs: executeStartedAt - ctx.requestStart,
+        },
+      });
     }
-    debugTracker.phase("contextConvert", t5);
     logTiming(
-      "contextEditing + estimateTokens + normalizeMessageParts + convertToModelMessages",
-      Date.now() - t5
+      "execute started (modelo + tools a correr)",
+      executeStartedAt - ctx.requestStart
     );
+    const effectiveAgentInstructions =
+      ctx.agentInstructions?.trim() || ctx.agentConfig.instructions;
 
-    const messagesForModel = withPromptCachingForAnthropic(
-      effectiveModel,
-      modelMessages
-    );
+    const baseToolNames = [
+      "getWeather",
+      "createDocument",
+      "updateDocument",
+      "requestSuggestions",
+      "improvePrompt",
+    ] as const;
+    type ActiveToolName =
+      | (typeof baseToolNames)[number]
+      | "createRevisorDefesaDocuments"
+      | "createRedatorContestacaoDocument";
+    const activeToolNames: ActiveToolName[] = ctx.isReasoningModel
+      ? []
+      : [
+          ...baseToolNames,
+          ...(ctx.agentConfig.useRevisorDefesaTools
+            ? (["createRevisorDefesaDocuments"] as const)
+            : []),
+          ...(ctx.agentConfig.useRedatorContestacaoTool
+            ? (["createRedatorContestacaoDocument"] as const)
+            : []),
+        ];
 
-    const preStreamEnd = Date.now();
-    debugTracker.flush("preStreamPhases");
-    logTiming("preStream (total antes do stream)", preStreamEnd - requestStart);
+    const tools = {
+      getWeather,
+      createDocument: createDocument({ session: ctx.session, dataStream }),
+      updateDocument: updateDocument({ session: ctx.session, dataStream }),
+      requestSuggestions: requestSuggestions({
+        session: ctx.session,
+        dataStream,
+      }),
+      improvePrompt: improvePromptTool,
+    } as {
+      getWeather: typeof getWeather;
+      createDocument: ReturnType<typeof createDocument>;
+      updateDocument: ReturnType<typeof updateDocument>;
+      requestSuggestions: ReturnType<typeof requestSuggestions>;
+      improvePrompt: typeof improvePromptTool;
+      createRevisorDefesaDocuments?: ReturnType<
+        typeof createRevisorDefesaDocuments
+      >;
+      createRedatorContestacaoDocument?: ReturnType<
+        typeof createRedatorContestacaoDocument
+      >;
+    };
+    if (ctx.agentConfig.useRevisorDefesaTools) {
+      tools.createRevisorDefesaDocuments = createRevisorDefesaDocuments({
+        session: ctx.session,
+        dataStream,
+      });
+    }
+    if (ctx.agentConfig.useRedatorContestacaoTool) {
+      tools.createRedatorContestacaoDocument = createRedatorContestacaoDocument(
+        {
+          session: ctx.session,
+          dataStream,
+        }
+      );
+    }
 
-    type StreamTextResult = Awaited<ReturnType<typeof streamText>>;
-    let streamTextResult: StreamTextResult | null = null;
-
-    const stream = createUIMessageStream({
-      originalMessages: isToolApprovalFlow ? uiMessages : undefined,
-      execute: async ({ writer: dataStream }) => {
-        const executeStartedAt = Date.now();
-        if (isChatDebugEnabled()) {
-          dataStream.write({
-            type: "data-chat-debug",
-            data: {
-              preStreamMs: preStreamEnd - requestStart,
-              executeStartedMs: executeStartedAt - requestStart,
+    const result = streamText({
+      model: getLanguageModel(ctx.effectiveModel),
+      temperature: 0.2,
+      maxOutputTokens: 8192,
+      system: systemPrompt({
+        selectedChatModel: ctx.effectiveModel,
+        requestHints: ctx.requestHints,
+        agentInstructions: effectiveAgentInstructions,
+        knowledgeContext: ctx.knowledgeContext,
+      }),
+      messages: ctx.messagesForModel as Awaited<
+        ReturnType<typeof convertToModelMessages>
+      >,
+      stopWhen: stepCountIs(5),
+      experimental_activeTools: activeToolNames,
+      providerOptions: ctx.isReasoningModel
+        ? {
+            anthropic: {
+              thinking: {
+                type: "enabled",
+                budgetTokens: 4000,
+              },
             },
-          });
-        }
-        logTiming(
-          "execute started (modelo + tools a correr)",
-          executeStartedAt - requestStart
-        );
-        const effectiveAgentInstructions =
-          agentInstructions?.trim() || agentConfig.instructions;
-
-        const baseToolNames = [
-          "getWeather",
-          "createDocument",
-          "updateDocument",
-          "requestSuggestions",
-          "improvePrompt",
-        ] as const;
-        type ActiveToolName =
-          | (typeof baseToolNames)[number]
-          | "createRevisorDefesaDocuments"
-          | "createRedatorContestacaoDocument";
-        const activeToolNames: ActiveToolName[] = isReasoningModel
-          ? []
-          : [
-              ...baseToolNames,
-              ...(agentConfig.useRevisorDefesaTools
-                ? (["createRevisorDefesaDocuments"] as const)
-                : []),
-              ...(agentConfig.useRedatorContestacaoTool
-                ? (["createRedatorContestacaoDocument"] as const)
-                : []),
-            ];
-
-        const tools = {
-          getWeather,
-          createDocument: createDocument({ session, dataStream }),
-          updateDocument: updateDocument({ session, dataStream }),
-          requestSuggestions: requestSuggestions({ session, dataStream }),
-          improvePrompt: improvePromptTool,
-        } as {
-          getWeather: typeof getWeather;
-          createDocument: ReturnType<typeof createDocument>;
-          updateDocument: ReturnType<typeof updateDocument>;
-          requestSuggestions: ReturnType<typeof requestSuggestions>;
-          improvePrompt: typeof improvePromptTool;
-          createRevisorDefesaDocuments?: ReturnType<
-            typeof createRevisorDefesaDocuments
-          >;
-          createRedatorContestacaoDocument?: ReturnType<
-            typeof createRedatorContestacaoDocument
-          >;
-        };
-        if (agentConfig.useRevisorDefesaTools) {
-          tools.createRevisorDefesaDocuments = createRevisorDefesaDocuments({
-            session,
-            dataStream,
-          });
-        }
-        if (agentConfig.useRedatorContestacaoTool) {
-          tools.createRedatorContestacaoDocument =
-            createRedatorContestacaoDocument({
-              session,
-              dataStream,
-            });
-        }
-
-        const result = streamText({
-          model: getLanguageModel(effectiveModel),
-          temperature: 0.2,
-          maxOutputTokens: 8192,
-          system: systemPrompt({
-            selectedChatModel: effectiveModel,
-            requestHints,
-            agentInstructions: effectiveAgentInstructions,
-            knowledgeContext,
-          }),
-          messages: messagesForModel,
-          stopWhen: stepCountIs(5),
-          experimental_activeTools: activeToolNames,
-          providerOptions: isReasoningModel
-            ? {
-                anthropic: {
-                  thinking: {
-                    type: "enabled",
-                    budgetTokens: 4000,
-                  },
-                },
-              }
-            : undefined,
-          tools,
-          experimental_telemetry: {
-            isEnabled: isProductionEnvironment,
-            functionId: "stream-text",
-          },
-        });
-        streamTextResult = result as unknown as StreamTextResult;
-
-        dataStream.merge(result.toUIMessageStream({ sendReasoning: true }));
-
-        if (titlePromise) {
-          const title = await titlePromise;
-          dataStream.write({ type: "data-chat-title", data: title });
-          updateChatTitleById({ chatId: id, title });
-        }
-      },
-      generateId: generateUUID,
-      onFinish: async ({ messages: finishedMessages }) => {
-        const onFinishStart = Date.now();
-        logTiming(
-          "onFinish (stream terminou) total request",
-          onFinishStart - requestStart
-        );
-
-        try {
-          const logOnFinishDbError = (label: string, err: unknown) => {
-            const msg = err instanceof Error ? err.message : String(err);
-            const isTimeout =
-              typeof (err as { code?: string })?.code === "string" &&
-              (err as { code: string }).code === "57014";
-            if (isDev || isTimeout) {
-              console.warn(`[chat] ${label}:`, msg);
-            }
-          };
-          let saveMessagesPromise: Promise<void>;
-          if (isToolApprovalFlow) {
-            saveMessagesPromise = (async () => {
-              for (const finishedMsg of finishedMessages) {
-                const existingMsg = uiMessages.find(
-                  (m) => m.id === finishedMsg.id
-                );
-                if (existingMsg) {
-                  await updateMessage({
-                    id: finishedMsg.id,
-                    parts: finishedMsg.parts,
-                  });
-                } else {
-                  await saveMessages({
-                    messages: [
-                      {
-                        id: finishedMsg.id,
-                        role: finishedMsg.role,
-                        parts: finishedMsg.parts,
-                        createdAt: new Date(),
-                        attachments: [],
-                        chatId: id,
-                      },
-                    ],
-                  });
-                }
-              }
-            })().catch((err: unknown) => {
-              logOnFinishDbError(
-                "saveMessages (tool-approval) em onFinish falhou",
-                err
-              );
-            });
-          } else if (finishedMessages.length > 0) {
-            saveMessagesPromise = saveMessages({
-              messages: finishedMessages.map((currentMessage) => ({
-                id: currentMessage.id,
-                role: currentMessage.role,
-                parts: currentMessage.parts,
-                createdAt: new Date(),
-                attachments: [],
-                chatId: id,
-              })),
-            })
-              .then(() => undefined)
-              .catch((err: unknown) => {
-                logOnFinishDbError("saveMessages em onFinish falhou", err);
-              });
-          } else {
-            saveMessagesPromise = Promise.resolve();
           }
-
-          const creditsPromise = streamTextResult
-            ? (async () => {
-                try {
-                  const usage = await streamTextResult.totalUsage;
-                  const promptTokens =
-                    "promptTokens" in usage
-                      ? (usage as { promptTokens: number }).promptTokens
-                      : ((usage as { inputTokens?: number }).inputTokens ?? 0);
-                  const completionTokens =
-                    "completionTokens" in usage
-                      ? (usage as { completionTokens: number }).completionTokens
-                      : ((usage as { outputTokens?: number }).outputTokens ??
-                        0);
-                  const creditsConsumed = tokensToCredits(
-                    promptTokens,
-                    completionTokens
-                  );
-                  await deductCreditsAndRecordUsage({
-                    userId: session.user.id,
-                    chatId: id,
-                    promptTokens,
-                    completionTokens,
-                    model: effectiveModel,
-                    creditsConsumed,
-                  });
-                  creditsCache.delete(session.user.id);
-                } catch (error_) {
-                  logOnFinishDbError(
-                    "Falha ao registar uso/créditos em onFinish",
-                    error_
-                  );
-                }
-              })()
-            : Promise.resolve();
-
-          await Promise.all([saveMessagesPromise, creditsPromise]);
-
-          after(() => {
-            updateChatActiveStreamId({
-              chatId: id,
-              activeStreamId: null,
-            }).catch((err: unknown) => {
-              const isTimeout =
-                typeof (err as { code?: string })?.code === "string" &&
-                (err as { code: string }).code === "57014";
-              if (isDev || isTimeout) {
-                console.warn(
-                  "[chat] updateChatActiveStreamId em after falhou:",
-                  err instanceof Error ? err.message : err
-                );
-              }
-            });
-          });
-        } catch (err) {
-          if (isDev) {
-            console.warn("[chat] onFinish falhou:", err);
-          }
-        }
-        logTiming("onFinish completo", Date.now() - onFinishStart);
-      },
-      onError: (error: unknown) => {
-        const fallback =
-          "Ocorreu um erro ao processar o pedido. Tente novamente.";
-        const err = error instanceof Error ? error : new Error(String(error));
-        const isInsufficientFunds = /insufficient\s+funds/i.test(err.message);
-        if (isInsufficientFunds) {
-          const hint =
-            "A conta Vercel não tem créditos para o AI Gateway. Adicione créditos em Vercel Dashboard → AI (top-up) ou use uma chave de API direta do fornecedor (ex.: ANTHROPIC_API_KEY) em desenvolvimento. Ver docs/vercel-setup.md.";
-          return process.env.NODE_ENV === "development"
-            ? `${hint} (dev: ${err.message})`
-            : hint;
-        }
-        if (process.env.NODE_ENV === "development") {
-          return `${fallback} (dev: ${err.message})`;
-        }
-        if (process.env.NODE_ENV === "production") {
-          console.error("[chat] onError (produção):", err.message, err.stack);
-        }
-        return fallback;
+        : undefined,
+      tools,
+      experimental_telemetry: {
+        isEnabled: isProductionEnvironment,
+        functionId: "stream-text",
       },
     });
+    streamTextResultRef.current = result as unknown as StreamTextResult;
 
-    return createUIMessageStreamResponse({
-      stream,
-      async consumeSseStream({ stream: sseStream }) {
-        if (!process.env.REDIS_URL) {
-          return;
+    dataStream.merge(result.toUIMessageStream({ sendReasoning: true }));
+
+    if (ctx.titlePromise) {
+      const title = await ctx.titlePromise;
+      dataStream.write({ type: "data-chat-title", data: title });
+      updateChatTitleById({ chatId: ctx.id, title });
+    }
+  };
+}
+
+/** Contexto para o handler onFinish do stream. */
+interface StreamOnFinishContext {
+  requestStart: number;
+  session: ChatStreamParams["session"];
+  id: string;
+  effectiveModel: string;
+  isToolApprovalFlow: boolean;
+  uiMessages: ChatMessage[];
+}
+
+/** Cria o callback onFinish para createUIMessageStream. */
+function createStreamOnFinishHandler(
+  ctx: StreamOnFinishContext,
+  streamTextResultRef: { current: StreamTextResult | null }
+) {
+  return async ({
+    messages: finishedMessages,
+  }: {
+    messages: Array<{ id: string; role: string; parts: unknown[] }>;
+  }) => {
+    const streamTextResult = streamTextResultRef.current;
+    const onFinishStart = Date.now();
+    logTiming(
+      "onFinish (stream terminou) total request",
+      onFinishStart - ctx.requestStart
+    );
+
+    try {
+      const logOnFinishDbError = (label: string, err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        const isTimeout =
+          typeof (err as { code?: string })?.code === "string" &&
+          (err as { code: string }).code === "57014";
+        if (isDev || isTimeout) {
+          console.warn(`[chat] ${label}:`, msg);
         }
-        try {
-          const streamContext = getStreamContext();
-          if (streamContext) {
-            await updateChatActiveStreamId({
-              chatId: id,
-              activeStreamId: null,
-            });
-            const streamId = generateId();
-            await createStreamId({ streamId, chatId: id });
-            await streamContext.createNewResumableStream(
-              streamId,
-              () => sseStream
+      };
+      let saveMessagesPromise: Promise<void>;
+      if (ctx.isToolApprovalFlow) {
+        saveMessagesPromise = (async () => {
+          for (const finishedMsg of finishedMessages) {
+            const existingMsg = ctx.uiMessages.find(
+              (m) => m.id === finishedMsg.id
             );
-            await updateChatActiveStreamId({
-              chatId: id,
-              activeStreamId: streamId,
-            });
+            if (existingMsg) {
+              await updateMessage({
+                id: finishedMsg.id,
+                parts: finishedMsg.parts,
+              });
+            } else {
+              await saveMessages({
+                messages: [
+                  {
+                    id: finishedMsg.id,
+                    role: finishedMsg.role,
+                    parts: finishedMsg.parts,
+                    createdAt: new Date(),
+                    attachments: [],
+                    chatId: ctx.id,
+                  },
+                ],
+              });
+            }
           }
-        } catch {
-          // Redis/stream context opcional: ignorar erros para não falhar o request
-        }
-      },
+        })().catch((err: unknown) => {
+          logOnFinishDbError(
+            "saveMessages (tool-approval) em onFinish falhou",
+            err
+          );
+        });
+      } else if (finishedMessages.length > 0) {
+        saveMessagesPromise = saveMessages({
+          messages: finishedMessages.map((currentMessage) => ({
+            id: currentMessage.id,
+            role: currentMessage.role,
+            parts: currentMessage.parts,
+            createdAt: new Date(),
+            attachments: [],
+            chatId: ctx.id,
+          })),
+        })
+          .then(() => undefined)
+          .catch((err: unknown) => {
+            logOnFinishDbError("saveMessages em onFinish falhou", err);
+          });
+      } else {
+        saveMessagesPromise = Promise.resolve();
+      }
+
+      const creditsPromise = streamTextResult
+        ? (async () => {
+            try {
+              const usage = await streamTextResult.totalUsage;
+              const promptTokens =
+                "promptTokens" in usage
+                  ? (usage as { promptTokens: number }).promptTokens
+                  : ((usage as { inputTokens?: number }).inputTokens ?? 0);
+              const completionTokens =
+                "completionTokens" in usage
+                  ? (usage as { completionTokens: number }).completionTokens
+                  : ((usage as { outputTokens?: number }).outputTokens ?? 0);
+              const creditsConsumed = tokensToCredits(
+                promptTokens,
+                completionTokens
+              );
+              await deductCreditsAndRecordUsage({
+                userId: ctx.session.user.id,
+                chatId: ctx.id,
+                promptTokens,
+                completionTokens,
+                model: ctx.effectiveModel,
+                creditsConsumed,
+              });
+              creditsCache.delete(ctx.session.user.id);
+            } catch (error_) {
+              logOnFinishDbError(
+                "Falha ao registar uso/créditos em onFinish",
+                error_
+              );
+            }
+          })()
+        : Promise.resolve();
+
+      await Promise.all([saveMessagesPromise, creditsPromise]);
+
+      after(() => {
+        updateChatActiveStreamId({
+          chatId: ctx.id,
+          activeStreamId: null,
+        }).catch((err: unknown) => {
+          const isTimeout =
+            typeof (err as { code?: string })?.code === "string" &&
+            (err as { code: string }).code === "57014";
+          if (isDev || isTimeout) {
+            console.warn(
+              "[chat] updateChatActiveStreamId em after falhou:",
+              err instanceof Error ? err.message : err
+            );
+          }
+        });
+      });
+    } catch (err) {
+      if (isDev) {
+        console.warn("[chat] onFinish falhou:", err);
+      }
+    }
+    logTiming("onFinish completo", Date.now() - onFinishStart);
+  };
+}
+
+/** Callback onError para createUIMessageStream. */
+function streamOnErrorHandler(error: unknown): string {
+  const fallback = "Ocorreu um erro ao processar o pedido. Tente novamente.";
+  const err = error instanceof Error ? error : new Error(String(error));
+  const isInsufficientFunds = /insufficient\s+funds/i.test(err.message);
+  if (isInsufficientFunds) {
+    const hint =
+      "A conta Vercel não tem créditos para o AI Gateway. Adicione créditos em Vercel Dashboard → AI (top-up) ou use uma chave de API direta do fornecedor (ex.: ANTHROPIC_API_KEY) em desenvolvimento. Ver docs/vercel-setup.md.";
+    return process.env.NODE_ENV === "development"
+      ? `${hint} (dev: ${err.message})`
+      : hint;
+  }
+  if (process.env.NODE_ENV === "development") {
+    return `${fallback} (dev: ${err.message})`;
+  }
+  if (process.env.NODE_ENV === "production") {
+    console.error("[chat] onError (produção):", err.message, err.stack);
+  }
+  return fallback;
+}
+
+/** Cria o handler consumeSseStream para createUIMessageStreamResponse. */
+function createConsumeSseStreamHandler(chatId: string) {
+  return async function consumeSseStream({
+    stream: sseStream,
+  }: {
+    stream: ReadableStream<string>;
+  }) {
+    if (!process.env.REDIS_URL) {
+      return;
+    }
+    try {
+      const streamContext = getStreamContext();
+      if (streamContext) {
+        await updateChatActiveStreamId({
+          chatId,
+          activeStreamId: null,
+        });
+        const streamId = generateId();
+        await createStreamId({ streamId, chatId });
+        await streamContext.createNewResumableStream(streamId, () => sseStream);
+        await updateChatActiveStreamId({
+          chatId,
+          activeStreamId: streamId,
+        });
+      }
+    } catch {
+      // Redis/stream context opcional: ignorar erros para não falhar o request
+    }
+  };
+}
+
+/** Cria o stream e a Response após as mensagens estarem preparadas. */
+function buildStreamAndResponse(
+  params: ChatStreamParams,
+  prepared: {
+    messagesForModel: Awaited<ReturnType<typeof withPromptCachingForAnthropic>>;
+    preStreamEnd: number;
+  }
+): Response {
+  const {
+    requestStart,
+    id,
+    session,
+    agentInstructions,
+    agentConfig,
+    effectiveModel,
+    titlePromise,
+    isToolApprovalFlow,
+    uiMessages,
+    requestHints,
+    knowledgeContext,
+  } = params;
+  const { messagesForModel, preStreamEnd } = prepared;
+
+  const isReasoningModel =
+    effectiveModel.includes("reasoning") || effectiveModel.includes("thinking");
+
+  const streamTextResultRef: { current: StreamTextResult | null } = {
+    current: null,
+  };
+
+  const executeContext: StreamExecuteContext = {
+    session,
+    agentInstructions,
+    agentConfig,
+    effectiveModel,
+    requestHints,
+    knowledgeContext,
+    messagesForModel,
+    isReasoningModel,
+    titlePromise,
+    id,
+    requestStart,
+    preStreamEnd,
+  };
+
+  const onFinishContext: StreamOnFinishContext = {
+    requestStart,
+    session,
+    id,
+    effectiveModel,
+    isToolApprovalFlow,
+    uiMessages,
+  };
+
+  const stream = createUIMessageStream({
+    originalMessages: isToolApprovalFlow ? uiMessages : undefined,
+    execute: createStreamExecuteHandler(executeContext, streamTextResultRef),
+    generateId: generateUUID,
+    onFinish: createStreamOnFinishHandler(onFinishContext, streamTextResultRef),
+    onError: streamOnErrorHandler,
+  });
+
+  return createUIMessageStreamResponse({
+    stream,
+    consumeSseStream: createConsumeSseStreamHandler(id),
+  });
+}
+
+/** Prepara mensagens para o modelo, cria o stream e devolve a Response. */
+async function buildChatStreamResponse(
+  params: ChatStreamParams
+): Promise<Response> {
+  const prepared = await prepareModelMessagesForStream(
+    params,
+    params.debugTracker
+  );
+  if ("response" in prepared) {
+    return prepared.response;
+  }
+  return buildStreamAndResponse(params, prepared);
+}
+
+/** Devolve Response de erro se sessão/BD/conteúdo inválidos; caso contrário null. */
+async function getEarlyValidationResponse(
+  session: Session | null,
+  message: PostRequestBody["message"]
+): Promise<Response | null> {
+  if (!session?.user) {
+    return new ChatbotError("unauthorized:chat").toResponse();
+  }
+  const dbError = await ensureDbReady();
+  if (dbError) {
+    return dbError;
+  }
+  const contentError = validateUserMessageContent(message);
+  return contentError ?? null;
+}
+
+/** Normaliza o agentId do body para string válida. */
+function resolveAgentId(agentIdFromBody: PostRequestBody["agentId"]): string {
+  const trimmed =
+    agentIdFromBody && typeof agentIdFromBody === "string"
+      ? agentIdFromBody.trim()
+      : "";
+  return trimmed || DEFAULT_AGENT_ID_WHEN_EMPTY;
+}
+
+/** Resolve AgentConfig a partir do resultado do batch (built-in vs custom). */
+function resolveAgentConfigFromBatch(
+  isBuiltInAgent: boolean,
+  agentId: string,
+  builtInOverrides: ChatDbBatchResult["builtInOverrides"],
+  customAgentFromBatch: ChatDbBatchResult["customAgentFromBatch"]
+): AgentConfig {
+  if (isBuiltInAgent) {
+    return getAgentConfigWithOverrides(agentId, builtInOverrides);
+  }
+  const customAgent = customAgentFromBatch;
+  return customAgent
+    ? getAgentConfigForCustomAgent(customAgent)
+    : getAgentConfigWithOverrides(
+        DEFAULT_AGENT_ID_WHEN_EMPTY,
+        builtInOverrides
+      );
+}
+
+/** Resolve agentConfig + effectiveModel e valida Revisor; devolve erro ou dados. */
+function getAgentConfigAndEffectiveModel(
+  agentId: string,
+  selectedChatModel: string,
+  batchResult: ChatDbBatchResult,
+  message: PostRequestBody["message"]
+): Response | { agentConfig: AgentConfig; effectiveModel: string } {
+  const agentConfig = resolveAgentConfigFromBatch(
+    AGENT_IDS.includes(agentId as (typeof AGENT_IDS)[number]),
+    agentId,
+    batchResult.builtInOverrides,
+    batchResult.customAgentFromBatch
+  );
+  const effectiveModel = isModelAllowedForAgent(agentId, selectedChatModel)
+    ? selectedChatModel
+    : getDefaultModelForAgent(agentId);
+  const revisorError = validateRevisorDocumentParts(message, agentConfig);
+  if (revisorError) {
+    return revisorError;
+  }
+  return { agentConfig, effectiveModel };
+}
+
+/** Parâmetros para runCreditsAndPersist. */
+interface CreditsAndPersistParams {
+  messageCount: number;
+  userType: UserType;
+  balanceFromDb: number;
+  session: { user: { id: string } };
+  initialCredits: number;
+  chat: Awaited<ReturnType<typeof getChatById>>;
+  id: string;
+  message: PostRequestBody["message"];
+  agentId: string;
+  selectedVisibilityType: PostRequestBody["selectedVisibilityType"];
+  isToolApprovalFlow: boolean;
+}
+
+/** Executa verificação de créditos e persistência do chat; devolve Response ou titlePromise. */
+async function runCreditsAndPersist(
+  params: CreditsAndPersistParams
+): Promise<Response | { titlePromise: Promise<string> | null }> {
+  const creditsResult = await checkRateLimitAndCredits(
+    params.messageCount,
+    params.userType,
+    params.balanceFromDb,
+    params.session,
+    params.initialCredits
+  );
+  if (creditsResult instanceof Response) {
+    return creditsResult;
+  }
+  const persistResult = await persistChatAndGetTitlePromise(
+    params.chat,
+    params.session,
+    params.id,
+    params.message,
+    params.agentId,
+    params.selectedVisibilityType,
+    params.isToolApprovalFlow
+  );
+  if (persistResult instanceof Response) {
+    return persistResult;
+  }
+  return { titlePromise: persistResult.titlePromise };
+}
+
+function logChatRequestStart(agentId: string): void {
+  if (isDev) {
+    console.info(
+      "[chat-timing] POST /api/chat request started",
+      "(agentId:",
+      agentId,
+      ")"
+    );
+  }
+}
+
+function logDbBatchStart(): void {
+  if (isDev) {
+    console.info("[chat-timing] dbBatch: starting…");
+  }
+}
+
+function logDbBatchComplete(t1: number): void {
+  if (isDev) {
+    console.info(
+      `[chat-timing] dbBatch: all done in ${Math.round(Date.now() - t1)}ms`
+    );
+  }
+}
+
+/** Lógica principal do POST /api/chat após parse do body (session e sucesso). */
+async function handleChatPostAuthenticated(
+  request: Request,
+  requestBody: PostRequestBody,
+  requestStart: number,
+  debugTracker: ReturnType<typeof createChatDebugTracker>
+): Promise<Response> {
+  const {
+    id,
+    message,
+    messages,
+    selectedChatModel,
+    selectedVisibilityType,
+    agentInstructions,
+    knowledgeDocumentIds,
+    archivoIds,
+    agentId: agentIdFromBody,
+  } = requestBody;
+
+  const agentId = resolveAgentId(agentIdFromBody);
+  logChatRequestStart(agentId);
+  if (isChatDebugEnabled()) {
+    logChatDebug("request", {
+      chatId: id,
+      agentId,
+      model: selectedChatModel,
+      knowledgeIds: knowledgeDocumentIds?.length ?? 0,
+      archivoIds: archivoIds?.length ?? 0,
+      hasMessage: Boolean(message),
+      messageParts: message?.parts?.length ?? 0,
     });
+  }
+
+  const t0 = Date.now();
+  const session = await auth();
+  debugTracker.phase("auth", t0);
+  logTiming("auth", Date.now() - t0);
+
+  const earlyError = await getEarlyValidationResponse(session, message);
+  if (earlyError) {
+    return earlyError;
+  }
+  const authenticatedSession = session as Session;
+
+  const userType: UserType = authenticatedSession.user.type;
+  const isToolApprovalFlow = Boolean(messages);
+  const initialCredits = entitlementsByUserType[userType].initialCredits;
+
+  const effectiveKnowledgeIds = resolveEffectiveKnowledgeIds(
+    knowledgeDocumentIds,
+    authenticatedSession.user.id,
+    agentId
+  );
+  const redatorBancoAllowedUserIds =
+    agentId === AGENT_ID_REDATOR_CONTESTACAO &&
+    effectiveKnowledgeIds.includes(REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID)
+      ? [REDATOR_BANCO_SYSTEM_USER_ID]
+      : undefined;
+
+  const isBuiltInAgent = AGENT_IDS.includes(
+    agentId as (typeof AGENT_IDS)[number]
+  );
+  const t1 = Date.now();
+  logDbBatchStart();
+  const batchResult = await runChatDbBatch(
+    authenticatedSession,
+    id,
+    agentId,
+    isBuiltInAgent,
+    effectiveKnowledgeIds,
+    redatorBancoAllowedUserIds,
+    initialCredits
+  );
+  if (batchResult instanceof Response) {
+    return batchResult;
+  }
+
+  const agentResult = getAgentConfigAndEffectiveModel(
+    agentId,
+    selectedChatModel,
+    batchResult,
+    message
+  );
+  if (agentResult instanceof Response) {
+    return agentResult;
+  }
+  const { agentConfig, effectiveModel } = agentResult;
+
+  debugTracker.phase("dbBatch", t1);
+  logDbBatchComplete(t1);
+  logTiming(
+    "getMessageCount + getChat + getMessages + knowledge + overrides + credits (paralelo)",
+    Date.now() - t1
+  );
+
+  const creditsPersistResult = await runCreditsAndPersist({
+    messageCount: batchResult.messageCount,
+    userType,
+    balanceFromDb: batchResult.balanceFromDb,
+    session: authenticatedSession,
+    initialCredits,
+    chat: batchResult.chat,
+    id,
+    message,
+    agentId,
+    selectedVisibilityType,
+    isToolApprovalFlow,
+  });
+  if (creditsPersistResult instanceof Response) {
+    return creditsPersistResult;
+  }
+  const titlePromise = creditsPersistResult.titlePromise;
+
+  const effectiveMessagesFromDb =
+    batchResult.chat && !isToolApprovalFlow ? batchResult.messagesFromDb : [];
+
+  let uiMessages: ChatMessage[] = isToolApprovalFlow
+    ? (messages as ChatMessage[])
+    : [...convertToUIMessages(effectiveMessagesFromDb), message as ChatMessage];
+
+  const normalizedForValidation =
+    !isToolApprovalFlow && uiMessages.length > 0
+      ? normalizeMessageParts(uiMessages)
+      : uiMessages;
+
+  const lastUserText =
+    message?.parts
+      ?.filter((p) => (p as { type?: string }).type === "text")
+      .map((p) => (p as { text?: string }).text ?? "")
+      .join(" ")
+      .trim() ?? "";
+
+  const t2 = Date.now();
+  const {
+    uiMessages: validatedUiMessages,
+    ragChunks,
+    userFilesFromArchivos,
+  } = await runValidationRagUserFiles({
+    normalizedForValidation,
+    isToolApprovalFlow,
+    knowledgeDocsResult: batchResult.knowledgeDocsResult,
+    lastUserText,
+    session: authenticatedSession,
+    effectiveKnowledgeIds,
+    agentId,
+    redatorBancoAllowedUserIds,
+    archivoIds,
+  });
+  debugTracker.phase("validationRag", t2);
+  uiMessages = validatedUiMessages;
+
+  const { longitude, latitude, city, country } = geolocation(request);
+  const requestHints: RequestHints = {
+    longitude,
+    latitude,
+    city,
+    country,
+  };
+
+  const knowledgeContext = buildKnowledgeContextFromParts(
+    ragChunks,
+    batchResult.knowledgeDocsResult,
+    userFilesFromArchivos,
+    agentId,
+    effectiveKnowledgeIds
+  );
+
+  const t4 = Date.now();
+  const saveUserErr = await saveUserMessageToDb(message, id);
+  if (saveUserErr) {
+    return saveUserErr;
+  }
+  if (message?.role === "user") {
+    debugTracker.phase("saveMessages", t4);
+    logTiming("saveMessages(user)", Date.now() - t4);
+  }
+
+  return buildChatStreamResponse({
+    requestStart,
+    debugTracker,
+    id,
+    message,
+    session: authenticatedSession,
+    agentInstructions,
+    agentConfig,
+    effectiveModel,
+    titlePromise,
+    isToolApprovalFlow,
+    uiMessages,
+    requestHints,
+    knowledgeContext,
+  });
+}
+
+export async function POST(request: Request) {
+  const requestBody = await parsePostBody(request);
+  if (requestBody instanceof Response) {
+    return requestBody;
+  }
+
+  const requestStart = Date.now();
+  const debugTracker = createChatDebugTracker();
+
+  try {
+    return await handleChatPostAuthenticated(
+      request,
+      requestBody,
+      requestStart,
+      debugTracker
+    );
   } catch (error) {
-    const vercelId = request.headers.get("x-vercel-id");
-
-    if (error instanceof ChatbotError) {
-      return error.toResponse();
-    }
-
-    if (isDatabaseConnectionError(error) || isStatementTimeoutError(error)) {
-      return databaseUnavailableResponse();
-    }
-
-    if (
-      error instanceof Error &&
-      error.message?.includes(
-        "AI Gateway requires a valid credit card on file to service requests"
-      )
-    ) {
-      return new ChatbotError("bad_request:activate_gateway").toResponse();
-    }
-
-    // API overload (ex.: Anthropic 529)
-    const status =
-      error instanceof Error && "status" in error
-        ? (error as { status?: number }).status
-        : undefined;
-    if (status === 529) {
-      return new ChatbotError(
-        "offline:chat",
-        "Serviço de IA temporariamente sobrecarregado. Tente novamente em instantes."
-      ).toResponse();
-    }
-
-    console.error("Unhandled error in chat API:", error, { vercelId });
-    return new ChatbotError("offline:chat").toResponse();
+    return handleChatPostError(error, request);
   }
 }
 

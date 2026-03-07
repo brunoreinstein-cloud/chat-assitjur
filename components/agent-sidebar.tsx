@@ -286,7 +286,7 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
         </div>
       )}
 
-      {user && <SidebarUserNav user={user} />}
+      {user && <SidebarUserNav isGuest={isGuest} user={user} />}
     </aside>
   );
 }

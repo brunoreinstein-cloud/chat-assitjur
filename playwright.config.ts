@@ -26,6 +26,7 @@ const useExistingServer = Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL);
  * See https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({
+  globalSetup: "./tests/global-setup.ts",
   testDir: "./tests",
   /* Run tests in files in parallel */
   fullyParallel: true,

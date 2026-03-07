@@ -1,0 +1,13 @@
+# Dependencies and build output (Biome ignore file for CI/Vercel)
+node_modules
+.next
+out
+build
+.vercel
+.turbo
+coverage
+*.log
+test-results
+playwright-report
+blob-report
+.playwright

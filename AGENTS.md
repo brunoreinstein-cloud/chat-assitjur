@@ -79,7 +79,7 @@ Referência em `.env.example`. Principais:
 
 - `AUTH_SECRET` — Auth.js.
 - `AI_GATEWAY_API_KEY` — obrigatório em ambientes não-Vercel.
-- `POSTGRES_URL` — connection string PostgreSQL (Supabase/Neon).
+- `POSTGRES_URL` — connection string PostgreSQL (Supabase/Neon). Em Vercel usar pooler (Supabase: porta 6543). A app aquece a BD ao carregar o chat (`DbWarmup` → GET /api/health/db). Ver `docs/DB-TIMEOUT-TROUBLESHOOTING.md`.
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` — Supabase (Auth, Storage).
 - `BLOB_READ_WRITE_TOKEN` — Vercel Blob (alternativa ao Storage).
 - `REDIS_URL` — opcional, para rate limiting.

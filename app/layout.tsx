@@ -92,7 +92,11 @@ export default function RootLayout({
           enableSystem
         >
           <Toaster position="top-center" />
-          <SessionProvider basePath="/api/auth" refetchInterval={5 * 60}>
+          <SessionProvider
+            basePath="/api/auth"
+            refetchInterval={5 * 60}
+            refetchOnWindowFocus={false}
+          >
             {children}
           </SessionProvider>
         </ThemeProvider>

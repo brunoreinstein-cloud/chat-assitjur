@@ -97,12 +97,9 @@ function PureChatComposerHeader({
     modelsForAgent[0] ??
     chatModels[0];
 
-  let effectiveAgentId = NO_AGENT_SELECTED;
-  if (agentId && AGENT_IDS.includes(agentId as AgentId)) {
-    effectiveAgentId = agentId;
-  } else if (agentId && customAgents.some((a) => a.id === agentId)) {
-    effectiveAgentId = agentId;
-  }
+  const isBuiltIn = agentId && AGENT_IDS.includes(agentId as AgentId);
+  const isCustom = agentId && customAgents.some((a) => a.id === agentId);
+  const effectiveAgentId = isBuiltIn || isCustom ? agentId : NO_AGENT_SELECTED;
 
   return (
     <section
@@ -115,6 +112,7 @@ function PureChatComposerHeader({
             <ModelSelectorTrigger asChild>
               <Button
                 className="h-8 gap-1.5 pr-2 pl-2 font-normal text-muted-foreground"
+                data-testid="model-selector-trigger"
                 variant="ghost"
               >
                 <span className="text-sm">Configurações rápidas</span>

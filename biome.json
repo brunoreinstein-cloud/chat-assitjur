@@ -1,6 +1,12 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "extends": ["ultracite/biome/core"],
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": false,
+    "defaultBranch": "main"
+  },
   "files": {
     "includes": [
       "!!.pnpm-store",
@@ -10,7 +16,11 @@
       "!!.agents",
       "!!.vercel",
       "!!.vscode",
-      "!!vercel.json"
+      "!!vercel.json",
+      "!!**/test-results",
+      "!!**/playwright-report",
+      "!!**/blob-report",
+      "!!**/.playwright"
     ]
   },
   "css": { "parser": { "tailwindDirectives": true } },

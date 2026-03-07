@@ -1,34 +1,28 @@
 import { expect, test } from "@playwright/test";
+import { ensureChatPageWithGuest } from "../helpers";
 
-// O seletor de modelo está na página /chat; o botão mostra "Configurações rápidas"
+// O seletor de modelo está no composer (não na topbar); usamos data-testid para evitar 2 botões com texto parecido
 const SEARCH_PLACEHOLDER = "Buscar modelos…";
-const MODEL_SELECTOR_BUTTON_REGEX = /Configurações rápidas/i;
 
 test.describe("Model Selector", () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto("/chat", { waitUntil: "domcontentloaded" });
+    await ensureChatPageWithGuest(page);
   });
 
   test("displays a model button", async ({ page }) => {
-    const modelButton = page.getByRole("button", {
-      name: MODEL_SELECTOR_BUTTON_REGEX,
-    });
+    const modelButton = page.getByTestId("model-selector-trigger");
     await expect(modelButton).toBeVisible();
   });
 
   test("opens model selector popover on click", async ({ page }) => {
-    const modelButton = page.getByRole("button", {
-      name: MODEL_SELECTOR_BUTTON_REGEX,
-    });
+    const modelButton = page.getByTestId("model-selector-trigger");
     await modelButton.click();
 
     await expect(page.getByPlaceholder(SEARCH_PLACEHOLDER)).toBeVisible();
   });
 
   test("can search for models", async ({ page }) => {
-    const modelButton = page.getByRole("button", {
-      name: MODEL_SELECTOR_BUTTON_REGEX,
-    });
+    const modelButton = page.getByTestId("model-selector-trigger");
     await modelButton.click();
 
     const searchInput = page.getByPlaceholder(SEARCH_PLACEHOLDER);
@@ -38,9 +32,7 @@ test.describe("Model Selector", () => {
   });
 
   test("can close model selector by clicking outside", async ({ page }) => {
-    const modelButton = page.getByRole("button", {
-      name: MODEL_SELECTOR_BUTTON_REGEX,
-    });
+    const modelButton = page.getByTestId("model-selector-trigger");
     await modelButton.click();
 
     await expect(page.getByPlaceholder(SEARCH_PLACEHOLDER)).toBeVisible();
@@ -51,9 +43,7 @@ test.describe("Model Selector", () => {
   });
 
   test("shows model provider groups", async ({ page }) => {
-    const modelButton = page.getByRole("button", {
-      name: MODEL_SELECTOR_BUTTON_REGEX,
-    });
+    const modelButton = page.getByTestId("model-selector-trigger");
     await modelButton.click();
 
     await expect(page.getByText("Anthropic")).toBeVisible();
@@ -61,9 +51,7 @@ test.describe("Model Selector", () => {
   });
 
   test("can select a different model", async ({ page }) => {
-    const modelButton = page.getByRole("button", {
-      name: MODEL_SELECTOR_BUTTON_REGEX,
-    });
+    const modelButton = page.getByTestId("model-selector-trigger");
     await modelButton.click();
 
     await page.getByText("Claude Haiku").first().click();
