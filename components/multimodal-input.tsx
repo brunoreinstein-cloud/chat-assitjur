@@ -1454,10 +1454,10 @@ function PureMultimodalInput({
                       </Button>
                     </div>
                   ))}
-                  {visibleQueue.map((filename, queueIndex) => (
+                  {visibleQueue.map((filename) => (
                     <div
                       className="flex max-w-[200px] items-center gap-1.5 rounded-full border border-border/60 bg-muted/50 px-2.5 py-1 text-xs"
-                      key={`upload-queue-${queueIndex}-${filename}`}
+                      key={`upload-queue-${filename}`}
                     >
                       <FileTextIcon
                         aria-hidden

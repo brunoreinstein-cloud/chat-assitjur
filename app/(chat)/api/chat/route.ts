@@ -449,7 +449,10 @@ async function ensureDbReady(): Promise<Response | null> {
     await attempt();
   } catch (dbInitErr) {
     if (isDev) {
-      console.warn("[chat] DB init/timeout (1.ª tentativa), a repetir:", dbInitErr);
+      console.warn(
+        "[chat] DB init/timeout (1.ª tentativa), a repetir:",
+        dbInitErr
+      );
     }
     try {
       await attempt();
