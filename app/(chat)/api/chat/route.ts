@@ -617,7 +617,7 @@ async function runChatDbBatch(
             null as unknown as Awaited<ReturnType<typeof getCustomAgentById>>
           )
         ),
-  ]);
+    ]);
 
   try {
     const [
