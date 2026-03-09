@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { pingDatabase } from "@/lib/db/queries";
 
+/** Timeout máximo do health check (ms). Primeira ligação em dev pode demorar; 15s cobre connect_timeout (10s) + margem. */
+const HEALTH_DB_TIMEOUT_MS = 15_000;
+
 /**
  * Timeout máximo do health check (ms).
  * Em produção o cold start da BD (Supabase/Neon) pode levar 10–30s; 30s evita 503 no primeiro pedido.
@@ -48,7 +51,6 @@ export async function GET() {
       result.latencyMs
     );
   }
-
   const body: { ok: false; error: string; latencyMs: number; hint?: string } = {
     ok: false,
     error: result.error,
