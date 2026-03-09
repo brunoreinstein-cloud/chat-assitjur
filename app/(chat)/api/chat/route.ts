@@ -432,6 +432,14 @@ async function parsePostBody(
         | { parts?: Array<{ type?: string; text?: string }> }
         | undefined
     );
+    const messagesArr = json?.messages as
+      | Array<{ parts?: Array<{ type?: string; text?: string }> }>
+      | undefined;
+    if (Array.isArray(messagesArr)) {
+      for (const msg of messagesArr) {
+        truncateDocumentPartsInPlace(msg);
+      }
+    }
     return postRequestBodySchema.parse(json);
   } catch (error: unknown) {
     let cause: string | undefined;

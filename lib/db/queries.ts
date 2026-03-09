@@ -1308,6 +1308,7 @@ export async function deleteChunksByKnowledgeDocumentId(
 /**
  * Busca os chunks mais relevantes para o embedding da pergunta (cosine similarity).
  * Considera documentos do userId; se allowedUserIds for passado, inclui também documentos desses utilizadores (ex.: doc. sistema).
+ * Se minSimilarity for definido (0–1), só devolve chunks com similaridade >= minSimilarity (cosine distance <= 1 - minSimilarity).
  */
 export async function getRelevantChunks({
   userId,
@@ -1315,6 +1316,7 @@ export async function getRelevantChunks({
   queryEmbedding,
   limit = 12,
   allowedUserIds,
+  minSimilarity,
 }: {
   userId: string;
   documentIds: string[];
@@ -1322,6 +1324,8 @@ export async function getRelevantChunks({
   limit?: number;
   /** Quando definido, inclui chunks de documentos destes userIds (ex.: Redator banco padrão). */
   allowedUserIds?: string[];
+  /** Similaridade mínima (0–1). Só devolve chunks com similarity >= este valor. Ex.: 0.25 ou 0.3 (env RAG_MIN_SIMILARITY). */
+  minSimilarity?: number;
 }): Promise<KnowledgeChunkRow[]> {
   if (documentIds.length === 0 || queryEmbedding.length === 0) {
     return [];
@@ -1334,6 +1338,21 @@ export async function getRelevantChunks({
         inArray(knowledgeDocument.userId, allowedUserIds)
       )
     : eq(knowledgeDocument.userId, userId);
+  const conditions = [
+    userIdCondition,
+    inArray(knowledgeDocument.id, documentIds),
+    sql`${knowledgeChunk.embedding} IS NOT NULL`,
+  ];
+  if (
+    minSimilarity !== undefined &&
+    minSimilarity > 0 &&
+    minSimilarity <= 1
+  ) {
+    const maxDistance = 1 - minSimilarity;
+    conditions.push(
+      sql`(${knowledgeChunk.embedding} <=> ${sql.raw(vectorLiteral)}) <= ${maxDistance}`
+    );
+  }
   const rows = await getDb()
     .select({
       id: knowledgeChunk.id,
@@ -1346,13 +1365,7 @@ export async function getRelevantChunks({
       knowledgeDocument,
       eq(knowledgeChunk.knowledgeDocumentId, knowledgeDocument.id)
     )
-    .where(
-      and(
-        userIdCondition,
-        inArray(knowledgeDocument.id, documentIds),
-        sql`${knowledgeChunk.embedding} IS NOT NULL`
-      )
-    )
+    .where(and(...conditions))
     .orderBy(sql`${knowledgeChunk.embedding} <=> ${sql.raw(vectorLiteral)}`)
     .limit(limit);
   return rows as KnowledgeChunkRow[];

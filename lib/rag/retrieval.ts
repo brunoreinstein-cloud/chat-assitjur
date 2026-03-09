@@ -25,6 +25,8 @@ export interface VectorRetrievalBackend {
     queryEmbedding: number[];
     limit?: number;
     allowedUserIds?: string[];
+    /** Similaridade mínima 0–1; só devolver chunks acima deste threshold (ex.: 0.25). */
+    minSimilarity?: number;
   }): Promise<RetrievalChunk[]>;
 }
 
@@ -36,6 +38,7 @@ export const pgVectorRetrieval: VectorRetrievalBackend = {
     queryEmbedding,
     limit = 12,
     allowedUserIds,
+    minSimilarity,
   }) {
     return getRelevantChunks({
       userId,
@@ -43,6 +46,7 @@ export const pgVectorRetrieval: VectorRetrievalBackend = {
       queryEmbedding,
       limit,
       allowedUserIds,
+      minSimilarity,
     });
   },
 };
@@ -73,6 +77,15 @@ export async function getDefaultRetrievalBackend(): Promise<VectorRetrievalBacke
  * Recupera o contexto de base de conhecimento para o prompt: gera embedding da query
  * e devolve os chunks mais relevantes formatados (ou lista vazia se falhar).
  */
+/** Lê RAG_MIN_SIMILARITY do env (0–1). Undefined se não definido ou inválido. */
+function getMinSimilarityFromEnv(): number | undefined {
+  const raw = process.env.RAG_MIN_SIMILARITY?.trim();
+  if (!raw) return undefined;
+  const value = Number.parseFloat(raw);
+  if (!Number.isFinite(value) || value <= 0 || value > 1) return undefined;
+  return value;
+}
+
 export async function retrieveKnowledgeContext(params: {
   userId: string;
   documentIds: string[];
@@ -80,6 +93,8 @@ export async function retrieveKnowledgeContext(params: {
   limit?: number;
   allowedUserIds?: string[];
   backend?: VectorRetrievalBackend;
+  /** Override do env RAG_MIN_SIMILARITY (0–1). */
+  minSimilarity?: number;
 }): Promise<RetrievalChunk[]> {
   const backend = params.backend ?? (await getDefaultRetrievalBackend());
   const { queryText } = params;
@@ -91,11 +106,14 @@ export async function retrieveKnowledgeContext(params: {
   if (queryEmbedding === null) {
     return [];
   }
+  const minSimilarity =
+    params.minSimilarity ?? getMinSimilarityFromEnv();
   return backend.getRelevantChunks({
     userId: params.userId,
     documentIds: params.documentIds,
     queryEmbedding,
     limit: params.limit,
     allowedUserIds: params.allowedUserIds,
+    minSimilarity,
   });
 }

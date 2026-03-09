@@ -63,6 +63,53 @@ import type { VisibilityType } from "./visibility-selector";
 
 const MAX_KNOWLEDGE_SELECT = 50;
 
+/** Margem abaixo do limite do schema (2M); truncagem defensiva no cliente para evitar 400 por tamanho. */
+const MAX_PART_TEXT_CLIENT = 400_000;
+
+const TRUNCATE_SUFFIX_CLIENT =
+  "\n\n[Truncado: o documento excedeu o limite de caracteres.]";
+
+function truncateMessagePartsForRequest(messages: unknown[]): {
+  messages: unknown[];
+  lastMessage: unknown;
+  didTruncate: boolean;
+  truncatedTotal: number;
+} {
+  let didTruncate = false;
+  let truncatedTotal = 0;
+  const maxLen = MAX_PART_TEXT_CLIENT - TRUNCATE_SUFFIX_CLIENT.length;
+  const out: unknown[] = [];
+  for (const msg of messages) {
+    const m = msg as { parts?: Array<{ type?: string; text?: string }> };
+    if (!m || typeof m !== "object" || !Array.isArray(m.parts)) {
+      out.push(msg);
+      continue;
+    }
+    const newParts = m.parts.map((part) => {
+      if (
+        part?.type === "document" &&
+        typeof part.text === "string" &&
+        part.text.length > MAX_PART_TEXT_CLIENT
+      ) {
+        didTruncate = true;
+        truncatedTotal += part.text.length - (maxLen + TRUNCATE_SUFFIX_CLIENT.length);
+        return {
+          ...part,
+          text: part.text.slice(0, maxLen) + TRUNCATE_SUFFIX_CLIENT,
+        };
+      }
+      return part;
+    });
+    out.push({ ...m, parts: newParts });
+  }
+  return {
+    messages: out,
+    lastMessage: out.at(-1),
+    didTruncate,
+    truncatedTotal,
+  };
+}
+
 function getInitialAttachments(storageKey: string): Attachment[] {
   if (globalThis.window === undefined) {
     return [];
@@ -438,10 +485,17 @@ export function Chat({
       api: "/api/chat",
       fetch: fetchWithErrorHandlers,
       prepareSendMessagesRequest(request) {
-        const lastMessage = request.messages.at(-1);
+        const { messages: truncatedMessages, lastMessage: truncatedLastMessage, didTruncate, truncatedTotal } =
+          truncateMessagePartsForRequest([...request.messages]);
+        if (didTruncate && truncatedTotal > 0) {
+          toast({
+            type: "error",
+            description: `Documento muito longo; o texto foi truncado (${truncatedTotal.toLocaleString("pt-PT")} caracteres).`,
+          });
+        }
         const isContinuation = isToolApprovalContinuation(
           request.messages,
-          lastMessage
+          request.messages.at(-1)
         );
         const refs: ChatRequestRefs = {
           currentModelIdRef,
@@ -454,11 +508,11 @@ export function Chat({
           body: buildChatRequestBody(
             {
               id: request.id,
-              messages: [...request.messages],
+              messages: truncatedMessages,
               body: request.body ?? {},
             },
             isContinuation,
-            lastMessage,
+            truncatedLastMessage,
             refs,
             initialChatModel,
             visibilityType ?? "private"

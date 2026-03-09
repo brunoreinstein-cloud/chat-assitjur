@@ -39,6 +39,7 @@ export const qdrantRetrieval: VectorRetrievalBackend = {
     queryEmbedding,
     limit = 12,
     allowedUserIds,
+    minSimilarity,
   }) {
     if (documentIds.length === 0 || queryEmbedding.length === 0) {
       return [];
@@ -72,8 +73,17 @@ export const qdrantRetrieval: VectorRetrievalBackend = {
       with_payload: true,
       with_vector: false,
     });
-    return result.map((p) =>
-      payloadToChunk(String(p.id), (p.payload ?? {}) as Record<string, unknown>)
-    );
+    let hits = result.map((p) => ({
+      chunk: payloadToChunk(String(p.id), p.payload ?? {}),
+      score: p.score ?? 0,
+    }));
+    if (
+      minSimilarity !== undefined &&
+      minSimilarity > 0 &&
+      minSimilarity <= 1
+    ) {
+      hits = hits.filter((h) => h.score >= minSimilarity);
+    }
+    return hits.map((h) => h.chunk);
   },
 };

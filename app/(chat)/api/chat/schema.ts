@@ -12,8 +12,8 @@ const filePartSchema = z.object({
   url: z.string().url(),
 });
 
-/** Limite de caracteres do texto de uma parte do tipo "document" (PDF/DOCX). Texto acima é truncado no servidor antes da validação. */
-export const MAX_DOCUMENT_PART_TEXT_LENGTH = 500_000;
+/** Limite de caracteres do texto de uma parte do tipo "document" (PDF/DOCX). Texto acima é truncado no servidor antes da validação. ~2M ≈ 1500 páginas. */
+export const MAX_DOCUMENT_PART_TEXT_LENGTH = 2_000_000;
 
 /** Parte com texto extraído de PDF/DOCX (PI, Contestação, etc.). Texto vazio é aceite (ex.: ficheiro sem extração). */
 const documentPartSchema = z.object({
