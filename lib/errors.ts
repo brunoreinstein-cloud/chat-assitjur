@@ -114,6 +114,35 @@ export function isStatementTimeoutError(error: unknown): boolean {
   return code === PG_STATEMENT_TIMEOUT_CODE;
 }
 
+/**
+ * Indica se o erro parece ser de BD/conexão (por mensagem ou nome).
+ * Fallback quando isDatabaseConnectionError/isStatementTimeoutError não reconhecem
+ * o formato do driver (ex.: postgres.js em alguns contextos).
+ */
+export function isLikelyDatabaseError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  const err = error as Error;
+  const msg =
+    err.message?.toLowerCase() ??
+    (typeof error === "string" ? error : "").toLowerCase();
+  const name = err.name ?? "";
+  if (
+    msg.includes("connect") ||
+    msg.includes("econnrefused") ||
+    msg.includes("etimedout") ||
+    msg.includes("enotfound") ||
+    msg.includes("connection refused") ||
+    msg.includes("connection timeout") ||
+    name === "PostgresError" ||
+    name === "postgres"
+  ) {
+    return true;
+  }
+  return false;
+}
+
 /** Resposta 503 padrão para indisponibilidade da base de dados. */
 export function databaseUnavailableResponse() {
   return Response.json(

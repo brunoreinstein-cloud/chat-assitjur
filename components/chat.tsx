@@ -26,7 +26,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useArtifactSelector } from "@/hooks/use-artifact";
 import { useAutoResume } from "@/hooks/use-auto-resume";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
 import {
@@ -50,6 +49,7 @@ import {
 import { Artifact } from "./artifact";
 import { DataPolicyLink } from "./data-policy-link";
 import { type DataStreamState, useDataStream } from "./data-stream-provider";
+import { useDbFallback } from "./db-fallback-context";
 import { KnowledgeSidebar } from "./knowledge-sidebar";
 import { Messages } from "./messages";
 import { MultimodalInput } from "./multimodal-input";
@@ -63,6 +63,243 @@ import type { VisibilityType } from "./visibility-selector";
 
 const MAX_KNOWLEDGE_SELECT = 50;
 
+function getInitialAttachments(storageKey: string): Attachment[] {
+  if (globalThis.window === undefined) {
+    return [];
+  }
+  try {
+    const raw = globalThis.sessionStorage.getItem(storageKey);
+    return raw ? (JSON.parse(raw) as Attachment[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function saveReplyToKnowledge(
+  title: string,
+  content: string
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const res = await fetch("/api/knowledge", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, content }),
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { message?: string };
+    return {
+      ok: false,
+      error: data?.message ?? "Erro ao guardar em conhecimento.",
+    };
+  }
+  const created = (await res.json()) as { id: string; title: string };
+  return { ok: true, id: created.id };
+}
+
+function getEffectiveAgentId(agentId: string): (typeof AGENT_IDS)[number] {
+  if (agentId && AGENT_IDS.includes(agentId as (typeof AGENT_IDS)[number])) {
+    return agentId as (typeof AGENT_IDS)[number];
+  }
+  return AGENT_IDS[0];
+}
+
+function shouldSendAutomaticallyAfterApproval(
+  currentMessages: ReadonlyArray<{ parts?: unknown[] }>
+): boolean {
+  const lastMessage = currentMessages.at(-1);
+  return (
+    lastMessage?.parts?.some((part) => {
+      if (part == null || typeof part !== "object") {
+        return false;
+      }
+      const p = part as { state?: string; approval?: { approved?: boolean } };
+      return p.state === "approval-responded" && p.approval?.approved === true;
+    }) ?? false
+  );
+}
+
+function isToolApprovalContinuation(
+  messages: ReadonlyArray<{ role?: string; parts?: unknown[] }>,
+  lastMessage: { role?: string; parts?: unknown[] } | undefined
+): boolean {
+  if (lastMessage?.role !== "user") {
+    return true;
+  }
+  return messages.some((msg) =>
+    msg.parts?.some((part) => {
+      if (part == null) {
+        return false;
+      }
+      const state = (part as { state?: string })?.state;
+      return state === "approval-responded" || state === "output-denied";
+    })
+  );
+}
+
+interface ChatRequestRefs {
+  currentModelIdRef: { current: string };
+  agentInstructionsRef: { current: string };
+  knowledgeDocumentIdsRef: { current: string[] };
+  archivoIdsForChatRef: { current: string[] };
+  agentIdRef: { current: string };
+}
+
+function buildChatRequestBody(
+  request: { id: string; messages: unknown[]; body: Record<string, unknown> },
+  isContinuation: boolean,
+  lastMessage: unknown,
+  refs: ChatRequestRefs,
+  initialChatModel: string,
+  visibilityType: string
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    id: request.id,
+    ...(isContinuation
+      ? { messages: request.messages }
+      : { message: lastMessage }),
+    selectedChatModel:
+      refs.currentModelIdRef.current?.trim() || initialChatModel,
+    selectedVisibilityType: visibilityType ?? "private",
+    agentId: refs.agentIdRef.current?.trim() || DEFAULT_AGENT_ID_WHEN_EMPTY,
+    ...request.body,
+  };
+  if (refs.agentInstructionsRef.current?.trim()) {
+    body.agentInstructions = refs.agentInstructionsRef.current.trim();
+  }
+  if (refs.knowledgeDocumentIdsRef.current.length > 0) {
+    body.knowledgeDocumentIds = refs.knowledgeDocumentIdsRef.current;
+  }
+  if (refs.archivoIdsForChatRef.current.length > 0) {
+    body.archivoIds = refs.archivoIdsForChatRef.current;
+  }
+  return body;
+}
+
+function useSyncAgentToUrl(
+  agentId: string,
+  pathname: string,
+  router: ReturnType<typeof useRouter>
+) {
+  useEffect(() => {
+    if (pathname !== "/chat" || globalThis.window === undefined) {
+      return;
+    }
+    const expectedSearch = agentId
+      ? `?agent=${encodeURIComponent(agentId)}`
+      : "";
+    if (globalThis.window.location.search !== expectedSearch) {
+      router.replace(`/chat${expectedSearch}`);
+    }
+  }, [agentId, pathname, router]);
+}
+
+function useCustomAgentKnowledgeSync(
+  agentId: string,
+  setKnowledgeDocumentIds: React.Dispatch<React.SetStateAction<string[]>>
+) {
+  useEffect(() => {
+    if (!agentId || AGENT_IDS.includes(agentId as AgentId)) {
+      return;
+    }
+    fetch(`/api/agents/custom/${agentId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((agent: { knowledgeDocumentIds?: string[] } | null) => {
+        const ids =
+          agent?.knowledgeDocumentIds?.slice(0, MAX_KNOWLEDGE_SELECT) ?? [];
+        setKnowledgeDocumentIds(ids);
+      })
+      .catch(() => {
+        // Ignore fetch errors (e.g. no agent config)
+      });
+  }, [agentId, setKnowledgeDocumentIds]);
+}
+
+function useAgentModelSync(
+  agentId: string,
+  currentModelId: string,
+  setCurrentModelId: React.Dispatch<React.SetStateAction<string>>
+) {
+  useEffect(() => {
+    const effectiveAgentId = agentId?.trim() || DEFAULT_AGENT_ID_WHEN_EMPTY;
+    if (!isModelAllowedForAgent(effectiveAgentId, currentModelId)) {
+      setCurrentModelId(getDefaultModelForAgent(effectiveAgentId));
+    }
+  }, [agentId, currentModelId, setCurrentModelId]);
+}
+
+function updateUrlRemoveKnowledge(base = "/chat") {
+  if (globalThis.window === undefined) {
+    return;
+  }
+  const params = new URLSearchParams(globalThis.window.location.search);
+  params.delete("knowledge");
+  params.delete("folder");
+  const q = params.toString();
+  globalThis.window.history.replaceState(null, "", q ? `${base}?${q}` : base);
+}
+
+function updateUrlForKnowledgeOpen(base = "/chat") {
+  if (globalThis.window === undefined) {
+    return;
+  }
+  const params = new URLSearchParams(globalThis.window.location.search);
+  params.set("knowledge", "open");
+  globalThis.window.history.replaceState(
+    null,
+    "",
+    `${base}?${params.toString()}`
+  );
+}
+
+function handleChatError(
+  error: unknown,
+  setShowCreditCardAlert: (show: boolean) => void
+) {
+  const unwrapped =
+    error instanceof Error && error.cause instanceof ChatbotError
+      ? error.cause
+      : error;
+  const errMessage =
+    unwrapped instanceof Error ? unwrapped.message : String(unwrapped);
+  const cause =
+    unwrapped instanceof Error && "cause" in unwrapped
+      ? (unwrapped as { cause?: unknown }).cause
+      : undefined;
+  let causeStr = "";
+  if (cause instanceof Error) {
+    causeStr = cause.message;
+  } else if (typeof cause === "string") {
+    causeStr = cause;
+  }
+  const isContextLimit =
+    errMessage.includes("context_limit") ||
+    errMessage.includes("excede o limite") ||
+    causeStr.includes("context_limit");
+  if (isContextLimit) {
+    toast({
+      type: "error",
+      description:
+        "O contexto desta conversa excede o limite do modelo. Por favor, inicia um novo chat.",
+    });
+    return;
+  }
+  if (unwrapped instanceof ChatbotError) {
+    if (
+      unwrapped.message?.includes("AI Gateway requires a valid credit card")
+    ) {
+      setShowCreditCardAlert(true);
+    } else {
+      const description = unwrapped.cause ?? unwrapped.message;
+      toast({ type: "error", description });
+    }
+  } else {
+    const message =
+      unwrapped instanceof Error
+        ? unwrapped.message
+        : "Algo correu mal. Tente novamente.";
+    toast({ type: "error", description: message });
+  }
+}
+
 type ChatProps = Readonly<{
   id: string;
   initialMessages: ChatMessage[];
@@ -73,6 +310,39 @@ type ChatProps = Readonly<{
   isReadonly: boolean;
   autoResume: boolean;
 }>;
+
+function useKnowledgeOpenFromSearchParams(
+  searchParams: ReturnType<typeof useSearchParams>,
+  setKnowledgeOpen: React.Dispatch<React.SetStateAction<boolean>>
+) {
+  useEffect(() => {
+    if (searchParams.get("knowledge") === "open") {
+      setKnowledgeOpen(true);
+    }
+  }, [searchParams, setKnowledgeOpen]);
+}
+
+function useAppendQueryFromSearchParams(
+  query: string | null,
+  sendMessage: (msg: {
+    role: "user";
+    parts: [{ type: "text"; text: string }];
+  }) => void,
+  chatId: string
+) {
+  const [hasAppendedQuery, setHasAppendedQuery] = useState(false);
+  useEffect(() => {
+    if (query === null || query === "" || hasAppendedQuery) {
+      return;
+    }
+    sendMessage({
+      role: "user" as const,
+      parts: [{ type: "text", text: query }],
+    });
+    setHasAppendedQuery(true);
+    globalThis.window.history.replaceState({}, "", `/chat/${chatId}`);
+  }, [query, sendMessage, hasAppendedQuery, chatId]);
+}
 
 export function Chat({
   id,
@@ -104,6 +374,7 @@ export function Chat({
     return () => globalThis.removeEventListener("popstate", handlePopState);
   }, [router]);
   const { setDataStream } = useDataStream();
+  const { dbFallbackUsed, setDbFallbackUsed } = useDbFallback();
 
   const [input, setInput] = useState<string>("");
   const [showCreditCardAlert, setShowCreditCardAlert] = useState(false);
@@ -135,12 +406,7 @@ export function Chat({
     agentIdRef.current = agentId;
   }, [agentId]);
 
-  useEffect(() => {
-    const effectiveAgentId = agentId?.trim() || DEFAULT_AGENT_ID_WHEN_EMPTY;
-    if (!isModelAllowedForAgent(effectiveAgentId, currentModelId)) {
-      setCurrentModelId(getDefaultModelForAgent(effectiveAgentId));
-    }
-  }, [agentId, currentModelId]); // only when agent changes; currentModelId intentionally omitted to avoid loops
+  useAgentModelSync(agentId, currentModelId, setCurrentModelId);
 
   useEffect(() => {
     knowledgeDocumentIdsRef.current = knowledgeDocumentIds;
@@ -150,36 +416,8 @@ export function Chat({
     archivoIdsForChatRef.current = archivoIdsForChat;
   }, [archivoIdsForChat]);
 
-  // Sincroniza o agente selecionado com a URL na página de novo chat (sidebar reflete o estado)
-  useEffect(() => {
-    if (pathname !== "/chat" || typeof globalThis.window === "undefined") {
-      return;
-    }
-    const expectedSearch = agentId
-      ? `?agent=${encodeURIComponent(agentId)}`
-      : "";
-    if (globalThis.window.location.search !== expectedSearch) {
-      router.replace(`/chat${expectedSearch}`);
-    }
-  }, [agentId, pathname, router]);
-
-  // Ao selecionar um agente personalizado, preencher a base de conhecimento com a do agente
-  useEffect(() => {
-    if (!agentId || AGENT_IDS.includes(agentId as AgentId)) {
-      return;
-    }
-    fetch(`/api/agents/custom/${agentId}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((agent: { knowledgeDocumentIds?: string[] } | null) => {
-        const ids = Array.isArray(agent?.knowledgeDocumentIds)
-          ? agent.knowledgeDocumentIds.slice(0, MAX_KNOWLEDGE_SELECT)
-          : [];
-        setKnowledgeDocumentIds(ids);
-      })
-      .catch(() => {
-        // Ignore fetch errors (e.g. no agent config)
-      });
-  }, [agentId]);
+  useSyncAgentToUrl(agentId, pathname, router);
+  useCustomAgentKnowledgeSync(agentId, setKnowledgeDocumentIds);
 
   const {
     messages,
@@ -194,59 +432,37 @@ export function Chat({
     id,
     messages: initialMessages,
     generateId: generateUUID,
-    sendAutomaticallyWhen: ({ messages: currentMessages }) => {
-      const lastMessage = currentMessages.at(-1);
-      const shouldContinue =
-        lastMessage?.parts?.some(
-          (part) =>
-            part != null &&
-            "state" in part &&
-            part?.state === "approval-responded" &&
-            "approval" in part &&
-            (part.approval as { approved?: boolean })?.approved === true
-        ) ?? false;
-      return shouldContinue;
-    },
+    sendAutomaticallyWhen: ({ messages }) =>
+      shouldSendAutomaticallyAfterApproval(messages),
     transport: new DefaultChatTransport({
       api: "/api/chat",
       fetch: fetchWithErrorHandlers,
       prepareSendMessagesRequest(request) {
         const lastMessage = request.messages.at(-1);
-        const isToolApprovalContinuation =
-          lastMessage?.role !== "user" ||
-          request.messages.some((msg) =>
-            msg.parts?.some((part) => {
-              if (part == null) {
-                return false;
-              }
-              const state = (part as { state?: string })?.state;
-              return (
-                state === "approval-responded" || state === "output-denied"
-              );
-            })
-          );
-
+        const isContinuation = isToolApprovalContinuation(
+          request.messages,
+          lastMessage
+        );
+        const refs: ChatRequestRefs = {
+          currentModelIdRef,
+          agentInstructionsRef,
+          knowledgeDocumentIdsRef,
+          archivoIdsForChatRef,
+          agentIdRef,
+        };
         return {
-          body: {
-            id: request.id,
-            ...(isToolApprovalContinuation
-              ? { messages: request.messages }
-              : { message: lastMessage }),
-            selectedChatModel:
-              currentModelIdRef.current?.trim() || initialChatModel,
-            selectedVisibilityType: visibilityType ?? "private",
-            ...(agentInstructionsRef.current?.trim()
-              ? { agentInstructions: agentInstructionsRef.current.trim() }
-              : {}),
-            ...(knowledgeDocumentIdsRef.current.length > 0
-              ? { knowledgeDocumentIds: knowledgeDocumentIdsRef.current }
-              : {}),
-            ...(archivoIdsForChatRef.current.length > 0
-              ? { archivoIds: archivoIdsForChatRef.current }
-              : {}),
-            agentId: agentIdRef.current?.trim() || DEFAULT_AGENT_ID_WHEN_EMPTY,
-            ...request.body,
-          },
+          body: buildChatRequestBody(
+            {
+              id: request.id,
+              messages: [...request.messages],
+              body: request.body ?? {},
+            },
+            isContinuation,
+            lastMessage,
+            refs,
+            initialChatModel,
+            visibilityType ?? "private"
+          ),
         };
       },
     }),
@@ -260,109 +476,32 @@ export function Chat({
       mutate("/api/credits");
     },
     onError: (error: unknown) => {
-      const unwrapped =
-        error instanceof Error && error.cause instanceof ChatbotError
-          ? error.cause
-          : error;
-      const errMessage =
-        unwrapped instanceof Error ? unwrapped.message : String(unwrapped);
-      const cause =
-        unwrapped instanceof Error && "cause" in unwrapped
-          ? (unwrapped as { cause?: unknown }).cause
-          : undefined;
-      const causeStr =
-        cause instanceof Error
-          ? cause.message
-          : typeof cause === "string"
-            ? cause
-            : "";
-      const isContextLimit =
-        errMessage.includes("context_limit") ||
-        errMessage.includes("excede o limite") ||
-        causeStr.includes("context_limit");
-      if (isContextLimit) {
-        toast({
-          type: "error",
-          description:
-            "O contexto desta conversa excede o limite do modelo. Por favor, inicia um novo chat.",
-        });
-        return;
-      }
-      if (unwrapped instanceof ChatbotError) {
-        if (
-          unwrapped.message?.includes("AI Gateway requires a valid credit card")
-        ) {
-          setShowCreditCardAlert(true);
-        } else {
-          const description = unwrapped.cause ?? unwrapped.message;
-          toast({
-            type: "error",
-            description,
-          });
-        }
-      } else {
-        const message =
-          unwrapped instanceof Error
-            ? unwrapped.message
-            : "Algo correu mal. Tente novamente.";
-        toast({ type: "error", description: message });
-      }
+      handleChatError(error, setShowCreditCardAlert);
     },
   });
+
+  useEffect(() => {
+    if (status === "submitted") {
+      setDbFallbackUsed(false);
+    }
+  }, [status, setDbFallbackUsed]);
 
   const searchParams = useSearchParams();
   const query = searchParams.get("query");
   const [knowledgeOpen, setKnowledgeOpen] = useState(false);
-
-  useEffect(() => {
-    if (searchParams.get("knowledge") === "open") {
-      setKnowledgeOpen(true);
-    }
-  }, [searchParams]);
+  useKnowledgeOpenFromSearchParams(searchParams, setKnowledgeOpen);
 
   const closeKnowledgeSidebar = useCallback(() => {
     setKnowledgeOpen(false);
-    if (globalThis.window !== undefined) {
-      const base = pathname ?? "/chat";
-      const params = new URLSearchParams(globalThis.window.location.search);
-      params.delete("knowledge");
-      params.delete("folder");
-      const q = params.toString();
-      globalThis.window.history.replaceState(
-        null,
-        "",
-        q ? `${base}?${q}` : base
-      );
-    }
+    updateUrlRemoveKnowledge(pathname ?? "/chat");
   }, [pathname]);
 
   const openKnowledgeSidebar = useCallback(() => {
     setKnowledgeOpen(true);
-    if (globalThis.window !== undefined) {
-      const base = pathname ?? "/chat";
-      const params = new URLSearchParams(globalThis.window.location.search);
-      params.set("knowledge", "open");
-      globalThis.window.history.replaceState(
-        null,
-        "",
-        `${base}?${params.toString()}`
-      );
-    }
+    updateUrlForKnowledgeOpen(pathname ?? "/chat");
   }, [pathname]);
 
-  const [hasAppendedQuery, setHasAppendedQuery] = useState(false);
-
-  useEffect(() => {
-    if (query && !hasAppendedQuery) {
-      sendMessage({
-        role: "user" as const,
-        parts: [{ type: "text", text: query }],
-      });
-
-      setHasAppendedQuery(true);
-      globalThis.window.history.replaceState({}, "", `/chat/${id}`);
-    }
-  }, [query, sendMessage, hasAppendedQuery, id]);
+  useAppendQueryFromSearchParams(query, sendMessage, id);
 
   const { data: votes } = useSWR<Vote[]>(
     messages.length >= 2 ? `/api/vote?chatId=${id}` : null,
@@ -372,17 +511,9 @@ export function Chat({
 
   const DRAFT_ATTACHMENTS_KEY = `chat-draft-attachments-${id}`;
 
-  const [attachments, setAttachments] = useState<Attachment[]>(() => {
-    if (globalThis.window === undefined) {
-      return [];
-    }
-    try {
-      const raw = globalThis.sessionStorage.getItem(DRAFT_ATTACHMENTS_KEY);
-      return raw ? (JSON.parse(raw) as Attachment[]) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [attachments, setAttachments] = useState<Attachment[]>(() =>
+    getInitialAttachments(DRAFT_ATTACHMENTS_KEY)
+  );
 
   const prevChatIdRef = useRef<string>(id);
 
@@ -413,7 +544,6 @@ export function Chat({
     }
   }, [attachments, id]);
 
-  const isArtifactVisible = useArtifactSelector((state) => state.isVisible);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   useAutoResume({
@@ -452,27 +582,19 @@ export function Chat({
       saveToKnowledgeTitle.trim().slice(0, 512) || "Resposta do chat";
     setIsSavingToKnowledge(true);
     try {
-      const res = await fetch("/api/knowledge", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, content: lastAssistantText }),
-      });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as {
-          message?: string;
-        };
-        toast.error(data?.message ?? "Erro ao guardar em conhecimento.");
-        return;
+      const result = await saveReplyToKnowledge(title, lastAssistantText);
+      if (result.ok) {
+        setKnowledgeDocumentIds((prev) =>
+          prev.length < MAX_KNOWLEDGE_SELECT ? [...prev, result.id] : prev
+        );
+        mutate("/api/knowledge");
+        setSaveToKnowledgeOpen(false);
+        toast.success(
+          "Guardado em conhecimento. Este conteúdo poderá ser usado como contexto noutros chats."
+        );
+      } else {
+        toast.error(result.error);
       }
-      const created = (await res.json()) as { id: string; title: string };
-      setKnowledgeDocumentIds((prev) =>
-        prev.length < MAX_KNOWLEDGE_SELECT ? [...prev, created.id] : prev
-      );
-      mutate("/api/knowledge");
-      setSaveToKnowledgeOpen(false);
-      toast.success(
-        "Guardado em conhecimento. Este conteúdo poderá ser usado como contexto noutros chats."
-      );
     } catch {
       toast.error("Erro ao guardar em conhecimento.");
     } finally {
@@ -480,10 +602,7 @@ export function Chat({
     }
   };
 
-  const effectiveAgentId =
-    agentId && AGENT_IDS.includes(agentId as (typeof AGENT_IDS)[number])
-      ? agentId
-      : AGENT_IDS[0];
+  const effectiveAgentId = getEffectiveAgentId(agentId);
 
   return (
     <>
@@ -500,7 +619,7 @@ export function Chat({
           />
 
           {!isReadonly && (
-            <div className="border-border bg-muted/30 dark:border-white/8 dark:bg-[#13161b] [&_*]:text-muted-foreground dark:[&_*]:text-[#6b7280] [&_button]:border-border [&_button]:bg-transparent [&_button]:text-foreground [&_button]:hover:bg-muted dark:[&_button]:border-white/8 dark:[&_button]:text-[#e8eaf0] dark:[&_button]:hover:bg-[#1a1e26]">
+            <div className="border-border bg-muted/30 **:text-muted-foreground dark:border-white/8 dark:bg-[#13161b] dark:**:text-[#6b7280] [&_button]:border-border [&_button]:bg-transparent [&_button]:text-foreground [&_button]:hover:bg-muted dark:[&_button]:border-white/8 dark:[&_button]:text-[#e8eaf0] dark:[&_button]:hover:bg-[#1a1e26]">
               <ChatComposerHeader
                 agentId={agentId}
                 onModelChange={setCurrentModelId}
@@ -515,8 +634,8 @@ export function Chat({
             agentId={agentId}
             attachments={attachments}
             chatId={id}
+            dbFallbackUsed={dbFallbackUsed}
             inputRef={inputRef}
-            isArtifactVisible={isArtifactVisible}
             isReadonly={isReadonly}
             knowledgeDocumentIds={knowledgeDocumentIds}
             messages={messages}

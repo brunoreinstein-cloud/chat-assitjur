@@ -87,6 +87,18 @@ describe("toResponse", () => {
     expect(json.message).toContain("base de dados");
     expect(json.cause).toBe("Mensagem de teste");
   });
+
+  it("para bad_request:api com cause inclui cause no JSON da resposta", async () => {
+    const err = new ChatbotError("bad_request:api", "Parameter id is required");
+    const res = err.toResponse();
+    const json = (await res.json()) as {
+      code: string;
+      message: string;
+      cause?: string;
+    };
+    expect(json.code).toBe("bad_request:api");
+    expect(json.cause).toBe("Parameter id is required");
+  });
 });
 
 describe("visibilityBySurface", () => {

@@ -62,6 +62,10 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm exec playwright install --with-deps chromium
 
+      - name: Warm up database
+        run: pnpm db:ping
+        continue-on-error: true
+
       - name: Run Playwright tests
         run: pnpm test
 

@@ -119,6 +119,41 @@ que corre `supabase:config-push`. De seguida usa `supabase:api-keys` para obter 
 
 As migrações da app são feitas com **Drizzle** (`pnpm run db:migrate`). O schema está em `lib/db/schema.ts`. A pasta `supabase/migrations/` do CLI pode ficar vazia ou ser usada só para extensões (ex.: pgvector).
 
+## Revisão rápida com Supabase CLI
+
+Para **revisar** ou **confirmar** a configuração usando o CLI:
+
+1. **Login e projeto vinculado**
+   ```bash
+   pnpm exec supabase login
+   pnpm run supabase:link
+   ```
+   O project ref fica em `supabase/.temp/project-ref`.
+
+2. **Variáveis para `.env.local`**
+   ```bash
+   pnpm run supabase:env
+   ```
+   Copia o output (NEXT_PUBLIC_SUPABASE_*, SUPABASE_SERVICE_ROLE_KEY) para `.env.local`. O script **não** gera `POSTGRES_URL`; tens de a obter manualmente (passo 3).
+
+3. **POSTGRES_URL (pooler, porta 6543)**  
+   O CLI não expõe a connection string da base. Obtém no **Dashboard**: [Supabase](https://supabase.com/dashboard) → teu projeto → **Settings** → **Database** → **Connection string** → escolhe **Transaction** (URI com porta **6543**).  
+   Formato: `postgresql://postgres.[ref]:[PASSWORD]@[region].pooler.supabase.com:6543/postgres`  
+   Usar a porta **6543** (pooler) reduz cold start e timeouts no chat e nos testes E2E. Ver **docs/DB-TIMEOUT-TROUBLESHOOTING.md** (secção 5 para E2E).
+
+4. **Verificar ligação à BD**
+   ```bash
+   pnpm db:ping
+   ```
+   Se responder com latência aceitável (< 3s após warmup), a `POSTGRES_URL` está correta.
+
+5. **Config no remoto (Auth, Storage)**
+   ```bash
+   pnpm run supabase:config-push
+   ```
+
+---
+
 ## Variáveis e mapeamento
 
 Ver **supabase/ENV-MAPPING.md** para o mapeamento entre variáveis do Supabase e o que o app espera no `.env.local`.

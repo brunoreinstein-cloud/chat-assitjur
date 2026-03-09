@@ -63,8 +63,21 @@ function toDatabaseError(error: unknown, fallbackMessage: string): never {
 let dbInstance: ReturnType<typeof drizzle> | null = null;
 let clientInstance: ReturnType<typeof postgres> | null = null;
 
-/** Opções de conexão: schema (statement_timeout na URL é ignorado pelo Supabase; usamos ensureStatementTimeout()). */
+/**
+ * Opções de conexão: schema. Não usar com pooler Supabase (porta 6543) — não suporta
+ * o parâmetro "options" (erro "unsupported startup parameter: options").
+ */
 const CONNECTION_OPTS = "options=-c%20search_path%3Dpublic";
+
+/** True se a URL for o pooler Supabase (Supavisor), que não aceita "options". */
+function isSupabasePoolerUrl(url: string): boolean {
+  return /:6543\//.test(url) || url.includes("pooler.supabase.com");
+}
+
+/** True se a URL for Supabase (recomenda-se sslmode=require). */
+function isSupabaseUrl(url: string): boolean {
+  return url.includes("supabase.co") || url.includes("pooler.supabase.com");
+}
 
 /**
  * Conexão Postgres (singleton por processo). Em serverless (Vercel) cada invocação
@@ -85,10 +98,20 @@ function getDb() {
     );
   }
   if (!dbInstance) {
-    if (!url.includes("search_path")) {
+    if (process.env.NODE_ENV === "development") {
+      const safeUrl = url.replace(/:\/\/[^:]+:[^@]+@/, "://***:***@");
+      console.warn("[db] connecting:", safeUrl);
+    }
+    if (!(url.includes("search_path") || isSupabasePoolerUrl(url))) {
       url = url.includes("?")
         ? `${url}&${CONNECTION_OPTS}`
         : `${url}?${CONNECTION_OPTS}`;
+    }
+    // Supabase recomenda SSL; evita 503 por falha de handshake em alguns ambientes.
+    if (isSupabaseUrl(url) && !url.includes("sslmode=")) {
+      url = url.includes("?")
+        ? `${url}&sslmode=require`
+        : `${url}?sslmode=require`;
     }
     clientInstance = postgres(url, {
       max: 1,

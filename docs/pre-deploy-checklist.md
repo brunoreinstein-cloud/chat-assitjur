@@ -24,7 +24,9 @@ O script valida variáveis obrigatórias, a porta da `POSTGRES_URL` (Supabase = 
 - [ ] **POSTGRES_URL** definida com o pooler:
   - Supabase: usar porta **6543** (Connection string "Transaction"), nunca 5432.
   - Formato: `postgresql://user:password@host:6543/postgres`
+  - **Em produção (Vercel):** adicionar `?pgbouncer=true&connection_limit=1` ao fim da URL para evitar "too many connections". Ex.: `...@...6543/postgres?pgbouncer=true&connection_limit=1`
 - [ ] Sem espaços ou caracteres extra ao copiar/colar; valores não vazios.
+- [ ] Antes de cada deploy, rever [CHECKLIST-REVISAO-BD-E-AUTH.md](CHECKLIST-REVISAO-BD-E-AUTH.md) (BD, Auth, guest, timeouts).
 
 ### Base de dados
 

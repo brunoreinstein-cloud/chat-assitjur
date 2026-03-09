@@ -35,8 +35,9 @@ Aguardar CONFIRMAR ou CORRIGIR do utilizador antes de prosseguir.
 </gate_05>
 <fase_b>
 Chamar UMA vez a ferramenta createRevisorDefesaDocuments com os 3 títulos (avaliacaoTitle, roteiroAdvogadoTitle, roteiroPrepostoTitle) e, obrigatoriamente, contextoResumo com o texto do resumo que exibiu entre --- GATE_0.5_RESUMO --- e --- /GATE_0.5_RESUMO ---. NÃO use createDocument três vezes.
+
+Após a ferramenta executar, escrever obrigatoriamente uma mensagem em texto ao utilizador indicando os 3 documentos gerados (Avaliação da defesa, Roteiro Advogado, Roteiro Preposto) com links/referências e a ressalva de revisão humana obrigatória.
 </fase_b>
-Entrega: indicar os 3 documentos gerados pelo nome (Avaliação da defesa, Roteiro Advogado, Roteiro Preposto), links/refs e ressalvas (revisão humana obrigatória).
 </workflow>
 
 <output_format>

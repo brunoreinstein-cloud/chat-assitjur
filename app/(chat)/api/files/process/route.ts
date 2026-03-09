@@ -32,12 +32,145 @@ function isAllowedBlobUrl(urlString: string): boolean {
   }
 }
 
+interface ProcessBody {
+  url: string;
+  pathname: string;
+  contentType: string;
+  filename: string;
+}
+
 const ProcessBodySchema = {
   url: (v: unknown) => typeof v === "string" && v.length > 0,
   pathname: (v: unknown) => typeof v === "string" && v.length > 0,
   contentType: (v: unknown) => typeof v === "string",
   filename: (v: unknown) => typeof v === "string" && v.length > 0,
 } as const;
+
+async function parseProcessBody(
+  request: Request
+): Promise<
+  { ok: true; body: ProcessBody } | { ok: false; response: NextResponse }
+> {
+  interface RawBody {
+    url?: string;
+    pathname?: string;
+    contentType?: string;
+    filename?: string;
+  }
+  let raw: RawBody;
+  try {
+    raw = (await request.json()) as RawBody;
+  } catch {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "Corpo da requisição inválido" },
+        { status: 400 }
+      ),
+    };
+  }
+  const url = raw.url;
+  const pathname = raw.pathname;
+  const filename = raw.filename;
+  const valid =
+    ProcessBodySchema.url(url) &&
+    ProcessBodySchema.pathname(pathname) &&
+    ProcessBodySchema.filename(filename);
+  if (!valid) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "Campos obrigatórios: url, pathname, filename" },
+        { status: 400 }
+      ),
+    };
+  }
+  const urlString = url as string;
+  const filenameStr = filename as string;
+  if (!isAllowedBlobUrl(urlString)) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "URL de ficheiro não permitida" },
+        { status: 400 }
+      ),
+    };
+  }
+  let contentType = raw.contentType ?? OCTET_STREAM;
+  if (contentType === "" || contentType === OCTET_STREAM) {
+    contentType = contentTypeFromFilename(filenameStr);
+  }
+  return {
+    ok: true,
+    body: {
+      url: urlString,
+      pathname: pathname as string,
+      contentType,
+      filename: filenameStr,
+    },
+  };
+}
+
+async function fetchBlobBuffer(
+  urlString: string
+): Promise<
+  { ok: true; buffer: ArrayBuffer } | { ok: false; response: NextResponse }
+> {
+  let res: Response;
+  try {
+    res = await fetch(urlString, {
+      method: "GET",
+      headers: { Accept: "*/*" },
+      signal: AbortSignal.timeout(BLOB_FETCH_TIMEOUT_MS),
+    });
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Falha ao obter o ficheiro";
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: `Não foi possível obter o ficheiro: ${message}` },
+        { status: 502 }
+      ),
+    };
+  }
+  if (!res.ok) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: `Falha ao obter o ficheiro (${res.status})` },
+        { status: 502 }
+      ),
+    };
+  }
+  const contentLength = res.headers.get("content-length");
+  if (contentLength) {
+    const size = Number.parseInt(contentLength, 10);
+    if (Number.isFinite(size) && size > MAX_BLOB_FETCH_SIZE) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: `Ficheiro demasiado grande para processar (máx. ${MAX_BLOB_FETCH_SIZE / (1024 * 1024)} MB).`,
+          },
+          { status: 413 }
+        ),
+      };
+    }
+  }
+  try {
+    const buffer = await res.arrayBuffer();
+    return { ok: true, buffer };
+  } catch {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "Falha ao ler o conteúdo do ficheiro" },
+        { status: 502 }
+      ),
+    };
+  }
+}
 
 /**
  * Processa um ficheiro já em Vercel Blob: extrai texto, classifica e persiste em Supabase.
@@ -49,110 +182,44 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
-  let body: {
-    url?: string;
-    pathname?: string;
-    contentType?: string;
-    filename?: string;
-  };
+  const parsed = await parseProcessBody(request);
+  if (!parsed.ok) {
+    return parsed.response;
+  }
+
+  const { body } = parsed;
+  const fetched = await fetchBlobBuffer(body.url);
+  if (!fetched.ok) {
+    return fetched.response;
+  }
+
   try {
-    body = (await request.json()) as typeof body;
-  } catch {
-    return NextResponse.json(
-      { error: "Corpo da requisição inválido" },
-      { status: 400 }
+    const extraction = await runExtractionAndClassification(
+      fetched.buffer,
+      body.contentType
     );
-  }
+    const documentType =
+      extraction.documentType ??
+      classifyDocumentTypeFromFilename(body.filename);
 
-  const url = body.url;
-  const pathname = body.pathname;
-  const filename = body.filename;
-  let contentType = body.contentType ?? OCTET_STREAM;
-
-  if (
-    !(
-      ProcessBodySchema.url(url) &&
-      ProcessBodySchema.pathname(pathname) &&
-      ProcessBodySchema.filename(filename)
-    )
-  ) {
-    return NextResponse.json(
-      { error: "Campos obrigatórios: url, pathname, filename" },
-      { status: 400 }
+    return await persistAndRespond(
+      session.user.id,
+      body.filename,
+      fetched.buffer,
+      body.contentType,
+      {
+        extractedText: extraction.extractedText,
+        extractionFailed: extraction.extractionFailed,
+        documentType,
+        extractionDetail: extraction.extractionDetail,
+      }
     );
-  }
-
-  const urlString = url as string;
-  const filenameStr = filename as string;
-  if (!isAllowedBlobUrl(urlString)) {
-    return NextResponse.json(
-      { error: "URL de ficheiro não permitida" },
-      { status: 400 }
-    );
-  }
-
-  if (contentType === "" || contentType === OCTET_STREAM) {
-    contentType = contentTypeFromFilename(filenameStr);
-  }
-
-  let res: Response;
-  try {
-    res = await fetch(urlString, {
-      method: "GET",
-      headers: { Accept: "*/*" },
-      signal: AbortSignal.timeout(BLOB_FETCH_TIMEOUT_MS),
-    });
   } catch (err) {
     const message =
-      err instanceof Error ? err.message : "Falha ao obter o ficheiro";
-    return NextResponse.json(
-      { error: `Não foi possível obter o ficheiro: ${message}` },
-      { status: 502 }
-    );
-  }
-
-  if (!res.ok) {
-    return NextResponse.json(
-      { error: `Falha ao obter o ficheiro (${res.status})` },
-      { status: 502 }
-    );
-  }
-
-  const contentLength = res.headers.get("content-length");
-  if (contentLength) {
-    const size = Number.parseInt(contentLength, 10);
-    if (Number.isFinite(size) && size > MAX_BLOB_FETCH_SIZE) {
-      return NextResponse.json(
-        {
-          error: `Ficheiro demasiado grande para processar (máx. ${MAX_BLOB_FETCH_SIZE / (1024 * 1024)} MB).`,
-        },
-        { status: 413 }
-      );
+      err instanceof Error ? err.message : "Erro ao processar o ficheiro.";
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[api/files/process] 500:", message, err);
     }
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  let buffer: ArrayBuffer;
-  try {
-    buffer = await res.arrayBuffer();
-  } catch {
-    return NextResponse.json(
-      { error: "Falha ao ler o conteúdo do ficheiro" },
-      { status: 502 }
-    );
-  }
-
-  const extraction = await runExtractionAndClassification(buffer, contentType);
-  const documentType =
-    extraction.documentType ?? classifyDocumentTypeFromFilename(filenameStr);
-
-  return persistAndRespond(
-    session.user.id,
-    filenameStr,
-    buffer,
-    contentType,
-    extraction.extractedText,
-    extraction.extractionFailed,
-    documentType,
-    extraction.extractionDetail
-  );
 }

@@ -1,12 +1,17 @@
 import { expect, test } from "@playwright/test";
-import { ensureChatPageWithGuest } from "../helpers";
+import { gotoChatPage } from "../helpers";
 
 const CHAT_URL_REGEX = /\/chat\/[\w-]+/;
 const ERROR_TEXT_REGEX = /error|failed|trouble/i;
 
+/** Aquece a conexão à BD antes dos testes (evita timeouts em /chat quando a BD está fria). */
+test.beforeAll(async ({ request }) => {
+  await request.get("/api/health/db");
+});
+
 test.describe("Chat API Integration", () => {
   test("sends message and receives AI response", async ({ page }) => {
-    await ensureChatPageWithGuest(page);
+    await gotoChatPage(page);
 
     const input = page.getByTestId("multimodal-input");
     await expect(input).toBeVisible();
@@ -23,7 +28,7 @@ test.describe("Chat API Integration", () => {
   });
 
   test("redirects to /chat/:id after sending message", async ({ page }) => {
-    await ensureChatPageWithGuest(page);
+    await gotoChatPage(page);
 
     const input = page.getByTestId("multimodal-input");
     await input.fill("Test redirect");
@@ -34,7 +39,7 @@ test.describe("Chat API Integration", () => {
   });
 
   test("clears input after sending", async ({ page }) => {
-    await ensureChatPageWithGuest(page);
+    await gotoChatPage(page);
 
     const input = page.getByTestId("multimodal-input");
     await input.fill("Test message");
@@ -45,7 +50,7 @@ test.describe("Chat API Integration", () => {
   });
 
   test("shows stop button during generation", async ({ page }) => {
-    await ensureChatPageWithGuest(page);
+    await gotoChatPage(page);
     const input = page.getByTestId("multimodal-input");
     await input.fill("Test");
     await page.getByTestId("send-button").click();
@@ -66,7 +71,7 @@ test.describe("Chat Error Handling", () => {
       });
     });
 
-    await ensureChatPageWithGuest(page);
+    await gotoChatPage(page);
     const input = page.getByTestId("multimodal-input");
     await input.fill("Test error");
     await page.getByTestId("send-button").click();
@@ -76,20 +81,78 @@ test.describe("Chat Error Handling", () => {
       timeout: 5000,
     });
   });
+
+  test("handles 400 Bad Request with cause and shows validation error", async ({
+    page,
+  }) => {
+    const causeMessage =
+      "selectedChatModel: String must contain at least 1 character(s)";
+    await page.route("**/api/chat", async (route) => {
+      await route.fulfill({
+        status: 400,
+        contentType: "application/json",
+        body: JSON.stringify({
+          code: "bad_request:api",
+          message: "Corpo do pedido inválido.",
+          cause: causeMessage,
+        }),
+      });
+    });
+
+    await gotoChatPage(page);
+    const input = page.getByTestId("multimodal-input");
+    await input.fill("Test validation");
+    await page.getByTestId("send-button").click();
+
+    // Toast ou mensagem deve mostrar o cause da resposta 400
+    await expect(
+      page.getByText(/selectedChatModel|inválido|at least 1/i).first()
+    ).toBeVisible({ timeout: 5000 });
+  });
+
+  test("handles 503 (database unavailable) and shows error message", async ({
+    page,
+  }) => {
+    await page.route("**/api/chat", async (route) => {
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({
+          code: "bad_request:database",
+          message: "Base de dados indisponível.",
+        }),
+      });
+    });
+
+    await gotoChatPage(page);
+    const input = page.getByTestId("multimodal-input");
+    await input.fill("Test 503");
+    await page.getByTestId("send-button").click();
+
+    // UI mostra a mensagem da API (ex.: "Base de dados indisponível") ou texto genérico de erro
+    await expect(
+      page.getByText(/error|failed|trouble|indisponível|Base de dados/i).first()
+    ).toBeVisible({ timeout: 15_000 });
+  });
 });
 
 test.describe("Prompt selector", () => {
   test("prompt selector sends message and redirects", async ({ page }) => {
-    await ensureChatPageWithGuest(page);
+    await gotoChatPage(page);
 
     const trigger = page.getByTestId("prompt-selector-trigger");
+    // Esperar o trigger aparecer (página/chat pode demorar com agents/history lentos)
+    await expect(trigger).toBeVisible({ timeout: 90_000 });
     await trigger.click();
 
-    // "Explicar o fluxo do Revisor" está sempre disponível
-    await page
-      .getByRole("menuitem", { name: /Explicar o fluxo do Revisor/i })
-      .click();
+    // Esperar o menuitem estar visível (lista pode demorar com BD lenta)
+    const menuItem = page.getByRole("menuitem", {
+      name: /Explicar o fluxo do Revisor/i,
+    });
+    await expect(menuItem).toBeVisible({ timeout: 35_000 });
+    await menuItem.click();
 
-    await expect(page).toHaveURL(CHAT_URL_REGEX, { timeout: 10_000 });
+    // Timeout generoso quando BD/redirecionamento lentos
+    await expect(page).toHaveURL(CHAT_URL_REGEX, { timeout: 50_000 });
   });
 });

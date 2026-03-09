@@ -32,7 +32,6 @@ interface MessagesProps {
   setMessages: UseChatHelpers<ChatMessage>["setMessages"];
   regenerate: UseChatHelpers<ChatMessage>["regenerate"];
   isReadonly: boolean;
-  isArtifactVisible: boolean;
   selectedModelId: string;
   /** Callback para o onboarding: abrir base de conhecimento */
   onOpenKnowledge?: () => void;
@@ -47,6 +46,8 @@ interface MessagesProps {
   onQuickPrompt?: (text: string) => void;
   /** Opcional: chamado para cancelar o pedido em curso (mostrado no aviso de espera longa) */
   onStop?: () => void;
+  /** true quando o servidor usou fallback da BD (resposta pode ter dados parciais) */
+  dbFallbackUsed?: boolean;
 }
 
 function PureMessages({
@@ -70,7 +71,8 @@ function PureMessages({
   onAgentSelect,
   onQuickPrompt,
   onStop,
-}: MessagesProps) {
+  dbFallbackUsed = false,
+}: Readonly<MessagesProps>) {
   const {
     containerRef: messagesContainerRef,
     endRef: messagesEndRef,
@@ -212,17 +214,29 @@ function PureMessages({
             ) && (
               <div className="flex flex-col gap-2">
                 <ThinkingMessage />
-                {submittedElapsedMs >= 50_000 && onStop && !isReadonly && (
+                {submittedElapsedMs >= 10_000 && onStop && !isReadonly && (
                   <p className="text-muted-foreground text-sm">
-                    A demorar mais do que o habitual.{" "}
+                    A demorar mais do que o habitual. Se for a primeira vez ou
+                    após muito tempo sem usar, a base de dados pode estar a
+                    acordar — podes{" "}
                     <Button
                       className="h-auto p-0 font-normal text-sm underline"
                       onClick={onStop}
                       type="button"
                       variant="link"
                     >
-                      Cancelar pedido
+                      cancelar e tentar de novo
                     </Button>
+                    .
+                  </p>
+                )}
+                {dbFallbackUsed && (
+                  <p
+                    aria-atomic="true"
+                    aria-live="polite"
+                    className="text-muted-foreground text-sm"
+                  >
+                    Resposta pode incluir dados parciais (base de dados lenta).
                   </p>
                 )}
               </div>

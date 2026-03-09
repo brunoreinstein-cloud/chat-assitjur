@@ -79,7 +79,7 @@ Referência em `.env.example`. Principais:
 
 - `AUTH_SECRET` — Auth.js.
 - `AI_GATEWAY_API_KEY` — obrigatório em ambientes não-Vercel.
-- `POSTGRES_URL` — connection string PostgreSQL (Supabase/Neon). Em Vercel usar pooler (Supabase: porta 6543). A app aquece a BD ao carregar o chat (`DbWarmup` → GET /api/health/db). Ver `docs/DB-TIMEOUT-TROUBLESHOOTING.md`.
+- `POSTGRES_URL` — connection string PostgreSQL (Supabase/Neon). Em Vercel e em E2E usar **pooler (porta 6543)** para maior estabilidade; a app aquece a BD ao carregar o chat (`DbWarmup` → GET /api/health/db). Para testes E2E estáveis: `pnpm run test:with-warmup` (aquecer BD antes) e ver `docs/DB-TIMEOUT-TROUBLESHOOTING.md`.
 - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` — Supabase (Auth, Storage).
 - `BLOB_READ_WRITE_TOKEN` — Vercel Blob (alternativa ao Storage).
 - `REDIS_URL` — opcional, para rate limiting.
@@ -136,6 +136,7 @@ pnpm run format       # Ultracite fix
 pnpm run lint         # Ultracite check
 pnpm run vercel:env   # puxar env da Vercel
 pnpm test             # Playwright E2E (inicia dev:test na porta 3301)
+pnpm run test:with-warmup # E2E com BD aquecida (db:ping + test); recomendado para maior estabilidade local
 pnpm run test:with-dev # E2E usando servidor já a correr (pnpm dev em 3300); evita "Unable to acquire lock"
 pnpm run test:unit    # Vitest (unitários)
 ```
@@ -171,6 +172,10 @@ Comandos: `npx skills list` | `npx skills find [query]` | `npx skills update`.
 - **[docs/OTIMIZACAO-CUSTO-TOKENS-LLM.md](docs/OTIMIZACAO-CUSTO-TOKENS-LLM.md)** — Revisão e otimização de custo de tokens e uso de LLM: onde se consome, limites atuais, checklist e ações recomendadas.
 - **[docs/PROMPT-LEAK-REDUCTION.md](docs/PROMPT-LEAK-REDUCTION.md)** — Estratégias para reduzir prompt leak (instruções sensíveis, base de conhecimento); o que o projeto já faz e melhorias opcionais (pós-processamento, auditorias).
 - **[docs/PDF-INPUTS-ESTADO-E-MELHORIAS.md](docs/PDF-INPUTS-ESTADO-E-MELHORIAS.md)** — Estado atual do tratamento de PDFs no chat (extração no servidor, partes `document` → texto) e melhorias possíveis com OpenRouter PDF (URL/base64, plugins, anotações).
+- **[docs/RASTREAR-E-CORRIGIR-PROBLEMAS.md](docs/RASTREAR-E-CORRIGIR-PROBLEMAS.md)** — Guia prático para rastrear e corrigir problemas: ativar DEBUG_CHAT, tabela sintoma → onde ver → correção, checklist BD lenta. Complementado por [docs/CHAT-DEBUG.md](docs/CHAT-DEBUG.md), [docs/DB-TIMEOUT-TROUBLESHOOTING.md](docs/DB-TIMEOUT-TROUBLESHOOTING.md) e [docs/REFERENCIA-ERROS-400.md](docs/REFERENCIA-ERROS-400.md).
+- **[docs/ESCALA-SAAS-BD.md](docs/ESCALA-SAAS-BD.md)** — Escala e performance da BD para SaaS: soluções para muitos chamados (cache Redis para créditos/overrides no chat, BD sempre ligada, read replicas, stream-first).
+- **[docs/COMPARATIVO-SUPABASE-PRO-VS-NEON-SCALE.md](docs/COMPARATIVO-SUPABASE-PRO-VS-NEON-SCALE.md)** — Comparativo Supabase Pro vs Neon Scale para escolher a BD (preço, pausa/cold start, pooler, integração com o projeto).
+- **[docs/MIGRACAO-SUPABASE-PRO.md](docs/MIGRACAO-SUPABASE-PRO.md)** — Passos para migrar para Supabase Pro (connection string com pooler 6543, variáveis de ambiente, migrações).
 
 ---
 

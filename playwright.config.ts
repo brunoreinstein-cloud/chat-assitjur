@@ -17,10 +17,13 @@ const PORT = process.env.PORT ?? 3301;
  * Se PLAYWRIGHT_TEST_BASE_URL estiver definido, usa esse servidor (ex.: pnpm dev já a correr em 3300).
  * Evita "Unable to acquire lock" quando há outro next dev ativo. Caso contrário, o webServer inicia dev:test na porta 3301.
  */
-const baseURL =
-  process.env.PLAYWRIGHT_TEST_BASE_URL ?? `http://localhost:${PORT}`;
-
-const useExistingServer = Boolean(process.env.PLAYWRIGHT_TEST_BASE_URL);
+/** Quando true (ex.: script `pnpm test`), o Playwright arranca sempre o servidor; ignora PLAYWRIGHT_TEST_BASE_URL de .env.local. */
+const useWebServer = process.env.PLAYWRIGHT_USE_WEB_SERVER === "1";
+const baseURLFromEnv = process.env.PLAYWRIGHT_TEST_BASE_URL?.trim();
+/** Usar 127.0.0.1 em vez de localhost para evitar IPv6 (::1) no Windows quando o servidor escuta só em IPv4. */
+const defaultBaseURL = `http://127.0.0.1:${PORT}`;
+const baseURL = baseURLFromEnv || defaultBaseURL;
+const useExistingServer = !useWebServer && Boolean(baseURLFromEnv);
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -59,42 +62,30 @@ export default defineConfig({
   /* Configure projects */
   projects: [
     {
-      name: "e2e",
-      testMatch: /e2e\/.*.test.ts/,
+      name: "guest-setup",
+      testMatch: /e2e\/guest-setup\.test\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+      fullyParallel: false,
+      workers: 1,
+    },
+    {
+      name: "e2e-guest",
+      testMatch: /e2e\/(chat|api|model-selector)\.test\.ts/,
       use: {
         ...devices["Desktop Chrome"],
+        storageState: ".auth/guest.json",
       },
+      dependencies: ["guest-setup"],
+      /* Retry quando a BD está fria ou a UI re-renderiza (element detached); em local também para reduzir falhas intermitentes */
+      retries: 1,
     },
-
-    // {
-    //   name: 'firefox',
-    //   use: { ...devices['Desktop Firefox'] },
-    // },
-
-    // {
-    //   name: 'webkit',
-    //   use: { ...devices['Desktop Safari'] },
-    // },
-
-    /* Test against mobile viewports. */
-    // {
-    //   name: 'Mobile Chrome',
-    //   use: { ...devices['Pixel 5'] },
-    // },
-    // {
-    //   name: 'Mobile Safari',
-    //   use: { ...devices['iPhone 12'] },
-    // },
-
-    /* Test against branded browsers. */
-    // {
-    //   name: 'Microsoft Edge',
-    //   use: { ...devices['Desktop Edge'], channel: 'msedge' },
-    // },
-    // {
-    //   name: 'Google Chrome',
-    //   use: { ...devices['Desktop Chrome'], channel: 'chrome' },
-    // },
+    {
+      name: "e2e-auth",
+      testMatch: /e2e\/auth\.test\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+      /* Retry quando POST /api/auth/guest devolve 503 (GuestSignInTimeout) por BD lenta */
+      retries: 1,
+    },
   ],
 
   /* Run your local dev server before starting the tests (port 3301). Se PLAYWRIGHT_TEST_BASE_URL estiver definido, não inicia servidor (usa o que já está a correr). */
@@ -103,9 +94,16 @@ export default defineConfig({
     : {
         webServer: {
           command: "pnpm run dev:test",
-          url: baseURL,
-          timeout: 180 * 1000,
+          url: `${baseURL}/api/health/db`,
+          timeout: 300 * 1000, // 5 min — Next.js dev pode demorar no primeiro arranque
           reuseExistingServer: !process.env.CI,
+          env: {
+            ...process.env,
+            AUTH_URL: defaultBaseURL,
+            NEXT_PUBLIC_APP_URL: defaultBaseURL,
+            /** Garante que GET /api/credits usa timeouts curtos (E2E) mesmo quando se corre `pnpm exec playwright test` sem `pnpm test`. */
+            PLAYWRIGHT: "True",
+          },
         },
       }),
 });

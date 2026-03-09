@@ -2,7 +2,7 @@
 
 Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. Atualizar este ficheiro quando prioridades ou estado mudarem.
 
-**Última atualização:** 2026-03-03 (Multi-agente: Revisor de Defesas e Redator de Contestações; agente Análise de contratos removido.)
+**Última atualização:** 2026-03-09 (BD/Auth: warmup guest, timeout 12s, historyFetcher; checklist pré-deploy e UX "A demorar mais".)
 
 ---
 
@@ -26,6 +26,7 @@ Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. 
 | —   | **UX etapas / DOCX (Fase 2)** | Banner com "FASE A — Extração e mapeamento"; "FASE B" com nomes dos 3 documentos; instruções do agente a indicar os 3 nomes na ENTREGA. |
 | —   | **Multi-agente (Fase 3)** | Registry em `lib/ai/agents-registry.ts`; agentes Revisor de Defesas e Redator de Contestações; `agentId` no body do chat; selector no header. Export .docx ficou opcional. |
 | —   | **UX: novo chat sem agente + agente visível** | Novo chat abre sem agente pré-selecionado; sidebar e header com opção "Selecionar agente"; greeting dinâmico (agente atual ou "Escolha um agente"); envio bloqueado sem agente (toast + API 400). Ver sugestões em [ux-ui-revisor-defesas.md](ux-ui-revisor-defesas.md) e lista abaixo. |
+| —   | **BD/Auth: warmup guest + timeout 12s + histórico** | POST `/api/auth/guest` faz warmup da BD com retry (até 3 tentativas, 8s cada) antes do sign-in. Timeout por query no chat reduzido para 12s (`PER_QUERY_TIMEOUT_MS` / `CREDITS_IN_BATCH_TIMEOUT_MS`) para falhar mais cedo em serverless. Histórico de chats: `historyFetcher` com `credentials: "include"` em `agent-sidebar` e `sidebar-history` para garantir que a sessão é enviada. Ver [CHECKLIST-REVISAO-BD-E-AUTH.md](CHECKLIST-REVISAO-BD-E-AUTH.md) e [DB-TIMEOUT-TROUBLESHOOTING.md](DB-TIMEOUT-TROUBLESHOOTING.md). |
 
 **Referência:** Validação pré-envio — secção 6 de [processo-revisor-upload-validacao.md](processo-revisor-upload-validacao.md); checklist em [PROJETO-REVISOR-DEFESAS.md](PROJETO-REVISOR-DEFESAS.md).
 

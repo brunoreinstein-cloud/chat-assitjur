@@ -13,9 +13,11 @@ Configura em **Vercel → Settings → Environment Variables** (Production e/ou 
 | Variável        | Descrição |
 |-----------------|-----------|
 | `AUTH_SECRET`   | Segredo para sessões NextAuth. Gerar em [generate-secret.vercel.app/32](https://generate-secret.vercel.app/32) ou `openssl rand -base64 32`. |
-| `POSTGRES_URL`  | Connection string PostgreSQL. **Com Supabase:** usar sempre o **pooler** (porta **6543**), não a porta 5432. Dashboard → Settings → Database → Connection string → "Transaction" (URI com `:6543`). |
+| `POSTGRES_URL`  | Connection string PostgreSQL. **Com Supabase:** usar sempre o **pooler** (porta **6543**), não a porta 5432. Dashboard → Settings → Database → Connection string → "Transaction" (URI com `:6543`). Em produção, sem pooler os primeiros pedidos (chat, créditos) podem dar timeouts ou cold start prolongado. |
 
 Se `AUTH_SECRET` ou `POSTGRES_URL` faltarem, a app redireciona para `/config-required`.
+
+**Aquecimento da BD em produção:** O `vercel.json` define um Cron que chama `GET /api/health/db` de 10 em 10 minutos. Isso mantém a BD (Supabase/Neon) ativa e reduz cold start quando um utilizador abre o chat. O cron só corre em **Production**; não é necessário configurar variáveis adicionais. Ver também `docs/DB-TIMEOUT-TROUBLESHOOTING.md` (secção 4.2).
 
 ### Opcionais (recomendadas)
 

@@ -1,11 +1,24 @@
-# Referência: erros 400 (Bad Request)
+# Referência: erros 400 (Bad Request) e 503 (health/db)
 
-Quando aparece **"Failed to load resource: the server responded with a status of 400"**, abre o pedido na aba **Network** do DevTools, clica no pedido a vermelho e na secção **Response** vê o JSON. O campo **`code`** (e opcionalmente **`message`** / **`cause`**) indica a origem. O **`cause`** passa a vir sempre preenchido em erros de validação do chat, para facilitar o diagnóstico.
+Quando aparece **"Failed to load resource: the server responded with a status of 400"**, abre o pedido na aba **Network** do DevTools, clica no pedido a vermelho e na secção **Response** vê o JSON. O campo **`code`** (e opcionalmente **`message`** / **`cause`**) indica a origem. O **`cause`** passa a vir sempre preenchido em erros de validação do chat, para facilitar o diagnóstico. Para **503** no health check da BD (`GET /api/health/db`), ver a secção no final do documento.
 
 ## Correções já aplicadas no projeto
 
 - **API chat** (`app/(chat)/api/chat/route.ts`): a resposta 400 de validação inclui sempre o campo **`cause`** com o detalhe do Zod (ex.: `"selectedChatModel: String must contain at least 1 character(s)"`), mesmo em produção.
 - **Cliente chat** (`components/chat.tsx`): o body do POST garante **`selectedChatModel`** (fallback para `initialChatModel` se vazio) e **`selectedVisibilityType`** (fallback para `"private"` se indefinido), evitando 400 por campos em falta ou vazios.
+- **Testes** (`tests/api/chat-schema.test.ts`): o bloco *"resposta 400 e cause (erro de validação)"* garante que, quando a validação falha, o erro Zod permite construir um **`cause`** não vazio que identifica o campo (selectedChatModel, selectedVisibilityType, id, message/messages).
+- **Testes E2E** (`tests/e2e/api.test.ts`): *"handles 400 Bad Request with cause and shows validation error"* — mock da API a devolver 400 com `code`, `message` e `cause`; verifica que a UI mostra o erro (toast) ao utilizador.
+
+### Mais testes que podes adicionar
+
+| Tipo | Onde | Descrição |
+|------|------|-----------|
+| Unit | `tests/api/chat-schema.test.ts` | Rejeitar `agentInstructions` > 4000 chars; rejeitar `knowledgeDocumentIds` com > 50 itens ou id não-UUID. |
+| Unit | `tests/lib/errors.test.ts` | Garantir que `toResponse()` com `cause` inclui `cause` no JSON para outros códigos (ex.: `bad_request:api`). |
+| E2E | `tests/e2e/api.test.ts` | Mock 429 (rate limit) e verificar que a UI mostra mensagem de limite; mock 503 (BD indisponível, ex. `GET /api/health/db`) e verificar mensagem. Ver secção «503 — GET /api/health/db» abaixo. |
+| E2E | `tests/e2e/api.test.ts` | Enviar mensagem vazia (se a UI o permitir) e verificar toast de "mensagem não pode estar vazia". |
+| E2E | Fluxo Revisor | Anexar só PI (sem Contestação), enviar, e verificar que aparece o 400 "anexe a Petição Inicial e a Contestação". |
+| Unit | Nova rota | Para cada rota que devolve 400 (upload, upload-token, admin, prompt/improve), testes unitários do schema ou do handler com body inválido. |
 
 Esta tabela mapeia cada resposta 400 ao ficheiro, linha e forma de corrigir.
 
@@ -30,6 +43,7 @@ O **Request URL** indica a API (ex.: `/api/chat`, `/api/files/upload`).
 | `code: "bad_request:api"` e `message` sobre "Corpo do pedido inválido" | `app/(chat)/api/chat/route.ts` | ~415–422 | Validação Zod do body falhou | Garantir que o body tem: `id` (UUID), `message` ou `messages` (não vazio), `selectedChatModel`, `selectedVisibilityType`. Ver `app/(chat)/api/chat/schema.ts`. |
 | `cause`: "A mensagem não pode estar vazia..." | `app/(chat)/api/chat/route.ts` | ~488–497 | Mensagem do user sem texto e sem ficheiro | Enviar pelo menos texto ou um anexo na mensagem. |
 | `cause`: "Para auditar a contestação, anexe a Petição Inicial e a Contestação..." | `app/(chat)/api/chat/route.ts` | ~682–695 | Revisor de Defesas: falta PI ou Contestação nos documentos | Anexar os dois documentos (PI e Contestação) e marcar o tipo em cada um. |
+| `cause`: "message.parts.0.text: String must contain at most 500000 character(s)" | `app/(chat)/api/chat/schema.ts` | documentPartSchema | Texto extraído de um anexo (PDF/DOCX) excedia 500.000 caracteres | **Correção aplicada:** o servidor trunca automaticamente o texto ao limite; a mensagem é processada e o utilizador vê "[Truncado: o documento excedeu o limite de caracteres.]" no final. Se precisar do documento completo, divida-o ou use ficheiros mais pequenos. |
 | `code: "bad_request:database"` (ligação/BD a demorar) | `app/(chat)/api/chat/route.ts` | ~461–466 | Timeout ao preparar a sessão da BD | Verificar `POSTGRES_URL`, rede, cold start do Supabase/Neon. Tentar reenviar. |
 | `code: "bad_request:database"` (não respondeu a tempo / erro ao aceder) | `app/(chat)/api/chat/route.ts` | ~654–662 | Timeout ou erro no batch de queries da BD | Cold start ou BD lenta; ver `POSTGRES_URL`. Reenviar a mensagem. |
 | `code: "bad_request:database"` (Não foi possível guardar a mensagem) | `app/(chat)/api/chat/route.ts` | ~963–968 | Erro ao guardar mensagem na BD | Ver logs do servidor; verificar BD e migrações. |
@@ -100,5 +114,56 @@ O **Request URL** indica a API (ex.: `/api/chat`, `/api/files/upload`).
 2. **Request URL** diz qual API (ex.: `/api/chat`).
 3. Usa esta tabela para encontrar o **ficheiro** e o **motivo**.
 4. Ajusta o **cliente** (body, query, headers) ou a **config** (env, BD) conforme a coluna **Correção**.
+5. Para **503** em `GET /api/health/db`, ver secção **«503 — GET /api/health/db»** abaixo.
 
 Se o response não tiver `code` (só `error`), é uma das rotas que devolve `{ "error": "..." }` diretamente (upload, upload-token, admin); a mensagem em `error` descreve o problema.
+
+---
+
+## 503 — GET /api/health/db (base de dados indisponível)
+
+O health check da BD devolve **503** quando a base de dados não está acessível ou o pedido excede o tempo máximo.
+
+| Response | Ficheiro | Motivo | Correção |
+|----------|----------|--------|----------|
+| `{ "ok": false, "error": "<mensagem>", "latencyMs": <ms> }` | `app/api/health/db/route.ts` | POSTGRES_URL em falta, BD inacessível (cold start, rede, timeout de conexão) ou timeout do health check (12s) | Verificar POSTGRES_URL em `.env.local`, usar pooler (Supabase porta 6543). Aquecer a BD (DbWarmup ou `pnpm db:ping`). Reenviar o pedido. Ver [docs/DB-TIMEOUT-TROUBLESHOOTING.md](DB-TIMEOUT-TROUBLESHOOTING.md). |
+
+- **200:** `{ "ok": true, "latencyMs": <ms> }` — BD acessível.
+- **503:** corpo com `ok: false`, `error` (mensagem do driver ou "Health check timed out") e `latencyMs`. O componente **DbWarmup** chama este endpoint em background ao carregar o chat; falhas são ignoradas (best-effort).
+
+### Resposta lenta (GET /api/credits, POST /api/chat) e logs de timeout
+
+Se no terminal aparecer `[credits-timing] getCreditBalance + getRecentUsage: 18000ms` ou `[chat-timing] dbBatch: ... timeout após 12000ms`, a **base de dados está a responder muito devagar** (cold start Supabase/Neon ou rede). O chat continua a funcionar: as queries usam fallbacks (ex.: saldo inicial, mensagens vazias) e o POST /api/chat pode devolver 200 após ~12–55s.
+
+**O que fazer:** Ver [docs/DB-TIMEOUT-TROUBLESHOOTING.md](DB-TIMEOUT-TROUBLESHOOTING.md): usar **POSTGRES_URL com pooler (porta 6543)**, aquecer a BD (`pnpm db:ping` ou abrir a página do chat para o DbWarmup chamar GET /api/health/db) e reenviar a mensagem. GET /api/credits passa a devolver mais cedo (até 10s) com `_partial: true` quando a query de histórico estoura o timeout.
+
+---
+
+## Auth.js — ClientFetchError "Unexpected token '<', \"<!DOCTYPE \"... is not valid JSON"
+
+O cliente Auth.js (SessionProvider / `getSession`) faz fetch a `GET /api/auth/session` e espera JSON. Se receber HTML (ex.: página de login ou 404), aparece este erro na consola.
+
+**Causas comuns:**
+
+1. **`AUTH_URL` em falta ou errada** — Em desenvolvimento local, define em `.env.local`:
+   ```bash
+   AUTH_URL=http://localhost:3300
+   ```
+   Usa a mesma origem e porta do `pnpm dev` (ex.: 3300). Sem isto, o cliente pode pedir a sessão a um URL incorreto e receber uma página HTML.
+2. **Rota de sessão a devolver HTML** — O projeto já tem rota explícita `app/api/auth/session/route.ts` e o catch-all `[...nextauth]` trata `/session` sempre com JSON. Se o erro persistir, confirma que não há proxy/rewrite a redirecionar `/api/auth/session` para uma página HTML.
+
+**Ver também:** `.env.example` (comentário em `AUTH_URL`); [errors.authjs.dev](https://errors.authjs.dev).
+
+---
+
+## Padrões no log (auth guest)
+
+Em testes E2E ou ao usar o modo visitante, o terminal pode mostrar muitas linhas de `GET`/`POST /api/auth/guest?redirectUrl=...`. O padrão esperado:
+
+| Pedido | Status típico | Significado |
+|--------|----------------|-------------|
+| `GET /api/auth/guest?redirectUrl=%2Fchat` (ou `/login`, `/register`) | 200 | Render da página de login/registo com opção “Entrar como visitante”; ainda não há sessão. |
+| `POST /api/auth/guest?redirectUrl=%2Fchat` | 303 | Criação da sessão guest (user na BD, cookie) e redirect para `redirectUrl`. O tempo pode variar (ex.: 400–1500 ms) conforme a BD. |
+| `GET /api/auth/guest?redirectUrl=%2Fchat` (após POST) | 200 | Página de destino (ex.: /chat) já com sessão. |
+
+Várias sequências GET → POST → GET indicam vários fluxos (ex.: vários testes E2E ou abas). Se aparecer **503** no `POST /api/auth/guest`, ver [docs/chat-guest-review.md](chat-guest-review.md) (ex.: `AUTH_SECRET` ou `POSTGRES_URL` em falta).

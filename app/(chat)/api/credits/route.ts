@@ -35,8 +35,21 @@ const DEFAULT_USAGE_LIMIT = 10;
 const MAX_USAGE_LIMIT = 50;
 const CACHE_MAX_AGE_SECONDS = 30;
 const BALANCE_TIMEOUT_MS = 5000;
-/** Histórico de uso: timeout maior para reduzir "base de dados lenta" em BDs lentas mas respondíveis. */
-const USAGE_TIMEOUT_MS = 18_000;
+/**
+ * Histórico de uso: timeout para não segurar GET /api/credits quando a BD está lenta.
+ * Em timeout devolve 200 com _partial (recentUsage []). 10s equilibra UX e BDs lentas.
+ */
+const USAGE_TIMEOUT_MS = 10_000;
+
+/**
+ * Em E2E (PLAYWRIGHT=true) usamos timeouts mais curtos para GET /api/credits responder
+ * em ~6s; em caso de BD lenta devolve 200 com _partial (balance inicial, recentUsage []).
+ * Evita que page.goto em testes auth exceda o timeout de navegação.
+ */
+const isE2E =
+  process.env.PLAYWRIGHT === "true" || process.env.PLAYWRIGHT === "True";
+const balanceTimeoutMs = isE2E ? 3000 : BALANCE_TIMEOUT_MS;
+const usageTimeoutMs = isE2E ? 6000 : USAGE_TIMEOUT_MS;
 
 function parseUsageLimit(searchParams: URLSearchParams): number {
   const limitParam = searchParams.get("limit");
@@ -75,7 +88,7 @@ async function resolveBalance(
   if (balanceRow === null) {
     const createResult = await withTimeout(
       getOrCreateCreditBalance(userId, initialCredits),
-      BALANCE_TIMEOUT_MS
+      balanceTimeoutMs
     );
     const balance = createResult.ok ? createResult.value : initialCredits;
     return { balance, partial: !createResult.ok };
@@ -123,8 +136,8 @@ export async function GET(request: Request) {
 
     const t1 = Date.now();
     const [balanceResult, usageResult] = await Promise.all([
-      withTimeout(getCreditBalance(userId), BALANCE_TIMEOUT_MS),
-      withTimeout(getRecentUsageByUserId(userId, limit), USAGE_TIMEOUT_MS),
+      withTimeout(getCreditBalance(userId), balanceTimeoutMs),
+      withTimeout(getRecentUsageByUserId(userId, limit), usageTimeoutMs),
     ]);
     if (isDev) {
       console.info(

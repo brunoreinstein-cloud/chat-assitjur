@@ -61,7 +61,7 @@ Permite confirmar agente, modelo, documentos da base de conhecimento e anexos.
 - **total** – soma das fases (≈ preStream)
 - **execute started** – momento em que o stream do modelo arranca
 
-**Identificar qual query do batch é o gargalo:** no terminal, a linha `[chat-timing] dbBatch: X done in Yms` com **Y mais alto** (ou `X timeout após 45000ms`) indica a query mais lenta. Ver **docs/DB-TIMEOUT-TROUBLESHOOTING.md** sec. 7 (Como identificar o gargalo).
+**Identificar qual query do batch é o gargalo:** no terminal, a linha `[chat-timing] dbBatch: X done in Yms` com **Y mais alto** (ou `X timeout após 12000ms`) indica a query mais lenta. Ver **docs/DB-TIMEOUT-TROUBLESHOOTING.md** sec. 8 (Como identificar o gargalo).
 
 ### Causas de «A demorar mais do que o habitual» (50s sem resposta)
 
@@ -69,14 +69,14 @@ A UI mostra este aviso quando o pedido está em `submitted` há ≥50s. As causa
 
 | Fase | Onde ver (DEBUG_CHAT) | Causa provável | O que fazer |
 |------|------------------------|----------------|-------------|
-| **dbBatch** | `preStreamPhases.dbBatch` alto (ex.: 45000) | Cold start da BD ou queries lentas; várias `timeout após 45000ms` | Aquecer a ligação (`pnpm db:ping` ou 2.º pedido); ver **docs/DB-TIMEOUT-TROUBLESHOOTING.md**. Com fallbacks o batch termina em ~45s e segue. |
+| **dbBatch** | `preStreamPhases.dbBatch` alto (ex.: 12000) | Cold start da BD ou queries lentas; várias `timeout após 12000ms` | Aquecer a ligação (`pnpm db:ping` ou 2.º pedido); ver **docs/DB-TIMEOUT-TROUBLESHOOTING.md**. Com fallbacks o batch termina em ~12s e segue. |
 | **validationRag** | `preStreamPhases.validationRag` alto | RAG (embeddings + busca vetorial), muitos documentos ou ficheiros do arquivo | Reduzir documentos na base de conhecimento ou anexos; verificar latência do serviço de embeddings. |
 | **saveMessages** | `preStreamPhases.saveMessages` alto | Gravar mensagem do utilizador na BD lenta | Mesma BD que dbBatch; cold start ou rede. |
 | **contextConvert** | `preStreamPhases.contextConvert` alto | Edição de contexto, estimativa de tokens, conversão para o modelo | Mensagens ou contexto muito grandes; considerar limitar tamanho. |
 | **execute (modelo)** | `execute started` aparece mas demora até sair texto | Latência do modelo (first token), rede para o AI Gateway, ou modelo de raciocínio («A pensar») | Modelos reasoning: 30s–1 min em "A pensar" é normal. Outros: ver **GET /api/health/ai** (latência do Gateway). |
 | **Stream no cliente** | `execute started` e `onFinish` no servidor, mas UI não atualiza | Rede, proxy ou cliente a não consumir o stream | DevTools → Network: pedido a `/api/chat` deve ser chunked; Console para erros. |
 
-Se **todas** as queries do batch fizerem `timeout após 45000ms` e `dbBatch` ≈ 45s, o gargalo é a **primeira ligação à BD** (cold start); o 2.º pedido costuma ser bem mais rápido.
+Se **todas** as queries do batch fizerem `timeout após 12000ms` e `dbBatch` ≈ 12s, o gargalo é a **primeira ligação à BD** (cold start); o 2.º pedido costuma ser bem mais rápido.
 
 ### Como usar para diagnosticar
 

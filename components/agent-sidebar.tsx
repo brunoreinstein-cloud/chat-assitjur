@@ -18,7 +18,7 @@ import {
   getAgentConfig,
 } from "@/lib/ai/agents-registry-metadata";
 import type { Chat } from "@/lib/db/schema";
-import { fetcher } from "@/lib/utils";
+import { fetcher, historyFetcher } from "@/lib/utils";
 
 const AGENT_DOTS: Record<AgentId, string> = {
   "assistente-geral": "bg-assistjur-purple",
@@ -94,7 +94,7 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
   const { data: paginatedHistories } = useSWRInfinite<ChatHistory>(
     (pageIndex, prev) =>
       user ? getChatHistoryPaginationKey(pageIndex, prev) : null,
-    fetcher,
+    historyFetcher,
     { fallbackData: [] }
   );
   const { data: creditsData } = useSWR<CreditsData>(

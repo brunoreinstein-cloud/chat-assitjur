@@ -12,11 +12,14 @@ const filePartSchema = z.object({
   url: z.string().url(),
 });
 
+/** Limite de caracteres do texto de uma parte do tipo "document" (PDF/DOCX). Texto acima é truncado no servidor antes da validação. */
+export const MAX_DOCUMENT_PART_TEXT_LENGTH = 500_000;
+
 /** Parte com texto extraído de PDF/DOCX (PI, Contestação, etc.). Texto vazio é aceite (ex.: ficheiro sem extração). */
 const documentPartSchema = z.object({
   type: z.enum(["document"]),
   name: z.string().min(1).max(200),
-  text: z.string().max(500_000),
+  text: z.string().max(MAX_DOCUMENT_PART_TEXT_LENGTH),
   /** Rótulo para o Revisor: "pi" = Petição Inicial, "contestacao" = Contestação */
   documentType: z.enum(["pi", "contestacao"]).optional(),
 });

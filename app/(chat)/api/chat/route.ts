@@ -85,12 +85,18 @@ import { retrieveKnowledgeContext } from "@/lib/rag";
 import type { ChatMessage } from "@/lib/types";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
 import { generateTitleFromUserMessage } from "../../actions";
-import { type PostRequestBody, postRequestBodySchema } from "./schema";
+import {
+  MAX_DOCUMENT_PART_TEXT_LENGTH,
+  type PostRequestBody,
+  postRequestBodySchema,
+} from "./schema";
 
 /** Limite de execução da rota (segundos). A duração total do pedido é dominada pelo streaming do modelo; aumentar em vercel.json se precisar de respostas muito longas. */
 export const maxDuration = 120;
 
 const isDev = process.env.NODE_ENV === "development";
+/** Quando true, não consulta nem deduz créditos (para diagnóstico de latência). */
+const creditsDisabled = process.env.DISABLE_CREDITS === "true";
 
 /** Indica se o modelo é Anthropic (Claude), para aplicar prompt caching quando suportado. */
 function isAnthropicModel(modelId: string): boolean {
@@ -157,12 +163,14 @@ function withFallbackTimeout<T>(
   label: string,
   p: Promise<T>,
   ms: number,
-  fallback: T
+  fallback: T,
+  onFallback?: () => void
 ): Promise<T> {
   return Promise.race([
     p,
     new Promise<T>((resolve) =>
       setTimeout(() => {
+        onFallback?.();
         if (isDev) {
           console.warn(
             `[chat-timing] dbBatch: ${label} timeout após ${ms}ms, a usar fallback`
@@ -172,6 +180,7 @@ function withFallbackTimeout<T>(
       }, ms)
     ),
   ]).catch(() => {
+    onFallback?.();
     if (isDev) {
       console.warn(`[chat-timing] dbBatch: ${label} erro, a usar fallback`);
     }
@@ -388,12 +397,41 @@ function buildKnowledgeContext(
   return rawKnowledgeContext || undefined;
 }
 
+const TRUNCATE_SUFFIX =
+  "\n\n[Truncado: o documento excedeu o limite de caracteres.]";
+
+/** Trunca in-place o texto de partes "document" que excedam MAX_DOCUMENT_PART_TEXT_LENGTH. */
+function truncateDocumentPartsInPlace(
+  message: { parts?: Array<{ type?: string; text?: string }> } | undefined
+): void {
+  if (!(message?.parts && Array.isArray(message.parts))) {
+    return;
+  }
+  const maxLen = MAX_DOCUMENT_PART_TEXT_LENGTH - TRUNCATE_SUFFIX.length;
+  for (const part of message.parts) {
+    if (
+      part &&
+      typeof part === "object" &&
+      part.type === "document" &&
+      typeof part.text === "string" &&
+      part.text.length > MAX_DOCUMENT_PART_TEXT_LENGTH
+    ) {
+      part.text = part.text.slice(0, maxLen) + TRUNCATE_SUFFIX;
+    }
+  }
+}
+
 /** Parseia e valida o body do POST; devolve Response em caso de erro. */
 async function parsePostBody(
   request: Request
 ): Promise<PostRequestBody | Response> {
   try {
-    const json = await request.json();
+    const json = (await request.json()) as Record<string, unknown>;
+    truncateDocumentPartsInPlace(
+      json?.message as
+        | { parts?: Array<{ type?: string; text?: string }> }
+        | undefined
+    );
     return postRequestBodySchema.parse(json);
   } catch (error: unknown) {
     let cause: string | undefined;
@@ -514,6 +552,8 @@ interface ChatDbBatchResult {
   >;
   balanceFromDb: number;
   customAgentFromBatch: Awaited<ReturnType<typeof getCustomAgentById>>;
+  /** true se alguma query do batch usou fallback (timeout/erro); o cliente pode mostrar aviso. */
+  usedFallback?: boolean;
 }
 
 /** Executa o batch de queries da BD com timeouts; devolve resultado ou Response. */
@@ -527,23 +567,42 @@ async function runChatDbBatch(
   initialCredits: number
 ): Promise<ChatDbBatchResult | Response> {
   const DB_BATCH_TIMEOUT_MS = 120_000;
-  /** Fallback por query: reduz contenção — em BD lenta o pedido completa em ~25s com fallback em vez de 45s. */
-  const PER_QUERY_TIMEOUT_MS = 25_000;
-  const CREDITS_IN_BATCH_TIMEOUT_MS = 25_000;
+  /** Fallback por query: 12s para falhar mais cedo em serverless (Vercel 60s); deixa margem ao stream. */
+  const PER_QUERY_TIMEOUT_MS = 12_000;
+  const CREDITS_IN_BATCH_TIMEOUT_MS = 12_000;
+  /** Limite usado na chave do cache de créditos (igual ao default de GET /api/credits). */
+  const CREDITS_CACHE_USAGE_LIMIT = 10;
+  const usedFallback = { current: false };
+  const onFallback = () => {
+    usedFallback.current = true;
+  };
 
-  const creditsPromise = Promise.race([
-    getOrCreateCreditBalance(session.user.id, initialCredits),
-    new Promise<number>((resolve) =>
-      setTimeout(() => resolve(initialCredits), CREDITS_IN_BATCH_TIMEOUT_MS)
-    ),
-  ]).catch(() => {
-    if (process.env.NODE_ENV === "development") {
-      console.warn(
-        "[chat] Credit balance unavailable (tabela de créditos?), a usar saldo inicial."
-      );
-    }
-    return initialCredits;
-  });
+  const creditsPromise = creditsDisabled
+    ? Promise.resolve(initialCredits)
+    : (() => {
+        const cachedCredits = creditsCache.get(
+          session.user.id,
+          CREDITS_CACHE_USAGE_LIMIT
+        );
+        return cachedCredits
+          ? Promise.resolve(cachedCredits.balance)
+          : Promise.race([
+              getOrCreateCreditBalance(session.user.id, initialCredits),
+              new Promise<number>((resolve) =>
+                setTimeout(
+                  () => resolve(initialCredits),
+                  CREDITS_IN_BATCH_TIMEOUT_MS
+                )
+              ),
+            ]).catch(() => {
+              if (process.env.NODE_ENV === "development") {
+                console.warn(
+                  "[chat] Credit balance unavailable (tabela de créditos?), a usar saldo inicial."
+                );
+              }
+              return initialCredits;
+            });
+      })();
 
   const dbBatchPromise = Promise.all([
     withTimingLog(
@@ -555,7 +614,8 @@ async function runChatDbBatch(
           differenceInHours: 24,
         }),
         PER_QUERY_TIMEOUT_MS,
-        0
+        0,
+        onFallback
       )
     ),
     withTimingLog(
@@ -564,7 +624,8 @@ async function runChatDbBatch(
         "getChatById",
         getChatById({ id }),
         PER_QUERY_TIMEOUT_MS,
-        null
+        null,
+        onFallback
       )
     ),
     withTimingLog(
@@ -573,7 +634,8 @@ async function runChatDbBatch(
         "getMessagesByChatId",
         getMessagesByChatId({ id, limit: CHAT_MESSAGES_LIMIT }),
         PER_QUERY_TIMEOUT_MS,
-        [] as Awaited<ReturnType<typeof getMessagesByChatId>>
+        [] as Awaited<ReturnType<typeof getMessagesByChatId>>,
+        onFallback
       )
     ),
     effectiveKnowledgeIds.length > 0
@@ -587,7 +649,8 @@ async function runChatDbBatch(
               allowedUserIds: redatorBancoAllowedUserIds,
             }),
             PER_QUERY_TIMEOUT_MS,
-            [] as Awaited<ReturnType<typeof getKnowledgeDocumentsByIds>>
+            [] as Awaited<ReturnType<typeof getKnowledgeDocumentsByIds>>,
+            onFallback
           )
         )
       : Promise.resolve(
@@ -599,7 +662,8 @@ async function runChatDbBatch(
         "getCachedBuiltInAgentOverrides",
         getCachedBuiltInAgentOverrides(),
         PER_QUERY_TIMEOUT_MS,
-        {} as Awaited<ReturnType<typeof getCachedBuiltInAgentOverrides>>
+        {} as Awaited<ReturnType<typeof getCachedBuiltInAgentOverrides>>,
+        onFallback
       )
     ),
     withTimingLog("getOrCreateCreditBalance", creditsPromise),
@@ -616,7 +680,8 @@ async function runChatDbBatch(
               userId: session.user.id,
             }),
             PER_QUERY_TIMEOUT_MS,
-            null as unknown as Awaited<ReturnType<typeof getCustomAgentById>>
+            null as unknown as Awaited<ReturnType<typeof getCustomAgentById>>,
+            onFallback
           )
         ),
   ]);
@@ -639,7 +704,7 @@ async function runChatDbBatch(
         )
       ),
     ]);
-    return {
+    const result: ChatDbBatchResult = {
       messageCount,
       chat,
       messagesFromDb,
@@ -649,6 +714,8 @@ async function runChatDbBatch(
       balanceFromDb,
       customAgentFromBatch,
     };
+    result.usedFallback = usedFallback.current;
+    return result;
   } catch (error_) {
     const isTimeout =
       error_ instanceof Error && error_.message === "DB_BATCH_TIMEOUT";
@@ -708,6 +775,9 @@ async function checkRateLimitAndCredits(
   session: { user: { id: string } },
   initialCredits: number
 ): Promise<{ balance: number } | Response> {
+  if (creditsDisabled) {
+    return { balance: initialCredits };
+  }
   if (
     process.env.NODE_ENV !== "development" &&
     messageCount > entitlementsByUserType[userType].maxMessagesPerDay
@@ -1018,6 +1088,8 @@ interface ChatStreamParams {
   uiMessages: ChatMessage[];
   requestHints: RequestHints;
   knowledgeContext: string | undefined;
+  /** true se o dbBatch usou fallback (timeout); o stream envia chunk para o cliente mostrar aviso. */
+  dbUsedFallback?: boolean;
 }
 
 /** Resultado da preparação de mensagens para o modelo. */
@@ -1121,6 +1193,7 @@ interface StreamExecuteContext {
   id: string;
   requestStart: number;
   preStreamEnd: number;
+  dbUsedFallback?: boolean;
 }
 
 /** Cria o callback execute para createUIMessageStream; escreve streamTextResult em ref. */
@@ -1135,6 +1208,9 @@ function createStreamExecuteHandler(
       Parameters<typeof createUIMessageStream>[0]["execute"]
     >[0]["writer"];
   }) => {
+    if (ctx.dbUsedFallback) {
+      dataStream.write({ type: "data-db-fallback", data: true });
+    }
     const executeStartedAt = Date.now();
     if (isChatDebugEnabled()) {
       dataStream.write({
@@ -1225,6 +1301,8 @@ function createStreamExecuteHandler(
       messages: ctx.messagesForModel as Awaited<
         ReturnType<typeof convertToModelMessages>
       >,
+      // Permite múltiplos steps: step 1 = model chama tool; step 2 = model gera texto após tool result (entrega).
+      // Sem isto (default stepCountIs(1)) o stream encerra após a tool e o utilizador não vê mensagem.
       stopWhen: stepCountIs(5),
       experimental_activeTools: activeToolNames,
       providerOptions: ctx.isReasoningModel
@@ -1344,39 +1422,40 @@ function createStreamOnFinishHandler(
         saveMessagesPromise = Promise.resolve();
       }
 
-      const creditsPromise = streamTextResult
-        ? (async () => {
-            try {
-              const usage = await streamTextResult.totalUsage;
-              const promptTokens =
-                "promptTokens" in usage
-                  ? (usage as { promptTokens: number }).promptTokens
-                  : ((usage as { inputTokens?: number }).inputTokens ?? 0);
-              const completionTokens =
-                "completionTokens" in usage
-                  ? (usage as { completionTokens: number }).completionTokens
-                  : ((usage as { outputTokens?: number }).outputTokens ?? 0);
-              const creditsConsumed = tokensToCredits(
-                promptTokens,
-                completionTokens
-              );
-              await deductCreditsAndRecordUsage({
-                userId: ctx.session.user.id,
-                chatId: ctx.id,
-                promptTokens,
-                completionTokens,
-                model: ctx.effectiveModel,
-                creditsConsumed,
-              });
-              creditsCache.delete(ctx.session.user.id);
-            } catch (error_) {
-              logOnFinishDbError(
-                "Falha ao registar uso/créditos em onFinish",
-                error_
-              );
-            }
-          })()
-        : Promise.resolve();
+      const creditsPromise =
+        creditsDisabled || !streamTextResult
+          ? Promise.resolve()
+          : (async () => {
+              try {
+                const usage = await streamTextResult.totalUsage;
+                const promptTokens =
+                  "promptTokens" in usage
+                    ? (usage as { promptTokens: number }).promptTokens
+                    : ((usage as { inputTokens?: number }).inputTokens ?? 0);
+                const completionTokens =
+                  "completionTokens" in usage
+                    ? (usage as { completionTokens: number }).completionTokens
+                    : ((usage as { outputTokens?: number }).outputTokens ?? 0);
+                const creditsConsumed = tokensToCredits(
+                  promptTokens,
+                  completionTokens
+                );
+                await deductCreditsAndRecordUsage({
+                  userId: ctx.session.user.id,
+                  chatId: ctx.id,
+                  promptTokens,
+                  completionTokens,
+                  model: ctx.effectiveModel,
+                  creditsConsumed,
+                });
+                creditsCache.delete(ctx.session.user.id);
+              } catch (error_) {
+                logOnFinishDbError(
+                  "Falha ao registar uso/créditos em onFinish",
+                  error_
+                );
+              }
+            })();
 
       await Promise.all([saveMessagesPromise, creditsPromise]);
 
@@ -1500,6 +1579,7 @@ function buildStreamAndResponse(
     id,
     requestStart,
     preStreamEnd,
+    dbUsedFallback: params.dbUsedFallback,
   };
 
   const onFinishContext: StreamOnFinishContext = {
@@ -1866,6 +1946,7 @@ async function handleChatPostAuthenticated(
     uiMessages,
     requestHints,
     knowledgeContext,
+    dbUsedFallback: batchResult.usedFallback ?? false,
   });
 }
 

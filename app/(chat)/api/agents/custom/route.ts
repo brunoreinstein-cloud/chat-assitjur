@@ -9,6 +9,8 @@ import {
   ChatbotError,
   databaseUnavailableResponse,
   isDatabaseConnectionError,
+  isLikelyDatabaseError,
+  isStatementTimeoutError,
 } from "@/lib/errors";
 
 const createBodySchema = z.object({
@@ -44,8 +46,15 @@ export async function GET() {
       }
       return error.toResponse();
     }
-    if (isDatabaseConnectionError(error)) {
+    if (
+      isDatabaseConnectionError(error) ||
+      isStatementTimeoutError(error) ||
+      isLikelyDatabaseError(error)
+    ) {
       return databaseUnavailableResponse();
+    }
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[api/agents/custom] GET 500:", error);
     }
     return Response.json(
       { code: "bad_request:api", message: "Algo correu mal. Tente novamente." },
@@ -88,8 +97,15 @@ export async function POST(request: Request) {
       }
       return error.toResponse();
     }
-    if (isDatabaseConnectionError(error)) {
+    if (
+      isDatabaseConnectionError(error) ||
+      isStatementTimeoutError(error) ||
+      isLikelyDatabaseError(error)
+    ) {
       return databaseUnavailableResponse();
+    }
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[api/agents/custom] POST 500:", error);
     }
     return Response.json(
       { code: "bad_request:api", message: "Algo correu mal. Tente novamente." },

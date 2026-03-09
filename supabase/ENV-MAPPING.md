@@ -8,7 +8,7 @@ Coloca **apenas** no `.env.local` (nunca commitar). Valores obtidos no [Dashboar
 
 | No .env.local   | Origem / valor |
 |-----------------|----------------|
-| `POSTGRES_URL`  | Connection string do Postgres. No Supabase: **Database** → **Connection string** (URI, ex. "Transaction" ou "Session" pooler). Preferir a que termina em `?pgbouncer=true` para a app e a **Direct** (non-pooling) para migrações se necessário. |
+| `POSTGRES_URL`  | Connection string do Postgres. No Supabase: **Settings** → **Database** → **Connection string** → escolher **Transaction** (porta **6543**, pooler). Formato: `postgresql://postgres.[ref]:[PASSWORD]@[region].pooler.supabase.com:6543/postgres`. A porta 6543 reduz cold start e timeouts (chat e testes E2E). Ver **supabase/README.md** (secção «Revisão rápida com Supabase CLI») e **docs/DB-TIMEOUT-TROUBLESHOOTING.md**. |
 | `AUTH_SECRET`   | Segredo do NextAuth. Pode ser o **JWT Secret** do Supabase (Settings → API → JWT Secret) ou gerar um: `openssl rand -base64 32` ou [generate-secret.vercel.app/32](https://generate-secret.vercel.app/32). |
 
 ## Cliente Supabase (Auth, Storage, Realtime)

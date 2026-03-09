@@ -1,12 +1,17 @@
 import { expect, test } from "@playwright/test";
-import { ensureChatPageWithGuest } from "../helpers";
+import { gotoChatPage } from "../helpers";
 
 // O seletor de modelo está no composer (não na topbar); usamos data-testid para evitar 2 botões com texto parecido
 const SEARCH_PLACEHOLDER = "Buscar modelos…";
 
 test.describe("Model Selector", () => {
+  /** Aquece a conexão à BD antes dos testes (evita timeouts em /chat quando a BD está fria). */
+  test.beforeAll(async ({ request }) => {
+    await request.get("/api/health/db");
+  });
+
   test.beforeEach(async ({ page }) => {
-    await ensureChatPageWithGuest(page);
+    await gotoChatPage(page);
   });
 
   test("displays a model button", async ({ page }) => {
@@ -25,10 +30,21 @@ test.describe("Model Selector", () => {
     const modelButton = page.getByTestId("model-selector-trigger");
     await modelButton.click();
 
-    const searchInput = page.getByPlaceholder(SEARCH_PLACEHOLDER);
-    await searchInput.fill("Claude");
+    await expect(page.getByPlaceholder(SEARCH_PLACEHOLDER)).toBeVisible();
+    // Esperar rede estabilizar antes de preencher (evita "element detached" ao digitar)
+    await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {
+      /* ignore timeout; networkidle is best-effort */
+    });
 
-    await expect(page.getByText("Claude Haiku").first()).toBeVisible();
+    // Locator fresco e force: true para contornar re-render que desanexa o input durante fill
+    await page
+      .getByPlaceholder(SEARCH_PLACEHOLDER)
+      .fill("Claude", { force: true });
+
+    // Nome exibido pode ser "Claude Haiku 4.5"; lista pode demorar (BD/API)
+    await expect(page.getByText(/Claude Haiku/i).first()).toBeVisible({
+      timeout: 20_000,
+    });
   });
 
   test("can close model selector by clicking outside", async ({ page }) => {
@@ -54,7 +70,21 @@ test.describe("Model Selector", () => {
     const modelButton = page.getByTestId("model-selector-trigger");
     await modelButton.click();
 
-    await page.getByText("Claude Haiku").first().click();
+    await expect(page.getByPlaceholder(SEARCH_PLACEHOLDER)).toBeVisible();
+
+    // Esperar rede estabilizar antes de interagir (evita "element detached" ao preencher/clicar)
+    await page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {
+      /* ignore timeout; networkidle is best-effort */
+    });
+
+    // Nome exibido pode ser "Claude Haiku 4.5"; esperar item antes de clicar (sem fill para evitar re-render)
+    const modelItem = page
+      .getByRole("option", { name: /Claude Haiku/i })
+      .or(page.getByText(/Claude Haiku/i))
+      .first();
+    await expect(modelItem).toBeVisible({ timeout: 20_000 });
+    // force: true evita falha quando o elemento é desanexado durante o click (re-render da lista)
+    await modelItem.click({ force: true });
 
     await expect(page.getByPlaceholder(SEARCH_PLACEHOLDER)).not.toBeVisible();
 

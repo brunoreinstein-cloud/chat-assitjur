@@ -102,7 +102,7 @@ Quando o utilizador envia uma mensagem no chat:
 5. Prepara parâmetros: `effectiveKnowledgeIds`, `redatorBancoAllowedUserIds`, `isBuiltInAgent`, etc.
 6. **`runChatDbBatch(...)`**:
    - Cria uma promise de créditos: **getOrCreateCreditBalance** com timeout de **25 s**; em timeout/erro usa `initialCredits`.
-   - **Promise.all** de várias operações em paralelo, cada uma com **withFallbackTimeout(..., PER_QUERY_TIMEOUT_MS = 45_000, fallback)** e **withTimingLog**:
+   - **Promise.all** de várias operações em paralelo, cada uma com **withFallbackTimeout(..., PER_QUERY_TIMEOUT_MS = 12_000, fallback)** e **withTimingLog**:
      - **getMessageCountByUserId** (fallback: 0)
      - **getChatById** (fallback: null)
      - **getMessagesByChatId** (fallback: [])
@@ -110,7 +110,7 @@ Quando o utilizador envia uma mensagem no chat:
      - **getCachedBuiltInAgentOverrides** (fallback: {})
      - a promise de créditos acima
      - **getCustomAgentById** (se não for agente built-in; fallback: null)
-   - Cada query: se não responder em **25 s**, usa o fallback e regista em dev `[chat-timing] dbBatch: <label> timeout após 25000ms, a usar fallback`; quando a promise original termina (mesmo tarde), regista `done in Xms`.
+   - Cada query: se não responder em **12 s**, usa o fallback e regista em dev `[chat-timing] dbBatch: <label> timeout após 12000ms, a usar fallback`; quando a promise original termina (mesmo tarde), regista `done in Xms`.
    - **Promise.race** de todo este batch com um timeout global de **120 s** (`DB_BATCH_TIMEOUT_MS`): se o batch não acabar em 120 s → rejeita com `DB_BATCH_TIMEOUT` e o handler devolve **400** “A base de dados não respondeu a tempo...”.
 7. Se o batch devolver `Response` (erro) → retorna essa resposta.
 8. Caso contrário, usa o resultado (messageCount, chat, messagesFromDb, knowledgeDocsResult, builtInOverrides, balanceFromDb, customAgentFromBatch) para seguir.
