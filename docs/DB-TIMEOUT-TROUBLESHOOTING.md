@@ -33,7 +33,7 @@ Detalhes e valores de timeout nas secções abaixo.
 - **Batch global:** 120s (`DB_BATCH_TIMEOUT_MS`). Rede de segurança; com timeouts por query o batch tende a completar em ≤12s.
 - **Por query:** 12s (`PER_QUERY_TIMEOUT_MS`). Se uma query (chat, mensagens, conhecimento, etc.) não responder a tempo, usa-se um fallback (ex.: chat null, mensagens []) e o chat continua; 12s deixa margem ao stream em serverless (Vercel 60s).
 - **Créditos no batch:** 12s (`CREDITS_IN_BATCH_TIMEOUT_MS`). Se a query de créditos não responder a tempo, a app usa o saldo inicial.
-- **Em desenvolvimento:** o `saveChat` (novo chat) é fire-and-forget (não bloqueia o handler), para não segurar a conexão à BD; em produção continua a ser aguardado.
+- **saveChat:** em dev e produção o handler aguarda `saveChat` (v2 do route); não é fire-and-forget — ver `docs/CHAT-DEBUG.md` (secção 7: ordem das fases e saveChat).
 
 ---
 
@@ -81,6 +81,15 @@ Em planos gratuitos ou com pausa automática, a **primeira** ligação após um 
 
 - **O que fazer:** Envia de novo a mensagem no chat. O segundo pedido costuma ser bem mais rápido.
 - Se o **db:ping** for lento na primeira vez e rápido na segunda, é cold start; não é necessário alterar código.
+- **Confirmar que é cold start:** segue o procedimento em **[9.2 Medir cold start vs ligação quente](#92-medir-cold-start-vsligação-quente)** (duas execuções de `pnpm db:ping` e comparar tempos).
+
+### 3.1 Sintomas de esgotamento do connection pool (pool exhaustion)
+
+Quando o **pool de conexões** (Supabase/Neon) está esgotado, o comportamento é distinto do cold start:
+
+- **Sintomas:** as queries ficam em **fila** no lado do servidor; o timeout dispara sem erro de rede óbvio; `pnpm db:ping` pode ser **rápido** (a própria query do ping entra na fila e sai, não prova que o pool está saudável sob carga).
+- **Diferença em relação ao cold start:** no cold start a primeira ligação é lenta e a segunda costuma ser rápida; no pool exhaustion, vários pedidos concorrentes (ex.: muitos utilizadores ou muitas instâncias serverless) esgotam o limite de conexões e os pedidos passam a esperar na fila até timeout.
+- **O que fazer:** usar **pooler** (porta 6543) para reduzir conexões por cliente; em SaaS com muitas instâncias, ver `docs/ESCALA-SAAS-BD.md` (cache Redis, read replicas, BD sem auto-pause). Se o timeout ocorre sob carga alta e não após inatividade, considerar pool exhaustion e não apenas cold start.
 
 ---
 
@@ -160,7 +169,7 @@ Se no **DevTools (Console)** aparecer *"The resource &lt;URL&gt; was preloaded u
 | POSTGRES_URL em falta ou errada | Corrigir em `.env.local`; ver `.env.example`. Formato: `postgresql://user:pass@host:port/db`. |
 | Não sabes se a BD responde | `pnpm db:ping`. |
 | Primeira mensagem após muito tempo sem usar | Tentar de novo (cold start). |
-| Sempre lento / timeout no chat | Usar URL do **pooler** (Supabase porta **6543**); em local dev, se o pooler for lento, testar Session (porta **5432**) só em `.env.local`. Se ainda falhar, aumentar `DB_BATCH_TIMEOUT_MS` (ex.: 120_000). |
+| Sempre lento / timeout no chat | Usar URL do **pooler** (Supabase porta **6543**); em local dev, se o pooler for lento, testar Session (porta **5432**) só em `.env.local`. Se ainda falhar, aumentar `DB_BATCH_TIMEOUT_MS` (ex.: 180_000). |
 | Timeout só na query de créditos | A app usa saldo inicial após 12s; o resto do chat continua. Se quiseres, podes subir `CREDITS_IN_BATCH_TIMEOUT_MS` no `route.ts`. |
 
 **Como reduzir o tempo de resposta:** (1) Pooler (6543) + aquecimento (DbWarmup ao abrir `/chat`, cron em produção). (2) O batch do chat usa o cache de créditos em memória quando existir (ex.: após o utilizador ter carregado a sidebar/credits); assim evita uma query à BD por mensagem quando o saldo está em cache. (3) Plano de BD sem auto-pause (Supabase Pro / Neon Scale) elimina cold start. (4) Cache distribuído (Redis) para créditos e overrides — ver `docs/ESCALA-SAAS-BD.md`.
@@ -213,11 +222,13 @@ pnpm db:ping
 Em `.env.local` define `DEBUG_CHAT=true`, reinicia e envia uma mensagem. No terminal aparecem linhas como:
 
 ```
-[chat-debug] timing: dbBatch 412
-[chat-debug] preStreamPhases {"auth":25,"dbBatch":412,...}
+[chat-debug] timing: auth 45
+[chat-debug] timing: dbBatch 11823
+[chat-debug] timing: validationRag 340
+[chat-debug] preStreamPhases {"auth":45,"dbBatch":11823,"validationRag":340}
 ```
 
-- **dbBatch** alto (ex.: 40000) → o batch de BD é o gargalo; usa os logs do ponto 9.1 para ver qual query dentro do batch.
+- **dbBatch** alto (ex.: 11823 ms) → o batch de BD é o gargalo; usa os logs do ponto 9.1 para ver qual query dentro do batch.
 - **validationRag** ou **saveMessages** altos → o gargalo está noutra fase (RAG, gravação), não na BD do batch.
 
 ### 9.4 GET /api/credits lento (ex.: 19s+)
@@ -243,12 +254,12 @@ Se **GET /api/credits** demorar 15–20s, o tempo está quase todo na **primeira
 
 **Sim, para o utilizador conseguir usar o chat.** As alterações feitas garantem que:
 
-1. **Nenhuma query bloqueia o pedido todo.** Cada query tem timeout de 45s; em caso de atraso usa-se um fallback (ex.: sem histórico, chat novo) e o chat continua. O pedido deixa de ficar preso 2 minutos.
+1. **Nenhuma query bloqueia o pedido todo.** Cada query tem timeout de **12s** (`PER_QUERY_TIMEOUT_MS`); em caso de atraso usa-se um fallback (ex.: sem histórico, chat novo) e o chat continua. O pedido deixa de ficar preso 2 minutos.
 2. **A mensagem de erro é visível** (surface `database` em "response") e explica cold start e "tenta novamente".
-3. **O batch tende a completar em ≤45s** (em vez de esperar indefinidamente pela query mais lenta).
+3. **O batch tende a completar em ≤120s** (`DB_BATCH_TIMEOUT_MS`), com cada query limitada a 12s; em timeout por query usa-se fallback e o chat continua (em vez de esperar indefinidamente pela query mais lenta).
 
 **O que não fica resolvido pela correção:** a **causa raiz** (ex.: cold start 20–30s) continua a existir. No primeiro pedido após inatividade podes ter:
-- Resposta em ~45s com alguns dados em fallback (ex.: sem histórico na primeira mensagem), ou
+- Resposta em ~12–30s com alguns dados em fallback (ex.: sem histórico na primeira mensagem), ou
 - Se a BD responder a tempo, dados completos.
 
 **Aquecimento da ligação (recomendado):**
@@ -259,8 +270,25 @@ Se **GET /api/credits** demorar 15–20s, o tempo está quase todo na **primeira
 
 ---
 
-## 11. Referências
+## 11. Índices da BD (queries do chat)
 
+As queries do batch usam estas tabelas. Índices existentes que as aceleram:
+
+| Tabela | Índice | Uso |
+|--------|--------|-----|
+| Chat | `Chat_userId_createdAt_idx` | Listar chats por utilizador (GET /api/history). |
+| Message_v2 | `Message_v2_chatId_createdAt_idx` | Histórico do chat (getMessagesByChatId). |
+| Message_v2 | `Message_v2_chatId_role_createdAt_idx` | Contagem de mensagens por utilizador (getMessageCountByUserId). |
+| KnowledgeDocument | `KnowledgeDocument_userId_idx` | Listar documentos por utilizador; útil se queries por `userId` forem lentas. |
+| KnowledgeChunk | `KnowledgeChunk_documentId_chunkIndex_idx` | Lookups por documento (knowledgeDocumentId + chunkIndex); acelera RAG/chunks por documento. |
+
+Se `getMessageCount` ou `getMessagesByChatId` aparecerem nos logs como as mais lentas, confirma que a migração `0023_message_v2_chat_id_role_created_at_idx.sql` foi aplicada (`pnpm db:migrate`). Se **getKnowledgeDocumentsByIds** (base de conhecimento no chat) for a query mais lenta, confirma que os índices em `KnowledgeDocument` e `KnowledgeChunk` existem no teu schema (`lib/db/schema.ts`) e que as migrações foram aplicadas. Em planos gratuitos ou com poucos dados, o cold start da ligação costuma ser o gargalo, não a falta de índices.
+
+---
+
+## 12. Referências
+
+- **Fluxo completo (componentes e correções):** `docs/FLUXO-TIMEOUT-BD-E-CREDITOS.md` — descreve o percurso do POST /api/chat e GET /api/credits, contenção com `max: 1` e aumento de conexões em dev.
 - **Debug do chat (logs, fases):** `docs/CHAT-DEBUG.md`
 - **Script de ping:** `scripts/db-ping.ts` — `pnpm db:ping`
 - **Schema e migrações:** `lib/db/queries.ts`, `lib/db/schema.ts`, `pnpm db:migrate`

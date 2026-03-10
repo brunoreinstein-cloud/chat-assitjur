@@ -1,17 +1,17 @@
 # Estrutura das instruções dos agentes
 
-Referência para manter consistência entre os agentes built-in (Revisor, Redator, Assistente, Master).
+Referência para manter consistência entre os agentes built-in (Revisor, Redator, Assistente, Master). **Todos os agentes estão alinhados** ao padrão XML na cabeça das instruções.
 
 ---
 
-## Estado atual por agente
+## Estado atual por agente (alinhado)
 
 | Agente | Ficheiro | Estrutura | Observação |
 |--------|----------|-----------|------------|
-| **Assistente** | `agent-assistente-geral.ts` | Texto corrido (PODE / NÃO PODE). Sem XML, sem blocos. | Propositalmente mínimo; agente leve. ✅ Adequado ao propósito. |
-| **Revisor de Defesas** | `agent-revisor-defesas.ts` | **XML completo:** `<role>`, `<thinking>`, `<workflow>`, `<output_format>`, `<constraints>`, `<examples>`. | Padrão de referência (Claude-optimized). ✅ Consistente. |
-| **Redator de Contestações** | `agent-redator-contestacao.ts` | **Híbrido:** início com `<role>` + `<constraints>` (XML); corpo em Markdown (# INSTRUÇÃO CONSOLIDADA, ## BLOCO 1…); final com `<examples>`. | Falta `<thinking>`, `<workflow>`, `<output_format>` em XML; fluxo está em Markdown. ⚠️ Misto. |
-| **AssistJur Master** | `agent-assistjur-master-instructions.md` | **Só Markdown:** # INSTRUÇÃO MASTER, ## PARTE 0, ### 0.1… Sem tags XML. | Documento longo; muitos módulos. ⚠️ Estilo diferente. |
+| **Assistente** | `agent-assistente-geral.ts` | **XML:** `<role>`, `<constraints>`. Sem workflow/output (agente simples). | ✅ Alinhado. |
+| **Revisor de Defesas** | `agent-revisor-defesas.ts` | **XML completo:** `<role>`, `<thinking>`, `<workflow>`, `<output_format>`, `<constraints>`, `<examples>`. | Padrão de referência. ✅ Alinhado. |
+| **Redator de Contestações** | `agent-redator-contestacao.ts` | **XML na cabeça:** `<role>`, `<thinking>`, `<workflow>`, `<output_format>`, `<constraints>`; depois Markdown (# INSTRUÇÃO CONSOLIDADA, Blocos); final com `<examples>`. | ✅ Alinhado. |
+| **AssistJur Master** | `agent-assistjur-master-instructions.md` | **XML no topo:** `<role>`, `<thinking>`, `<workflow>`, `<output_format>`, `<constraints>`; depois # INSTRUÇÃO MASTER e Markdown (PARTE 0, 1…). | ✅ Alinhado. |
 
 ---
 
@@ -45,8 +45,34 @@ Para agentes **muito longos e modulares** (ex.: Master): Markdown com partes num
 
 ---
 
-## Próximos passos (opcionais)
+## Validação dos agentes com ficheiros
 
-- **Redator:** considerar extrair gates/fluxo para `<workflow>` e resumo de formato para `<output_format>` em XML, mantendo os Blocos em Markdown para detalhe.
-- **Master:** manter Markdown; garantir que PARTE 0 (identidade, princípios) e formato de entrega por módulo estejam sempre no início de cada secção relevante.
-- **Assistente:** manter como está (instruções curtas).
+As instruções dos agentes built-in (ficheiros em `lib/ai/agent-*.ts` e `agent-*.md`) podem ser **validadas automaticamente** contra esta estrutura.
+
+- **Módulo:** `lib/ai/validate-agents.ts`  
+  - `validateAgentInstructions(agentId, instructions)` — valida um bloco de instruções para um agente.  
+  - `validateAllBuiltInAgents()` — valida todos os agentes do registry (instruções carregadas dos ficheiros).  
+  - Regras: comprimento mínimo/máximo; para **Revisor** exige as tags `<role>`, `<thinking>`, `<workflow>`, `<output_format>`, `<constraints>`, `<examples>`; para **Redator** exige `<role>` e `<constraints>`; para **Assistente** e **Master** aplicam-se avisos de boa prática (escopo, identidade).
+
+- **Testes:** `tests/validate-agents.test.ts`  
+  - Garante que todos os agentes built-in passam na validação (sem erros).  
+  - Testes específicos por agente (tags XML, escopo PODE/NÃO PODE, instruções vazias ou inválidas).
+
+**Como validar:**
+
+```bash
+# Todos os testes unitários (inclui validação dos agentes)
+pnpm run test:unit
+
+# Apenas os testes de validação dos agentes
+pnpm run test:unit -- tests/validate-agents.test.ts
+```
+
+A validação usa as instruções **dos ficheiros** (registry), não os overrides da BD (admin). Para validar após alterar um ficheiro de agente, basta correr os testes acima.
+
+---
+
+## Manutenção
+
+- Ao adicionar novo agente com fluxo (gates/fases), usar os 6 blocos XML na cabeça; o corpo pode ser Markdown longo para detalhe.
+- Assistente permanece mínimo (apenas `<role>` e `<constraints>`); sem `<workflow>` nem `<output_format>` por não ter fluxo estruturado.

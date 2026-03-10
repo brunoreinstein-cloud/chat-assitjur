@@ -40,6 +40,11 @@ interface CustomAgentRow {
   createdAt: string;
 }
 
+interface UploadQueueItem {
+  id: string;
+  label: string;
+}
+
 import { MIN_CREDITS_TO_START_CHAT } from "@/lib/ai/credits";
 import type {
   Attachment,
@@ -105,6 +110,9 @@ import { Textarea } from "./ui/textarea";
 import type { VisibilityType } from "./visibility-selector";
 
 const AGENT_INSTRUCTIONS_MAX_LENGTH = 4000;
+
+/** Máximo de documentos da base de conhecimento selecionáveis no popover @ e no formulário de agente. */
+const MAX_KNOWLEDGE_SELECT = 50;
 
 /** Tipos MIME aceites para anexos (chat e base de conhecimento). */
 const ACCEPTED_FILE_ACCEPT =
@@ -483,6 +491,73 @@ type PureMultimodalInputProps = Readonly<{
   onOpenKnowledgeSidebar?: () => void;
 }>;
 
+interface ImproveTextOptions {
+  emptyError: string;
+  genericError: string;
+  successTitle: string;
+}
+
+function usePromptImprovement() {
+  const [isImproving, setIsImproving] = useState(false);
+  const improveText = useCallback(
+    async (
+      text: string,
+      setResult: (value: string) => void,
+      options: ImproveTextOptions
+    ) => {
+      const trimmed = text.trim();
+      if (trimmed.length === 0) {
+        toast.error(options.emptyError);
+        return;
+      }
+      setIsImproving(true);
+      try {
+        const res = await fetch("/api/prompt/improve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: trimmed }),
+        });
+        const data = (await res.json()) as
+          | { improvedPrompt: string; diagnosis?: string; notes?: string }
+          | { error?: string };
+        if (!res.ok) {
+          const msg =
+            "error" in data && typeof data.error === "string"
+              ? data.error
+              : options.genericError;
+          toast.error(msg);
+          return;
+        }
+        if (
+          "improvedPrompt" in data &&
+          typeof data.improvedPrompt === "string"
+        ) {
+          setResult(data.improvedPrompt);
+          const parts: string[] = [];
+          if (data.diagnosis?.trim()) {
+            parts.push(data.diagnosis.trim());
+          }
+          if (data.notes?.trim()) {
+            parts.push(`Alterações: ${data.notes.trim()}`);
+          }
+          const description =
+            parts.length > 0
+              ? parts.join("\n\n").slice(0, 400) +
+                (parts.join("\n\n").length > 400 ? "…" : "")
+              : undefined;
+          toast.success(options.successTitle, { description });
+        }
+      } catch {
+        toast.error("Erro de ligação. Tente novamente.");
+      } finally {
+        setIsImproving(false);
+      }
+    },
+    []
+  );
+  return { improveText, isImproving };
+}
+
 function PureMultimodalInput({
   chatId,
   input,
@@ -507,7 +582,6 @@ function PureMultimodalInput({
   setAgentInstructions,
   onOpenKnowledgeSidebar,
 }: PureMultimodalInputProps) {
-  const MAX_KNOWLEDGE_SELECT = 50;
   const [atPopoverOpen, setAtPopoverOpen] = useState(false);
   const [agentInstructionsDialogOpen, setAgentInstructionsDialogOpen] =
     useState(false);
@@ -525,9 +599,8 @@ function PureMultimodalInput({
   const [agentIdToDelete, setAgentIdToDelete] = useState<string | null>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [chipsExpanded, setChipsExpanded] = useState(false);
-  const [isImprovingPrompt, setIsImprovingPrompt] = useState(false);
-  const [isImprovingAgentInstructions, setIsImprovingAgentInstructions] =
-    useState(false);
+
+  const { improveText, isImproving } = usePromptImprovement();
 
   const { data: customAgents = [], mutate: mutateCustomAgents } = useSWR<
     CustomAgentRow[]
@@ -554,112 +627,23 @@ function PureMultimodalInput({
     setManageAgentsOpen(true);
   }, []);
 
-  const handleImprovePrompt = useCallback(async () => {
-    const text = input.trim();
-    if (text.length === 0) {
-      toast.error("Escreva um texto para melhorar.");
-      return;
-    }
-    setIsImprovingPrompt(true);
-    try {
-      const res = await fetch("/api/prompt/improve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: text }),
-      });
-      const data = (await res.json()) as
-        | { improvedPrompt: string; diagnosis?: string; notes?: string }
-        | { error?: string };
-      if (!res.ok) {
-        const msg =
-          "error" in data && typeof data.error === "string"
-            ? data.error
-            : "Não foi possível melhorar o prompt.";
-        toast.error(msg);
-        return;
-      }
-      if ("improvedPrompt" in data && typeof data.improvedPrompt === "string") {
-        setInput(data.improvedPrompt);
-        const parts: string[] = [];
-        if (data.diagnosis?.trim()) {
-          parts.push(data.diagnosis.trim());
-        }
-        if (data.notes?.trim()) {
-          parts.push(`Alterações: ${data.notes.trim()}`);
-        }
-        const description =
-          parts.length > 0
-            ? parts.join("\n\n").slice(0, 400) +
-              (parts.join("\n\n").length > 400 ? "…" : "")
-            : undefined;
-        toast.success("Prompt melhorado. Pode editar antes de enviar.", {
-          description,
-        });
-      }
-    } catch {
-      toast.error("Erro de ligação. Tente novamente.");
-    } finally {
-      setIsImprovingPrompt(false);
-    }
-  }, [input, setInput]);
+  const handleImprovePrompt = useCallback(() => {
+    improveText(input, setInput, {
+      emptyError: "Escreva um texto para melhorar.",
+      genericError: "Não foi possível melhorar o prompt.",
+      successTitle: "Prompt melhorado. Pode editar antes de enviar.",
+    });
+  }, [input, setInput, improveText]);
 
-  /** Melhorar texto de instruções (formulário Meus agentes ou diálogo Instruções do agente) via API. */
   const handleImproveInstructions = useCallback(
-    async (text: string, setResult: (value: string) => void) => {
-      const trimmed = text.trim();
-      if (trimmed.length === 0) {
-        toast.error("Escreva instruções para melhorar.");
-        return;
-      }
-      setIsImprovingAgentInstructions(true);
-      try {
-        const res = await fetch("/api/prompt/improve", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: trimmed }),
-        });
-        const data = (await res.json()) as
-          | { improvedPrompt: string; diagnosis?: string; notes?: string }
-          | { error?: string };
-        if (!res.ok) {
-          const msg =
-            "error" in data && typeof data.error === "string"
-              ? data.error
-              : "Não foi possível melhorar as instruções.";
-          toast.error(msg);
-          return;
-        }
-        if (
-          "improvedPrompt" in data &&
-          typeof data.improvedPrompt === "string"
-        ) {
-          setResult(data.improvedPrompt);
-          const parts: string[] = [];
-          if (data.diagnosis?.trim()) {
-            parts.push(data.diagnosis.trim());
-          }
-          if (data.notes?.trim()) {
-            parts.push(`Alterações: ${data.notes.trim()}`);
-          }
-          const description =
-            parts.length > 0
-              ? parts.join("\n\n").slice(0, 400) +
-                (parts.join("\n\n").length > 400 ? "…" : "")
-              : undefined;
-          toast.success(
-            "Instruções melhoradas. Pode editar antes de guardar.",
-            {
-              description,
-            }
-          );
-        }
-      } catch {
-        toast.error("Erro de ligação. Tente novamente.");
-      } finally {
-        setIsImprovingAgentInstructions(false);
-      }
+    (text: string, setResult: (value: string) => void) => {
+      improveText(text, setResult, {
+        emptyError: "Escreva instruções para melhorar.",
+        genericError: "Não foi possível melhorar as instruções.",
+        successTitle: "Instruções melhoradas. Pode editar antes de guardar.",
+      });
     },
-    []
+    [improveText]
   );
 
   const startCreateAgent = useCallback(() => {
@@ -826,17 +810,30 @@ function PureMultimodalInput({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const { width } = useWindowSize();
 
-  const adjustHeight = useCallback(() => {
+  const resetTextareaHeight = useCallback(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "44px";
     }
   }, []);
 
+  const hasHydratedInput = useRef(false);
+  const [localStorageInput, setLocalStorageInput] = useLocalStorage(
+    "input",
+    ""
+  );
   useEffect(() => {
-    if (textareaRef.current) {
-      adjustHeight();
+    if (hasHydratedInput.current) {
+      return;
     }
-  }, [adjustHeight]);
+    if (!textareaRef.current) {
+      return;
+    }
+    hasHydratedInput.current = true;
+    const domValue = textareaRef.current.value;
+    const finalValue = domValue || localStorageInput || "";
+    setInput(finalValue);
+    resetTextareaHeight();
+  }, [localStorageInput, setInput, resetTextareaHeight]);
 
   const hasAutoFocused = useRef(false);
   useEffect(() => {
@@ -848,29 +845,6 @@ function PureMultimodalInput({
       return () => clearTimeout(timer);
     }
   }, [width]);
-
-  const resetHeight = useCallback(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "44px";
-    }
-  }, []);
-
-  const [localStorageInput, setLocalStorageInput] = useLocalStorage(
-    "input",
-    ""
-  );
-
-  useEffect(() => {
-    if (textareaRef.current) {
-      const domValue = textareaRef.current.value;
-      // Prefer DOM value over localStorage to handle hydration
-      const finalValue = domValue || localStorageInput || "";
-      setInput(finalValue);
-      adjustHeight();
-    }
-    // Only run once after hydration
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [adjustHeight, localStorageInput, setInput]);
 
   useEffect(() => {
     setLocalStorageInput(input);
@@ -930,7 +904,7 @@ function PureMultimodalInput({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingPreferredTypeRef = useRef<"pi" | "contestacao" | null>(null);
-  const [uploadQueue, setUploadQueue] = useState<string[]>([]);
+  const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([]);
 
   const submitForm = useCallback(() => {
     const validationError = validateAttachmentsForSubmit(attachments);
@@ -965,7 +939,7 @@ function PureMultimodalInput({
 
     setAttachments([]);
     setLocalStorageInput("");
-    resetHeight();
+    resetTextareaHeight();
     setInput("");
 
     if (width && width > 768) {
@@ -980,7 +954,7 @@ function PureMultimodalInput({
     setLocalStorageInput,
     width,
     chatId,
-    resetHeight,
+    resetTextareaHeight,
     isRevisorAgent,
     messages.length,
   ]);
@@ -1004,7 +978,11 @@ function PureMultimodalInput({
       if (files.length === 0) {
         return;
       }
-      setUploadQueue((prev) => [...prev, ...files.map((f) => f.name)]);
+      const now = Date.now();
+      setUploadQueue((prev) => [
+        ...prev,
+        ...files.map((f, i) => ({ id: `uq-${now}-${i}`, label: f.name })),
+      ]);
       try {
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
@@ -1034,7 +1012,13 @@ function PureMultimodalInput({
               autoAssignMissingDocumentType([...current, a])
             );
           }
-          setUploadQueue((prev) => prev.filter((n) => n !== file.name));
+          setUploadQueue((prev) => {
+            const idx = prev.findIndex((q) => q.label === file.name);
+            if (idx < 0) {
+              return prev;
+            }
+            return [...prev.slice(0, idx), ...prev.slice(idx + 1)];
+          });
         }
       } finally {
         setUploadQueue([]);
@@ -1102,51 +1086,6 @@ function PureMultimodalInput({
     [processFiles]
   );
 
-  const _removeAllAttachments = useCallback(() => {
-    setAttachments([]);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-  }, [setAttachments]);
-
-  const _handleSaveToArchivos = useCallback(async (attachment: Attachment) => {
-    const pathname = attachment.pathname;
-    const url = attachment.url;
-    if (!(pathname && url)) {
-      toast.error(
-        "Este anexo não pode ser guardado em Arquivos (falta referência)."
-      );
-      return;
-    }
-    try {
-      const res = await fetch("/api/arquivos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pathname,
-          url,
-          filename: attachment.name,
-          contentType: attachment.contentType,
-          ...(typeof attachment.extractedText === "string" && {
-            extractedTextCache: attachment.extractedText,
-          }),
-        }),
-      });
-      if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as {
-          message?: string;
-        };
-        toast.error(data?.message ?? "Erro ao guardar em Arquivos.");
-        return;
-      }
-      toast.success(
-        "Guardado em Arquivos. Pode adicionar à base de conhecimento na sidebar."
-      );
-    } catch {
-      toast.error("Erro ao guardar em Arquivos.");
-    }
-  }, []);
-
   const handlePaste = useCallback(
     async (event: ClipboardEvent) => {
       const items = event.clipboardData?.items;
@@ -1165,7 +1104,10 @@ function PureMultimodalInput({
       // Prevent default paste behavior for images
       event.preventDefault();
 
-      setUploadQueue((prev) => [...prev, "Imagem colada"]);
+      setUploadQueue((prev) => [
+        ...prev,
+        { id: `uq-${Date.now()}-img`, label: "Imagem colada" },
+      ]);
 
       try {
         const uploadPromises = imageItems
@@ -1244,13 +1186,15 @@ function PureMultimodalInput({
     fetcher
   );
   const revisorFirstMessage = isRevisorAgent && messages.length === 0;
+  const isInputEmpty = revisorFirstMessage
+    ? !hasPiAndContestacao && input.trim() === ""
+    : attachments.length === 0 && input.trim() === "";
+  const isUploading = uploadQueue.length > 0;
+  const hasInsufficientCredits =
+    creditsData !== undefined &&
+    creditsData.balance < MIN_CREDITS_TO_START_CHAT;
   const sendButtonDisabled =
-    (revisorFirstMessage
-      ? !hasPiAndContestacao && input.trim() === ""
-      : attachments.length === 0 && input.trim() === "") ||
-    uploadQueue.length > 0 ||
-    (creditsData !== undefined &&
-      creditsData.balance < MIN_CREDITS_TO_START_CHAT);
+    isInputEmpty || isUploading || hasInsufficientCredits;
 
   return (
     <div className={cn("relative flex w-full flex-col gap-4", className)}>
@@ -1454,17 +1398,17 @@ function PureMultimodalInput({
                       </Button>
                     </div>
                   ))}
-                  {visibleQueue.map((filename) => (
+                  {visibleQueue.map((item) => (
                     <div
                       className="flex max-w-[200px] items-center gap-1.5 rounded-full border border-border/60 bg-muted/50 px-2.5 py-1 text-xs"
-                      key={`upload-queue-${filename}`}
+                      key={item.id}
                     >
                       <FileTextIcon
                         aria-hidden
                         className="size-3.5 shrink-0 text-muted-foreground"
                       />
                       <span className="min-w-0 truncate text-muted-foreground">
-                        {filename}
+                        {item.label}
                       </span>
                       <span className="shrink-0 text-[10px] text-muted-foreground">
                         extraindo…
@@ -1706,14 +1650,14 @@ function PureMultimodalInput({
               disabled={
                 status === "submitted" ||
                 input.trim().length === 0 ||
-                isImprovingPrompt
+                isImproving
               }
               onClick={handleImprovePrompt}
               title="Melhorar prompt"
               type="button"
               variant="ghost"
             >
-              {isImprovingPrompt ? (
+              {isImproving ? (
                 <LoaderIcon aria-hidden className="size-[18px] animate-spin" />
               ) : (
                 <WandIcon aria-hidden size={18} />
@@ -1835,7 +1779,7 @@ function PureMultimodalInput({
                             </Label>
                             <Button
                               aria-label="Melhorar instruções com IA"
-                              disabled={isImprovingAgentInstructions}
+                              disabled={isImproving}
                               onClick={() =>
                                 handleImproveInstructions(
                                   agentFormInstructions,
@@ -1846,7 +1790,7 @@ function PureMultimodalInput({
                               type="button"
                               variant="outline"
                             >
-                              {isImprovingAgentInstructions ? (
+                              {isImproving ? (
                                 <LoaderIcon
                                   aria-hidden
                                   className="size-4 animate-spin"
@@ -1854,9 +1798,7 @@ function PureMultimodalInput({
                               ) : (
                                 <WandIcon aria-hidden className="size-4" />
                               )}
-                              {isImprovingAgentInstructions
-                                ? "A melhorar…"
-                                : "Melhorar prompt"}
+                              {isImproving ? "A melhorar…" : "Melhorar prompt"}
                             </Button>
                           </div>
                           <Textarea
@@ -2079,7 +2021,7 @@ function PureMultimodalInput({
                           </Label>
                           <Button
                             aria-label="Melhorar instruções com IA"
-                            disabled={isImprovingAgentInstructions}
+                            disabled={isImproving}
                             onClick={() =>
                               handleImproveInstructions(
                                 localAgentInstructions,
@@ -2090,7 +2032,7 @@ function PureMultimodalInput({
                             type="button"
                             variant="outline"
                           >
-                            {isImprovingAgentInstructions ? (
+                            {isImproving ? (
                               <LoaderIcon
                                 aria-hidden
                                 className="size-4 animate-spin"
@@ -2098,9 +2040,7 @@ function PureMultimodalInput({
                             ) : (
                               <WandIcon aria-hidden className="size-4" />
                             )}
-                            {isImprovingAgentInstructions
-                              ? "A melhorar…"
-                              : "Melhorar prompt"}
+                            {isImproving ? "A melhorar…" : "Melhorar prompt"}
                           </Button>
                         </div>
                         <Textarea
@@ -2150,6 +2090,11 @@ function PureMultimodalInput({
   );
 }
 
+/**
+ * Comparador do memo: inclui callbacks (sendMessage, setAgentId, etc.) para que
+ * o componente re-renderize quando o pai passar novas referências.
+ * O pai deve usar useCallback nesses callbacks para evitar re-renders desnecessários.
+ */
 export const MultimodalInput = memo(
   PureMultimodalInput,
   (prevProps, nextProps) => {
@@ -2157,6 +2102,9 @@ export const MultimodalInput = memo(
       return false;
     }
     if (prevProps.status !== nextProps.status) {
+      return false;
+    }
+    if (prevProps.sendMessage !== nextProps.sendMessage) {
       return false;
     }
     if (!equal(prevProps.attachments, nextProps.attachments)) {
@@ -2174,14 +2122,28 @@ export const MultimodalInput = memo(
       return false;
     }
     if (
+      prevProps.setKnowledgeDocumentIds !== nextProps.setKnowledgeDocumentIds
+    ) {
+      return false;
+    }
+    if (
       !equal(prevProps.knowledgeDocumentIds, nextProps.knowledgeDocumentIds)
     ) {
+      return false;
+    }
+    if (prevProps.onOpenKnowledgeSidebar !== nextProps.onOpenKnowledgeSidebar) {
       return false;
     }
     if (prevProps.agentId !== nextProps.agentId) {
       return false;
     }
     if (prevProps.agentInstructions !== nextProps.agentInstructions) {
+      return false;
+    }
+    if (prevProps.setAgentId !== nextProps.setAgentId) {
+      return false;
+    }
+    if (prevProps.setAgentInstructions !== nextProps.setAgentInstructions) {
       return false;
     }
 

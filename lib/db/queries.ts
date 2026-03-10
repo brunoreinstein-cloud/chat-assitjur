@@ -113,8 +113,10 @@ function getDb() {
         ? `${url}&sslmode=require`
         : `${url}?sslmode=require`;
     }
+    /** Em dev usa-se mais uma conexão para reduzir contenção entre chat, credits e health (mesmo processo). Em produção mantém 1 por invocação. */
+    const maxConnections = process.env.NODE_ENV === "development" ? 3 : 1;
     clientInstance = postgres(url, {
-      max: 1,
+      max: maxConnections,
       connect_timeout: 10,
     });
     dbInstance = drizzle(clientInstance);
@@ -1343,11 +1345,7 @@ export async function getRelevantChunks({
     inArray(knowledgeDocument.id, documentIds),
     sql`${knowledgeChunk.embedding} IS NOT NULL`,
   ];
-  if (
-    minSimilarity !== undefined &&
-    minSimilarity > 0 &&
-    minSimilarity <= 1
-  ) {
+  if (minSimilarity !== undefined && minSimilarity > 0 && minSimilarity <= 1) {
     const maxDistance = 1 - minSimilarity;
     conditions.push(
       sql`(${knowledgeChunk.embedding} <=> ${sql.raw(vectorLiteral)}) <= ${maxDistance}`

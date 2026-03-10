@@ -2,6 +2,8 @@
 
 Comparação com o [template RAG da Vercel](https://vercel.com/templates/next.js/ai-sdk-rag) ([repositório vercel-labs/ai-sdk-preview-rag](https://github.com/vercel-labs/ai-sdk-preview-rag)) e recomendações de melhorias a implantar.
 
+**Nota:** Existe também o template [Internal Knowledge Base](https://vercel.com/templates/next.js/ai-sdk-internal-knowledge-base) ([vercel-labs/ai-sdk-preview-internal-knowledge-base](https://github.com/vercel-labs/ai-sdk-preview-internal-knowledge-base)), que usa **Language Model Middleware**, **HyDE** (hypothetical document embeddings) e **classificação da mensagem** (só RAG para "question"). Análise em **`docs/TEMPLATE-INTERNAL-KNOWLEDGE-BASE-ANALISE.md`**.
+
 ---
 
 ## 1. O que o template oferece

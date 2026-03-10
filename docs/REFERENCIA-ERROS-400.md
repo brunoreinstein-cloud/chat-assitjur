@@ -51,6 +51,18 @@ O **Request URL** indica a API (ex.: `/api/chat`, `/api/files/upload`).
 
 **Nota:** `rate_limit:chat` e `forbidden:chat` devolvem 429 e 403, não 400. Para 400 no chat, os códigos acima são os relevantes.
 
+### DELETE /api/chat — comportamento 404 vs 403
+
+Ao apagar um chat (`DELETE /api/chat?id=...`), o servidor deve distinguir:
+
+| Situação | Código esperado | Interpretação pelo cliente |
+|----------|-----------------|----------------------------|
+| Chat existe e o utilizador é dono | 200 | Chat apagado. |
+| Chat não existe (id inválido ou já apagado) | **404** | Recurso não encontrado — o cliente pode tratar como "já removido" ou atualizar a lista. |
+| Chat existe mas o utilizador não é dono | **403** | Sem permissão para apagar este chat. |
+
+Se o servidor devolver **403** quando o chat não existe, o utilizador interpreta erroneamente como "não tenho permissão" em vez de "chat inexistente". A rota deve devolver **404** quando o chat não for encontrado (independentemente de ownership). Ver `app/(chat)/api/chat/route.ts` (handler DELETE).
+
 ---
 
 ## Upload de ficheiros

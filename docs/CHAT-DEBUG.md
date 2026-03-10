@@ -63,18 +63,18 @@ Permite confirmar agente, modelo, documentos da base de conhecimento e anexos.
 
 **Identificar qual query do batch é o gargalo:** no terminal, a linha `[chat-timing] dbBatch: X done in Yms` com **Y mais alto** (ou `X timeout após 12000ms`) indica a query mais lenta. Ver **docs/DB-TIMEOUT-TROUBLESHOOTING.md** sec. 8 (Como identificar o gargalo).
 
-### Causas de «A demorar mais do que o habitual» (50s sem resposta)
+### Causas de «A demorar mais do que o habitual» (5s sem resposta)
 
-A UI mostra este aviso quando o pedido está em `submitted` há ≥50s. As causas podem ser **antes** do modelo (preStream) ou **no modelo/rede**:
+A UI mostra este aviso quando o pedido está em `submitted` há ≥5s. As causas podem ser **antes** do modelo (preStream) ou **no modelo/rede**:
 
-| Fase | Onde ver (DEBUG_CHAT) | Causa provável | O que fazer |
-|------|------------------------|----------------|-------------|
-| **dbBatch** | `preStreamPhases.dbBatch` alto (ex.: 12000) | Cold start da BD ou queries lentas; várias `timeout após 12000ms` | Aquecer a ligação (`pnpm db:ping` ou 2.º pedido); ver **docs/DB-TIMEOUT-TROUBLESHOOTING.md**. Com fallbacks o batch termina em ~12s e segue. |
-| **validationRag** | `preStreamPhases.validationRag` alto | RAG (embeddings + busca vetorial), muitos documentos ou ficheiros do arquivo | Reduzir documentos na base de conhecimento ou anexos; verificar latência do serviço de embeddings. |
-| **saveMessages** | `preStreamPhases.saveMessages` alto | Gravar mensagem do utilizador na BD lenta | Mesma BD que dbBatch; cold start ou rede. |
-| **contextConvert** | `preStreamPhases.contextConvert` alto | Edição de contexto, estimativa de tokens, conversão para o modelo | Mensagens ou contexto muito grandes; considerar limitar tamanho. |
-| **execute (modelo)** | `execute started` aparece mas demora até sair texto | Latência do modelo (first token), rede para o AI Gateway, ou modelo de raciocínio («A pensar») | Modelos reasoning: 30s–1 min em "A pensar" é normal. Outros: ver **GET /api/health/ai** (latência do Gateway). |
-| **Stream no cliente** | `execute started` e `onFinish` no servidor, mas UI não atualiza | Rede, proxy ou cliente a não consumir o stream | DevTools → Network: pedido a `/api/chat` deve ser chunked; Console para erros. |
+| Fase | Onde ver (DEBUG_CHAT) | Valor típico (normal) | Valor preocupante | Causa provável | O que fazer |
+|------|------------------------|------------------------|-------------------|----------------|-------------|
+| **dbBatch** | `preStreamPhases.dbBatch` | &lt; 500 ms (BD quente) | &gt; 5000 ms | Cold start da BD ou queries lentas; várias `timeout após 12000ms` | Aquecer a ligação (`pnpm db:ping` ou 2.º pedido); ver **docs/DB-TIMEOUT-TROUBLESHOOTING.md**. Com fallbacks o batch termina em ~12s e segue. |
+| **validationRag** | `preStreamPhases.validationRag` | &lt; 1000 ms | &gt; 3000 ms | RAG (embeddings + busca vetorial), muitos documentos ou ficheiros do arquivo | Reduzir documentos na base de conhecimento ou anexos; verificar latência do serviço de embeddings. |
+| **saveMessages** | `preStreamPhases.saveMessages` | &lt; 200 ms | &gt; 1000 ms | Gravar mensagem do utilizador na BD lenta | Mesma BD que dbBatch; cold start ou rede. |
+| **contextConvert** | `preStreamPhases.contextConvert` | &lt; 500 ms | &gt; 3000 ms | Edição de contexto, estimativa de tokens, conversão para o modelo | Mensagens ou contexto muito grandes; considerar limitar tamanho. |
+| **execute (modelo)** | `execute started` aparece mas demora até sair texto | — | — | Latência do modelo (first token), rede para o AI Gateway, ou modelo de raciocínio («A pensar») | Modelos reasoning: 30s–1 min em "A pensar" é normal. Outros: ver **GET /api/health/ai** (latência do Gateway). |
+| **Stream no cliente** | `execute started` e `onFinish` no servidor, mas UI não atualiza | — | — | Rede, proxy ou cliente a não consumir o stream | DevTools → Network: pedido a `/api/chat` deve ser chunked; Console para erros. |
 
 Se **todas** as queries do batch fizerem `timeout após 12000ms` e `dbBatch` ≈ 12s, o gargalo é a **primeira ligação à BD** (cold start); o 2.º pedido costuma ser bem mais rápido.
 
@@ -85,7 +85,7 @@ Se **todas** as queries do batch fizerem `timeout após 12000ms` e `dbBatch` ≈
 | Resposta nunca aparece | `execute started` não chega a aparecer | Travagem em alguma fase antes do stream (auth, BD, RAG, saveMessages, context). Ver qual fase tem o último `timing` e o valor de `preStreamPhases`. |
 | 400 «base de dados não respondeu a tempo» | Log `[chat] dbBatch timeout or error: DB_BATCH_TIMEOUT` | O batch excedeu 120s (raro com timeouts por query). Ver **docs/DB-TIMEOUT-TROUBLESHOOTING.md**: identificar o gargalo (sec. 7), POSTGRES_URL, `pnpm db:ping`, cold start, pooler (porta 6543). |
 | Demora muito até aparecer texto | `preStream (total antes do stream)` ou `validationRag` / `dbBatch` muito altos | BD lenta, RAG (embedding + vector search) lento, ou muitos documentos. |
-| Mensagem «A demorar mais do que o habitual» (após 50s) | Ver secção abaixo | Várias causas possíveis; usar DEBUG_CHAT e `preStreamPhases` para ver onde está o tempo. |
+| Mensagem «A demorar mais do que o habitual» (após 5s) | Ver secção abaixo | Várias causas possíveis; usar DEBUG_CHAT e `preStreamPhases` para ver onde está o tempo. |
 | Aparece "execute started" mas nada no cliente | Rede, proxy ou cliente a não consumir o stream | Verificar erros no browser (Network, Console) e se a resposta é stream (chunked). |
 | Resposta cortada ou erro no fim | Logs de `onFinish` ou erros 57014 | Timeout na BD (ver docs/API-CHAT-LATENCY.md) ou falha ao guardar mensagens/créditos. |
 
@@ -98,7 +98,7 @@ Com debug ativo, o servidor envia um chunk de dados no início do stream:
 - **Tipo:** `data-chat-debug`
 - **Dados:** `{ preStreamMs, executeStartedMs }`
 
-O cliente pode usar estes valores para mostrar na UI, por exemplo: *"Preparação: 1.9s; a aguardar resposta do modelo..."*. A implementação do consumo deste chunk fica no componente que usa o hook do chat (ex.: procurar por `useChat` e por eventos do stream).
+O cliente pode usar estes valores para mostrar na UI, por exemplo: *"Preparação: 1.9s; a aguardar resposta do modelo..."*. **Onde consumir:** os chunks chegam em `components/chat.tsx` via o callback `onData` do `useChat` (linha ~526), que os adiciona ao estado partilhado do stream; o processamento por tipo faz-se em `components/data-stream-handler.tsx`. O tipo `data-chat-debug` não tem handler próprio — para exibir `preStreamMs`/`executeStartedMs` na UI é necessário acrescentar um `case` para `data-chat-debug` em `DataStreamHandler`.
 
 ---
 
@@ -116,7 +116,7 @@ Se a resposta **fica em "A pensar"** e não aparece texto:
 - **O que o projeto faz:**
   - O *budget* de thinking foi definido em **4 000 tokens** (em vez de 10 000) para que a resposta em texto tenda a aparecer mais cedo.
   - Se o stream terminar **sem nenhum texto** (só raciocínio), a UI mostra: "O modelo concluiu o raciocínio mas não devolveu texto. Tenta novamente ou escolhe outro modelo."
-  - Após **cerca de 50 segundos** em "A pensar", a UI mostra o aviso "A demorar mais do que o habitual" e um link **Cancelar pedido** para interromper o pedido.
+  - Após **cerca de 5 segundos** em "A pensar", a UI mostra o aviso "A demorar mais do que o habitual" e um link **Cancelar pedido** para interromper o pedido.
 - **Se continuar preso:** ativa `DEBUG_CHAT=true` e confirma no terminal se aparecem `execute started` e depois `onFinish`. Se não aparecer `onFinish`, o pedido pode estar a falhar no modelo ou na rede.
 
 ---
@@ -128,7 +128,7 @@ Quando **nenhum** agente (Revisor, Redator, Assistente, etc.) devolve resposta:
 1. **Confirmar que o pedido chega ao modelo**  
    Ativa `DEBUG_CHAT=true` e envia uma mensagem. No terminal:
    - Se aparecer **`[chat-debug] timing: execute started`** → o servidor chegou a chamar o AI Gateway; o problema pode ser rede, resposta do modelo ou consumo do stream no cliente.
-   - Se **não** aparecer `execute started` → a travagem está **antes** do modelo. Ordem típica: `dbBatch` (~45s com fallbacks) → **saveChat** (quando é novo chat; em dev tem timeout 15s) → validationRag → saveMessages → `execute started`. Ver qual fase é a última a aparecer nos logs.
+   - Se **não** aparecer `execute started` → a travagem está **antes** do modelo. Ordem típica: `dbBatch` (~12s com fallbacks) → **saveChat** (quando é novo chat) → validationRag → saveMessages → `execute started`. Ver qual fase é a última a aparecer nos logs.
 
 2. **AI Gateway e autenticação**  
    - **Local:** `AI_GATEWAY_API_KEY` em `.env.local` (obrigatório). Criar em [AI Gateway API Keys](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai-gateway%2Fapi-keys).
@@ -136,7 +136,7 @@ Quando **nenhum** agente (Revisor, Redator, Assistente, etc.) devolve resposta:
    - **Na Vercel:** key nas variáveis do projeto ou OIDC; sem key válida o SDK devolve erro de autenticação e o stream não arranca.
 
 3. **BD lenta a bloquear depois do batch**  
-   Com fallbacks, o batch termina em ~45s. Se o **chat for novo** (getChatById devolveu null), em seguida o servidor chama **saveChat**. Em **dev** esse saveChat tem timeout de 15s; se a BD continuar lenta, após 15s o fluxo segue na mesma e o modelo é chamado. Em produção saveChat não tem timeout — BD muito lenta pode atrasar tudo até ao limite da rota (ex.: 120s).
+   Com fallbacks, o batch termina em ~12s. Se o **chat for novo** (getChatById devolveu null), em seguida o servidor chama **saveChat** (await sem timeout). BD muito lenta pode atrasar tudo até ao limite da rota (ex.: 120s).
 
 4. **Resumo rápido**  
    - Ver no terminal: `execute started` sim/não.  
@@ -231,7 +231,7 @@ Ao abrir `/chat` (ou `/chat?agent=...`), o cliente faz várias chamadas em paral
 |--------|------|-------------------|
 | **GET /api/auth/session** | SessionProvider (next-auth) no root layout | Uma vez por carga. Evitar 2.ª chamada: `refetchOnWindowFocus={false}` no SessionProvider; na sidebar usar `user`/`isGuest` do servidor em vez de `useSession()`. |
 | **GET /api/health/db** | DbWarmup (layout do chat) | Baixa; fire-and-forget para aquecer a BD. Não bloqueia a UI. |
-| **GET /api/credits** | Sidebar + MultimodalInput (SWR com a mesma key) | Uma única request partilhada pelo SWR. Só quando há sessão. |
+| **GET /api/credits** | Sidebar + MultimodalInput (e outros: credits-balance, message) — SWR com a mesma key | SWR deduplica pedidos com a mesma key; pode haver 2 pedidos se os componentes montarem em momentos diferentes. Só quando há sessão. |
 | **GET /api/agents/custom** | Header/input (SWR) | Uma request partilhada; só quando o utilizador pode editar agentes. |
 
 ### Por que pode haver 2× GET /api/auth/session

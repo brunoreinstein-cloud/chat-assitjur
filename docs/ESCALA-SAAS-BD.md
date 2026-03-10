@@ -23,6 +23,7 @@ O stream **só começa** quando **todas** terminam (ou dão timeout aos 12s com 
 **Já implementado:**
 
 - Pooler (porta 6543) para menos conexões e reutilização.
+- Índice `Message_v2_chatId_role_createdAt_idx` para `getMessageCountByUserId` (migração 0023); ver `docs/DB-TIMEOUT-TROUBLESHOOTING.md` (secção 11).
 - Cron a cada 10 min (`GET /api/health/db`) para manter a BD ativa em produção.
 - DbWarmup ao abrir `/chat` para aquecer ligação antes da primeira mensagem.
 - Timeouts por query (12s) com fallback para o chat não bloquear indefinidamente.

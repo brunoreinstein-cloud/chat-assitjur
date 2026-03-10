@@ -80,9 +80,13 @@ export async function getDefaultRetrievalBackend(): Promise<VectorRetrievalBacke
 /** Lê RAG_MIN_SIMILARITY do env (0–1). Undefined se não definido ou inválido. */
 function getMinSimilarityFromEnv(): number | undefined {
   const raw = process.env.RAG_MIN_SIMILARITY?.trim();
-  if (!raw) return undefined;
+  if (!raw) {
+    return undefined;
+  }
   const value = Number.parseFloat(raw);
-  if (!Number.isFinite(value) || value <= 0 || value > 1) return undefined;
+  if (!Number.isFinite(value) || value <= 0 || value > 1) {
+    return undefined;
+  }
   return value;
 }
 
@@ -106,8 +110,7 @@ export async function retrieveKnowledgeContext(params: {
   if (queryEmbedding === null) {
     return [];
   }
-  const minSimilarity =
-    params.minSimilarity ?? getMinSimilarityFromEnv();
+  const minSimilarity = params.minSimilarity ?? getMinSimilarityFromEnv();
   return backend.getRelevantChunks({
     userId: params.userId,
     documentIds: params.documentIds,

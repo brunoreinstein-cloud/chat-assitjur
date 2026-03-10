@@ -8,7 +8,9 @@ export default defineConfig({
       "tests/agente-trabalhista/**/*.test.ts",
       "tests/lib/**/*.test.ts",
       "tests/api/**/*.test.ts",
+      "tests/**/*.test.ts",
     ],
+    exclude: ["tests/e2e/**"],
   },
   resolve: {
     alias: {

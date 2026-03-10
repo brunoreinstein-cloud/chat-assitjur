@@ -1,0 +1,332 @@
+__AssistJur__ __\.IA__ CONTENCIOSO TRABALHISTA *PRD \+ Especificação Técnica
+Completa* Módulo: Fluxo de Processos Trabalhistas com IA Generativa Versão
+__1\.0\.0__ Data __Março 2026__ Status __Draft para validação__ Produto
+__AssistJur\.IA__ # __Sumário__ # __1\. Visão Geral do Produto__ ## __1\.1
+Resumo Executivo__ O AssistJur\.IA é uma plataforma SaaS de assistência jurídica
+com IA generativa, voltada para escritórios de advocacia trabalhista de médio
+porte no Brasil\. O módulo de Contencioso Trabalhista automatiza e estrutura o
+fluxo completo de gestão de ações trabalhistas — do recebimento da petição
+inicial até o protocolo da contestação — reduzindo o tempo médio de elaboração
+de peças em até 60% e aumentando a consistência técnica das defesas\. Este
+documento descreve os requisitos funcionais e não\-funcionais, a arquitetura
+técnica, as especificações de banco de dados, as APIs, o modelo de dados e o
+roadmap de implementação do módulo\. ## __1\.2 Problema que Resolve__
+Escritórios trabalhistas de médio porte \(10–50 advogados\) enfrentam três
+gargalos críticos: - Dispersão de informações: petições, documentos, prazos e
+estratégias ficam em e\-mails, WhatsApp, pastas compartilhadas e sistemas
+distintos, sem rastreabilidade\. - Retrabalho na elaboração de peças: cada
+advogado redige contestações do zero, sem reutilização de teses vencedoras ou
+templates estruturados por vara e segmento\. - Passivo opaco: clientes não têm
+visibilidade consolidada do risco processual, dificultando decisões de provisão
+contábil e estratégias de acordo\. ## __1\.3 Proposta de Valor__ __Dimensão__
+__Situação Atual__ __Com AssistJur\.IA__ Tempo médio p/ contestação 8–12
+horas/advogado 3–5 horas \(redução de 60%\) Rastreabilidade Nenhuma ou manual
+Histórico completo por processo Reutilização de teses Memória individual Base de
+conhecimento com RAG Transparência com cliente Reuniões esporádicas Portal com
+passivo em tempo real Análise de risco Subjetiva, por advogado Estruturada com
+score por verba # __2\. Personas e Casos de Uso__ ## __2\.1 Personas Primárias__
+### __P1 — Advogado Sênior / Sócio__ __Atributo__ __Descrição__ Perfil 35–50
+anos, 10\+ anos de experiência, OAB ativa, cliente de relacionamento Objetivo
+Supervisionar qualidade técnica, aprovar estratégias de alto risco, manter
+relacionamento com cliente Dor principal Gasta 30% do tempo revisando peças de
+juniores em vez de atuar estrategicamente Ganho esperado Revisão focada em casos
+relevantes, relatórios automáticos para cliente, visão consolidada do passivo
+Acesso Full access — todos os processos, aprovação de estratégias, painel
+executivo ### __P2 — Advogado Pleno__ __Atributo__ __Descrição__ Perfil 28–40
+anos, 5–10 anos de experiência, responsável pela maioria das contestações
+Objetivo Elaborar defesas de qualidade no menor tempo possível, manter reputação
+técnica Dor principal Pesquisa de jurisprudência consome 40% do tempo;
+dificuldade em acessar teses internas Ganho esperado Templates inteligentes,
+pesquisa semântica de precedentes, checklist automático de documentos Acesso
+Processos da sua carteira, elaboração e revisão de peças, banco de teses ###
+__P3 — Paralegal / Assistente Jurídico__ __Atributo__ __Descrição__ Perfil 22–30
+anos, recém\-formado ou bacharel, responsável por triagem e cadastro Objetivo
+Receber e cadastrar processos rapidamente sem erros, notificar advogados dentro
+do prazo Dor principal Processo manual e repetitivo, risco de perder prazo por
+falha humana Ganho esperado Captura automática de intimações, formulário guiado,
+alertas configuráveis Acesso Recebimento e protocolo; sem acesso à estratégia e
+elaboração ### __P4 — Cliente \(Empresa / RH\)__ __Atributo__ __Descrição__
+Perfil Gerente jurídico ou de RH, não\-advogado, precisa prestar contas à
+diretoria Objetivo Entender o passivo trabalhista total, antecipar provisões
+contábeis, acompanhar andamentos Dor principal Recebe informações fragmentadas;
+não sabe o risco real do passivo Ganho esperado Portal self\-service com painel
+de passivo, relatório mensal em PDF, alertas de movimentação Acesso Read\-only —
+portal do cliente, relatórios, andamentos dos próprios processos # __3\.
+Requisitos Funcionais__ ## __3\.1 Módulo de Gestão de Processos__ ### __RF\-01 —
+Cadastro de Processo__ O sistema deve permitir o cadastro manual de processos
+trabalhistas com os seguintes campos obrigatórios e opcionais: __Campo__
+__Tipo__ __Obrigatório__ __Validação__ Número dos autos varchar\(30\) Sim
+Formato CNJ: NNNNNNN\-DD\.AAAA\.J\.TT\.OOOO Reclamante varchar\(200\) Sim Min 3
+caracteres Reclamada varchar\(200\) Sim Min 3 caracteres Vara varchar\(120\) Não
+Texto livre Comarca varchar\(100\) Não Texto livre Tribunal varchar\(20\) Sim
+Default: TRT Rito enum Sim ordinário | sumaríssimo | especial Valor da causa
+numeric\(15,2\) Não Positivo Prazo fatal timestamp Não Data futura Contexto
+extra text Não Injetado no prompt do agente ### __RF\-02 — Fluxo de Fases
+\(State Machine\)__ Cada processo percorre as seguintes fases de forma
+sequencial, com possibilidade de avanço manual ou via tool call do agente:
+__Fase__ __Código__ __Gatilho de Entrada__ __Gatilho de Saída__ Recebimento
+recebimento Cadastro manual ou captura automática de intimação Processo
+cadastrado e advogado notificado Análise de Risco analise\_risco Advogado inicia
+sessão com AgentRisk Score de risco e provisão aprovados pelo sócio Estratégia
+estrategia Risco aprovado; briefing com cliente realizado Linha de defesa e
+margem de acordo registradas Elaboração elaboracao Estratégia aprovada;
+documentos instruídos Minuta de contestação concluída Revisão revisao Minuta
+gerada; solicitação de revisão disparada Peça aprovada pelo sênior / sócio
+Protocolo protocolo Peça aprovada e assinada digitalmente Recibo de protocolo
+salvo no GED; cliente notificado Audiência audiencia Designação de pauta
+capturada pelo robô Resultado registrado Sentença sentenca Publicação capturada
+Análise de recorribilidade concluída Recurso recurso Decisão de recorrer
+aprovada RO / TST protocolado Encerrado encerrado Arquivamento, acordo
+homologado ou CDA quitado — ### __RF\-03 — Análise de Risco por Verba__ O
+AgentRisk deve produzir, para cada verba pleiteada na petição inicial, uma ficha
+estruturada com: - Identificação da verba \(ex: horas extras, FGTS, dano moral\)
+- Classificação de risco: Remoto \( &lt; 20% prob\.\) | Possível \(20–60%\) |
+Provável \(> 60%\) - Valor estimado mínimo e máximo de condenação \(baseado em
+jurisprudência\) - Tese defensiva sugerida com citação de precedente - Score
+global consolidado e valor de provisão recomendado ### __RF\-04 — Base de
+Conhecimento Jurídico \(RAG\)__ O sistema deve manter uma base vetorial de teses
+e precedentes consultável semanticamente pelos agentes: - Ingestão de: acórdãos
+do TRT/TST, OJs e Súmulas do TST, peças vencedoras internas, pareceres -
+Chunking semântico por verba, vara e rito - Busca por similaridade \(pgvector\)
+com rerankng por relevância contextual - Atualização mensal automática via
+scraping do DataJud e Jusbrasil ### __RF\-05 — Elaboração de Peças com IA__ O
+AgentDrafter deve suportar a elaboração das seguintes peças processuais:
+__Peça__ __Gatilho__ __Modelo__ __Prazo Padrão__ Contestação \(Ordinário\) Fase
+elaboracao claude\-sonnet\-4\-6 15 dias úteis Contestação \(Sumaríssimo\) Fase
+elaboracao claude\-sonnet\-4\-6 15 dias úteis Recurso Ordinário Fase recurso
+claude\-sonnet\-4\-6 8 dias Embargos de Declaração Análise da sentença
+claude\-haiku\-4\-5 5 dias Razões Finais Após instrução claude\-sonnet\-4\-6 10
+dias Impugnação à liquidação Fase execução claude\-sonnet\-4\-6 15 dias ###
+__RF\-06 — Painel de Passivo do Cliente__ O módulo de passivo deve exibir, por
+cliente: - Total de processos ativos com distribuição por fase - Breakdown de
+provisão: Remoto \(0%\), Possível \(50%\), Provável \(100%\) - Histórico de
+acordos: valor pleiteado vs\. valor pago, % de desconto obtido - Relatório
+mensal em PDF branded, enviado automaticamente por e\-mail - Alerta automático
+quando o passivo total ultrapassa limite definido pelo cliente ### __RF\-07 —
+Chat por Processo e Agente__ O sistema deve manter histórico de conversas
+separado por combinação processo × agente, permitindo: - Retomada de contexto em
+sessões futuras \(persistência no banco\) - Injeção automática do contexto do
+processo no system prompt a cada request - Kickoff automático com mensagem
+contextualizada ao abrir uma nova sessão - Sugestões de prompt rápido baseadas
+na fase atual do processo # __4\. Requisitos Não\-Funcionais__ ## __4\.1
+Performance__ __Requisito__ __Métrica__ __Target__ Tempo de resposta \(1ª
+token\) P95 &lt; 1,5 segundos Tempo total de elaboração de contestação Média
+&lt; 45 segundos \(streaming\) Carregamento da página de chat P95 &lt; 800ms
+\(Vercel Edge\) Consulta de passivo do cliente P95 &lt; 300ms \(Neon, índice\)
+Upload de PDF ao Vercel Blob Média &lt; 3 segundos para PDFs &lt; 10MB ## __4\.2
+Segurança e LGPD__ - Autenticação via Auth\.js com sessões seguras \(JWT
+httpOnly\) - Controle de acesso por perfil \(RBAC\) — 5 perfis: paralegal,
+adv\_junior, adv\_pleno, adv\_senior, socio, cliente - Criptografia em trânsito
+\(TLS 1\.3\) e em repouso \(AES\-256 no Neon e Vercel Blob\) - Todos os dados
+armazenados em servidores com localização no Brasil \(São Paulo — AWS
+sa\-east\-1\) - ROPA \(Registro de Operações de Tratamento de Dados\)
+atualizado; DPO designado - Retenção de dados: processos encerrados retidos por
+5 anos; histórico de chat por 2 anos - Logs de auditoria imutáveis para todas as
+ações de escrita \(criação, edição, aprovação, protocolo\) ## __4\.3
+Disponibilidade e Confiabilidade__ - SLA de disponibilidade: 99,5% \( &lt; 22h
+de downtime/mês\) - Backup automático diário do banco Neon com retenção de 90
+dias - Failover automático de modelo: se claude\-sonnet indisponível, fallback
+para gpt\-4o via AI Gateway - Monitoramento de latência e erros de streaming com
+alertas no Slack \(Vercel Observability\) ## __4\.4 Escalabilidade__ -
+Arquitetura serverless \(Next\.js API Routes na Vercel\): escala automaticamente
+por demanda - Connection pooling no Neon via PgBouncer para suportar picos de
+até 500 conexões simultâneas - Rate limiting na rota /api/chat: 60
+requisições/minuto por usuário - Processamento de PDFs grandes \(> 5MB\) de
+forma assíncrona com fila \(Vercel Queue ou Upstash\) # __5\. Arquitetura
+Técnica__ ## __5\.1 Stack Principal__ __Camada__ __Tecnologia__
+__Responsabilidade__ __Versão__ Frontend Next\.js 15 \+ React 19 App Router,
+RSC, Server Actions ^15\.x UI Components shadcn/ui \+ Tailwind CSS Design
+system, acessibilidade latest AI Streaming Vercel AI SDK useChat, streamText,
+generateObject ^4\.x Modelos Anthropic \(Claude\) Haiku \(triagem\), Sonnet
+\(análise/redação\) claude\-sonnet\-4\-6 Roteamento de modelos Vercel AI Gateway
+Model routing, fallback, cache latest Banco de dados Neon Serverless Postgres
+Dados transacionais, histórico de chat Postgres 16 ORM Drizzle ORM Schema,
+queries, migrations ^0\.30\.x Busca vetorial pgvector \(Neon\) RAG para base de
+teses v0\.7\+ File Storage Vercel Blob PDFs, peças, documentos latest
+Autenticação Auth\.js v5 Sessões, RBAC, providers ^5\.x Deploy Vercel \(Pro\)
+Edge network, previews, observability latest Monitoramento Vercel Analytics \+
+Sentry Performance, erros, logs latest ## __5\.2 Fluxo de Dados — Request de
+Chat__ __Passo__ __Componente__ __Ação__ __Output__ 1 Browser \(useChat\) Envia
+\{ messages, processoId, agentId \} POST /api/chat 2 Middleware Auth\.js Valida
+sessão e role do usuário session\.user\.role 3 Route Handler Valida schema Zod;
+extrai processoId e agentId Dados validados 4 getProcessoContexto\(\) Busca
+processo \+ verbas \+ peças no Neon String de contexto 5 getChatHistory\(\)
+Busca histórico de chat processo × agente CoreMessage\[\] 6
+buildSystemPrompt\(\) Monta system prompt com contexto injetado string 7
+streamText\(\) Chama Claude com tools registradas; inicia stream ReadableStream
+8 onFinish callback Persiste resposta do assistente no banco INSERT
+chat\_history 9 Browser \(useChat\) Recebe stream e renderiza tokens
+progressivamente UI atualizada ## __5\.3 Model Routing por Agente__ __Agente__
+__Modelo Primário__ __Modelo Fallback__ __Justificativa__ AgentIngestor
+\(recebimento\) claude\-haiku\-4\-5 gpt\-4o\-mini Tarefa estruturada; velocidade
+prioritária AgentRisk \(análise de risco\) claude\-sonnet\-4\-6 gpt\-4o
+Raciocínio jurídico \+ generateObject AgentStrategy \(estratégia\)
+claude\-sonnet\-4\-6 gpt\-4o Síntese de teses \+ histórico de precedentes
+AgentDrafter \(elaboração\) claude\-sonnet\-4\-6 gpt\-4o Redação longa com
+contexto extenso AgentRevisor \(revisão\) claude\-sonnet\-4\-6 gpt\-4o Análise
+crítica \+ checklist estruturado AgentProtocol \(protocolo\) claude\-haiku\-4\-5
+gpt\-4o\-mini Confirmação simples; custo otimizado # __6\. Especificação do
+Banco de Dados__ ## __6\.1 Tabelas Principais__ ### __processos__ __Coluna__
+__Tipo__ __Nullable__ __Descrição__ id uuid PK Não Identificador único
+\(defaultRandom\) numero\_autos varchar\(30\) Não Número CNJ do processo
+reclamante varchar\(200\) Não Nome do reclamante reclamada varchar\(200\) Não
+Razão social da reclamada vara varchar\(120\) Sim Nome da vara trabalhista
+comarca varchar\(100\) Sim Comarca tribunal varchar\(20\) Sim Default: TRT rito
+enum\(rito\) Sim ordinario | sumarissimo | especial fase enum\(fase\_processo\)
+Sim Fase atual do processo \(state machine\) risco\_global enum\(risco\_nivel\)
+Sim remoto | possivel | provavel valor\_causa numeric\(15,2\) Sim Valor da causa
+em R$ provisao numeric\(15,2\) Sim Provisão contábil recomendada prazo\_fatal
+timestamp Sim Data limite para contestação cliente\_id uuid FK Sim Referência ao
+cliente adv\_responsavel\_id uuid FK Sim Referência ao usuário responsável
+contexto\_extra text Sim Texto livre injetado no system prompt ativo boolean Não
+Soft delete; default true created\_at timestamp Não defaultNow\(\) updated\_at
+timestamp Não Atualizado a cada modificação ### __risco\_por\_verba__ __Coluna__
+__Tipo__ __Descrição__ id uuid PK Identificador processo\_id uuid FK Cascata:
+onDelete = CASCADE verba varchar\(120\) Ex: horas\_extras, fgts, dano\_moral
+risco enum\(risco\_nivel\) remoto | possivel | provavel valor\_min
+numeric\(15,2\) Estimativa mínima de condenação valor\_max numeric\(15,2\)
+Estimativa máxima de condenação tese text Tese defensiva sugerida pelo agente
+### __pecas__ __Coluna__ __Tipo__ __Descrição__ id uuid PK Identificador
+processo\_id uuid FK Cascata: onDelete = CASCADE tipo varchar\(40\) contestacao
+| ro | embargos | razoes\_finais versao integer Default 1; incrementado a cada
+revisão status enum\(status\_peca\) rascunho | em\_revisao | aprovado |
+protocolado blob\_url text URL do arquivo no Vercel Blob aprovado\_por uuid FK
+Usuário que aprovou a peça created\_at timestamp defaultNow\(\) ###
+__chat\_history\_processo__ __Coluna__ __Tipo__ __Descrição__ id uuid PK
+Identificador processo\_id uuid FK Cascata: onDelete = CASCADE agent\_id
+varchar\(40\) recebimento | analise\_risco | estrategia | elaboracao | revisao |
+protocolo role varchar\(12\) user | assistant content text NOT NULL Conteúdo da
+mensagem created\_at timestamp defaultNow\(\) — usado para ordenação ## __6\.2
+Índices__ __Índice__ __Tabela__ __Colunas__ __Tipo__ processos\_cliente\_idx
+processos cliente\_id B\-Tree processos\_fase\_idx processos fase B\-Tree
+processos\_numero\_idx processos numero\_autos B\-Tree \(unique\)
+chat\_processo\_agent\_idx chat\_history\_processo \(processo\_id, agent\_id\)
+B\-Tree composto teses\_embedding\_idx teses\_conhecimento embedding IVFFlat
+\(pgvector\) # __7\. Especificação de API__ ## __7\.1 Endpoints REST / Route
+Handlers__ __Endpoint__ __Método__ __Auth__ __Descrição__ POST /api/chat POST
+Qualquer usuário autenticado Envia mensagem ao agente; retorna stream SSE GET
+/api/processos GET adv\_pleno\+ Lista processos ativos do escritório
+\(paginado\) GET /api/processos/:id GET adv\_pleno\+ Retorna processo com verbas
+e peças GET /api/processos/:id/contexto GET adv\_pleno\+ Retorna string de
+contexto para debug GET /api/processos/:id/passivo GET socio | cliente Retorna
+passivo consolidado do cliente GET /api/processos/:id/chat/:agentId GET
+adv\_pleno\+ Retorna histórico de chat processo × agente DELETE
+/api/processos/:id/chat/:agentId DELETE adv\_senior\+ Limpa histórico de chat ##
+__7\.2 Server Actions \(Next\.js\)__ __Action__ __Módulo__ __Parâmetros__
+__Retorno__ createProcessoAction processos\.ts CreateProcessoInput \(Zod\) \{
+success, data: Processo \} avancaFaseAction processos\.ts \{ processoId, fase,
+riscoGlobal?, provisao? \} \{ success, data: Processo \}
+getProcessoContextoAction processos\.ts processoId: string \{ success, data:
+Processo \} upsertRiscoVerbaAction processos\.ts \{ processoId, verbas:
+RiscoVerba\[\] \} \{ success, data: RiscoVerba\[\] \} savePecaAction pecas\.ts
+\{ processoId, tipo, blobUrl, versao \} \{ success, data: Peca \}
+aprovaPecaAction pecas\.ts \{ pecaId, aprovadoPor \} \{ success, data: Peca \}
+## __7\.3 Schema de Request — POST /api/chat__ Corpo da requisição
+\(application/json\): __Campo__ __Tipo__ __Descrição__ messages Message\[\]
+Array de mensagens no formato CoreMessage do Vercel AI SDK processoId string
+\(uuid\) ID do processo ativo\. Obrigatório\. Usado para buscar contexto e
+histórico\. agentId enum recebimento | analise\_risco | estrategia | elaboracao
+| revisao | protocolo 🔒 O backend nunca confia no contexto enviado pelo
+cliente\. O processoId é usado para buscar o contexto diretamente do banco de
+dados no servidor, garantindo que o usuário não possa manipular o contexto do
+processo\. # __8\. Especificação de Componentes UI__ ## __8\.1 Layout da Página
+de Chat__ A interface segue o padrão two\-panel do template vercel/chatbot,
+adaptado para o contexto jurídico: __Zona__ __Componente__ __Dimensão__
+__Responsabilidade__ Sidebar esquerda ProcessoPanel 280px \(fixo\) Seleção de
+processo, cadastro de novo, seletor de agente/fase Header do chat ChatTopbar
+52px \(fixo\) Número do processo, partes, badge de risco, badge de provisão,
+toggle verbas Painel de verbas VerbaPanel Colapsável \(80px\) Cards de verba com
+risco e valor estimado Área de mensagens MessageList Flex grow Histórico de chat
+com renderização de markdown jurídico Sugestões PromptSuggestions 40px Chips de
+prompts rápidos contextuais à fase Input ChatInput 80px \(fixo\) Textarea
+multi\-linha, botão enviar, indicador de agente ativo ## __8\.2 ProcessoPanel —
+Estados__ __Estado__ __View__ __Comportamento__ Nenhum processo Lista vazia
+Exibe CTA "Criar primeiro processo" Selecionando Lista com busca Filtro por
+número, reclamante, reclamada; destaque do ativo Processo ativo Badge no topo
+Número \+ partes \+ fase com dot animado Criando novo Formulário Validação
+inline; botão Salvar dispara createProcessoAction Salvando Loading state Botão
+desabilitado; spinner; revalidatePath após sucesso ## __8\.3 RBAC — Visibilidade
+de Componentes__ __Componente / Ação__ __paralegal__ __adv\_junior__
+__adv\_pleno__ __adv\_senior__ __socio__ Cadastrar processo Sim Sim Sim Sim Sim
+Ver análise de risco Não Não Sim Sim Sim Aprovar estratégia Não Não Não Sim Sim
+Elaborar peça Não Sim Sim Sim Sim Revisar e aprovar peça Não Não Não Sim Sim
+Protocolar processo Sim Não Não Não Sim Ver painel de passivo Não Não Sim Sim
+Sim Limpar histórico de chat Não Não Não Sim Sim Admin \(todos os processos\)
+Não Não Não Não Sim # __9\. Roadmap de Implementação__ ## __9\.1 Sprints \(2
+semanas cada\)__ __Sprint__ __Período__ __Entregas__ __Critério de Aceite__
+Sprint 1 Semanas 1–2 Schema Drizzle \+ migrations; CRUD básico de processos;
+Server Actions createProcessoAction e avancaFaseAction Processo criado e
+persistido; fase avança corretamente via action Sprint 2 Semanas 3–4 Rota
+/api/chat com streamText; injeção de contexto via getProcessoContexto;
+persistência de histórico via onFinish Chat funcional com contexto do processo;
+histórico salvo e recuperado Sprint 3 Semanas 5–6 Componente ProcessoPanel
+\(selecionar \+ criar\); hook useProcessoChat; layout two\-panel com shadcn/ui
+Usuário seleciona processo, abre chat, vê streaming; cadastra novo processo pelo
+formulário Sprint 4 Semanas 7–8 AgentRisk com generateObject \(Zod schema de
+verbas\); painel de risco na UI; upsertRiscoVerbas Agente gera score
+estruturado; verbas persistidas; UI exibe tabela de risco Sprint 5 Semanas 9–10
+AgentDrafter com templates de contestação; integração Vercel Blob para PDFs;
+fluxo de aprovação de peças Minuta gerada, salva no Blob, link exibido no chat;
+sênior aprova via action Sprint 6 Semanas 11–12 RBAC completo via Auth\.js
+middleware; painel de passivo do cliente; relatório PDF mensal Permissões
+bloqueam ações corretamente; painel exibe provisão; PDF gerado e enviado Sprint
+7 Semanas 13–14 Base de conhecimento com pgvector; tool searchTeses no
+AgentStrategy; atualização mensal automática Agente busca precedentes
+semanticamente; resultados relevantes nas 3 primeiras posições Sprint 8 Semanas
+15–16 Testes E2E \(Playwright\), load tests, monitoramento Sentry, documentação
+de deploy Cobertura > 80% nos fluxos críticos; latência P95 dentro do target; 0
+erros críticos em staging ## __9\.2 Dependências e Riscos__ __Risco__
+__Probabilidade__ __Impacto__ __Mitigação__ Latência alta do Claude em pico
+Média Alto Fallback automático para GPT\-4o via AI Gateway; cache de respostas
+comuns Custo de tokens acima do orçamento Alta Médio Model routing \(Haiku para
+tarefas simples\); limite de tokens por request; cache de system prompts
+\(Anthropic prompt caching\) Qualidade das peças geradas insuficiente Média Alto
+Fluxo de revisão obrigatória pelo sênior; iteração de prompts por segmento e
+vara Complexidade do RBAC atrasando sprints Baixa Médio Implementar RBAC básico
+\(socio vs\. outros\) nos primeiros sprints; granularidade total no Sprint 6
+Resistência dos advogados à ferramenta Média Alto Onboarding presencial; mostrar
+redução de tempo com métricas reais; manter fluxo familiar ao ChatGPT # __10\.
+Métricas de Sucesso__ ## __10\.1 KPIs do Produto \(6 meses pós\-lançamento\)__
+__KPI__ __Baseline Atual__ __Target 3 meses__ __Target 6 meses__ Tempo médio de
+elaboração de contestação 10h 5h \(–50%\) 4h \(–60%\) Taxa de aprovação de peças
+sem revisão maior — 40% 65% NPS do advogado \(usuário\) — > 35 > 50 Processos
+cadastrados / escritório — > 50 > 150 DAU / MAU \(engajamento\) — > 40% > 60%
+Churn de escritórios no 1º trimestre — &lt; 10% &lt; 8% Custo médio de tokens
+por contestação — &lt; R$ 0,80 &lt; R$ 0,50 ## __10\.2 Eventos de Analytics a
+Rastrear__ - processo\_criado — \{ rito, tribunal, fase\_inicial \} -
+agente\_iniciado — \{ agentId, processoId, fase \} - peca\_gerada — \{ tipo,
+agentId, tokens\_used, tempo\_ms \} - peca\_aprovada — \{ tipo, nivel\_revisor,
+num\_revisoes \} - peca\_protocolada — \{ tipo, prazo\_restante\_dias \} -
+risco\_calculado — \{ risco\_global, num\_verbas, provisao \} -
+acordo\_registrado — \{ valor\_inicial, valor\_acordo, percentual\_desconto \} #
+__11\. Questões Abertas e Decisões Pendentes__ __\#__ __Questão__ __Opções__
+__Decisor__ __Prazo__ Q1 Integrar diretamente com PJe para captura de intimações
+ou usar middleware \(Escavador\)? A\) API PJe direta B\) Escavador API C\)
+Monitoramento manual assistido Sócio \+ Tech Sprint 1 Q2 Qual o limite de
+contexto máximo a injetar no prompt \(custo vs\. qualidade\)? A\) Últimas 20
+msgs B\) Últimas 40 msgs C\) Resumo automático acima de 40 Tech Sprint 2 Q3
+Assinatura digital de peças: ICP\-Brasil \(custo\) ou assinatura simples \(art\.
+10, MP 2\.200\)? A\) ICP\-Brasil via BirdID B\) Assinatura simples Auth\.js C\)
+Integração com D4Sign Sócio \+ Jurídico Sprint 5 Q4 Portal do cliente: parte do
+AssistJur\.IA ou app separado? A\) Mesmo app, rota /portal B\) Subdomínio
+separado C\) PDF por e\-mail apenas Sócio \+ Produto Sprint 6 Q5 Precificação do
+módulo: por processo, por assento ou flat? A\) R$ X/processo ativo B\) R$
+Y/advogado/mês C\) Flat por escritório Sócio \+ Comercial Sprint 8 # __12\.
+Glossário__ __Termo__ __Definição__ Contestação Peça processual de defesa
+apresentada pelo réu \(reclamada\) em resposta à petição inicial, dentro do
+prazo legal\. Passivo trabalhista Conjunto de contingências decorrentes de ações
+trabalhistas, com valor estimado de condenação para fins de provisão contábil\.
+RAG Retrieval\-Augmented Generation — técnica de enriquecer prompts de IA com
+documentos recuperados de uma base vetorial\. Rito ordinário Rito processual
+trabalhista padrão, sem limite de alçada; prazo de contestação de 15 dias
+úteis\. Rito sumaríssimo Rito simplificado para causas de até 40 salários
+mínimos; prazo de contestação de 15 dias úteis\. ICP\-Brasil Infraestrutura de
+Chaves Públicas Brasileira — padrão legal de assinatura eletrônica qualificada
+com validade jurídica plena\. pgvector Extensão do PostgreSQL para armazenamento
+e busca de vetores de embedding; usada para RAG na base de teses\. Tool \(AI
+SDK\) Função registrada no agente que pode ser chamada pelo modelo para executar
+ações externas \(ex: buscar dados, avançar fase\)\. State machine \(fluxo de
+fases\) Modelagem do ciclo de vida do processo como estados discretos com
+transições controladas\. RBAC Role\-Based Access Control — modelo de controle de
+acesso baseado em perfis de usuário\. *AssistJur\.IA — PRD \+ Spec v1\.0 —
+Documento confidencial de uso interno*

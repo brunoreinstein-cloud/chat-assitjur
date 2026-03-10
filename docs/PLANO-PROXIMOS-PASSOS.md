@@ -2,7 +2,7 @@
 
 Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. Atualizar este ficheiro quando prioridades ou estado mudarem.
 
-**Última atualização:** 2026-03-09 (RAG: análise template Vercel e threshold de similaridade em PLANO; BD/Auth: warmup guest, timeout 12s, historyFetcher; Workflow DevKit em WORKFLOW-DEVKIT-PROXIMOS-PASSOS.md.)
+**Última atualização:** 2026-03-09 (Revisão PRD AssistJur.IA: doc [ASSISTJUR-PRD-ALINHAMENTO.md](ASSISTJUR-PRD-ALINHAMENTO.md) com gaps e próximos passos priorizados; RAG, BD/Auth, Workflow DevKit em PLANO.)
 
 ---
 
@@ -10,7 +10,7 @@ Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. 
 
 | #   | Tarefa                                        | Detalhe                                                                                                                                 | Estado   |
 |-----|-----------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------|----------|
-| 1   | *(a definir)*                                 | Inserir aqui a próxima tarefa crítica assim que priorizada.                                                                             | —        |
+| 1   | **Decisão: evolução para “por processo”**    | Definir se o produto evolui para o modelo do PRD (entidade Processo, chat por processo×agente, fases, AgentRisk, passivo). Ver [ASSISTJUR-PRD-ALINHAMENTO.md](ASSISTJUR-PRD-ALINHAMENTO.md) § 4.                             | —        |
 
 ### 1.1 Concluído (arquivo)
 
@@ -42,11 +42,12 @@ Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. 
 | 3 | **Deploy** | Usar checklist antes de cada deploy; incluir `pnpm run prebuild` (lint + test:unit) no fluxo. | [pre-deploy-checklist.md](pre-deploy-checklist.md) |
 | 4 | **Skills (.agents)** | Executar `npx skills update` periodicamente; CI já faz `npx skills check` em push em main e semanalmente (.github/workflows/skills-check.yml). | [.agents/README.md](../.agents/README.md), [SKILLS_REPORT.md](SKILLS_REPORT.md) |
 | 5 | **Upgrade Next.js** | Usar a skill **@next-upgrade** ao planear ou executar upgrade do Next.js. | [next-upgrade.md](next-upgrade.md) |
-| 6 | **RAG (base de conhecimento)** | Implementado (Fase 2); threshold de similaridade (`RAG_MIN_SIMILARITY`) já disponível. **Melhorias recomendadas** (ver análise template Vercel): (1) multi-query / query expansion; (2) tool "pesquisar na base" (opcional); (3) tool "adicionar à base" a partir do chat; (4) reranking pós-recuperação; (5) chunking semântico. | [TEMPLATE-RAG-VERCEL-ANALISE.md](TEMPLATE-RAG-VERCEL-ANALISE.md), [lib/ai/knowledge-base.md](../lib/ai/knowledge-base.md) |
+| 6 | **RAG (base de conhecimento)** | Implementado (Fase 2); threshold de similaridade (`RAG_MIN_SIMILARITY`) já disponível. **Melhorias recomendadas:** (1) multi-query / query expansion; (2) tool "pesquisar na base" (opcional); (3) tool "adicionar à base"; (4) reranking; (5) chunking semântico; (6) **HyDE opcional** e **classificação "só RAG para perguntas"** (ver template Internal Knowledge Base). | [TEMPLATE-RAG-VERCEL-ANALISE.md](TEMPLATE-RAG-VERCEL-ANALISE.md), [TEMPLATE-INTERNAL-KNOWLEDGE-BASE-ANALISE.md](TEMPLATE-INTERNAL-KNOWLEDGE-BASE-ANALISE.md), [lib/ai/knowledge-base.md](../lib/ai/knowledge-base.md) |
 | 7 | **Modo Split-Screen (Revisor)** | Sugestão UX: ao gerar o parecer, ver documento original de um lado e sugestões da IA do outro, com highlights ligando os dois — padrão em ferramentas jurídicas de revisão. | Especificar em SPEC ou PROJETO-REVISOR-DEFESAS.md |
 | 8 | **Mais melhorias UX/UI chat** | (1) Indicador de modelo LLM ao lado do agente no header. (2) Breadcrumb ou título da conversa visível no topo. (3) Reduzir redundância: agente mostrado na sidebar + header + greeting — considerar um único ponto de verdade com destaque. (4) Botão "Faça anexar PI e Contestação" só quando Revisor selecionado. (5) Acessibilidade: garantir que o seletor de agente tenha foco lógico e anúncio para leitores de ecrã. | [ux-ui-revisor-defesas.md](ux-ui-revisor-defesas.md) |
 | 9 | **Workflow DevKit (useworkflow.dev)** | Avaliar adopção para workflows duráveis (Revisor GATE-1→FASE A→GATE 0.5→FASE B), retries em tool calls, human-in-the-loop no GATE 0.5, observabilidade e (futuro) sleep/agendamento. POC mínima recomendada antes de integrar no chat. | [WORKFLOW-DEVKIT-PROXIMOS-PASSOS.md](WORKFLOW-DEVKIT-PROXIMOS-PASSOS.md) |
 | 10 | **AI SDK Agents (ToolLoopAgent, call options)** | Avaliar migração do chat para ToolLoopAgent, call options + prepareCall (RAG/contexto), loop control (prepareStep) e lifecycle callbacks. Ver análise e prioridades em [AI-SDK-AGENTS-PROXIMOS-PASSOS.md](AI-SDK-AGENTS-PROXIMOS-PASSOS.md). | [AI-SDK-AGENTS-PROXIMOS-PASSOS.md](AI-SDK-AGENTS-PROXIMOS-PASSOS.md) |
+| 11 | **AssistJur PRD — modelo “por processo”** | Conforme [ASSISTJUR-PRD-ALINHAMENTO.md](ASSISTJUR-PRD-ALINHAMENTO.md): (1) Schema e CRUD de processos; (2) Chat com processoId e histórico por (processoId, agentId); (3) State machine de fases; (4) AgentRisk + risco por verba; (5) Peças e AgentDrafter integrado; (6) RBAC; (7) Painel de passivo. Priorização e dependências no doc. | [ASSISTJUR-PRD-ALINHAMENTO.md](ASSISTJUR-PRD-ALINHAMENTO.md) |
 
 ---
 
@@ -83,7 +84,9 @@ Priorizar itens da Fase 1 conforme [PROJETO-REVISOR-DEFESAS.md](PROJETO-REVISOR-
 | **SUGESTOES-FUTURO.md** | Sugestões técnicas para o futuro: RAG (try/catch + toDatabaseError), rotas com BD e tratamento 503, logger centralizado em vez de console. |
 | **WORKFLOW-DEVKIT-PROXIMOS-PASSOS.md** | Benefícios do Workflow DevKit (useworkflow.dev) aplicáveis ao sistema: workflows duráveis, steps com retry, human-in-the-loop, observabilidade; próximos passos (doc, POC, avaliação integração chat/Revisor). |
 | **TEMPLATE-RAG-VERCEL-ANALISE.md** | Comparação com o template RAG da Vercel; melhorias recomendadas (threshold já implementado; multi-query, tools pesquisar/adicionar, reranking) e prioridades. |
+| **TEMPLATE-INTERNAL-KNOWLEDGE-BASE-ANALISE.md** | Análise do template Internal Knowledge Base (middleware, HyDE, classificação question/statement); recomendações: HyDE opcional, classificação "só RAG para perguntas". |
 | **AI-SDK-AGENTS-PROXIMOS-PASSOS.md** | Análise da doc AI SDK Agents (ToolLoopAgent, workflows, loop control, call options, memory, subagents); estado atual do projeto e próximos passos implantáveis (migração para ToolLoopAgent, prepareCall para RAG, prepareStep, memória, subagentes). |
+| **ASSISTJUR-PRD-ALINHAMENTO.md** | Resumo do PRD AssistJur.IA v1.0 (Contencioso Trabalhista), estado atual do projeto, gaps (processo, fases, AgentRisk, peças, chat por processo×agente, RBAC, passivo) e próximos passos priorizados; referência aos Sprints 1–8 do PRD e questões abertas. |
 
 **Sugestão:** Manter este plano como índice; alterações de prioridade ou novas tarefas imediatas devem ser atualizadas na secção 1 e, se relevante, no roadmap da SPEC.
 

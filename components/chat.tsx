@@ -63,8 +63,8 @@ import type { VisibilityType } from "./visibility-selector";
 
 const MAX_KNOWLEDGE_SELECT = 50;
 
-/** Margem abaixo do limite do schema (2M); truncagem defensiva no cliente para evitar 400 por tamanho. */
-const MAX_PART_TEXT_CLIENT = 400_000;
+/** Alinhado ao máximo extraído no upload (600k). Margem abaixo do schema (2M) para evitar 400 por tamanho. */
+const MAX_PART_TEXT_CLIENT = 600_000;
 
 const TRUNCATE_SUFFIX_CLIENT =
   "\n\n[Truncado: o documento excedeu o limite de caracteres.]";
@@ -92,7 +92,8 @@ function truncateMessagePartsForRequest(messages: unknown[]): {
         part.text.length > MAX_PART_TEXT_CLIENT
       ) {
         didTruncate = true;
-        truncatedTotal += part.text.length - (maxLen + TRUNCATE_SUFFIX_CLIENT.length);
+        truncatedTotal +=
+          part.text.length - (maxLen + TRUNCATE_SUFFIX_CLIENT.length);
         return {
           ...part,
           text: part.text.slice(0, maxLen) + TRUNCATE_SUFFIX_CLIENT,
@@ -485,12 +486,16 @@ export function Chat({
       api: "/api/chat",
       fetch: fetchWithErrorHandlers,
       prepareSendMessagesRequest(request) {
-        const { messages: truncatedMessages, lastMessage: truncatedLastMessage, didTruncate, truncatedTotal } =
-          truncateMessagePartsForRequest([...request.messages]);
+        const {
+          messages: truncatedMessages,
+          lastMessage: truncatedLastMessage,
+          didTruncate,
+          truncatedTotal,
+        } = truncateMessagePartsForRequest([...request.messages]);
         if (didTruncate && truncatedTotal > 0) {
           toast({
             type: "error",
-            description: `Documento muito longo; o texto foi truncado (${truncatedTotal.toLocaleString("pt-PT")} caracteres).`,
+            description: `Documento muito longo; o texto foi truncado (${truncatedTotal.toLocaleString("pt-PT")} caracteres). Apenas o início é enviado ao modelo. Pode anexar menos documentos ou peças mais curtas.`,
           });
         }
         const isContinuation = isToolApprovalContinuation(
@@ -705,7 +710,6 @@ export function Chat({
             onQuickPrompt={isReadonly ? undefined : setInput}
             onStop={isReadonly ? undefined : stop}
             regenerate={regenerate}
-            selectedModelId={initialChatModel}
             sendMessage={sendMessage}
             setInput={setInput}
             setMessages={setMessages}

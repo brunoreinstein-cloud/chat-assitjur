@@ -65,6 +65,7 @@ O projeto usa **Ultracite** (regras em `.cursor/rules/ultracite.mdc`). Ao editar
 3. **React/JSX:** hooks no top-level, keys em listas, sem `children` + `dangerouslySetInnerHTML`.
 4. **Qualidade:** sem `console` em código de produção, tratar erros de forma explícita, usar `===`/`!==`.
 5. **Next.js:** não usar `<img>` (usar componente do Next.js), não importar `next/document` fora de `_document`.
+6. **Documentação:** qualquer alteração a constantes de timeout ou ao fluxo de `app/(chat)/api/chat/route.ts` requer atualização dos docs em `docs/` (ex.: RASTREAR-E-CORRIGIR-PROBLEMAS.md, CHAT-DEBUG.md, DB-TIMEOUT-TROUBLESHOOTING.md, REFERENCIA-ERROS-400.md), para evitar dessincronização entre código e documentação.
 
 Comandos úteis:
 
@@ -169,6 +170,7 @@ Comandos: `npx skills list` | `npx skills find [query]` | `npx skills update`.
 - **[docs/SPEC-AI-DRIVE-JURIDICO.md](docs/SPEC-AI-DRIVE-JURIDICO.md)** — Spec completa do produto "AI Drive Jurídico": visão, personas, domínios jurídicos, capacidades, arquitetura, segurança, UX, roadmap e métricas.
 - **[docs/AGENTES-IA-PERSONALIZADOS.md](docs/AGENTES-IA-PERSONALIZADOS.md)** — Agentes de IA personalizados: agentes pré-definidos (Revisor, Redator de Contestações), instruções customizadas e base de conhecimento; referência técnica e evolução futura.
 - **[docs/PLANO-PROXIMOS-PASSOS.md](docs/PLANO-PROXIMOS-PASSOS.md)** — Plano de próximos passos: tarefas imediatas (ex.: prebuild), curto prazo, índice do roadmap e onde a documentação descreve "próximos passos". Atualizar este ficheiro quando mudarem prioridades.
+- **[docs/ASSISTJUR-PRD-ALINHAMENTO.md](docs/ASSISTJUR-PRD-ALINHAMENTO.md)** — Alinhamento do PRD AssistJur.IA v1.0 (Contencioso Trabalhista) com o estado atual: gaps (processo, fases, AgentRisk, peças, chat por processo×agente, RBAC, passivo) e próximos passos priorizados.
 - **[docs/OTIMIZACAO-CUSTO-TOKENS-LLM.md](docs/OTIMIZACAO-CUSTO-TOKENS-LLM.md)** — Revisão e otimização de custo de tokens e uso de LLM: onde se consome, limites atuais, checklist e ações recomendadas.
 - **[docs/PROMPT-LEAK-REDUCTION.md](docs/PROMPT-LEAK-REDUCTION.md)** — Estratégias para reduzir prompt leak (instruções sensíveis, base de conhecimento); o que o projeto já faz e melhorias opcionais (pós-processamento, auditorias).
 - **[docs/PDF-INPUTS-ESTADO-E-MELHORIAS.md](docs/PDF-INPUTS-ESTADO-E-MELHORIAS.md)** — Estado atual do tratamento de PDFs no chat (extração no servidor, partes `document` → texto) e melhorias possíveis com OpenRouter PDF (URL/base64, plugins, anotações).

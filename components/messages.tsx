@@ -1,6 +1,6 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
 import { ArrowDownIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMessages } from "@/hooks/use-messages";
 import type { AgentId } from "@/lib/ai/agents-registry-metadata";
 import type { Vote } from "@/lib/db/schema";
@@ -32,7 +32,6 @@ interface MessagesProps {
   setMessages: UseChatHelpers<ChatMessage>["setMessages"];
   regenerate: UseChatHelpers<ChatMessage>["regenerate"];
   isReadonly: boolean;
-  selectedModelId: string;
   /** Callback para o onboarding: abrir base de conhecimento */
   onOpenKnowledge?: () => void;
   /** Callback para o onboarding: focar a barra de digitação */
@@ -62,7 +61,6 @@ function PureMessages({
   setMessages,
   regenerate,
   isReadonly,
-  selectedModelId: _selectedModelId,
   onOpenKnowledge,
   onFocusInput,
   attachments = [],
@@ -98,21 +96,42 @@ function PureMessages({
 
   useDataStream();
 
-  const gate05Idx = findLastAssistantIndexWithGate05(messages);
-  const lastAssistantIndex = (() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i]?.role === "assistant") {
-        return i;
-      }
-    }
-    return -1;
-  })();
-  const afterGate05 = messages.slice(gate05Idx + 1);
-  const userRepliedToGate05 = afterGate05.some(
-    (m) =>
-      m.role === "user" &&
-      (getUserMessageText(m) === "CONFIRMAR" ||
-        getUserMessageText(m).startsWith("CORRIGIR:"))
+  const focusInput = useCallback(() => {
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, [inputRef]);
+
+  const gate05State = useMemo(() => {
+    const gate05Idx = findLastAssistantIndexWithGate05(messages);
+    const lastAssistantIndex = messages.findLastIndex(
+      (m) => m?.role === "assistant"
+    );
+    const afterGate05 = gate05Idx >= 0 ? messages.slice(gate05Idx + 1) : [];
+    const userRepliedToGate05 = afterGate05.some(
+      (m) =>
+        m.role === "user" &&
+        (getUserMessageText(m) === "CONFIRMAR" ||
+          getUserMessageText(m).startsWith("CORRIGIR:"))
+    );
+    return {
+      gate05Idx,
+      lastAssistantIndex: lastAssistantIndex >= 0 ? lastAssistantIndex : -1,
+      userRepliedToGate05,
+    };
+  }, [messages]);
+
+  const { gate05Idx, lastAssistantIndex, userRepliedToGate05 } = gate05State;
+
+  const hasApprovalResponded = useMemo(
+    () =>
+      messages.some((msg) =>
+        msg.parts?.some(
+          (part) =>
+            part != null &&
+            "state" in part &&
+            (part as { state?: string }).state === "approval-responded"
+        )
+      ),
+    [messages]
   );
 
   const showNewEmptyState =
@@ -132,7 +151,7 @@ function PureMessages({
                   onAgentSelect={onAgentSelect}
                   onQuickPrompt={(text) => {
                     onQuickPrompt(text);
-                    setTimeout(() => inputRef.current?.focus(), 0);
+                    focusInput();
                   }}
                 />
               ) : (
@@ -181,9 +200,7 @@ function PureMessages({
               }
               onCorrigirGate05={() => {
                 setInput("CORRIGIR: ");
-                setTimeout(() => {
-                  inputRef.current?.focus();
-                }, 0);
+                focusInput();
               }}
               regenerate={regenerate}
               requiresScrollPadding={
@@ -203,44 +220,36 @@ function PureMessages({
             />
           ))}
 
-          {status === "submitted" &&
-            !messages.some((msg) =>
-              msg.parts?.some(
-                (part) =>
-                  part != null &&
-                  "state" in part &&
-                  part?.state === "approval-responded"
-              )
-            ) && (
-              <div className="flex flex-col gap-2">
-                <ThinkingMessage />
-                {submittedElapsedMs >= 10_000 && onStop && !isReadonly && (
-                  <p className="text-muted-foreground text-sm">
-                    A demorar mais do que o habitual. Se for a primeira vez ou
-                    após muito tempo sem usar, a base de dados pode estar a
-                    acordar — podes{" "}
-                    <Button
-                      className="h-auto p-0 font-normal text-sm underline"
-                      onClick={onStop}
-                      type="button"
-                      variant="link"
-                    >
-                      cancelar e tentar de novo
-                    </Button>
-                    .
-                  </p>
-                )}
-                {dbFallbackUsed && (
-                  <p
-                    aria-atomic="true"
-                    aria-live="polite"
-                    className="text-muted-foreground text-sm"
+          {status === "submitted" && !hasApprovalResponded && (
+            <div className="flex flex-col gap-2">
+              <ThinkingMessage />
+              {submittedElapsedMs >= 5000 && onStop && !isReadonly && (
+                <p className="text-muted-foreground text-sm">
+                  A demorar mais do que o habitual. Se for a primeira vez ou
+                  após muito tempo sem usar, a base de dados pode estar a
+                  acordar — podes{" "}
+                  <Button
+                    className="h-auto p-0 font-normal text-sm underline"
+                    onClick={onStop}
+                    type="button"
+                    variant="link"
                   >
-                    Resposta pode incluir dados parciais (base de dados lenta).
-                  </p>
-                )}
-              </div>
-            )}
+                    cancelar e tentar de novo
+                  </Button>
+                  .
+                </p>
+              )}
+            </div>
+          )}
+          {dbFallbackUsed && (
+            <p
+              aria-atomic="true"
+              aria-live="polite"
+              className="text-muted-foreground text-sm"
+            >
+              Resposta pode incluir dados parciais (base de dados lenta).
+            </p>
+          )}
 
           <div
             className="min-h-[24px] min-w-[24px] shrink-0"

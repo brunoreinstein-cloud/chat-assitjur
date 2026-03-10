@@ -33,6 +33,8 @@ O assistente usa por padrão as instruções do **Agente Revisor de Defesas Trab
 
 **Implementação:** Tabela `KnowledgeChunk` (id, knowledgeDocumentId, chunkIndex, text, embedding vector(1536)); extensão pgvector; chunking e embeddings no POST /api/knowledge; no chat, embedding da última mensagem do utilizador e busca top-k por similaridade (cosine); fallback para injeção direta. O pipeline está separado em etapas (ingestão, vetorização, indexação, recuperação, geração): ver **`docs/RAG-PIPELINE-SEPARATION.md`** e módulos em `lib/rag/` (vectorization, indexing, retrieval, pipeline). APIs e chat usam `vectorizeAndIndex` e `retrieveKnowledgeContext`.
 
+**Melhorias a partir do template Internal Knowledge Base (Vercel):** O template [ai-sdk-preview-internal-knowledge-base](https://github.com/vercel-labs/ai-sdk-preview-internal-knowledge-base) usa Language Model Middleware, classificação da mensagem (só RAG para "question") e **HyDE** (embedding de uma resposta hipotética em vez da pergunta). Análise completa e recomendações em **`docs/TEMPLATE-INTERNAL-KNOWLEDGE-BASE-ANALISE.md`**. Resumo: (1) **HyDE opcional** (`RAG_USE_HYDE`) para melhor recall; (2) **classificação "só RAG para perguntas"** opcional para reduzir custo em afirmações/comandos; (3) manter injeção no system prompt (não na mensagem do user).
+
 Para **melhorias futuras** (reranking, chunking semântico):
 
 1. **Chunking:** Dividir cada `KnowledgeDocument` em pedaços (ex.: 500–1000 tokens com overlap). Guardar no DB ou em tabela `knowledge_chunk` (documentId, chunkIndex, text, embedding?).

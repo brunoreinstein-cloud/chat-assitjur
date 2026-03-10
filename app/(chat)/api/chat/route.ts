@@ -179,10 +179,13 @@ function withFallbackTimeout<T>(
         resolve(fallback);
       }, ms)
     ),
-  ]).catch(() => {
+  ]).catch((err: unknown) => {
     onFallback?.();
     if (isDev) {
-      console.warn(`[chat-timing] dbBatch: ${label} erro, a usar fallback`);
+      console.error(
+        `[chat-timing] dbBatch: ${label} falhou com erro real:`,
+        err instanceof Error ? err.message : err
+      );
     }
     return fallback;
   });
@@ -228,12 +231,22 @@ function wrapKnowledgeDocument(
 const MAX_CHARS_PER_DOCUMENT = 35_000;
 /** Máximo total de caracteres de documentos numa única mensagem. */
 const MAX_TOTAL_DOC_CHARS = 100_000;
+/** Na PI, ao truncar, preservar este número de caracteres do final (OAB/assinaturas). */
+const PI_TAIL_CHARS = 2500;
 
 /** Últimas N mensagens a carregar para contexto (reduz BD e tamanho do prompt; a qualidade mantém-se com contexto recente). */
 const CHAT_MESSAGES_LIMIT = 80;
 
 /** Máximo de caracteres da base de conhecimento no system prompt (reduz custo de tokens). */
 const MAX_KNOWLEDGE_CONTEXT_CHARS = 50_000;
+
+/** Timeouts e limites do batch de BD (runChatDbBatch). */
+const DB_BATCH_TIMEOUT_MS = 120_000;
+/** Fallback por query: 12s para falhar mais cedo em serverless (Vercel 60s); deixa margem ao stream. */
+const PER_QUERY_TIMEOUT_MS = 12_000;
+const CREDITS_IN_BATCH_TIMEOUT_MS = 12_000;
+/** Limite usado na chave do cache de créditos (igual ao default de GET /api/credits). */
+const CREDITS_CACHE_USAGE_LIMIT = 10;
 
 function getDocumentPartLabel(documentType: string | undefined): string {
   if (documentType === "pi") {
@@ -243,6 +256,38 @@ function getDocumentPartLabel(documentType: string | undefined): string {
     return "Contestação";
   }
   return "Documento";
+}
+
+/** Trunca texto de documento: para PI preserva início + fim (OAB); caso contrário só início. */
+function truncateDocumentText(
+  text: string,
+  maxChars: number,
+  documentType: string | undefined
+): string {
+  if (text.length <= maxChars) {
+    return text;
+  }
+  const notice = "\n\n[... texto truncado para caber no limite do modelo ...]";
+  const needPiTail =
+    documentType === "pi" && maxChars > PI_TAIL_CHARS * 2 + notice.length;
+  if (needPiTail) {
+    const startLen = maxChars - PI_TAIL_CHARS - notice.length - 2; // 2 = "\n\n"
+    return `${text.slice(0, startLen)}${notice}\n\n${text.slice(-PI_TAIL_CHARS)}`;
+  }
+  return text.slice(0, maxChars) + notice;
+}
+
+/** Dica curta para o modelo localizar dados rapidamente (reduz releituras). */
+function getDocumentPartExtractionHint(
+  documentType: string | undefined
+): string {
+  if (documentType === "pi") {
+    return "Extrair prioritariamente: número do processo, vara, partes, DAJ, Admissão/Término/Rescisão (início); OAB e audiência (Notificação Judicial PJe; assinaturas ao final).";
+  }
+  if (documentType === "contestacao") {
+    return "Extrair prioritariamente: dados do contrato, DTC, teses e impugnações por pedido; usar mapeamento pedido×prova.";
+  }
+  return "";
 }
 
 function fillKnowledgeFromFullDocsWhenEmpty(
@@ -322,16 +367,21 @@ function normalizeMessageParts(messages: ChatMessage[]): ChatMessage[] {
         return [];
       }
       const maxForThis = Math.min(MAX_CHARS_PER_DOCUMENT, remaining);
-      const truncated =
-        p.text.length > maxForThis
-          ? `${p.text.slice(0, maxForThis)}\n\n[... texto truncado para caber no limite do modelo ...]`
-          : p.text;
+      const truncated = truncateDocumentText(
+        p.text,
+        maxForThis,
+        p.documentType
+      );
       totalDocChars += truncated.length;
       const label = getDocumentPartLabel(p.documentType);
+      const hint = getDocumentPartExtractionHint(p.documentType);
+      const header = hint
+        ? `[${label}: ${p.name}]\n${hint}\n\n`
+        : `[${label}: ${p.name}]\n\n`;
       return [
         {
           type: "text" as const,
-          text: `[${label}: ${p.name}]\n\n${truncated}`,
+          text: `${header}${truncated}`,
         },
       ];
     });
@@ -364,10 +414,11 @@ function getStreamContext() {
 
 function resolveEffectiveKnowledgeIds(
   knowledgeDocumentIds: string[] | undefined,
-  userId: string | undefined,
+  _userId: string | undefined,
   agentId: string
 ): string[] {
-  if (knowledgeDocumentIds?.length && userId) {
+  // Chamado apenas após getEarlyValidationResponse; userId está garantido pelo fluxo.
+  if (knowledgeDocumentIds?.length) {
     return knowledgeDocumentIds;
   }
   if (agentId === AGENT_ID_REDATOR_CONTESTACAO) {
@@ -400,15 +451,12 @@ function buildKnowledgeContext(
 const TRUNCATE_SUFFIX =
   "\n\n[Truncado: o documento excedeu o limite de caracteres.]";
 
-/** Trunca in-place o texto de partes "document" que excedam MAX_DOCUMENT_PART_TEXT_LENGTH. */
-function truncateDocumentPartsInPlace(
-  message: { parts?: Array<{ type?: string; text?: string }> } | undefined
-): void {
-  if (!(message?.parts && Array.isArray(message.parts))) {
-    return;
-  }
+type UserMessagePart = NonNullable<PostRequestBody["message"]>["parts"][number];
+
+/** Trunca o texto de partes "document" que excedam MAX_DOCUMENT_PART_TEXT_LENGTH. Devolve novo array (imutável). */
+function truncateDocumentParts(parts: UserMessagePart[]): UserMessagePart[] {
   const maxLen = MAX_DOCUMENT_PART_TEXT_LENGTH - TRUNCATE_SUFFIX.length;
-  for (const part of message.parts) {
+  return parts.map((part) => {
     if (
       part &&
       typeof part === "object" &&
@@ -416,9 +464,24 @@ function truncateDocumentPartsInPlace(
       typeof part.text === "string" &&
       part.text.length > MAX_DOCUMENT_PART_TEXT_LENGTH
     ) {
-      part.text = part.text.slice(0, maxLen) + TRUNCATE_SUFFIX;
+      return { ...part, text: part.text.slice(0, maxLen) + TRUNCATE_SUFFIX };
     }
-  }
+    return part;
+  });
+}
+
+/** Aplica truncagem de partes "document" ao body já parseado (imutável). */
+function truncateDocumentPartsInBody(body: PostRequestBody): PostRequestBody {
+  const message = body.message
+    ? { ...body.message, parts: truncateDocumentParts(body.message.parts) }
+    : undefined;
+  const messages = body.messages
+    ? body.messages.map((msg) => ({
+        ...msg,
+        parts: truncateDocumentParts((msg.parts ?? []) as UserMessagePart[]),
+      }))
+    : undefined;
+  return { ...body, message, messages };
 }
 
 /** Parseia e valida o body do POST; devolve Response em caso de erro. */
@@ -427,19 +490,6 @@ async function parsePostBody(
 ): Promise<PostRequestBody | Response> {
   try {
     const json = (await request.json()) as Record<string, unknown>;
-    truncateDocumentPartsInPlace(
-      json?.message as
-        | { parts?: Array<{ type?: string; text?: string }> }
-        | undefined
-    );
-    const messagesArr = json?.messages as
-      | Array<{ parts?: Array<{ type?: string; text?: string }> }>
-      | undefined;
-    if (Array.isArray(messagesArr)) {
-      for (const msg of messagesArr) {
-        truncateDocumentPartsInPlace(msg);
-      }
-    }
     return postRequestBodySchema.parse(json);
   } catch (error: unknown) {
     let cause: string | undefined;
@@ -574,12 +624,6 @@ async function runChatDbBatch(
   redatorBancoAllowedUserIds: string[] | undefined,
   initialCredits: number
 ): Promise<ChatDbBatchResult | Response> {
-  const DB_BATCH_TIMEOUT_MS = 120_000;
-  /** Fallback por query: 12s para falhar mais cedo em serverless (Vercel 60s); deixa margem ao stream. */
-  const PER_QUERY_TIMEOUT_MS = 12_000;
-  const CREDITS_IN_BATCH_TIMEOUT_MS = 12_000;
-  /** Limite usado na chave do cache de créditos (igual ao default de GET /api/credits). */
-  const CREDITS_CACHE_USAGE_LIMIT = 10;
   const usedFallback = { current: false };
   const onFallback = () => {
     usedFallback.current = true;
@@ -858,12 +902,7 @@ async function persistChatAndGetTitlePromise(
       );
     }
   });
-  if (isDev) {
-    // Em dev: fire-and-forget para não bloquear o handler nem segurar conexão à BD.
-    // O chat fica guardado em background; em produção esperamos para garantir persistência.
-  } else {
-    await saveChatPromise;
-  }
+  await saveChatPromise;
   const titlePromise = generateTitleFromUserMessage({
     message: normalizeMessageParts([message as ChatMessage])[0],
   });
@@ -1570,6 +1609,8 @@ function buildStreamAndResponse(
   const isReasoningModel =
     effectiveModel.includes("reasoning") || effectiveModel.includes("thinking");
 
+  // Ref partilhada entre execute e onFinish: o SDK invoca execute antes de onFinish,
+  // pelo que onFinish pode ler streamTextResultRef.current com segurança.
   const streamTextResultRef: { current: StreamTextResult | null } = {
     current: null,
   };
@@ -1671,7 +1712,10 @@ function resolveAgentConfigFromBatch(
       );
 }
 
-/** Resolve agentConfig + effectiveModel e valida Revisor; devolve erro ou dados. */
+/**
+ * Resolve agentConfig + effectiveModel e valida Revisor; devolve Response (erro) ou dados.
+ * Refatoração futura: lançar ChatbotError e deixar o try/catch do POST converter com toResponse().
+ */
 function getAgentConfigAndEffectiveModel(
   agentId: string,
   selectedChatModel: string,
@@ -1959,10 +2003,11 @@ async function handleChatPostAuthenticated(
 }
 
 export async function POST(request: Request) {
-  const requestBody = await parsePostBody(request);
-  if (requestBody instanceof Response) {
-    return requestBody;
+  const parsed = await parsePostBody(request);
+  if (parsed instanceof Response) {
+    return parsed;
   }
+  const requestBody = truncateDocumentPartsInBody(parsed);
 
   const requestStart = Date.now();
   const debugTracker = createChatDebugTracker();
@@ -1995,7 +2040,10 @@ export async function DELETE(request: Request) {
 
   const chat = await getChatById({ id });
 
-  if (chat?.userId !== session.user.id) {
+  if (chat == null) {
+    return new ChatbotError("not_found:chat").toResponse();
+  }
+  if (chat.userId !== session.user.id) {
     return new ChatbotError("forbidden:chat").toResponse();
   }
 
