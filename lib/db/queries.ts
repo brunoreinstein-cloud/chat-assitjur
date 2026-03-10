@@ -121,7 +121,11 @@ function getDb() {
       connect_timeout: connectTimeout,
     };
     if (isSupabaseUrl(url)) {
-      postgresOptions.ssl = true;
+      // Em desenvolvimento aceitar certificados auto-assinados (proxy/VPN podem causar SELF_SIGNED_CERT_IN_CHAIN).
+      postgresOptions.ssl =
+        process.env.NODE_ENV === "development"
+          ? { rejectUnauthorized: false }
+          : true;
     }
     clientInstance = postgres(url, postgresOptions);
     dbInstance = drizzle(clientInstance);
@@ -234,6 +238,41 @@ export async function createGuestUser() {
     throw new ChatbotError(
       "bad_request:database",
       `Failed to create guest user: ${detail}`
+    );
+  }
+}
+
+/**
+ * Garante que o utilizador existe na tabela User (para satisfazer FK ao criar chat).
+ * Se não existir, insere um registo com o id e email da sessão (evita 401 "utilizador inexistente").
+ */
+export async function ensureUserExistsInDb(
+  userId: string,
+  email?: string | null
+): Promise<void> {
+  const existing = await getDb()
+    .select({ id: user.id })
+    .from(user)
+    .where(eq(user.id, userId))
+    .limit(1);
+  if (existing.length > 0) {
+    return;
+  }
+  const emailValue =
+    typeof email === "string" && email.trim().length > 0
+      ? email.trim().slice(0, 64)
+      : `user-${userId}@session`;
+  try {
+    await getDb()
+      .insert(user)
+      .values({ id: userId, email: emailValue, password: null })
+      .onConflictDoNothing({ target: user.id });
+  } catch (err) {
+    const detail =
+      err instanceof Error ? err.message : "Unknown database error";
+    throw new ChatbotError(
+      "bad_request:database",
+      `Failed to ensure user: ${detail}`
     );
   }
 }

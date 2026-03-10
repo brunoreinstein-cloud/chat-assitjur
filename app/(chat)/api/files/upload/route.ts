@@ -718,9 +718,12 @@ async function uploadToStorage(
   if (uploadResult.ok) {
     return { url: uploadResult.url, pathname: uploadResult.pathname };
   }
-  if (uploadResult.reason === "storage_error") {
-    throw new Error(
-      `Falha ao enviar o ficheiro para o Storage.${storageErrorHint(uploadResult.message)}`
+  // Supabase falhou (ex.: ficheiro > 5 MiB no bucket chat-files); tentar Blob como fallback
+  if (uploadResult.reason === "storage_error" && isDev) {
+    console.warn(
+      "[upload] Supabase storage_error, a tentar Blob:",
+      uploadResult.message,
+      storageErrorHint(uploadResult.message)
     );
   }
   try {

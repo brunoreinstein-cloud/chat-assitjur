@@ -45,3 +45,6 @@ try {
   );
   process.exit(1);
 }
+
+// Bucket usado pela app para upload (config.toml: [storage.buckets.chat-files]). Opcional: default é "chat-files".
+console.log("SUPABASE_STORAGE_BUCKET=chat-files");

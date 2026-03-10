@@ -61,6 +61,7 @@ import {
   deductCreditsAndRecordUsage,
   deleteChatById,
   ensureStatementTimeout,
+  ensureUserExistsInDb,
   getChatById,
   getCustomAgentById,
   getKnowledgeDocumentsByIds,
@@ -79,6 +80,7 @@ import {
   ChatbotError,
   databaseUnavailableResponse,
   isDatabaseConnectionError,
+  isLikelyDatabaseError,
   isStatementTimeoutError,
 } from "@/lib/errors";
 import { retrieveKnowledgeContext } from "@/lib/rag";
@@ -167,28 +169,33 @@ function withFallbackTimeout<T>(
   onFallback?: () => void
 ): Promise<T> {
   return Promise.race([
-    p,
-    new Promise<T>((resolve) =>
-      setTimeout(() => {
+    p.then((v) => ({ type: "query" as const, value: v })),
+    new Promise<{ type: "timeout" }>((resolve) =>
+      setTimeout(() => resolve({ type: "timeout" }), ms)
+    ),
+  ])
+    .then((result) => {
+      if (result.type === "timeout") {
         onFallback?.();
         if (isDev) {
           console.warn(
             `[chat-timing] dbBatch: ${label} timeout após ${ms}ms, a usar fallback`
           );
         }
-        resolve(fallback);
-      }, ms)
-    ),
-  ]).catch((err: unknown) => {
-    onFallback?.();
-    if (isDev) {
-      console.error(
-        `[chat-timing] dbBatch: ${label} falhou com erro real:`,
-        err instanceof Error ? err.message : err
-      );
-    }
-    return fallback;
-  });
+        return fallback;
+      }
+      return result.value;
+    })
+    .catch((err: unknown) => {
+      onFallback?.();
+      if (isDev) {
+        console.error(
+          `[chat-timing] dbBatch: ${label} falhou com erro real:`,
+          err instanceof Error ? err.message : err
+        );
+      }
+      return fallback;
+    });
 }
 
 interface DocumentPartLike {
@@ -889,21 +896,29 @@ async function persistChatAndGetTitlePromise(
   if (message?.role !== "user") {
     return { titlePromise: null };
   }
-  const saveChatPromise = saveChat({
-    id,
-    userId: session.user.id,
-    title: "New chat",
-    visibility: selectedVisibilityType,
-    agentId,
-  }).catch((err) => {
+  try {
+    await saveChat({
+      id,
+      userId: session.user.id,
+      title: "New chat",
+      visibility: selectedVisibilityType,
+      agentId,
+    });
+  } catch (saveChatErr) {
+    if (
+      saveChatErr instanceof ChatbotError &&
+      saveChatErr.type === "unauthorized" &&
+      saveChatErr.surface === "auth"
+    ) {
+      return saveChatErr.toResponse();
+    }
     if (isDev) {
       console.warn(
         "[chat] saveChat (novo chat) falhou, a continuar para o modelo:",
-        err instanceof Error ? err.message : err
+        saveChatErr instanceof Error ? saveChatErr.message : saveChatErr
       );
     }
-  });
-  await saveChatPromise;
+  }
   const titlePromise = generateTitleFromUserMessage({
     message: normalizeMessageParts([message as ChatMessage])[0],
   });
@@ -1081,6 +1096,14 @@ async function saveUserMessageToDb(
   } catch (err) {
     if (isDev) {
       console.error("[chat] saveMessages(user) falhou:", err);
+    }
+    if (
+      (err instanceof ChatbotError && err.surface === "database") ||
+      isDatabaseConnectionError(err) ||
+      isStatementTimeoutError(err) ||
+      isLikelyDatabaseError(err)
+    ) {
+      return databaseUnavailableResponse();
     }
     return new ChatbotError(
       "bad_request:database",
@@ -1866,6 +1889,11 @@ async function handleChatPostAuthenticated(
     effectiveKnowledgeIds.includes(REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID)
       ? [REDATOR_BANCO_SYSTEM_USER_ID]
       : undefined;
+
+  await ensureUserExistsInDb(
+    authenticatedSession.user.id,
+    authenticatedSession.user.email ?? null
+  );
 
   const isBuiltInAgent = AGENT_IDS.includes(
     agentId as (typeof AGENT_IDS)[number]

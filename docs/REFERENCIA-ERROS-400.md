@@ -2,6 +2,21 @@
 
 Quando aparece **"Failed to load resource: the server responded with a status of 400"**, abre o pedido na aba **Network** do DevTools, clica no pedido a vermelho e na secção **Response** vê o JSON. O campo **`code`** (e opcionalmente **`message`** / **`cause`**) indica a origem. O **`cause`** passa a vir sempre preenchido em erros de validação do chat, para facilitar o diagnóstico. Para **503** no health check da BD (`GET /api/health/db`), ver a secção no final do documento.
 
+---
+
+## 503 e 400 em produção (Vercel)
+
+Quando na consola do browser aparecem **503** e **400** (por exemplo em `/api/chat`):
+
+| Erro | Origem provável | O que fazer |
+|------|------------------|-------------|
+| **503** | `GET /api/health/db` (chamado pelo `DbWarmup` ao abrir o chat). BD em cold start, timeout (30s) ou `POSTGRES_URL` incorreta. | 1) Em **Vercel → Settings → Environment Variables** confirma que `POSTGRES_URL` usa o **pooler** (porta **6543**; Supabase: Connection string → **Transaction**). 2) Se a resposta 503 tiver o campo `hint`, segue a indicação (trocar para porta 6543). 3) Faz redeploy. Ver [DB-TIMEOUT-TROUBLESHOOTING.md](DB-TIMEOUT-TROUBLESHOOTING.md). |
+| **400** em `/api/chat` | Validação do body (campos em falta/inválidos) ou timeout/erro da BD (`bad_request:database`). | 1) Abre **DevTools → Network**, clica no pedido **POST /api/chat** a vermelho e na aba **Response** lê o JSON. 2) Se tiver **`code: "bad_request:database"`** e mensagem sobre "ligação à base de dados" ou "não respondeu a tempo": é o mesmo problema que o 503 — corrige `POSTGRES_URL` (6543) e reenvia a mensagem. 3) Se tiver **`code: "bad_request:api"`** e **`cause`**: é validação (ex.: mensagem vazia, campo em falta); o toast na UI deve mostrar o `cause`. |
+
+O **503** é muitas vezes do health check em background (DbWarmup); o utilizador pode ignorá-lo se o chat funcionar. O **400** no POST do chat é o que bloqueia: verifica sempre o corpo da resposta (Network → Response) para ver `code` e `cause`.
+
+---
+
 ## Correções já aplicadas no projeto
 
 - **API chat** (`app/(chat)/api/chat/route.ts`): a resposta 400 de validação inclui sempre o campo **`cause`** com o detalhe do Zod (ex.: `"selectedChatModel: String must contain at least 1 character(s)"`), mesmo em produção.

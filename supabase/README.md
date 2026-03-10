@@ -38,7 +38,7 @@ Envia o `supabase/config.toml` para o projeto ligado (Auth, Storage buckets, etc
 pnpm run supabase:config-push
 ```
 
-Confirma com `Y` se perguntar. Isto aplica, entre outras coisas, o bucket **chat-files** (Storage) e as opções de Auth definidas no `config.toml`.
+Confirma com `Y` se perguntar. Isto aplica, entre outras coisas, o bucket **chat-files** (Storage) e as opções de Auth definidas no `config.toml`. O nome do bucket usado pela app é `SUPABASE_STORAGE_BUCKET` no `.env.local` (opcional; default: `chat-files`). Ver **supabase/ENV-MAPPING.md** e **supabase/REVISAO-SUPABASE.md**.
 
 ### 4. Obter API keys e preencher `.env.local`
 
@@ -101,6 +101,10 @@ que corre `supabase:config-push`. De seguida usa `supabase:api-keys` para obter 
 
 ---
 
+## Storage e SUPABASE_STORAGE_BUCKET
+
+A app usa **Supabase Storage** para upload de ficheiros do chat quando `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` estão definidas. O bucket padrão é **chat-files**, definido em `config.toml` em `[storage.buckets.chat-files]` (public, 5MiB, JPEG/PNG/PDF). Ao correr `supabase:config-push`, o bucket é criado/atualizado no projeto remoto. No `.env.local` podes definir `SUPABASE_STORAGE_BUCKET=chat-files` (opcional; a app usa "chat-files" por defeito). O script `pnpm run supabase:env` inclui esta linha no output para copiares. Ver **supabase/REVISAO-SUPABASE.md** para a revisão completa via CLI.
+
 ## Scripts disponíveis
 
 | Comando | Descrição |
@@ -108,7 +112,7 @@ que corre `supabase:config-push`. De seguida usa `supabase:api-keys` para obter 
 | `pnpm run supabase:link` | Vincula ao projeto Supabase remoto |
 | `pnpm run supabase:config-push` | Envia `config.toml` para o projeto remoto (Auth, Storage, etc.) |
 | `pnpm run supabase:api-keys` | Lista API keys em formato env (copiar para .env.local) |
-| `pnpm run supabase:env` | Gera NEXT_PUBLIC_SUPABASE_* e SUPABASE_SERVICE_ROLE_KEY (copiar para .env.local) |
+| `pnpm run supabase:env` | Gera NEXT_PUBLIC_SUPABASE_*, SUPABASE_SERVICE_ROLE_KEY e SUPABASE_STORAGE_BUCKET (copiar para .env.local) |
 | `pnpm run supabase:setup` | Atalho para `supabase:config-push` |
 | `pnpm run supabase:start` | Sobe Postgres + Studio local (Docker) |
 | `pnpm run supabase:stop` | Para os serviços locais |
@@ -134,7 +138,7 @@ Para **revisar** ou **confirmar** a configuração usando o CLI:
    ```bash
    pnpm run supabase:env
    ```
-   Copia o output (NEXT_PUBLIC_SUPABASE_*, SUPABASE_SERVICE_ROLE_KEY) para `.env.local`. O script **não** gera `POSTGRES_URL`; tens de a obter manualmente (passo 3).
+   Copia o output (NEXT_PUBLIC_SUPABASE_*, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_STORAGE_BUCKET) para `.env.local`. O script **não** gera `POSTGRES_URL`; tens de a obter manualmente (passo 3).
 
 3. **POSTGRES_URL (pooler, porta 6543)**  
    O CLI não expõe a connection string da base. Obtém no **Dashboard**: [Supabase](https://supabase.com/dashboard) → teu projeto → **Settings** → **Database** → **Connection string** → escolhe **Transaction** (URI com porta **6543**).  

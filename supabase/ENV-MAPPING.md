@@ -20,7 +20,7 @@ Com estas variáveis o app usa **Supabase Storage** para upload de ficheiros (bu
 | `NEXT_PUBLIC_SUPABASE_URL`     | URL do projeto (ex. `https://xxxx.supabase.co`) |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY`| Chave anon/public (exposta no cliente) |
 | `SUPABASE_SERVICE_ROLE_KEY`   | Chave service_role (só no servidor; nunca em `NEXT_PUBLIC_*`) |
-| `SUPABASE_STORAGE_BUCKET`     | (Opcional) Nome do bucket. Default: `chat-files`. Criar no Dashboard → Storage. |
+| `SUPABASE_STORAGE_BUCKET`     | (Opcional) Nome do bucket. Default: `chat-files`. O bucket é criado/atualizado no remoto com `pnpm run supabase:config-push` (definido em `supabase/config.toml` em `[storage.buckets.chat-files]`). Se usares outro nome, cria o bucket no Dashboard → Storage ou em `config.toml` e define aqui o mesmo nome. |
 
 ## Exemplo de variáveis com outro prefixo
 

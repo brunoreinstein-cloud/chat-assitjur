@@ -1,5 +1,7 @@
 # Resolução de problemas: timeout da base de dados no chat
 
+**Em produção (Vercel)** — Se vês **503** e **400** na consola (ex.: `/api/chat`): o 503 costuma vir do health check da BD (`GET /api/health/db`); o 400 pode ser validação ou timeout da BD. Confirma em Vercel que `POSTGRES_URL` usa o **pooler (porta 6543)**; depois faz redeploy e reenvia a mensagem. Ver também [REFERENCIA-ERROS-400.md](REFERENCIA-ERROS-400.md#503-e-400-em-produção-vercel).
+
 Quando o chat devolve **400** com a mensagem *"A base de dados não respondeu a tempo"*, a **resposta do chat não carrega** (stream nunca começa ou demora demasiado), ou no terminal aparece `[chat] dbBatch timeout or error: DB_BATCH_TIMEOUT`, o batch de queries à BD excedeu o limite (atualmente **120s**). Segue estes passos.
 
 ---

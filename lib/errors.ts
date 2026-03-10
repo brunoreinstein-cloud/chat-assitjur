@@ -77,13 +77,14 @@ export class ChatbotError extends Error {
   }
 }
 
-/** Códigos/errno do driver postgres.js em falhas de conexão. */
+/** Códigos/errno do driver em falhas de conexão (rede, timeout, SSL). */
 const DB_CONNECTION_ERROR_CODES = new Set([
   "CONNECT_TIMEOUT",
   "ECONNREFUSED",
   "ECONNRESET",
   "ETIMEDOUT",
   "ENOTFOUND",
+  "SELF_SIGNED_CERT_IN_CHAIN",
 ]);
 
 /**
@@ -114,8 +115,29 @@ export function isStatementTimeoutError(error: unknown): boolean {
   return code === PG_STATEMENT_TIMEOUT_CODE;
 }
 
+/** Padrões de mensagem que indicam falha de BD/conexão (postgres.js, Node, etc.). */
+const DB_ERROR_MESSAGE_PATTERNS = [
+  "connect",
+  "econnrefused",
+  "econnreset",
+  "etimedout",
+  "enotfound",
+  "connection refused",
+  "connection timeout",
+  "connection terminated",
+  "connection closed",
+  "postgres",
+  "postgres_url",
+  "getaddrinfo",
+  "statement_timeout",
+  "timeout",
+  "unavailable",
+  "certificate",
+  "self_signed_cert",
+];
+
 /**
- * Indica se o erro parece ser de BD/conexão (por mensagem ou nome).
+ * Indica se o erro parece ser de BD/conexão (por mensagem, nome ou cause).
  * Fallback quando isDatabaseConnectionError/isStatementTimeoutError não reconhecem
  * o formato do driver (ex.: postgres.js em alguns contextos).
  */
@@ -123,22 +145,19 @@ export function isLikelyDatabaseError(error: unknown): boolean {
   if (!error || typeof error !== "object") {
     return false;
   }
-  const err = error as Error;
+  const err = error as Error & { cause?: unknown };
   const msg =
     err.message?.toLowerCase() ??
     (typeof error === "string" ? error : "").toLowerCase();
   const name = err.name ?? "";
-  if (
-    msg.includes("connect") ||
-    msg.includes("econnrefused") ||
-    msg.includes("etimedout") ||
-    msg.includes("enotfound") ||
-    msg.includes("connection refused") ||
-    msg.includes("connection timeout") ||
-    name === "PostgresError" ||
-    name === "postgres"
-  ) {
+  if (name === "PostgresError" || name === "postgres") {
     return true;
+  }
+  if (DB_ERROR_MESSAGE_PATTERNS.some((p) => msg.includes(p))) {
+    return true;
+  }
+  if (err.cause && typeof err.cause === "object") {
+    return isLikelyDatabaseError(err.cause);
   }
   return false;
 }
@@ -149,7 +168,7 @@ export function databaseUnavailableResponse() {
     {
       code: "bad_request:database",
       message:
-        "Base de dados indisponível. Verifique POSTGRES_URL no .env.local.",
+        "Base de dados indisponível ou a responder com atraso. Verifica POSTGRES_URL no .env.local (pooler, porta 6543) e tenta novamente; pode ser cold start.",
     },
     { status: 503 }
   );
