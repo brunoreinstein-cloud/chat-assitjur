@@ -115,10 +115,15 @@ function getDb() {
     }
     /** Em dev usa-se mais uma conexão para reduzir contenção entre chat, credits e health (mesmo processo). Em produção mantém 1 por invocação. */
     const maxConnections = process.env.NODE_ENV === "development" ? 3 : 1;
-    clientInstance = postgres(url, {
+    const connectTimeout = process.env.NODE_ENV === "production" ? 15 : 10;
+    const postgresOptions: Parameters<typeof postgres>[1] = {
       max: maxConnections,
-      connect_timeout: 10,
-    });
+      connect_timeout: connectTimeout,
+    };
+    if (isSupabaseUrl(url)) {
+      postgresOptions.ssl = true;
+    }
+    clientInstance = postgres(url, postgresOptions);
     dbInstance = drizzle(clientInstance);
   }
   return dbInstance;

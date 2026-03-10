@@ -28,6 +28,10 @@ Detalhes e valores de timeout nas secções abaixo.
 
 ---
 
+**Ligação (getDb em `lib/db/queries.ts`):**
+- **SSL:** Para URLs Supabase o código passa `ssl: true` nas opções do driver (postgres.js), além de `sslmode=require` na URL. Evita falhas estruturais em produção quando o pooler exige TLS.
+- **connect_timeout:** 15s em produção, 10s em desenvolvimento. Se a primeira ligação demorar mais (cold start), aumenta a margem antes de falhar.
+
 **Timeouts atuais (referência):**
 - **Ligação ao iniciar (ensureDbReady):** 10s por tentativa, com **1 retry** (máx. ~20s antes de devolver erro). Reduz contenção ao falhar cedo e pedir "tenta novamente".
 - **Batch global:** 120s (`DB_BATCH_TIMEOUT_MS`). Rede de segurança; com timeouts por query o batch tende a completar em ≤12s.
@@ -62,6 +66,8 @@ pnpm db:ping
 
 - **✅ Ligação OK (X ms)** — a BD responde. Se X for alto (> 3s), a ligação é lenta; em baixo verás sugestões.
 - **❌ Erro** — POSTGRES_URL em falta, incorreta, rede inacessível ou BD em baixo. Corrige a URL ou a rede e volta a tentar. Se testares via `GET /api/health/db`, a resposta 503 tem o formato `{ "ok": false, "error": "...", "latencyMs": <ms> }` — ver [REFERENCIA-ERROS-400.md](REFERENCIA-ERROS-400.md#503--get-apihealthdb-base-de-dados-indisponível).
+
+**Em produção (Vercel):** abre `https://<teu-dominio>/api/health/db`. Se a resposta 503 incluir o campo `hint`, a `POSTGRES_URL` está a usar a porta 5432; segue a indicação do `hint` (usar pooler, porta 6543) e faz redeploy.
 - **❌ "canceling statement due to statement timeout" (código 57014)** — O pooler (Supabase porta 6543) tem um `statement_timeout` no servidor (ex.: 8s) que não é alterável pelo cliente. Em cold start a ligação demora mais e a query do ping pode ser cancelada. O script mostra sugestões: **1)** Correr `pnpm db:ping` de novo (2.ª vez = ligação quente). **2)** Para o ping só: usar a connection string em **Session mode** (porta **5432**) em vez do pooler (6543) — Supabase *Settings → Database* → Connection string → **Session**. A app do chat continua a usar o pooler (6543) em produção.
 - **❌ "unsupported startup parameter: options"** — O pooler Supabase (porta 6543 / Supavisor) não aceita o parâmetro `options` na connection string. O código já evita enviar esse parâmetro quando usa o pooler (URL com `:6543/` ou `pooler.supabase.com`). Se o erro persistir, confirma que `POSTGRES_URL` usa a porta **6543** e reinicia o servidor (`pnpm dev`).
 
@@ -185,7 +191,7 @@ Se no **DevTools (Console)** aparecer *"The resource &lt;URL&gt; was preloaded u
 | Timeout da ligação ao iniciar o chat | `app/(chat)/api/chat/route.ts` → `ensureDbReady()` | 10s por tentativa, 1 retry (máx. ~20s). |
 | Timeout da query de créditos dentro do batch | `app/(chat)/api/chat/route.ts` → `CREDITS_IN_BATCH_TIMEOUT_MS` | 12_000 (12s). Após este tempo usa-se saldo inicial. |
 | Statement timeout (por sessão SQL) | `lib/db/queries.ts` → `ensureStatementTimeout()` | 120s. A app define na sessão ao iniciar o chat. |
-| Timeout de ligação ao Postgres | `lib/db/queries.ts` → `getDb()` (opções do driver) | `connect_timeout: 10` (10s). |
+| Timeout de ligação ao Postgres | `lib/db/queries.ts` → `getDb()` (opções do driver) | `connect_timeout: 15` (produção), `10` (dev). SSL explícito (`ssl: true`) para Supabase. |
 
 **Conexão:** O projeto usa uma única conexão por processo (`max: 1`). Em Vercel cada invocação pode ser um processo novo, daí a importância do **pooler** (porta 6543) para não esgotar conexões e para menor latência.
 
