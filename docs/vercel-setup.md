@@ -130,6 +130,25 @@ O projeto usa **Next.js 16** com Turbopack e a convenção **proxy** (em vez de 
 
 Se não aparecer nada nos Runtime Logs, abre **Functions** no mesmo deployment e inspeciona a função associada à URL que devolve 500; ou usa **Vercel → Logs** (stream em tempo real) enquanto reproduzes o erro.
 
+### "A ligação à base de dados está a demorar demasiado" (produção)
+
+**Mensagem:** O chat (ou outra rota que usa a BD) devolve 400 com texto a pedir para verificar POSTGRES_URL e que a base de dados está acessível.
+
+**Causa:** A primeira ligação à BD (ou o pool) demorou mais de ~20s (timeout de `ensureDbReady` no chat). Em produção costuma ser: (1) **POSTGRES_URL** com porta errada (ex.: 5432 em vez do pooler 6543); (2) **cold start** da BD (Supabase/Neon após inatividade); (3) variável em falta ou host inacessível a partir da Vercel.
+
+**Checklist em produção (Vercel):**
+
+1. **POSTGRES_URL com pooler (porta 6543)**  
+   Em Vercel → Settings → Environment Variables confirma que `POSTGRES_URL` usa a connection string do **pooler** (Supabase: Dashboard → Settings → Database → Connection string → **Transaction**; a URI deve ter `:6543`). Com porta 5432 (Session) as funções serverless tendem a dar timeout.
+2. **Variável aplicada ao ambiente certo**  
+   Garante que `POSTGRES_URL` está definida para **Production** (e para **Preview** se usares deploys de preview). Após alterar, faz **Redeploy** do último deployment.
+3. **Base de dados acessível**  
+   No Supabase/Neon confirma que o projeto está ativo (sem pausa). Em planos com auto-pause, a primeira ligação após inatividade pode levar 10–30s; o utilizador pode **tentar novamente** (a segunda vez costuma ser rápida).
+4. **Migrações aplicadas**  
+   Se a base de produção for nova, corre as migrações uma vez: `pnpm run vercel:env:prod` e depois `pnpm run db:migrate`.
+
+**Mais detalhes:** `docs/DB-TIMEOUT-TROUBLESHOOTING.md` (pooler, cold start, cron de aquecimento, timeouts).
+
 ### CredentialsSignin (login / guest)
 
 **É um erro de autenticação, não de configuração.** O Auth.js lança `CredentialsSignin` quando o login é tentado mas as credenciais não batem com o que está na base de dados (ou o `authorize` falha por outro motivo).

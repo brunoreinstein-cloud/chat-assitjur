@@ -558,10 +558,11 @@ async function ensureDbReady(): Promise<Response | null> {
       if (isDev) {
         console.error("[chat] DB init/timeout após retry:", retryErr);
       }
-      return new ChatbotError(
-        "bad_request:database",
-        "A ligação à base de dados está a demorar demasiado. Verifica POSTGRES_URL em .env.local e que a base de dados está acessível. Tenta novamente."
-      ).toResponse();
+      const dbMsg =
+        process.env.NODE_ENV === "production"
+          ? "A ligação à base de dados está a demorar demasiado. Em produção (Vercel) verifica POSTGRES_URL em Settings → Environment Variables (usa pooler, porta 6543 no Supabase) e que a base de dados está acessível. Tenta novamente."
+          : "A ligação à base de dados está a demorar demasiado. Verifica POSTGRES_URL em .env.local e que a base de dados está acessível. Tenta novamente.";
+      return new ChatbotError("bad_request:database", dbMsg).toResponse();
     }
   }
   if (isDev) {
