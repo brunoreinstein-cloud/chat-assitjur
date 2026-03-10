@@ -77,6 +77,7 @@ Ao apagar um chat (`DELETE /api/chat?id=...`), o servidor deve distinguir:
 | Chat existe mas o utilizador não é dono | **403** | Sem permissão para apagar este chat. |
 
 Se o servidor devolver **403** quando o chat não existe, o utilizador interpreta erroneamente como "não tenho permissão" em vez de "chat inexistente". A rota deve devolver **404** quando o chat não for encontrado (independentemente de ownership). Ver `app/(chat)/api/chat/route.ts` (handler DELETE).
+
 ---
 
 ## Upload de ficheiros
