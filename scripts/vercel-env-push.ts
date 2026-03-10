@@ -10,7 +10,7 @@
  * Uso: pnpm run vercel:env:push
  * Ou:  pnpm exec tsx scripts/vercel-env-push.ts
  */
-import { execSync } from "node:child_process";
+import { type ExecSyncOptions, execSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -63,18 +63,23 @@ function main(): void {
     }
 
     for (const env of ENVIRONMENTS) {
+      const shellPath =
+        process.env.COMSPEC ??
+        (process.platform === "win32" ? "cmd.exe" : "/bin/sh");
+      const execOpts: ExecSyncOptions = {
+        encoding: "utf8",
+        stdio: "pipe",
+        shell: shellPath,
+      };
       try {
-        execSync(`npx vercel env rm ${key} ${env} --yes`, {
-          stdio: "pipe",
-          shell: true,
-        });
+        execSync(`npx vercel env rm ${key} ${env} --yes`, execOpts);
       } catch {
         // Variável pode não existir
       }
       execSync(`npx vercel env add ${key} ${env}`, {
+        ...execOpts,
         input: value,
         stdio: ["pipe", "inherit", "inherit"],
-        shell: true,
       });
       console.log(`✅ ${key} → ${env}`);
     }
