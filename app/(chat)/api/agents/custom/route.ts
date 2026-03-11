@@ -1,7 +1,5 @@
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
-
-export const maxDuration = 30;
 import {
   createCustomAgent,
   ensureStatementTimeout,
@@ -14,6 +12,8 @@ import {
   isLikelyDatabaseError,
   isStatementTimeoutError,
 } from "@/lib/errors";
+
+export const maxDuration = 30;
 
 const createBodySchema = z.object({
   name: z.string().min(1).max(256),

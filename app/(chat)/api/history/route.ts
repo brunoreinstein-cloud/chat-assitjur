@@ -1,7 +1,5 @@
 import type { NextRequest } from "next/server";
 import { auth } from "@/app/(auth)/auth";
-
-export const maxDuration = 30;
 import {
   deleteAllChatsByUserId,
   ensureStatementTimeout,
@@ -14,6 +12,8 @@ import {
   isLikelyDatabaseError,
   isStatementTimeoutError,
 } from "@/lib/errors";
+
+export const maxDuration = 30;
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;

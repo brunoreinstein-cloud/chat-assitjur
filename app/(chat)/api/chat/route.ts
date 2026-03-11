@@ -93,8 +93,11 @@ import {
   postRequestBodySchema,
 } from "./schema";
 
-/** Limite de execução da rota (segundos). A duração total do pedido é dominada pelo streaming do modelo; aumentar em vercel.json se precisar de respostas muito longas. */
-export const maxDuration = 120;
+/** Limite de execução da rota (segundos).
+ * No Vercel, respostas em streaming podem durar até ao máximo da plataforma (300s Pro)
+ * independentemente deste valor; o valor aqui controla a fase de computação inicial.
+ * O AbortSignal no streamText garante que o stream fecha antes do corte da plataforma. */
+export const maxDuration = 300;
 
 const isDev = process.env.NODE_ENV === "development";
 /** Quando true, não consulta nem deduz créditos (para diagnóstico de latência). */
@@ -1391,6 +1394,9 @@ function createStreamExecuteHandler(
         isEnabled: isProductionEnvironment,
         functionId: "stream-text",
       },
+      // Aborta o stream ao fim de 270s para fechar graciosamente antes do
+      // corte do Vercel (300s). Evita o "Task timed out after 300 seconds".
+      abortSignal: AbortSignal.timeout(270_000),
     });
     streamTextResultRef.current = result as unknown as StreamTextResult;
 
