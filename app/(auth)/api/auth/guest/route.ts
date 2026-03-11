@@ -253,26 +253,57 @@ export async function GET(request: Request) {
     // fallback para página de auto-submit
   }
 
+  const postUrl = `/api/auth/guest?redirectUrl=${redirectEnc}`;
+
   const html = `<!DOCTYPE html>
 <html lang="pt">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Visitante</title>
-  <meta http-equiv="refresh" content="4;url=/api/auth/guest?redirectUrl=${redirectEnc}" />
 </head>
 <body>
-  <p>A iniciar sessão como visitante…</p>
-  <form id="f" method="post" action="/api/auth/guest?redirectUrl=${redirectEnc}">
-    <button type="submit">Continuar</button>
+  <p id="status">A iniciar sessão como visitante…</p>
+  <form id="f" method="post" action="${postUrl}">
+    <button id="retry-btn" type="submit">Continuar</button>
   </form>
   <script>
     (function(){
-      const form = document.getElementById("f");
-      const warmupMs = 3000;
-      const warmup = fetch("/api/health/db", { method: "GET", credentials: "omit" }).catch(function(){});
-      const timeout = new Promise(function(r){ setTimeout(r, warmupMs); });
-      Promise.race([warmup, timeout]).then(function(){ form.submit(); });
+      var statusEl = document.getElementById("status");
+      var retryBtn = document.getElementById("retry-btn");
+      var fallback = decodeURIComponent("${redirectEnc}") || "/chat";
+
+      function setStatus(msg) { statusEl.textContent = msg; }
+      function showRetry() { retryBtn.style.display = ""; }
+      function hideRetry() { retryBtn.style.display = "none"; }
+
+      function attempt() {
+        hideRetry();
+        setStatus("A iniciar sessão como visitante…");
+        fetch("${postUrl}", { method: "POST", credentials: "same-origin", redirect: "follow" })
+          .then(function(res) {
+            if (!res.ok && !res.redirected) {
+              setStatus("Não foi possível iniciar sessão. Tenta novamente.");
+              showRetry();
+              return;
+            }
+            window.location.replace(res.redirected ? res.url : fallback);
+          })
+          .catch(function() {
+            setStatus("Não foi possível iniciar sessão. Verifica a ligação e tenta novamente.");
+            showRetry();
+          });
+      }
+
+      retryBtn.addEventListener("click", function(e) {
+        e.preventDefault();
+        attempt();
+      });
+
+      hideRetry();
+      var warmup = fetch("/api/health/db", { method: "GET", credentials: "omit" }).catch(function(){});
+      var timeout = new Promise(function(r){ setTimeout(r, 3000); });
+      Promise.race([warmup, timeout]).then(attempt);
     })();
   </script>
 </body>
