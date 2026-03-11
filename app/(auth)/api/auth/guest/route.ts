@@ -252,6 +252,7 @@ export async function GET(request: Request) {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Visitante</title>
+  <meta http-equiv="refresh" content="4;url=/api/auth/guest?redirectUrl=${redirectEnc}" />
 </head>
 <body>
   <p id="status">A iniciar sessão como visitante…</p>
