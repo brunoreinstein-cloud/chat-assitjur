@@ -7,9 +7,7 @@ export function register() {
   // postgres.js (ex.: statement timeout 57014 em promises "orphaned" no TLS socket).
   process.on("unhandledRejection", (reason: unknown) => {
     const code =
-      reason !== null &&
-      typeof reason === "object" &&
-      "code" in reason
+      reason !== null && typeof reason === "object" && "code" in reason
         ? (reason as { code: unknown }).code
         : undefined;
     if (code === "57014") {
@@ -20,7 +18,7 @@ export function register() {
     // Outros erros: registar mas não terminar o processo (Next.js gere o ciclo de vida).
     console.error(
       "[server] unhandledRejection:",
-      reason instanceof Error ? reason.message : reason,
+      reason instanceof Error ? reason.message : reason
     );
   });
 }
