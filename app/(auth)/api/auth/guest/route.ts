@@ -15,6 +15,8 @@ const WARMUP_DELAY_BETWEEN_MS = 1000;
  * Aquece a BD com retry antes do sign-in guest, para estabilizar o pool no mesmo
  * processo (evita race em que o GET warmup não chega antes do POST).
  * Não falha o pedido se o warmup falhar — o sign-in segue e pode falhar por si.
+ * Nota: em serverless (ex.: Vercel), o sign-in do Auth.js pode disparar uma sub-requisição
+ * noutra instância; o pool aquecido aqui não garante que essa instância esteja quente.
  */
 async function warmupDatabaseWithRetry(): Promise<void> {
   for (let attempt = 1; attempt <= WARMUP_MAX_ATTEMPTS; attempt++) {
@@ -44,33 +46,46 @@ async function warmupDatabaseWithRetry(): Promise<void> {
       await new Promise((r) => setTimeout(r, WARMUP_DELAY_BETWEEN_MS));
     }
   }
+  console.warn(
+    `[guest] DB warmup falhou após ${WARMUP_MAX_ATTEMPTS} tentativas`
+  );
 }
 
-/** Em E2E (Playwright), timeout para o sign-in guest; se a BD estiver lenta, devolve 503 em vez de bloquear ~50s. */
-const isE2E =
-  process.env.PLAYWRIGHT === "true" || process.env.PLAYWRIGHT === "True";
-const GUEST_SIGNIN_TIMEOUT_MS = isE2E ? 30_000 : 0; // 0 = sem timeout
+/** Timeout para sign-in guest em E2E (avaliado por request para não ficar frozen no cold start). */
+function getGuestSignInTimeoutMs(): number {
+  const isE2E =
+    process.env.PLAYWRIGHT === "true" || process.env.PLAYWRIGHT === "True";
+  return isE2E ? 30_000 : 0; // 0 = sem timeout
+}
+
+/** Resultado possível de signIn(..., { redirect: false }). */
+type SignInResult = { ok?: boolean; url?: string | null } | string | undefined;
 
 async function signInGuestWithOptionalTimeout(
-  redirectUrl: string
+  redirectUrl: string,
+  request: Request
 ): Promise<NextResponse | Response> {
-  const doSignIn = () =>
-    signIn("guest", { redirect: true, redirectTo: redirectUrl });
+  const timeoutMs = getGuestSignInTimeoutMs();
 
-  if (GUEST_SIGNIN_TIMEOUT_MS <= 0) {
-    return doSignIn();
+  const doSignIn = (): Promise<SignInResult> =>
+    signIn("guest", {
+      redirect: false,
+      redirectTo: redirectUrl,
+    }) as Promise<SignInResult>;
+
+  if (timeoutMs <= 0) {
+    const result = await doSignIn();
+    return redirectFromSignInResult(result, redirectUrl, request);
   }
 
   try {
-    await Promise.race([
+    const result = await Promise.race([
       doSignIn(),
-      new Promise<never>((_, reject) =>
-        setTimeout(
-          () => reject(new Error("GUEST_SIGNIN_TIMEOUT")),
-          GUEST_SIGNIN_TIMEOUT_MS
-        )
+      new Promise<SignInResult>((_, reject) =>
+        setTimeout(() => reject(new Error("GUEST_SIGNIN_TIMEOUT")), timeoutMs)
       ),
     ]);
+    return redirectFromSignInResult(result, redirectUrl, request);
   } catch (e) {
     if (e instanceof Error && e.message === "GUEST_SIGNIN_TIMEOUT") {
       return NextResponse.json(
@@ -87,8 +102,33 @@ async function signInGuestWithOptionalTimeout(
     }
     throw e;
   }
+}
 
-  return doSignIn();
+function redirectFromSignInResult(
+  result: SignInResult,
+  redirectUrl: string,
+  request: Request
+): NextResponse {
+  const raw =
+    typeof result === "string"
+      ? result
+      : (result as { url?: string | null } | undefined)?.url;
+  const base = new URL(request.url);
+  const fallback = new URL(redirectUrl, request.url);
+  if (!raw) {
+    return NextResponse.redirect(fallback);
+  }
+  try {
+    const resolved = raw.startsWith("/")
+      ? new URL(raw, request.url)
+      : new URL(raw);
+    if (resolved.origin !== base.origin) {
+      return NextResponse.redirect(fallback);
+    }
+    return NextResponse.redirect(resolved);
+  } catch {
+    return NextResponse.redirect(fallback);
+  }
 }
 
 function isCredentialsSignin(error: unknown): boolean {
@@ -96,7 +136,13 @@ function isCredentialsSignin(error: unknown): boolean {
   return e?.type === "CredentialsSignin" || e?.code === "credentials";
 }
 
-function checkEnv() {
+let envChecked: boolean | null = null;
+
+/** Verifica env uma vez por processo; evita overhead em cada request. */
+function checkEnv(): NextResponse | null {
+  if (envChecked === true) {
+    return null;
+  }
   if (!process.env.AUTH_SECRET) {
     return NextResponse.json(
       {
@@ -116,15 +162,23 @@ function checkEnv() {
       { status: 503 }
     );
   }
+  envChecked = true;
   return null;
 }
 
+/** Extrai e valida redirectUrl (apenas same-origin) para evitar open redirect (ex.: //evil.com, javascript:). */
 function parseRedirectUrl(request: Request): string {
   const { searchParams } = new URL(request.url);
-  const rawRedirect = searchParams.get("redirectUrl") || "/chat";
-  return rawRedirect.startsWith("http")
-    ? new URL(rawRedirect).pathname + new URL(rawRedirect).search
-    : rawRedirect;
+  const raw = searchParams.get("redirectUrl") ?? "/chat";
+  try {
+    const url = new URL(raw, request.url);
+    if (url.origin !== new URL(request.url).origin) {
+      return "/chat";
+    }
+    return url.pathname + url.search;
+  } catch {
+    return "/chat";
+  }
 }
 
 /** POST: aciona o sign-in guest e redireciona. O cookie de sessão é definido nesta resposta (fluxo Auth.js). */
@@ -148,12 +202,11 @@ export async function POST(request: Request) {
     }
 
     await warmupDatabaseWithRetry();
-    return signInGuestWithOptionalTimeout(redirectUrl);
+    return signInGuestWithOptionalTimeout(redirectUrl, request);
   } catch (error) {
     if (isDevelopmentEnvironment) {
-      const err = error as Error | undefined;
-      const msg = err?.message ?? String(error);
-      console.error("[guest] sign-in failed:", msg, error);
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error("[guest] sign-in failed:", msg);
     }
     if (isCredentialsSignin(error)) {
       return NextResponse.json(
@@ -206,6 +259,7 @@ export async function GET(request: Request) {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Visitante</title>
+  <meta http-equiv="refresh" content="4;url=/api/auth/guest?redirectUrl=${redirectEnc}" />
 </head>
 <body>
   <p>A iniciar sessão como visitante…</p>

@@ -118,8 +118,10 @@ const MAX_KNOWLEDGE_SELECT = 50;
 const ACCEPTED_FILE_ACCEPT =
   "image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/plain,application/vnd.oasis.opendocument.text";
 
-function isAcceptedAttachmentType(type: string): boolean {
-  return (
+const ACCEPTED_DROP_EXTENSIONS = /\.(docx?|pdf|jpe?g|png|xlsx?|csv|txt|odt)$/i;
+
+function isAcceptedAttachmentType(type: string, filename?: string): boolean {
+  if (
     type.startsWith("image/") ||
     type === "application/pdf" ||
     type === "application/msword" ||
@@ -131,7 +133,14 @@ function isAcceptedAttachmentType(type: string): boolean {
     type === "text/csv" ||
     type === "text/plain" ||
     type === "application/vnd.oasis.opendocument.text"
-  );
+  ) {
+    return true;
+  }
+  // Fallback: Windows/browsers may report application/octet-stream or "" for DOCX/PDF on drag-and-drop
+  if ((type === "" || type === "application/octet-stream") && filename) {
+    return ACCEPTED_DROP_EXTENSIONS.test(filename);
+  }
+  return false;
 }
 
 function _setCookie(name: string, value: string) {
@@ -1047,7 +1056,7 @@ function PureMultimodalInput({
         return;
       }
       const files = Array.from(items).filter((f) =>
-        isAcceptedAttachmentType(f.type)
+        isAcceptedAttachmentType(f.type, f.name)
       );
       if (files.length > 0) {
         processFiles(files);
@@ -1077,7 +1086,7 @@ function PureMultimodalInput({
         return;
       }
       const files = Array.from(items).filter((f) =>
-        isAcceptedAttachmentType(f.type)
+        isAcceptedAttachmentType(f.type, f.name)
       );
       if (files.length > 0) {
         processFiles(files, preferredType);

@@ -10,24 +10,34 @@ export default function ErrorBoundary({
   reset: () => void;
 }>) {
   useEffect(() => {
-    // Opcional: enviar para serviço de logging
+    if (process.env.NODE_ENV === "production") {
+      // Enviar para serviço de logging (ex.: Sentry.captureException(error))
+    }
   }, []);
 
-  const isConfigError =
-    error.message.includes("POSTGRES_URL") ||
-    error.message.includes("AUTH_SECRET");
+  const isDev = process.env.NODE_ENV === "development";
 
   return (
-    <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 p-6">
-      <h2 className="font-semibold text-lg">Algo correu mal</h2>
+    <div
+      aria-live="assertive"
+      className="flex min-h-[50vh] flex-col items-center justify-center gap-4 p-6"
+      role="alert"
+    >
+      <h2 className="font-semibold text-lg">Algo deu errado</h2>
       <p className="text-center text-muted-foreground text-sm">
-        Ocorreu um erro. Se estiver em produção na Vercel, confira as variáveis
-        de ambiente (POSTGRES_URL, AUTH_SECRET).
+        Ocorreu um erro inesperado. Se o problema persistir, consulte os logs da
+        função no dashboard da Vercel.
       </p>
-      {isConfigError && (
+      {isDev && (
         <pre className="max-w-full overflow-auto rounded-md bg-muted p-4 text-left text-sm">
+          {error.digest ? `[${error.digest}] ` : ""}
           {error.message}
         </pre>
+      )}
+      {!isDev && error.digest && (
+        <p className="text-center text-muted-foreground text-xs">
+          Código: {error.digest}
+        </p>
       )}
       <button
         className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:opacity-90"
