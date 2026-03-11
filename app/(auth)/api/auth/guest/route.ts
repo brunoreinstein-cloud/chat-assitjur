@@ -175,7 +175,8 @@ function parseRedirectUrl(request: Request): string {
     if (url.origin !== new URL(request.url).origin) {
       return "/chat";
     }
-    return url.pathname + url.search;
+    const path = url.pathname + url.search;
+    return path === "/" ? "/chat" : path;
   } catch {
     return "/chat";
   }
@@ -208,23 +209,13 @@ export async function POST(request: Request) {
       const msg = error instanceof Error ? error.message : String(error);
       console.error("[guest] sign-in failed:", msg);
     }
-    if (isCredentialsSignin(error)) {
-      return NextResponse.json(
-        {
-          error: "GuestSignInFailed",
-          message:
-            "Não foi possível criar sessão de visitante. Verifica: POSTGRES_URL (Supabase usa porta 6543), migrações (pnpm db:migrate), AUTH_URL=http://localhost:3300 em .env.local e base de dados acessível.",
-        },
-        { status: 503 }
-      );
-    }
+    const isKnown = isCredentialsSignin(error);
+    const message = isKnown
+      ? "Não foi possível criar sessão de visitante. A base de dados pode estar indisponível."
+      : "Não foi possível iniciar sessão. Tenta novamente.";
     return NextResponse.json(
-      {
-        error: "Guest sign-in failed",
-        message:
-          "Something went wrong. Please try again later. In dev, check terminal for [guest] sign-in failed.",
-      },
-      { status: 500 }
+      { error: "GuestSignInFailed", message },
+      { status: 503 }
     );
   }
 }

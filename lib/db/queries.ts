@@ -121,11 +121,9 @@ function getDb() {
       connect_timeout: connectTimeout,
     };
     if (isSupabaseUrl(url)) {
-      // Em desenvolvimento aceitar certificados auto-assinados (proxy/VPN podem causar SELF_SIGNED_CERT_IN_CHAIN).
-      postgresOptions.ssl =
-        process.env.NODE_ENV === "development"
-          ? { rejectUnauthorized: false }
-          : true;
+      // O Supabase Supavisor (pooler porta 6543) usa certificados que o Node rejeita com ssl:true.
+      // rejectUnauthorized:false garante ligação com SSL sem falhar na cadeia de certificados.
+      postgresOptions.ssl = { rejectUnauthorized: false };
     }
     clientInstance = postgres(url, postgresOptions);
     dbInstance = drizzle(clientInstance);
