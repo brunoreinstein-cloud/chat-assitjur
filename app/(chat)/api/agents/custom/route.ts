@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
+
+export const maxDuration = 30;
 import {
   createCustomAgent,
   ensureStatementTimeout,
