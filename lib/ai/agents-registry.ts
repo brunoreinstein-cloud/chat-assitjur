@@ -36,6 +36,19 @@ export interface AgentConfig {
   /** Incluir createRedatorContestacaoDocument para export minuta DOCX */
   useRedatorContestacaoTool: boolean;
   /**
+   * Habilitar Custom Memory Tools (saveMemory, recallMemories, forgetMemory).
+   * Quando true, o agente pode guardar e recuperar contexto persistente entre sessões.
+   * Default: true — todos os agentes têm memória por omissão.
+   */
+  useMemoryTools?: boolean;
+  /**
+   * Habilitar Human-in-the-Loop (requestApproval).
+   * Quando true, o agente pode pausar e solicitar aprovação explícita do advogado
+   * antes de acções irreversíveis (ex.: submeter peça, enviar comunicação).
+   * Default: false — activar apenas em agentes que executam acções externas.
+   */
+  useApprovalTool?: boolean;
+  /**
    * IDs de modelos LLM permitidos para este agente (ex.: ["anthropic/claude-sonnet-4.6"]).
    * Se omitido ou vazio, todos os modelos do catálogo são permitidos.
    */
@@ -57,6 +70,8 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
     instructions: AGENTE_ASSISTENTE_GERAL_INSTRUCTIONS,
     useRevisorDefesaTools: false,
     useRedatorContestacaoTool: false,
+    useMemoryTools: true,
+    useApprovalTool: false,
   },
   [AGENT_ID_REVISOR_DEFESAS]: {
     id: AGENT_ID_REVISOR_DEFESAS,
@@ -64,6 +79,8 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
     instructions: AGENTE_REVISOR_DEFESAS_INSTRUCTIONS,
     useRevisorDefesaTools: true,
     useRedatorContestacaoTool: false,
+    useMemoryTools: true,
+    useApprovalTool: false, // Usa GATE do sistema prompt; HITL não necessário aqui
     /** Apenas modelos sem extended thinking: ferramentas ativas e primeira resposta rápida (evita "Thinking" prolongado). */
     allowedModelIds: nonReasoningChatModelIds,
   },
@@ -73,6 +90,8 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
     instructions: AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS,
     useRevisorDefesaTools: false,
     useRedatorContestacaoTool: true,
+    useMemoryTools: true,
+    useApprovalTool: true, // Advogado aprova minuta antes de gerar DOCX final
     allowedModelIds: REDATOR_ALLOWED_MODEL_IDS,
   },
   [AGENT_ID_ASSISTJUR_MASTER]: {
@@ -81,6 +100,8 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
     instructions: AGENTE_ASSISTJUR_MASTER_INSTRUCTIONS,
     useRevisorDefesaTools: false,
     useRedatorContestacaoTool: false,
+    useMemoryTools: true,
+    useApprovalTool: true, // Master agent pode executar acções — requer aprovação
   },
 };
 

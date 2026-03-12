@@ -101,6 +101,53 @@ export const validationTools = {
     }),
     execute: noop,
   }),
+
+  // Memory Tool stubs — necessários para validar histórico de mensagens
+  // que contêm chamadas a estas tools. Schemas devem manter-se em sync
+  // com createMemoryTools() em lib/ai/tools/memory.ts.
+  saveMemory: tool({
+    description:
+      "Guarda uma informação importante sobre o cliente, processo ou preferências do advogado " +
+      "para ser lembrada em futuras sessões.",
+    inputSchema: z.object({
+      key: z.string().min(1).max(128),
+      value: z.string().min(1),
+    }),
+    execute: noop,
+  }),
+  recallMemories: tool({
+    description:
+      "Recupera todas as memórias guardadas para o utilizador actual.",
+    inputSchema: z.object({}),
+    execute: noop,
+  }),
+  forgetMemory: tool({
+    description: "Apaga uma memória guardada pela chave.",
+    inputSchema: z.object({
+      key: z.string().min(1),
+    }),
+    execute: noop,
+  }),
+
+  // Human-in-the-Loop stub — valida histórico com chamadas a requestApproval.
+  // Schema em sync com lib/ai/tools/human-in-the-loop.ts.
+  requestApproval: tool({
+    description:
+      "Solicita aprovação do advogado antes de executar uma acção importante ou irreversível.",
+    inputSchema: z.object({
+      action: z.enum([
+        "submit_document",
+        "send_communication",
+        "modify_data",
+        "irreversible_action",
+      ]),
+      title: z.string().max(80),
+      description: z.string().max(1000),
+      items: z.array(z.string().max(200)).max(10).optional(),
+      urgency: z.enum(["low", "medium", "high"]).default("medium"),
+    }),
+    execute: noop,
+  }),
 };
 
 /** Tipagem para safeValidateUIMessages (espera Record<string, Tool<unknown, unknown>>). */

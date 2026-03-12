@@ -15,4 +15,6 @@ export interface RetrievalChunk {
   text: string;
   knowledgeDocumentId: string;
   title: string;
+  /** Similaridade cossenoidal com a query (0–1). Presente quando o backend a calcula. */
+  similarity?: number;
 }

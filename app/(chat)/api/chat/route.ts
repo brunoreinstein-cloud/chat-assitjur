@@ -39,6 +39,8 @@ import { MIN_CREDITS_TO_START_CHAT, tokensToCredits } from "@/lib/ai/credits";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import { getPromptCachingCacheControl } from "@/lib/ai/prompt-caching-config";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
+import { modelSupportsVision } from "@/lib/ai/models";
+import { stripImageParts } from "@/lib/ai/multimodal";
 import { getLanguageModel } from "@/lib/ai/providers";
 import {
   REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID,
@@ -49,6 +51,8 @@ import { createRedatorContestacaoDocument } from "@/lib/ai/tools/create-redator-
 import { createRevisorDefesaDocuments } from "@/lib/ai/tools/create-revisor-defesa-documents";
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import { improvePromptTool } from "@/lib/ai/tools/improve-prompt";
+import { requestApproval } from "@/lib/ai/tools/human-in-the-loop";
+import { createMemoryTools } from "@/lib/ai/tools/memory";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
 import { updateDocument } from "@/lib/ai/tools/update-document";
 import { validationToolsForValidate } from "@/lib/ai/tools/validation-tools";
@@ -84,6 +88,7 @@ import {
   isStatementTimeoutError,
 } from "@/lib/errors";
 import { retrieveKnowledgeContext } from "@/lib/rag";
+import { buildAiSdkTelemetry } from "@/lib/telemetry";
 import type { ChatMessage } from "@/lib/types";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
 import { generateTitleFromUserMessage } from "../../actions";
@@ -345,8 +350,18 @@ function isPartValidForModel(part: unknown): boolean {
   return true;
 }
 
-/** Converte partes do tipo "document" (PDF/DOCX) em partes "text" para o modelo. Ordena PI antes de Contestação. Trunca texto para não exceder o limite do modelo. Remove partes inválidas para o AI SDK (ex.: tool sem toolCallId vindas da BD). */
-function normalizeMessageParts(messages: ChatMessage[]): ChatMessage[] {
+/**
+ * Converte partes do tipo "document" (PDF/DOCX) em partes "text" para o modelo.
+ * Ordena PI antes de Contestação. Trunca texto para não exceder o limite do modelo.
+ * Remove partes inválidas para o AI SDK (ex.: tool sem toolCallId vindas da BD).
+ *
+ * Multi-Modal Agent: se supportsVision=false, substitui partes de imagem por
+ * placeholders textuais (evita erros de API em modelos sem visão).
+ */
+function normalizeMessageParts(
+  messages: ChatMessage[],
+  supportsVision = true
+): ChatMessage[] {
   return messages.map((msg) => {
     if (!msg.parts?.length) {
       return msg;
@@ -407,9 +422,13 @@ function normalizeMessageParts(messages: ChatMessage[]): ChatMessage[] {
       return [part];
     });
 
-    const normalizedParts = [...docTextParts, ...normalizedOther].filter(
+    const combinedParts = [...docTextParts, ...normalizedOther].filter(
       isPartValidForModel
     );
+    // Multi-Modal Agent: remove imagens para modelos sem visão
+    const normalizedParts = supportsVision
+      ? combinedParts
+      : (stripImageParts(combinedParts) as typeof combinedParts);
     return { ...msg, parts: normalizedParts };
   });
 }
@@ -1192,7 +1211,8 @@ async function prepareModelMessagesForStream(
     knowledgeContext,
   } = params;
   const t5 = Date.now();
-  const normalizedMessages = normalizeMessageParts(uiMessages);
+  const visionEnabled = modelSupportsVision(effectiveModel);
+  const normalizedMessages = normalizeMessageParts(uiMessages, visionEnabled);
   const effectiveAgentInstructionsForContext =
     agentInstructions?.trim() || agentConfig.instructions;
   const systemStrForEstimate = systemPrompt({
@@ -1232,7 +1252,7 @@ async function prepareModelMessagesForStream(
     }
     const fallbackMessages =
       message?.role === "user"
-        ? normalizeMessageParts([message as ChatMessage])
+        ? normalizeMessageParts([message as ChatMessage], visionEnabled)
         : normalizedMessages.slice(-1);
     modelMessages = await convertToModelMessages(fallbackMessages);
   }
@@ -1258,6 +1278,7 @@ interface StreamExecuteContext {
   session: ChatStreamParams["session"];
   agentInstructions: ChatStreamParams["agentInstructions"];
   agentConfig: AgentConfig;
+  agentId: string;
   effectiveModel: string;
   requestHints: RequestHints;
   knowledgeContext: string | undefined;
@@ -1308,6 +1329,10 @@ function createStreamExecuteHandler(
       "updateDocument",
       "requestSuggestions",
       "improvePrompt",
+      "saveMemory",
+      "recallMemories",
+      "forgetMemory",
+      "requestApproval",
     ] as const;
     type ActiveToolName =
       | (typeof baseToolNames)[number]
@@ -1325,6 +1350,7 @@ function createStreamExecuteHandler(
             : []),
         ];
 
+    const memoryTools = createMemoryTools({ userId: ctx.session.user.id });
     const tools = {
       getWeather,
       createDocument: createDocument({ session: ctx.session, dataStream }),
@@ -1334,12 +1360,20 @@ function createStreamExecuteHandler(
         dataStream,
       }),
       improvePrompt: improvePromptTool,
+      saveMemory: memoryTools.saveMemory,
+      recallMemories: memoryTools.recallMemories,
+      forgetMemory: memoryTools.forgetMemory,
+      requestApproval,
     } as {
       getWeather: typeof getWeather;
       createDocument: ReturnType<typeof createDocument>;
       updateDocument: ReturnType<typeof updateDocument>;
       requestSuggestions: ReturnType<typeof requestSuggestions>;
       improvePrompt: typeof improvePromptTool;
+      saveMemory: ReturnType<typeof createMemoryTools>["saveMemory"];
+      recallMemories: ReturnType<typeof createMemoryTools>["recallMemories"];
+      forgetMemory: ReturnType<typeof createMemoryTools>["forgetMemory"];
+      requestApproval: typeof requestApproval;
       createRevisorDefesaDocuments?: ReturnType<
         typeof createRevisorDefesaDocuments
       >;
@@ -1390,10 +1424,14 @@ function createStreamExecuteHandler(
           }
         : undefined,
       tools,
-      experimental_telemetry: {
+      experimental_telemetry: buildAiSdkTelemetry({
         isEnabled: isProductionEnvironment,
         functionId: "stream-text",
-      },
+        agentId: ctx.agentId,
+        model: ctx.effectiveModel,
+        userId: ctx.session.user.id,
+        chatId: ctx.id,
+      }),
       // Aborta o stream ao fim de 270s para fechar graciosamente antes do
       // corte do Vercel (300s). Evita o "Task timed out after 300 seconds".
       abortSignal: AbortSignal.timeout(270_000),
@@ -1649,6 +1687,7 @@ function buildStreamAndResponse(
     session,
     agentInstructions,
     agentConfig,
+    agentId: agentConfig.id,
     effectiveModel,
     requestHints,
     knowledgeContext,
