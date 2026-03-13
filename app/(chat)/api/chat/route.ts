@@ -37,10 +37,10 @@ import {
 } from "@/lib/ai/context-window";
 import { MIN_CREDITS_TO_START_CHAT, tokensToCredits } from "@/lib/ai/credits";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
-import { getPromptCachingCacheControl } from "@/lib/ai/prompt-caching-config";
-import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { modelSupportsVision } from "@/lib/ai/models";
 import { stripImageParts } from "@/lib/ai/multimodal";
+import { getPromptCachingCacheControl } from "@/lib/ai/prompt-caching-config";
+import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
 import {
   REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID,
@@ -50,8 +50,8 @@ import { createDocument } from "@/lib/ai/tools/create-document";
 import { createRedatorContestacaoDocument } from "@/lib/ai/tools/create-redator-contestacao-document";
 import { createRevisorDefesaDocuments } from "@/lib/ai/tools/create-revisor-defesa-documents";
 import { getWeather } from "@/lib/ai/tools/get-weather";
-import { improvePromptTool } from "@/lib/ai/tools/improve-prompt";
 import { requestApproval } from "@/lib/ai/tools/human-in-the-loop";
+import { improvePromptTool } from "@/lib/ai/tools/improve-prompt";
 import { createMemoryTools } from "@/lib/ai/tools/memory";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
 import { updateDocument } from "@/lib/ai/tools/update-document";

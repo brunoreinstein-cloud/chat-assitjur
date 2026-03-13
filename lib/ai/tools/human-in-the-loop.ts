@@ -38,10 +38,10 @@ export const requestApproval = tool({
     /** Tipo da acção que requer aprovação */
     action: z
       .enum([
-        "submit_document",   // Submeter peça processual
-        "send_communication",// Enviar comunicação a cliente/parte
-        "modify_data",       // Alterar dados (processo, cliente, etc.)
-        "irreversible_action",// Qualquer outra acção irreversível
+        "submit_document", // Submeter peça processual
+        "send_communication", // Enviar comunicação a cliente/parte
+        "modify_data", // Alterar dados (processo, cliente, etc.)
+        "irreversible_action", // Qualquer outra acção irreversível
       ])
       .describe("Categoria da acção que requer aprovação"),
 
@@ -49,7 +49,9 @@ export const requestApproval = tool({
     title: z
       .string()
       .max(80)
-      .describe("Título curto do diálogo de aprovação (ex.: 'Submeter Contestação ao TRT-2')"),
+      .describe(
+        "Título curto do diálogo de aprovação (ex.: 'Submeter Contestação ao TRT-2')"
+      ),
 
     /** Descrição completa da acção, visível ao advogado */
     description: z
@@ -57,7 +59,7 @@ export const requestApproval = tool({
       .max(1000)
       .describe(
         "Descrição detalhada da acção: o que será feito, impactos, dados envolvidos. " +
-        "O advogado lê este texto antes de aprovar."
+          "O advogado lê este texto antes de aprovar."
       ),
 
     /** Resumo em bullet points do que será submetido/enviado (opcional) */
@@ -71,7 +73,9 @@ export const requestApproval = tool({
     urgency: z
       .enum(["low", "medium", "high"])
       .default("medium")
-      .describe("Nível de urgência: low (informativo), medium (normal), high (prazo próximo)"),
+      .describe(
+        "Nível de urgência: low (informativo), medium (normal), high (prazo próximo)"
+      ),
   }),
   // SEM `execute` → AI SDK pausa e aguarda resultado humano
 });
