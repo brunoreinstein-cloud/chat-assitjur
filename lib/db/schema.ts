@@ -18,7 +18,8 @@ import {
 export const user = pgTable("User", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
   email: varchar("email", { length: 64 }).notNull(),
-  password: varchar("password", { length: 64 }),
+  /** Hash de palavra-passe (bcrypt ~60 chars; argon2 até ~95). text evita truncação silenciosa ao mudar de algoritmo. */
+  password: text("password"),
 });
 
 export type User = InferSelectModel<typeof user>;
@@ -46,12 +47,14 @@ export const chat = pgTable(
       table.userId,
       table.createdAt
     ),
+    /** Queries por agente (ex.: apagar agente custom → listar chats que o usam). */
+    agentIdIdx: index("Chat_agentId_idx").on(table.agentId),
   })
 );
 
 export type Chat = InferSelectModel<typeof chat>;
 
-// DEPRECATED: schema antigo; usar Message_v2 (parts/attachments) abaixo.
+// ─── DEPRECATED — não usar em código novo; migrar para Message_v2 (parts/attachments) ───
 export const messageDeprecated = pgTable("Message", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
   chatId: uuid("chatId")
@@ -63,6 +66,7 @@ export const messageDeprecated = pgTable("Message", {
 });
 
 export type MessageDeprecated = InferSelectModel<typeof messageDeprecated>;
+// ─────────────────────────────────────────────────────────────────────────────────────
 
 export const message = pgTable(
   "Message_v2",
@@ -81,12 +85,18 @@ export const message = pgTable(
       table.chatId,
       table.createdAt
     ),
+    /** getMessageCountByUserId: filtro por role e createdAt após join com Chat. */
+    chatIdRoleCreatedAtIdx: index("Message_v2_chatId_role_createdAt_idx").on(
+      table.chatId,
+      table.role,
+      table.createdAt
+    ),
   })
 );
 
 export type DBMessage = InferSelectModel<typeof message>;
 
-// DEPRECATED: associado ao Message antigo; migrar para Message_v2.
+// ─── DEPRECATED — associado ao Message antigo; migrar para Vote_v2 ───────────────────
 export const voteDeprecated = pgTable(
   "Vote",
   {
@@ -106,6 +116,7 @@ export const voteDeprecated = pgTable(
 );
 
 export type VoteDeprecated = InferSelectModel<typeof voteDeprecated>;
+// ─────────────────────────────────────────────────────────────────────────────────────
 
 export const vote = pgTable(
   "Vote_v2",
@@ -134,7 +145,8 @@ export const document = pgTable(
     createdAt: timestamp("createdAt").notNull(),
     title: text("title").notNull(),
     content: text("content"),
-    kind: varchar("text", { enum: ["text", "code", "image", "sheet"] })
+    /** Nome da coluna no Postgres deve ser "kind" (não "text") para queries SQL manuais. */
+    kind: varchar("kind", { enum: ["text", "code", "image", "sheet"] })
       .notNull()
       .default("text"),
     userId: uuid("userId")
@@ -222,22 +234,33 @@ export const INDEXING_STATUS = ["pending", "indexed", "failed"] as const;
 export type IndexingStatus = (typeof INDEXING_STATUS)[number];
 
 /** Base de conhecimento: documentos que podem ser usados como contexto no chat (RAG ou injeção direta). */
-export const knowledgeDocument = pgTable("KnowledgeDocument", {
-  id: uuid("id").primaryKey().notNull().defaultRandom(),
-  userId: uuid("userId")
-    .notNull()
-    .references(() => user.id),
-  folderId: uuid("folderId").references(() => knowledgeFolder.id, {
-    onDelete: "set null",
-  }),
-  title: varchar("title", { length: 512 }).notNull(),
-  content: text("content").notNull(),
-  /** pending = só guardado (job/endpoint vetoriza depois); indexed = chunks disponíveis; failed = erro ao vetorizar. */
-  indexingStatus: varchar("indexingStatus", { length: 32 })
-    .notNull()
-    .default("indexed"),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-});
+export const knowledgeDocument = pgTable(
+  "KnowledgeDocument",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => user.id),
+    folderId: uuid("folderId").references(() => knowledgeFolder.id, {
+      onDelete: "set null",
+    }),
+    title: varchar("title", { length: 512 }).notNull(),
+    content: text("content").notNull(),
+    /** pending = só guardado (job/endpoint vetoriza depois); indexed = chunks disponíveis; failed = erro ao vetorizar. */
+    indexingStatus: varchar("indexingStatus", { length: 32 })
+      .notNull()
+      .default("indexed"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (table) => ({
+    /** GET /api/knowledge, seletor @, formulário de agentes: listar por userId. */
+    userIdIdx: index("KnowledgeDocument_userId_idx").on(table.userId),
+    userIdFolderIdx: index("KnowledgeDocument_userId_folderId_idx").on(
+      table.userId,
+      table.folderId
+    ),
+  })
+);
 
 export type KnowledgeDocument = InferSelectModel<typeof knowledgeDocument>;
 
@@ -259,6 +282,10 @@ export const knowledgeChunk = pgTable(
       "hnsw",
       table.embedding.op("vector_cosine_ops")
     ),
+    /** Listar chunks por documento, reindexação parcial, apagar por documento. */
+    documentIdChunkIndexIdx: index(
+      "KnowledgeChunk_documentId_chunkIndex_idx"
+    ).on(table.knowledgeDocumentId, table.chunkIndex),
   })
 );
 
@@ -288,6 +315,7 @@ export type UserFile = InferSelectModel<typeof userFile>;
 /**
  * Agentes personalizados criados pelo utilizador (AGENTES-IA-PERSONALIZADOS).
  * Instruções próprias; opcionalmente herdam tools de um agente base (ex.: revisor-defesas).
+ * Nota: knowledgeDocumentIds não tem FK; documentos apagados deixam IDs órfãos (getKnowledgeDocumentsByIds filtra inexistentes).
  */
 export const customAgent = pgTable("CustomAgent", {
   id: uuid("id").primaryKey().notNull().defaultRandom(),
@@ -325,6 +353,7 @@ export type BuiltInAgentOverride = InferSelectModel<
 /**
  * Saldo de créditos por utilizador (consumo de LLM).
  * 1 crédito = 1000 tokens (input+output). Ver docs/SPEC-CREDITOS-LLM.md.
+ * Limite: integer ~2.1e9; se a granularidade mudar (ex.: 1 crédito = 1 token), considerar bigint.
  */
 export const userCreditBalance = pgTable("UserCreditBalance", {
   userId: uuid("userId")
@@ -363,3 +392,36 @@ export const llmUsageRecord = pgTable(
 );
 
 export type LlmUsageRecord = InferSelectModel<typeof llmUsageRecord>;
+
+/**
+ * Memórias persistentes por utilizador: pares chave-valor para contexto entre sessões.
+ * Permite que os agentes "lembrem" dados do cliente, processo, preferências do advogado, etc.
+ */
+export const userMemory = pgTable(
+  "UserMemory",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /** Chave única por utilizador (ex.: "cliente_principal", "processo_atual"). */
+    key: varchar("key", { length: 256 }).notNull(),
+    /** Valor associado (texto livre ou JSON serializado). */
+    value: text("value").notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+    /** Expiração opcional; null = memória permanente. */
+    expiresAt: timestamp("expiresAt"),
+  },
+  (table) => ({
+    /** Listar memórias por utilizador. */
+    userIdIdx: index("UserMemory_userId_idx").on(table.userId),
+    /** Upsert por (userId, key). */
+    userIdKeyIdx: index("UserMemory_userId_key_idx").on(
+      table.userId,
+      table.key
+    ),
+  })
+);
+
+export type UserMemory = InferSelectModel<typeof userMemory>;

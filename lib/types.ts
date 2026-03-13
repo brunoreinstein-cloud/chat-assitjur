@@ -63,8 +63,10 @@ export interface CustomUIDataTypes {
   clear: null;
   finish: null;
   "chat-title": string;
+  /** Enviado quando o dbBatch usou fallback (BD lenta); cliente mostra aviso "dados parciais". */
+  "data-db-fallback": boolean;
   /** Index signature required by AI SDK UIDataTypes. kind stays ArtifactKind via explicit property above. */
-  [key: string]: string | Suggestion | null | undefined;
+  [key: string]: string | Suggestion | boolean | null | undefined;
 }
 
 /** Parte de uma mensagem do chat (texto, ficheiro, tool, etc.). */

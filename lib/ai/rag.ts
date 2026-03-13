@@ -14,6 +14,28 @@ const CHUNK_OVERLAP = 150;
 const EMBEDDING_MODEL_ID = "openai/text-embedding-3-small";
 
 /**
+ * Tamanho máximo de cada batch enviado ao modelo de embeddings.
+ * A API OpenAI suporta até 2048 inputs por chamada; usamos 100 por margem de segurança
+ * e para limitar o payload por pedido.
+ */
+const EMBED_BATCH_SIZE = 100;
+
+/**
+ * Delay entre batches consecutivos (ms) para evitar erros de rate limit.
+ * Ajustar conforme o tier da API OpenAI (TPM/RPM limit).
+ */
+const EMBED_BATCH_DELAY_MS = 300;
+
+/** Aguarda ms milissegundos. */
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** Normaliza um valor de texto para embedding (limpa espaços, trunca). */
+function normalizeForEmbedding(v: string): string {
+  return v.replaceAll(/\s+/g, " ").trim().slice(0, 8000);
+}
+
+/**
  * Divide o texto em chunks com overlap.
  */
 export function chunkText(
@@ -61,7 +83,7 @@ export async function embedQuery(value: string): Promise<number[] | null> {
   try {
     const { embedding } = await embed({
       model: EMBEDDING_MODEL_ID,
-      value: value.replaceAll(/\s+/g, " ").trim().slice(0, 8000),
+      value: normalizeForEmbedding(value),
     });
     return embedding;
   } catch {
@@ -71,6 +93,8 @@ export async function embedQuery(value: string): Promise<number[] | null> {
 
 /**
  * Gera embeddings para uma lista de textos (ex.: chunks de um documento).
+ * Para listas pequenas (≤ EMBED_BATCH_SIZE) usa uma única chamada.
+ * Para listas grandes usa embedChunksInBatches automaticamente.
  */
 export async function embedChunks(
   values: string[]
@@ -78,15 +102,66 @@ export async function embedChunks(
   if (values.length === 0) {
     return [];
   }
+  if (values.length > EMBED_BATCH_SIZE) {
+    return embedChunksInBatches(values);
+  }
   try {
     const { embeddings } = await embedMany({
       model: EMBEDDING_MODEL_ID,
-      values: values.map((v) =>
-        v.replaceAll(/\s+/g, " ").trim().slice(0, 8000)
-      ),
+      values: values.map(normalizeForEmbedding),
     });
     return embeddings.map((embedding) => ({ embedding }));
   } catch {
     return null;
   }
+}
+
+/**
+ * Gera embeddings em batches para listas grandes de textos.
+ * Ideal para indexação em massa de documentos (Cookbook: Embed Text in Batch).
+ *
+ * Processa EMBED_BATCH_SIZE textos por chamada com delay entre batches
+ * para respeitar os rate limits da API de embeddings.
+ *
+ * @param values    Lista de textos a vectorizar.
+ * @param batchSize Tamanho do batch (default: 100). Ajustar conforme o tier da API.
+ * @param delayMs   Delay entre batches em ms (default: 300). 0 para desactivar.
+ * @returns         Array de embeddings na mesma ordem dos inputs, ou null em caso de erro.
+ */
+export async function embedChunksInBatches(
+  values: string[],
+  batchSize = EMBED_BATCH_SIZE,
+  delayMs = EMBED_BATCH_DELAY_MS
+): Promise<{ embedding: number[] }[] | null> {
+  if (values.length === 0) {
+    return [];
+  }
+
+  const results: { embedding: number[] }[] = [];
+
+  for (let i = 0; i < values.length; i += batchSize) {
+    // Aguarda entre batches para não exceder o rate limit
+    if (i > 0 && delayMs > 0) {
+      await sleep(delayMs);
+    }
+
+    const batch = values.slice(i, i + batchSize).map(normalizeForEmbedding);
+
+    try {
+      const { embeddings } = await embedMany({
+        model: EMBEDDING_MODEL_ID,
+        values: batch,
+      });
+      results.push(...embeddings.map((embedding) => ({ embedding })));
+    } catch (err) {
+      // Em caso de erro num batch, retorna null para que o chamador possa tratar
+      console.error(
+        `[embedChunksInBatches] Erro no batch ${i}–${i + batchSize}:`,
+        err instanceof Error ? err.message : err
+      );
+      return null;
+    }
+  }
+
+  return results;
 }

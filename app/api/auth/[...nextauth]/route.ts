@@ -82,8 +82,11 @@ export async function GET(
   context: { params: Promise<{ nextauth?: string[] }> }
 ) {
   const pathname = request.nextUrl?.pathname ?? "";
+  // Qualquer pedido ao endpoint de sessão deve devolver sempre JSON (evita ClientFetchError "Unexpected token '<', \"<!DOCTYPE \"...").
   const pathIsSession =
-    pathname.endsWith("/session") || pathname.endsWith("/session/");
+    pathname.endsWith("/session") ||
+    pathname.endsWith("/session/") ||
+    pathname.includes("/session");
 
   if (pathIsSession) {
     try {

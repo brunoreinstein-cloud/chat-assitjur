@@ -9,8 +9,11 @@ import {
   ChatbotError,
   databaseUnavailableResponse,
   isDatabaseConnectionError,
+  isLikelyDatabaseError,
   isStatementTimeoutError,
 } from "@/lib/errors";
+
+export const maxDuration = 30;
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -69,18 +72,15 @@ export async function GET(request: NextRequest) {
       }
       return error.toResponse();
     }
-    if (isDatabaseConnectionError(error)) {
+    if (
+      isDatabaseConnectionError(error) ||
+      isStatementTimeoutError(error) ||
+      isLikelyDatabaseError(error)
+    ) {
       return databaseUnavailableResponse();
     }
-    if (isStatementTimeoutError(error)) {
-      return Response.json(
-        {
-          code: "bad_request:database",
-          message:
-            "A consulta demorou demasiado. Tente novamente em instantes.",
-        },
-        { status: 503, headers: { "Retry-After": "5" } }
-      );
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[api/history] GET 500:", error);
     }
     return Response.json(
       {
@@ -106,10 +106,20 @@ export async function DELETE() {
     return Response.json(result, { status: 200 });
   } catch (error) {
     if (error instanceof ChatbotError) {
+      if (error.surface === "database") {
+        return databaseUnavailableResponse();
+      }
       return error.toResponse();
     }
-    if (isDatabaseConnectionError(error)) {
+    if (
+      isDatabaseConnectionError(error) ||
+      isStatementTimeoutError(error) ||
+      isLikelyDatabaseError(error)
+    ) {
       return databaseUnavailableResponse();
+    }
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[api/history] DELETE 500:", error);
     }
     return Response.json(
       {

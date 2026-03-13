@@ -159,6 +159,7 @@ O chat passa a usar apenas esta função em vez de chamar `embedQuery` + `getRel
 - **Indexação/Recuperação:**
   - `RAG_INDEX_BACKEND` — `pgvector` (default) | `qdrant`
   - `RAG_RETRIEVAL_BACKEND` — `pgvector` (default) | `qdrant`
+  - `RAG_MIN_SIMILARITY` — opcional; valor 0–1 (ex.: 0.25). Só devolve chunks com similaridade >= este valor. Ver `docs/TEMPLATE-RAG-VERCEL-ANALISE.md`.
   - Para Qdrant: `QDRANT_URL` (obrigatório), `QDRANT_API_KEY` (opcional)
 
 ---

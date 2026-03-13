@@ -56,6 +56,24 @@ export const fetcher = async (url: string) => {
   return response.json();
 };
 
+/**
+ * Fetcher para GET /api/history — garante que os cookies de sessão são enviados
+ * (credentials: "include"). Sem isto, a API devolve 401 e o histórico não carrega.
+ */
+export const historyFetcher = async (url: string) => {
+  const response = await fetch(url, {
+    credentials: "include",
+    headers: { Accept: "application/json" },
+  });
+
+  if (!response.ok) {
+    const { code, cause } = await parseErrorBody(response);
+    throw new ChatbotError(code as ErrorCode, cause);
+  }
+
+  return response.json();
+};
+
 const DOCUMENT_FETCH_MAX_RETRIES = 4;
 const DOCUMENT_FETCH_INITIAL_MS = 300;
 
@@ -148,8 +166,8 @@ export async function fetchWithErrorHandlers(
 }
 
 export function getLocalStorage(key: string) {
-  if (typeof window !== "undefined") {
-    return JSON.parse(localStorage.getItem(key) || "[]");
+  if (globalThis.window !== undefined) {
+    return JSON.parse(globalThis.window.localStorage.getItem(key) || "[]");
   }
   return [];
 }
@@ -162,7 +180,7 @@ export function isUUID(value: string): boolean {
 }
 
 export function generateUUID(): string {
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replaceAll(/[xy]/g, (c) => {
     const r = Math.floor(Math.random() * 16);
     const v = c === "x" ? r : (r % 4) + 8;
     return v.toString(16);

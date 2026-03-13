@@ -2,7 +2,32 @@
 
 Revisão do fluxo de visitante (guest) no módulo de chat, alinhada ao contexto do Revisor de Defesas e às regras do projeto (Ultracite, AGENTS.md).
 
-**Última atualização:** 2025-03-01
+**Última atualização:** 2025-03-10
+
+---
+
+## Revisão do endpoint `/api/auth/guest` (GET/POST)
+
+**URL em produção:** `https://chat-assitjur.vercel.app/api/auth/guest?redirectUrl=%2F`
+
+### Comportamento
+
+| Método | Comportamento |
+|--------|----------------|
+| **GET** | Se já existir sessão (cookie) → redirect para `redirectUrl`. Caso contrário → devolve HTML com mensagem "A iniciar sessão como visitante…", form POST para esta rota e script que faz warmup opcional a `/api/health/db` (3s) e depois submete o form. |
+| **POST** | Verifica `AUTH_SECRET` e `POSTGRES_URL` (503 se faltar). Se já existir token → redirect para `redirectUrl`. Senão → warmup da BD com retry → `signIn("guest", …)` → redirect para `redirectUrl`. Em caso de erro de credenciais ou BD → 503 com mensagem em português. |
+
+Com `redirectUrl=%2F` (i.e. `/`), após login como visitante o utilizador é redirecionado para a **página inicial** (`/`), não para `/chat`. Para ir direto ao chat use `redirectUrl=%2Fchat` (ex.: `/api/auth/guest?redirectUrl=%2Fchat`).
+
+### Segurança
+
+- **Open redirect:** `parseRedirectUrl()` aceita `redirectUrl` absoluto (http/https) mas usa apenas `pathname + search` do URL, e redirects são feitos com `new URL(redirectUrl, request.url)` para caminhos relativos. Não há redirecionamento para domínios externos.
+- **Env:** Sem `AUTH_SECRET` ou `POSTGRES_URL` a rota devolve 503 e não tenta criar sessão.
+
+### Possíveis melhorias
+
+- **GET com `redirectUrl=/`:** Se a intenção for levar o visitante ao chat, usar na app links para `/api/auth/guest?redirectUrl=%2Fchat` (ex.: página de login, proxy).
+- **Acessibilidade da página GET:** A página "A iniciar sessão como visitante…" tem `<p>` e botão "Continuar"; considerar `<h1>` e `aria-label` no botão para leitores de ecrã (ver recomendações abaixo).
 
 ---
 

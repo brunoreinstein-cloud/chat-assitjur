@@ -43,6 +43,9 @@ const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 /** Extensões aceites para fallback quando o browser envia type vazio ou octet-stream (comum em produção). */
 const ACCEPTED_EXTENSIONS = /\.(docx?|pdf|jpe?g|png|xlsx?|csv|txt|odt)$/i;
 
+/** Tipo de documento classificado (PI ou Contestação). */
+export type DocumentType = "pi" | "contestacao";
+
 export function contentTypeFromFilename(filename: string): string {
   const lower = filename.toLowerCase();
   if (lower.endsWith(".doc")) {
@@ -90,7 +93,7 @@ const CLASSIFY_SAMPLE_LENGTH = 6000;
  */
 function mapMetadataDocumentType(
   raw: string | undefined
-): "pi" | "contestacao" | undefined {
+): DocumentType | undefined {
   if (raw == null || raw.trim().length === 0) {
     return undefined;
   }
@@ -124,8 +127,8 @@ function mapMetadataDocumentType(
  */
 export function classifyDocumentTypeFromFilename(
   filename: string
-): "pi" | "contestacao" | undefined {
-  const n = filename.toLowerCase().replace(/\s+/g, " ");
+): DocumentType | undefined {
+  const n = filename.toLowerCase().replaceAll(/\s+/g, " ");
   const looksLikeContestacao =
     n.includes("contest") ||
     n.includes("defesa") ||
@@ -150,7 +153,7 @@ export function classifyDocumentTypeFromFilename(
  * Classifica o tipo de documento (PI ou Contestação) por padrões no texto.
  * Usa apenas o início do documento; retorna undefined se não houver indício claro.
  */
-function classifyDocumentType(text: string): "pi" | "contestacao" | undefined {
+function classifyDocumentType(text: string): DocumentType | undefined {
   const sample = text.slice(0, CLASSIFY_SAMPLE_LENGTH).toUpperCase();
   const piMarkers = [
     /\bPETI[CÇ][AÃ]O\s+INICIAL\b/,
@@ -167,10 +170,10 @@ function classifyDocumentType(text: string): "pi" | "contestacao" | undefined {
     /\bIMPUGNA[CÇ][AÃ]O\b/,
     /\bRECLAMADO\s*[:\s]/,
     /\bDEFESA\s+(?:DO\s+)?RECLAMADO\b/,
-    /\bCONTESTA[CÇ][AÃ]O\s+AO[S]?\s+PEDIDOS?\b/,
-    /\b(?:EM\s+)?RESPOSTA\s+(?:À|A)\s+(?:RECLAMA[CÇ][AÃ]O|PETI[CÇ][AÃ]O)\b/,
+    /\bCONTESTA[CÇ][AÃ]O\s+AOS?\s+PEDIDOS?\b/,
+    /\b(?:EM\s+)?RESPOSTA\s+[ÀA]\s+(?:RECLAMA[CÇ][AÃ]O|PETI[CÇ][AÃ]O)\b/,
     /\bNEGA\s+(?:INTEGRALMENTE|EM\s+PARTE)\b/,
-    /\bCONTESTA[CÇ][AÃ]O\s+À[S]?\s+INICIAL\b/,
+    /\bCONTESTA[CÇ][AÃ]O\s+ÀS?\s+INICIAL\b/,
     /\bDEFESA\s+(?:PR[EÉ]VIA|APRESENTADA)\b/,
     /\b(?:VEM\s+)?(?:O\s+)?RECLAMADO\s+[AÀ]\s+PRESEN/,
   ];
@@ -575,6 +578,45 @@ function isImageContentType(contentType: string): boolean {
   );
 }
 
+async function extractTextByContentType(
+  fileBuffer: ArrayBuffer,
+  contentType: string
+): Promise<{ text: string; detail?: string } | null> {
+  if (contentType === ACCEPTED_PDF_TYPE) {
+    const result = await extractTextFromPdf(fileBuffer);
+    return { text: result.text, detail: result.lastError };
+  }
+  if (contentType === ACCEPTED_DOC_TYPE) {
+    const text = await extractTextFromDoc(fileBuffer);
+    return { text };
+  }
+  if (contentType === ACCEPTED_DOCX_TYPE) {
+    const text = await extractTextFromDocx(fileBuffer);
+    return { text };
+  }
+  if (isImageContentType(contentType)) {
+    const text = await extractTextFromImage(fileBuffer);
+    return { text };
+  }
+  if (contentType === ACCEPTED_TXT_TYPE) {
+    const text = extractTextFromTxt(fileBuffer);
+    return { text };
+  }
+  if (contentType === ACCEPTED_CSV_TYPE) {
+    const text = await extractTextFromCsv(fileBuffer);
+    return { text };
+  }
+  if (contentType === ACCEPTED_XLSX_TYPE || contentType === ACCEPTED_XLS_TYPE) {
+    const text = await extractTextFromExcel(fileBuffer);
+    return { text };
+  }
+  if (contentType === ACCEPTED_ODT_TYPE) {
+    const text = await extractTextFromOdt(fileBuffer);
+    return { text };
+  }
+  return null;
+}
+
 /** Usado por upload (FormData) e por process (após fetch do Blob). */
 export async function runExtractionAndClassification(
   fileBuffer: ArrayBuffer,
@@ -582,65 +624,39 @@ export async function runExtractionAndClassification(
 ): Promise<{
   extractedText?: string;
   extractionFailed: boolean;
-  documentType?: "pi" | "contestacao";
+  documentType?: DocumentType;
   extractionDetail?: string;
 }> {
-  const isPdf = contentType === ACCEPTED_PDF_TYPE;
-  const isDoc = contentType === ACCEPTED_DOC_TYPE;
-  const isDocx = contentType === ACCEPTED_DOCX_TYPE;
-  const isImage = isImageContentType(contentType);
-  const isTxt = contentType === ACCEPTED_TXT_TYPE;
-  const isCsv = contentType === ACCEPTED_CSV_TYPE;
-  const isExcel =
-    contentType === ACCEPTED_XLSX_TYPE || contentType === ACCEPTED_XLS_TYPE;
-  const isOdt = contentType === ACCEPTED_ODT_TYPE;
-  let extractedText: string | undefined;
-  let extractionFailed = false;
-  let extractionDetail: string | undefined;
-  let documentType: "pi" | "contestacao" | undefined;
-  if (
-    isPdf ||
-    isDoc ||
-    isDocx ||
-    isImage ||
-    isTxt ||
-    isCsv ||
-    isExcel ||
-    isOdt
-  ) {
-    try {
-      if (isPdf) {
-        const result = await extractTextFromPdf(fileBuffer);
-        extractedText = result.text;
-        extractionDetail = result.lastError;
-      } else if (isDoc) {
-        extractedText = await extractTextFromDoc(fileBuffer);
-      } else if (isDocx) {
-        extractedText = await extractTextFromDocx(fileBuffer);
-      } else if (isImage) {
-        extractedText = await extractTextFromImage(fileBuffer);
-      } else if (isTxt) {
-        extractedText = extractTextFromTxt(fileBuffer);
-      } else if (isCsv) {
-        extractedText = await extractTextFromCsv(fileBuffer);
-      } else if (isExcel) {
-        extractedText = await extractTextFromExcel(fileBuffer);
-      } else if (isOdt) {
-        extractedText = await extractTextFromOdt(fileBuffer);
-      }
-      if (
-        typeof extractedText === "string" &&
-        extractedText.trim().length === 0
-      ) {
-        extractionFailed = true;
-      } else if (typeof extractedText === "string") {
-        documentType = classifyDocumentType(extractedText);
-      }
-    } catch {
-      extractionFailed = true;
-    }
+  let extracted: { text: string; detail?: string } | null = null;
+  try {
+    extracted = await extractTextByContentType(fileBuffer, contentType);
+  } catch {
+    return {
+      extractedText: undefined,
+      extractionFailed: true,
+      documentType: undefined,
+      extractionDetail: undefined,
+    };
   }
-  return { extractedText, extractionFailed, documentType, extractionDetail };
+  if (!extracted) {
+    return {
+      extractedText: undefined,
+      extractionFailed: false,
+      documentType: undefined,
+      extractionDetail: undefined,
+    };
+  }
+  const extractionFailed = extracted.text.trim().length === 0;
+  const documentType =
+    extracted.text.trim().length > 0
+      ? classifyDocumentType(extracted.text)
+      : undefined;
+  return {
+    extractedText: extracted.text,
+    extractionFailed,
+    documentType,
+    extractionDetail: extracted.detail,
+  };
 }
 
 /** Metadados extraídos pela IA (título, autor, tipo, informações-chave). Incluído na resposta do upload quando disponível. */
@@ -662,7 +678,7 @@ function respondUploadSuccess(
   _filename: string,
   extractedText?: string,
   extractionFailed?: boolean,
-  documentType?: "pi" | "contestacao",
+  documentType?: DocumentType,
   options?: UploadSuccessOptions
 ): NextResponse {
   const body = {
@@ -702,9 +718,12 @@ async function uploadToStorage(
   if (uploadResult.ok) {
     return { url: uploadResult.url, pathname: uploadResult.pathname };
   }
-  if (uploadResult.reason === "storage_error") {
-    throw new Error(
-      `Falha ao enviar o ficheiro para o Storage.${storageErrorHint(uploadResult.message)}`
+  // Supabase falhou (ex.: ficheiro > 5 MiB no bucket chat-files); tentar Blob como fallback
+  if (uploadResult.reason === "storage_error" && isDev) {
+    console.warn(
+      "[upload] Supabase storage_error, a tentar Blob:",
+      uploadResult.message,
+      storageErrorHint(uploadResult.message)
     );
   }
   try {
@@ -721,15 +740,20 @@ async function uploadToStorage(
   }
 }
 
+/** Opções de extração para persistAndRespond (agrupa 4 params para respeitar limite Sonar). */
+export interface PersistExtractionOptions {
+  extractedText?: string;
+  extractionFailed?: boolean;
+  documentType?: DocumentType;
+  extractionDetail?: string;
+}
+
 export async function persistAndRespond(
   userId: string,
   filename: string,
   fileBuffer: ArrayBuffer,
   contentType: string,
-  extractedText?: string,
-  extractionFailed?: boolean,
-  documentType?: "pi" | "contestacao",
-  extractionDetail?: string
+  extraction?: PersistExtractionOptions
 ): Promise<NextResponse> {
   try {
     const uploadResult = await uploadToStorage(
@@ -742,10 +766,12 @@ export async function persistAndRespond(
       uploadResult,
       contentType,
       filename,
-      extractedText,
-      extractionFailed,
-      documentType,
-      { extractionDetail }
+      extraction?.extractedText,
+      extraction?.extractionFailed,
+      extraction?.documentType,
+      extraction?.extractionDetail
+        ? { extractionDetail: extraction.extractionDetail }
+        : {}
     );
   } catch (err) {
     const message =
@@ -754,132 +780,134 @@ export async function persistAndRespond(
   }
 }
 
+function needsExtraction(contentType: string): boolean {
+  return (
+    contentType === ACCEPTED_PDF_TYPE ||
+    contentType === ACCEPTED_DOC_TYPE ||
+    contentType === ACCEPTED_DOCX_TYPE ||
+    isImageContentType(contentType) ||
+    contentType === ACCEPTED_TXT_TYPE ||
+    contentType === ACCEPTED_CSV_TYPE ||
+    contentType === ACCEPTED_XLSX_TYPE ||
+    contentType === ACCEPTED_XLS_TYPE ||
+    contentType === ACCEPTED_ODT_TYPE
+  );
+}
+
+async function fetchMetadataIfAvailable(
+  extractedText: string | undefined,
+  filename: string
+): Promise<{
+  extractedMetadata?: UploadExtractedMetadata;
+  documentTypeFromMeta?: DocumentType;
+}> {
+  if (typeof extractedText !== "string" || extractedText.trim().length === 0) {
+    return {};
+  }
+  const meta = await extractDocumentMetadata(extractedText, filename);
+  if (!meta) {
+    return {};
+  }
+  return {
+    extractedMetadata: {
+      title: meta.title,
+      author: meta.author,
+      documentType: meta.documentType,
+      keyInfo: meta.keyInfo,
+    },
+    documentTypeFromMeta: mapMetadataDocumentType(meta.documentType),
+  };
+}
+
+async function handleUploadFormData(
+  userId: string,
+  formData: FormData
+): Promise<NextResponse> {
+  const file = formData.get("file") as Blob | null;
+  if (!file) {
+    return NextResponse.json(
+      { error: "Nenhum arquivo enviado" },
+      { status: 400 }
+    );
+  }
+
+  const parsed = FileSchema.safeParse({ file });
+  if (!parsed.success) {
+    const message = parsed.error.errors.map((e) => e.message).join(". ");
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+
+  const filename =
+    (file instanceof File ? file.name : undefined) ?? "documento";
+  const fileBuffer = await file.arrayBuffer();
+  const bufferForStorage = fileBuffer.slice(0);
+  const rawType = file.type;
+  const contentType =
+    rawType === "" || rawType === OCTET_STREAM
+      ? contentTypeFromFilename(filename)
+      : rawType;
+
+  const extractionPromise = needsExtraction(contentType)
+    ? runExtractionAndClassification(fileBuffer, contentType)
+    : Promise.resolve({
+        extractedText: undefined,
+        extractionFailed: false,
+        documentType: undefined as DocumentType | undefined,
+        extractionDetail: undefined,
+      });
+
+  const [uploadResult, extraction] = await Promise.all([
+    uploadToStorage(userId, filename, bufferForStorage, contentType),
+    extractionPromise,
+  ]);
+
+  const { extractedMetadata, documentTypeFromMeta } =
+    await fetchMetadataIfAvailable(extraction.extractedText, filename);
+
+  const finalDocumentType =
+    classifyDocumentTypeFromFilename(filename) ??
+    extraction.documentType ??
+    documentTypeFromMeta;
+
+  return respondUploadSuccess(
+    uploadResult,
+    contentType,
+    filename,
+    extraction.extractedText,
+    extraction.extractionFailed,
+    finalDocumentType,
+    {
+      extractionDetail: extraction.extractionDetail,
+      ...(extractedMetadata ? { extractedMetadata } : {}),
+    }
+  );
+}
+
 export async function POST(request: Request) {
   const session = await auth();
-
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
-
   if (request.body === null) {
     return NextResponse.json(
       { error: "Corpo da requisição vazio" },
       { status: 400 }
     );
   }
-
   try {
     const formData = await request.formData();
-    const file = formData.get("file") as Blob | null;
-
-    if (!file) {
-      return NextResponse.json(
-        { error: "Nenhum arquivo enviado" },
-        { status: 400 }
-      );
-    }
-
-    const parsed = FileSchema.safeParse({ file });
-    if (!parsed.success) {
-      const message = parsed.error.errors.map((e) => e.message).join(". ");
-      return NextResponse.json({ error: message }, { status: 400 });
-    }
-
-    const filename =
-      (file instanceof File ? file.name : undefined) ?? "documento";
-    const fileBuffer = await file.arrayBuffer();
-    // Cópia para o Storage: a extração (unpdf/PDF.js) pode transferir o buffer e deixá-lo detached.
-    const bufferForStorage = fileBuffer.slice(0);
-    const rawType = file.type;
-    const contentType =
-      rawType === "" || rawType === OCTET_STREAM
-        ? contentTypeFromFilename(filename)
-        : rawType;
-    const isPdf = contentType === ACCEPTED_PDF_TYPE;
-    const isDoc = contentType === ACCEPTED_DOC_TYPE;
-    const isDocx = contentType === ACCEPTED_DOCX_TYPE;
-    const isImage = isImageContentType(contentType);
-    const isTxt = contentType === ACCEPTED_TXT_TYPE;
-    const isCsv = contentType === ACCEPTED_CSV_TYPE;
-    const isExcel =
-      contentType === ACCEPTED_XLSX_TYPE || contentType === ACCEPTED_XLS_TYPE;
-    const isOdt = contentType === ACCEPTED_ODT_TYPE;
-    const runsExtraction =
-      isPdf || isDoc || isDocx || isImage || isTxt || isCsv || isExcel || isOdt;
-
-    // Upload e extração em paralelo: o tempo total é o máximo dos dois, não a soma.
-    const extractionPromise = runsExtraction
-      ? runExtractionAndClassification(fileBuffer, contentType)
-      : Promise.resolve({
-          extractedText: undefined,
-          extractionFailed: false,
-          documentType: undefined as "pi" | "contestacao" | undefined,
-          extractionDetail: undefined,
-        });
-
-    const uploadPromise = uploadToStorage(
-      session.user.id,
-      filename,
-      bufferForStorage,
-      contentType
-    );
-
-    const [uploadResult, extraction] = await Promise.all([
-      uploadPromise,
-      extractionPromise,
-    ]);
-
-    // Extração inteligente de metadados pela IA (título, autor, tipo, informações-chave)
-    let extractedMetadata: UploadExtractedMetadata | undefined;
-    let documentTypeFromMeta: "pi" | "contestacao" | undefined;
-    if (
-      typeof extraction.extractedText === "string" &&
-      extraction.extractedText.trim().length > 0
-    ) {
-      const meta = await extractDocumentMetadata(
-        extraction.extractedText,
-        filename
-      );
-      if (meta) {
-        extractedMetadata = {
-          title: meta.title,
-          author: meta.author,
-          documentType: meta.documentType,
-          keyInfo: meta.keyInfo,
-        };
-        documentTypeFromMeta = mapMetadataDocumentType(meta.documentType);
-      }
-    }
-
-    // Tipo de documento: nome do ficheiro primeiro (ex.: "Contestação - RO.pdf"), depois regex no texto, depois IA
-    const finalDocumentType =
-      classifyDocumentTypeFromFilename(filename) ??
-      extraction.documentType ??
-      documentTypeFromMeta;
-
-    return respondUploadSuccess(
-      uploadResult,
-      contentType,
-      filename,
-      extraction.extractedText,
-      extraction.extractionFailed,
-      finalDocumentType,
-      {
-        extractionDetail: extraction.extractionDetail,
-        ...(extractedMetadata ? { extractedMetadata } : {}),
-      }
-    );
+    return await handleUploadFormData(session.user.id, formData);
   } catch (err) {
     const message =
       err instanceof Error && err.message.length > 0
         ? err.message
         : "Erro ao processar o upload. Verifique o tamanho e o tipo do ficheiro (até 100 MB).";
+    if (isDev) {
+      console.warn("[api/files/upload] 500:", message, err);
+    }
     const detail = isDev && err instanceof Error ? err.message : undefined;
     return NextResponse.json(
-      {
-        error: message,
-        ...(detail ? { detail } : {}),
-      },
+      { error: message, ...(detail ? { detail } : {}) },
       { status: 500 }
     );
   }

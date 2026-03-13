@@ -21,15 +21,17 @@ export const viewport = {
   maximumScale: 1, // Disable auto-zoom on mobile Safari
 };
 
+// display: "optional" evita o aviso "preloaded but not used within a few seconds"
+// quando a página demora a renderizar (ex.: BD lenta); a fonte é usada quando disponível.
 const geist = Geist({
   subsets: ["latin"],
-  display: "swap",
+  display: "optional",
   variable: "--font-geist",
 });
 
 const geistMono = Geist_Mono({
   subsets: ["latin"],
-  display: "swap",
+  display: "optional",
   variable: "--font-geist-mono",
 });
 

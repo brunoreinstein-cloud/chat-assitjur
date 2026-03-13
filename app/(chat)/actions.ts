@@ -7,6 +7,7 @@ import { signIn } from "@/app/(auth)/auth";
 import type { VisibilityType } from "@/components/visibility-selector";
 import { titlePrompt } from "@/lib/ai/prompts";
 import { getTitleModel } from "@/lib/ai/providers";
+import { withLlmCache } from "@/lib/cache/llm-response-cache";
 import {
   deleteAllChatsByUserId,
   deleteChatById,
@@ -43,7 +44,8 @@ export async function generateTitleFromUserMessage({
       ? `${fullText.slice(0, MAX_TITLE_PROMPT_CHARS)}...`
       : fullText;
   const { text } = await generateText({
-    model: getTitleModel(),
+    // Cached: mesmo prompt de primeira mensagem → mesmo título (TTL 24h)
+    model: withLlmCache(getTitleModel(), "title", 86_400),
     system: titlePrompt,
     prompt,
   });

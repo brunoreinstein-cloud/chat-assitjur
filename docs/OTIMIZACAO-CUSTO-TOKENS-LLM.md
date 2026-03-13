@@ -57,6 +57,7 @@ Estimativa grosseira de tamanho de prompt por pedido de chat (sem knowledge): sy
 ### 3.3 Documentos na mensagem (PI, Contestação, anexos)
 
 - **Onde:** `normalizeMessageParts` em `route.ts`; truncagem por `MAX_CHARS_PER_DOCUMENT` e `MAX_TOTAL_DOC_CHARS`.
+- **PI:** Quando a PI é truncada, o pipeline preserva início + fim (`PI_TAIL_CHARS` = 2500) para manter dados do processo no início e OAB/assinaturas no final.
 - **Revisão:** Se 35k/doc e 100k total forem demais para o teu uso, **reduzir** (ex.: 25k + 70k) reduz custo; se o modelo “cortar” informação importante, **aumentar** com cuidado (custos e limites de contexto do modelo).
 
 ### 3.4 Histórico de mensagens

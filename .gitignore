@@ -41,6 +41,7 @@ yarn-error.log*
 *.traineddata
 
 # Playwright
+.auth/
 /test-results/
 /playwright-report/
 /blob-report/

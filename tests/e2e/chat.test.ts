@@ -1,32 +1,38 @@
 import { expect, test } from "@playwright/test";
-import { ensureChatPageWithGuest } from "../helpers";
+import { gotoChatPage } from "../helpers";
 
 test.describe("Chat Page", () => {
+  /** Aquece a conexão à BD antes dos testes (evita timeouts em /chat quando a BD está fria). */
+  test.beforeAll(async ({ request }) => {
+    await request.get("/api/health/db");
+  });
+
   test("chat page loads with input field", async ({ page }) => {
-    await ensureChatPageWithGuest(page);
+    await gotoChatPage(page);
     await expect(page.getByTestId("multimodal-input")).toBeVisible();
   });
 
   test("can type in the input field", async ({ page }) => {
-    await ensureChatPageWithGuest(page);
+    await gotoChatPage(page);
     const input = page.getByTestId("multimodal-input");
     await input.fill("Hello world");
     await expect(input).toHaveValue("Hello world");
   });
 
   test("submit button is visible", async ({ page }) => {
-    await ensureChatPageWithGuest(page);
+    await gotoChatPage(page);
     await expect(page.getByTestId("send-button")).toBeVisible();
   });
 
   test("prompt selector is visible on empty chat", async ({ page }) => {
-    await ensureChatPageWithGuest(page);
+    await gotoChatPage(page);
     const trigger = page.getByTestId("prompt-selector-trigger");
-    await expect(trigger).toBeVisible();
+    // Timeout generoso: agents/history podem demorar vários minutos quando a BD está lenta
+    await expect(trigger).toBeVisible({ timeout: 120_000 });
   });
 
   test("can stop generation with stop button", async ({ page }) => {
-    await ensureChatPageWithGuest(page);
+    await gotoChatPage(page);
 
     // Type and send a message
     await page.getByTestId("multimodal-input").fill("Hello");
@@ -44,7 +50,7 @@ test.describe("Chat Page", () => {
 
 test.describe("Chat Input Features", () => {
   test("input clears after sending", async ({ page }) => {
-    await ensureChatPageWithGuest(page);
+    await gotoChatPage(page);
     const input = page.getByTestId("multimodal-input");
     await input.fill("Test message");
     await page.getByTestId("send-button").click();
@@ -54,7 +60,7 @@ test.describe("Chat Input Features", () => {
   });
 
   test("input supports multiline text", async ({ page }) => {
-    await ensureChatPageWithGuest(page);
+    await gotoChatPage(page);
     const input = page.getByTestId("multimodal-input");
     const multiline = "Line 1\nLine 2\nLine 3";
     await input.fill(multiline);

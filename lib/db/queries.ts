@@ -41,6 +41,7 @@ import {
   user,
   userCreditBalance,
   userFile,
+  userMemory,
   vote,
 } from "./schema";
 import { generateHashedPassword } from "./utils";
@@ -63,8 +64,21 @@ function toDatabaseError(error: unknown, fallbackMessage: string): never {
 let dbInstance: ReturnType<typeof drizzle> | null = null;
 let clientInstance: ReturnType<typeof postgres> | null = null;
 
-/** Opções de conexão: schema (statement_timeout na URL é ignorado pelo Supabase; usamos ensureStatementTimeout()). */
+/**
+ * Opções de conexão: schema. Não usar com pooler Supabase (porta 6543) — não suporta
+ * o parâmetro "options" (erro "unsupported startup parameter: options").
+ */
 const CONNECTION_OPTS = "options=-c%20search_path%3Dpublic";
+
+/** True se a URL for o pooler Supabase (Supavisor), que não aceita "options". */
+function isSupabasePoolerUrl(url: string): boolean {
+  return /:6543\//.test(url) || url.includes("pooler.supabase.com");
+}
+
+/** True se a URL for Supabase (recomenda-se sslmode=require). */
+function isSupabaseUrl(url: string): boolean {
+  return url.includes("supabase.co") || url.includes("pooler.supabase.com");
+}
 
 /**
  * Conexão Postgres (singleton por processo). Em serverless (Vercel) cada invocação
@@ -85,15 +99,34 @@ function getDb() {
     );
   }
   if (!dbInstance) {
-    if (!url.includes("search_path")) {
+    if (process.env.NODE_ENV === "development") {
+      const safeUrl = url.replace(/:\/\/[^:]+:[^@]+@/, "://***:***@");
+      console.warn("[db] connecting:", safeUrl);
+    }
+    if (!(url.includes("search_path") || isSupabasePoolerUrl(url))) {
       url = url.includes("?")
         ? `${url}&${CONNECTION_OPTS}`
         : `${url}?${CONNECTION_OPTS}`;
     }
-    clientInstance = postgres(url, {
-      max: 1,
-      connect_timeout: 10,
-    });
+    // Supabase recomenda SSL; evita 503 por falha de handshake em alguns ambientes.
+    if (isSupabaseUrl(url) && !url.includes("sslmode=")) {
+      url = url.includes("?")
+        ? `${url}&sslmode=require`
+        : `${url}?sslmode=require`;
+    }
+    /** Em dev usa-se mais uma conexão para reduzir contenção entre chat, credits e health (mesmo processo). Em produção mantém 1 por invocação. */
+    const maxConnections = process.env.NODE_ENV === "development" ? 3 : 1;
+    const connectTimeout = process.env.NODE_ENV === "production" ? 25 : 10;
+    const postgresOptions: Parameters<typeof postgres>[1] = {
+      max: maxConnections,
+      connect_timeout: connectTimeout,
+    };
+    if (isSupabaseUrl(url)) {
+      // O Supabase Supavisor (pooler porta 6543) usa certificados que o Node rejeita com ssl:true.
+      // rejectUnauthorized:false garante ligação com SSL sem falhar na cadeia de certificados.
+      postgresOptions.ssl = { rejectUnauthorized: false };
+    }
+    clientInstance = postgres(url, postgresOptions);
     dbInstance = drizzle(clientInstance);
   }
   return dbInstance;
@@ -204,6 +237,41 @@ export async function createGuestUser() {
     throw new ChatbotError(
       "bad_request:database",
       `Failed to create guest user: ${detail}`
+    );
+  }
+}
+
+/**
+ * Garante que o utilizador existe na tabela User (para satisfazer FK ao criar chat).
+ * Se não existir, insere um registo com o id e email da sessão (evita 401 "utilizador inexistente").
+ */
+export async function ensureUserExistsInDb(
+  userId: string,
+  email?: string | null
+): Promise<void> {
+  const existing = await getDb()
+    .select({ id: user.id })
+    .from(user)
+    .where(eq(user.id, userId))
+    .limit(1);
+  if (existing.length > 0) {
+    return;
+  }
+  const emailValue =
+    typeof email === "string" && email.trim().length > 0
+      ? email.trim().slice(0, 64)
+      : `user-${userId}@session`;
+  try {
+    await getDb()
+      .insert(user)
+      .values({ id: userId, email: emailValue, password: null })
+      .onConflictDoNothing({ target: user.id });
+  } catch (err) {
+    const detail =
+      err instanceof Error ? err.message : "Unknown database error";
+    throw new ChatbotError(
+      "bad_request:database",
+      `Failed to ensure user: ${detail}`
     );
   }
 }
@@ -1285,6 +1353,7 @@ export async function deleteChunksByKnowledgeDocumentId(
 /**
  * Busca os chunks mais relevantes para o embedding da pergunta (cosine similarity).
  * Considera documentos do userId; se allowedUserIds for passado, inclui também documentos desses utilizadores (ex.: doc. sistema).
+ * Se minSimilarity for definido (0–1), só devolve chunks com similaridade >= minSimilarity (cosine distance <= 1 - minSimilarity).
  */
 export async function getRelevantChunks({
   userId,
@@ -1292,6 +1361,8 @@ export async function getRelevantChunks({
   queryEmbedding,
   limit = 12,
   allowedUserIds,
+  minSimilarity,
+  allUserDocs = false,
 }: {
   userId: string;
   documentIds: string[];
@@ -1299,8 +1370,19 @@ export async function getRelevantChunks({
   limit?: number;
   /** Quando definido, inclui chunks de documentos destes userIds (ex.: Redator banco padrão). */
   allowedUserIds?: string[];
+  /** Similaridade mínima (0–1). Só devolve chunks com similarity >= este valor. Ex.: 0.25 ou 0.3 (env RAG_MIN_SIMILARITY). */
+  minSimilarity?: number;
+  /**
+   * Quando true, ignora o filtro de documentIds e busca em todos os documentos
+   * indexados do utilizador. Ideal para busca global na KB sem seleção manual.
+   */
+  allUserDocs?: boolean;
 }): Promise<KnowledgeChunkRow[]> {
-  if (documentIds.length === 0 || queryEmbedding.length === 0) {
+  // Requer embedding válido; requer documentIds não-vazio OU modo allUserDocs
+  if (queryEmbedding.length === 0) {
+    return [];
+  }
+  if (!allUserDocs && documentIds.length === 0) {
     return [];
   }
   const embeddingStr = `[${queryEmbedding.join(",")}]`;
@@ -1311,6 +1393,20 @@ export async function getRelevantChunks({
         inArray(knowledgeDocument.userId, allowedUserIds)
       )
     : eq(knowledgeDocument.userId, userId);
+  const conditions = [
+    userIdCondition,
+    sql`${knowledgeChunk.embedding} IS NOT NULL`,
+  ];
+  // Filtra por documentos específicos apenas quando não é busca global
+  if (!allUserDocs && documentIds.length > 0) {
+    conditions.push(inArray(knowledgeDocument.id, documentIds));
+  }
+  if (minSimilarity !== undefined && minSimilarity > 0 && minSimilarity <= 1) {
+    const maxDistance = 1 - minSimilarity;
+    conditions.push(
+      sql`(${knowledgeChunk.embedding} <=> ${sql.raw(vectorLiteral)}) <= ${maxDistance}`
+    );
+  }
   const rows = await getDb()
     .select({
       id: knowledgeChunk.id,
@@ -1323,13 +1419,7 @@ export async function getRelevantChunks({
       knowledgeDocument,
       eq(knowledgeChunk.knowledgeDocumentId, knowledgeDocument.id)
     )
-    .where(
-      and(
-        userIdCondition,
-        inArray(knowledgeDocument.id, documentIds),
-        sql`${knowledgeChunk.embedding} IS NOT NULL`
-      )
-    )
+    .where(and(...conditions))
     .orderBy(sql`${knowledgeChunk.embedding} <=> ${sql.raw(vectorLiteral)}`)
     .limit(limit);
   return rows as KnowledgeChunkRow[];
@@ -1661,7 +1751,7 @@ export async function addCreditsToUser({
   }
 }
 
-const RECENT_USAGE_LIMIT = 50;
+const RECENT_USAGE_LIMIT = 200;
 
 export async function getRecentUsageByUserId(userId: string, limit = 10) {
   try {
@@ -1681,6 +1771,59 @@ export async function getRecentUsageByUserId(userId: string, limit = 10) {
       .limit(Math.min(limit, RECENT_USAGE_LIMIT));
   } catch (err) {
     toDatabaseError(err, "Failed to get recent usage");
+  }
+}
+
+/**
+ * Busca registos de uso com filtros opcionais — usado pelo endpoint Natural Language Postgres.
+ * Os filtros são extraídos via LLM (generateObject) e passados como parâmetros tipados.
+ */
+export async function getRecentUsage({
+  userId,
+  limit = 50,
+  dateFrom,
+  dateTo,
+  modelPrefix,
+  minCredits,
+}: {
+  userId: string;
+  limit?: number;
+  dateFrom?: Date;
+  dateTo?: Date;
+  /** Prefixo do modelo (ex: "anthropic/" filtra todos os modelos Anthropic). */
+  modelPrefix?: string;
+  minCredits?: number;
+}) {
+  try {
+    const conditions: SQL[] = [eq(llmUsageRecord.userId, userId)];
+    if (dateFrom) {
+      conditions.push(gte(llmUsageRecord.createdAt, dateFrom));
+    }
+    if (dateTo) {
+      conditions.push(lt(llmUsageRecord.createdAt, dateTo));
+    }
+    if (modelPrefix) {
+      conditions.push(sql`${llmUsageRecord.model} ILIKE ${`${modelPrefix}%`}`);
+    }
+    if (minCredits !== undefined && minCredits > 0) {
+      conditions.push(gte(llmUsageRecord.creditsConsumed, minCredits));
+    }
+    return await getDb()
+      .select({
+        id: llmUsageRecord.id,
+        chatId: llmUsageRecord.chatId,
+        promptTokens: llmUsageRecord.promptTokens,
+        completionTokens: llmUsageRecord.completionTokens,
+        model: llmUsageRecord.model,
+        creditsConsumed: llmUsageRecord.creditsConsumed,
+        createdAt: llmUsageRecord.createdAt,
+      })
+      .from(llmUsageRecord)
+      .where(and(...conditions))
+      .orderBy(desc(llmUsageRecord.createdAt))
+      .limit(Math.min(limit, RECENT_USAGE_LIMIT));
+  } catch (err) {
+    toDatabaseError(err, "Failed to get recent usage with filters");
   }
 }
 
@@ -1704,5 +1847,96 @@ export async function getUsersWithCreditBalances() {
     }));
   } catch (err) {
     toDatabaseError(err, "Failed to list users with credits");
+  }
+}
+
+// --- UserMemory (Custom Memory Tool — Cookbook pattern) ---
+
+/**
+ * Cria ou atualiza uma memória para o utilizador (upsert por userId + key).
+ * Se já existir uma memória com a mesma key, substitui o value e atualiza updatedAt.
+ */
+export async function saveUserMemory({
+  userId,
+  key,
+  value,
+  expiresAt,
+}: {
+  userId: string;
+  key: string;
+  value: string;
+  expiresAt?: Date | null;
+}) {
+  try {
+    await getDb()
+      .insert(userMemory)
+      .values({
+        userId,
+        key,
+        value,
+        updatedAt: new Date(),
+        expiresAt: expiresAt ?? null,
+      })
+      .onConflictDoNothing();
+    // Drizzle não suporta onConflict com UPDATE directo em todas as versões;
+    // usa delete + insert para garantir upsert por (userId, key).
+    const existing = await getDb()
+      .select({ id: userMemory.id })
+      .from(userMemory)
+      .where(and(eq(userMemory.userId, userId), eq(userMemory.key, key)))
+      .limit(1);
+    if (existing.length > 0) {
+      await getDb()
+        .update(userMemory)
+        .set({ value, updatedAt: new Date(), expiresAt: expiresAt ?? null })
+        .where(and(eq(userMemory.userId, userId), eq(userMemory.key, key)));
+    }
+  } catch (err) {
+    toDatabaseError(err, "Failed to save user memory");
+  }
+}
+
+/** Lista todas as memórias activas de um utilizador (excluindo expiradas). */
+export async function listUserMemories({ userId }: { userId: string }) {
+  try {
+    const now = new Date();
+    return await getDb()
+      .select({
+        id: userMemory.id,
+        key: userMemory.key,
+        value: userMemory.value,
+        updatedAt: userMemory.updatedAt,
+        expiresAt: userMemory.expiresAt,
+      })
+      .from(userMemory)
+      .where(
+        and(
+          eq(userMemory.userId, userId),
+          or(
+            isNull(userMemory.expiresAt),
+            sql`${userMemory.expiresAt} > ${now}`
+          )
+        )
+      )
+      .orderBy(asc(userMemory.updatedAt));
+  } catch (err) {
+    toDatabaseError(err, "Failed to list user memories");
+  }
+}
+
+/** Apaga uma memória pelo userId + key. */
+export async function deleteUserMemory({
+  userId,
+  key,
+}: {
+  userId: string;
+  key: string;
+}) {
+  try {
+    await getDb()
+      .delete(userMemory)
+      .where(and(eq(userMemory.userId, userId), eq(userMemory.key, key)));
+  } catch (err) {
+    toDatabaseError(err, "Failed to delete user memory");
   }
 }

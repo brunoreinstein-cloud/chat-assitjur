@@ -3,6 +3,7 @@ import Script from "next/script";
 import { Suspense } from "react";
 import { ChatSidebar } from "@/components/chat-sidebar";
 import { DataStreamProvider } from "@/components/data-stream-provider";
+import { DbFallbackProvider } from "@/components/db-fallback-context";
 import { DbWarmup } from "@/components/db-warmup";
 import { PageLoading } from "@/components/page-loading";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -19,9 +20,11 @@ export default function Layout({
         strategy="beforeInteractive"
       />
       <DataStreamProvider>
-        <Suspense fallback={<PageLoading />}>
-          <SidebarWrapper>{children}</SidebarWrapper>
-        </Suspense>
+        <DbFallbackProvider>
+          <Suspense fallback={<PageLoading />}>
+            <SidebarWrapper>{children}</SidebarWrapper>
+          </Suspense>
+        </DbFallbackProvider>
       </DataStreamProvider>
     </>
   );
