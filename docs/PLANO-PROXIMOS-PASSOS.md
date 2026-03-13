@@ -2,7 +2,7 @@
 
 Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. Atualizar este ficheiro quando prioridades ou estado mudarem.
 
-**Última atualização:** 2026-03-09 (Revisão PRD AssistJur.IA: doc [ASSISTJUR-PRD-ALINHAMENTO.md](ASSISTJUR-PRD-ALINHAMENTO.md) com gaps e próximos passos priorizados; RAG, BD/Auth, Workflow DevKit em PLANO.)
+**Última atualização:** 2026-03-13 (Adicionadas secções Médio prazo — Cookbook features — e Longo prazo — arquitectura.)
 
 ---
 
@@ -51,7 +51,28 @@ Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. 
 
 ---
 
-## 3. Roadmap de produto (SPEC)
+## 3. Médio prazo (Cookbook — features não implementadas)
+
+| # | Tarefa | Detalhe | Estado |
+|---|--------|---------|--------|
+| 1 | **Track Token Usage** | Capturar `usage` do stream no `onFinish` callback e persistir por chat/utilizador na BD. Dashboard de consumo por modelo — útil para billing e controlo de custos. | — |
+| 2 | **Call Tools Multiple Steps — UI feedback** | `maxSteps` já está configurado. Falta UI de feedback por step: spinner/badge por tool call para o utilizador ver o progresso em tempo real quando a IA executa múltiplas ferramentas sequencialmente. | — |
+| 3 | **Knowledge Base Agent** | Agente dedicado que orquestra RAG → reranking → síntese com citações inline. Diferente do RAG actual que é chamado passivamente pela route — este agente decide activamente quando e como consultar a base. | — |
+| 4 | **MCP Tools — activação real** | Instalar `@ai-sdk/mcp` quando disponível no registry. Substituir o stub em `lib/ai/mcp-config.ts` por `experimental_createMCPClient` para activar ferramentas MCP reais. | — |
+
+---
+
+## 4. Longo prazo (arquitectura)
+
+| # | Tarefa | Detalhe |
+|---|--------|---------|
+| 1 | **Streaming com artefactos progressivos** | Usar `streamObject` para gerar tabelas/gráficos progressivamente enquanto o LLM responde, em vez de aguardar a resposta completa. |
+| 2 | **Multi-agent handoff** | Roteamento entre agentes especializados (pesquisa, redacção, análise) via handoff pattern — um agente delega explicitamente para outro conforme o tipo de tarefa. |
+| 3 | **Avaliação de qualidade RAG** | Pipeline de avaliação automática (RAGAS ou similar) para medir precision/recall dos chunks recuperados. Permite iterar sobre chunking, embeddings e threshold de forma orientada a dados. |
+
+---
+
+## 5. Roadmap de produto (SPEC)
 
 O roadmap detalhado está em **[SPEC-AI-DRIVE-JURIDICO.md § 11. Roadmap](SPEC-AI-DRIVE-JURIDICO.md#11-roadmap-sugestão)**. Resumo:
 
@@ -66,7 +87,7 @@ Priorizar itens da Fase 1 conforme [PROJETO-REVISOR-DEFESAS.md](PROJETO-REVISOR-
 
 ---
 
-## 4. Onde estão “próximos passos” na documentação
+## 6. Onde estão “próximos passos” na documentação
 
 | Documento | Secção / conteúdo |
 |-----------|-------------------|
@@ -92,7 +113,7 @@ Priorizar itens da Fase 1 conforme [PROJETO-REVISOR-DEFESAS.md](PROJETO-REVISOR-
 
 ---
 
-## 5. Como atualizar este plano
+## 7. Como atualizar este plano
 
 1. **Imediato (secção 1):** Quando uma tarefa for concluída, movê-la para “Concluído (arquivo)” (1.1) e atualizar a tabela principal; inserir novas tarefas com número e descrição breve.
 2. **Curto prazo (secção 2):** Adicionar ou remover linhas na tabela; manter referências aos docs quando existirem.

@@ -90,3 +90,51 @@ export async function GET(request: Request) {
     },
   });
 }
+
+/**
+ * POST /api/document/export
+ * Gera DOCX a partir de conteúdo no body (sem aceder à BD).
+ * Body: { title: string, content: string, layout?: DocxLayout }
+ */
+export async function POST(request: Request) {
+  const session = await auth();
+  if (!session?.user) {
+    return new ChatbotError("unauthorized:document").toResponse();
+  }
+
+  let body: { title?: unknown; content?: unknown; layout?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return new ChatbotError(
+      "bad_request:api",
+      "Body JSON inválido."
+    ).toResponse();
+  }
+
+  if (typeof body.title !== "string" || typeof body.content !== "string") {
+    return new ChatbotError(
+      "bad_request:api",
+      "Campos title e content são obrigatórios."
+    ).toResponse();
+  }
+
+  const layout: DocxLayout =
+    typeof body.layout === "string" &&
+    LAYOUT_VALUES.has(body.layout as DocxLayout)
+      ? (body.layout as DocxLayout)
+      : "default";
+
+  const buffer = await createDocxBuffer(body.title, body.content, layout);
+  const filename = sanitizeDocxFilename(body.title);
+  const safeFilename = toByteStringSafe(filename);
+
+  return new Response(new Uint8Array(buffer), {
+    status: 200,
+    headers: {
+      "Content-Type": DOCX_MIME,
+      "Content-Disposition": `attachment; filename="${safeFilename}"`,
+      "Cache-Control": "private, no-store",
+    },
+  });
+}

@@ -65,8 +65,20 @@ export interface CustomUIDataTypes {
   "chat-title": string;
   /** Enviado quando o dbBatch usou fallback (BD lenta); cliente mostra aviso "dados parciais". */
   "data-db-fallback": boolean;
+  /** Mensagem de progresso durante geração dos 3 docs Revisor (ex: "Gerando 2/3 — Roteiro Advogado..."). */
+  generationStatus: string;
+  /** Quantos docs do Revisor já foram gerados e guardados (0–3). */
+  revisorProgress: number;
+  // Eventos de stream exclusivos do Revisor — NÃO ativam o painel artifact (artifact.tsx usa useSWR
+  // só para data-id/title/kind/clear/textDelta/finish). Prefixo rdoc isola o fluxo do Revisor.
+  rdocId: string;
+  rdocTitle: string;
+  rdocKind: string;
+  rdocClear: null;
+  rdocDelta: string;
+  rdocFinish: null;
   /** Index signature required by AI SDK UIDataTypes. kind stays ArtifactKind via explicit property above. */
-  [key: string]: string | Suggestion | boolean | null | undefined;
+  [key: string]: string | Suggestion | boolean | number | null | undefined;
 }
 
 /** Parte de uma mensagem do chat (texto, ficheiro, tool, etc.). */
