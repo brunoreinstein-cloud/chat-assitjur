@@ -392,3 +392,36 @@ export const llmUsageRecord = pgTable(
 );
 
 export type LlmUsageRecord = InferSelectModel<typeof llmUsageRecord>;
+
+/**
+ * Memórias persistentes por utilizador: pares chave-valor para contexto entre sessões.
+ * Permite que os agentes "lembrem" dados do cliente, processo, preferências do advogado, etc.
+ */
+export const userMemory = pgTable(
+  "UserMemory",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /** Chave única por utilizador (ex.: "cliente_principal", "processo_atual"). */
+    key: varchar("key", { length: 256 }).notNull(),
+    /** Valor associado (texto livre ou JSON serializado). */
+    value: text("value").notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+    /** Expiração opcional; null = memória permanente. */
+    expiresAt: timestamp("expiresAt"),
+  },
+  (table) => ({
+    /** Listar memórias por utilizador. */
+    userIdIdx: index("UserMemory_userId_idx").on(table.userId),
+    /** Upsert por (userId, key). */
+    userIdKeyIdx: index("UserMemory_userId_key_idx").on(
+      table.userId,
+      table.key
+    ),
+  })
+);
+
+export type UserMemory = InferSelectModel<typeof userMemory>;

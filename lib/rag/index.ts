@@ -15,6 +15,8 @@ export {
   ingestFromContent,
 } from "./ingestion";
 export { reindexDocument, vectorizeAndIndex } from "./pipeline";
+export type { RerankOptions } from "./reranking";
+export { rerankByDiversity } from "./reranking";
 export type { RetrievalParams, VectorRetrievalBackend } from "./retrieval";
 export {
   getDefaultRetrievalBackend,
