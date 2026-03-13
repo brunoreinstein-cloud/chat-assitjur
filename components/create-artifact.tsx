@@ -24,6 +24,12 @@ export interface ArtifactAction<M = unknown> {
   description: string;
   onClick: (context: ArtifactActionContext<M>) => Promise<void> | void;
   isDisabled?: (context: ArtifactActionContext<M>) => boolean;
+  /**
+   * Quando definido, actions com o mesmo dropdownGroup são agrupadas num
+   * único botão dropdown. O label/icon do primeiro action do grupo é usado
+   * como trigger do dropdown.
+   */
+  dropdownGroup?: string;
 }
 
 export interface ArtifactToolbarContext {

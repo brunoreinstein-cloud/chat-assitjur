@@ -16,6 +16,8 @@
       "!!.agents",
       "!!.vercel",
       "!!.vscode",
+      "!!.claude",
+      "!!**/.claude",
       "!!vercel.json",
       "!!**/test-results",
       "!!**/playwright-report",

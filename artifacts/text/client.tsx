@@ -236,8 +236,9 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
     },
     {
       icon: <Download size={18} />,
-      label: "DOCX",
-      description: "Descarregar como DOCX",
+      label: "Download ▾",
+      description: "Download DOCX",
+      dropdownGroup: "Download DOCX",
       isDisabled: ({ documentId }) => documentId === "init",
       onClick: ({ documentId }) => {
         downloadDocx(documentId);
@@ -245,9 +246,10 @@ export const textArtifact = new Artifact<"text", TextArtifactMetadata>({
     },
     {
       icon: <Download size={18} />,
-      label: "DOCX (layout Master)",
+      label: "Layout Master",
       description:
         "Descarregar como DOCX com layout AssistJur (cinza/dourado, cabeçalho e rodapé)",
+      dropdownGroup: "Download DOCX",
       isDisabled: ({ documentId }) => documentId === "init",
       onClick: ({ documentId }) => {
         downloadDocx(documentId, "assistjur-master");

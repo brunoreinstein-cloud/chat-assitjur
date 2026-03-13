@@ -2,12 +2,14 @@ import type { UseChatHelpers } from "@ai-sdk/react";
 import { formatDistance } from "date-fns";
 import equal from "fast-deep-equal";
 import { AnimatePresence, motion } from "framer-motion";
+import { Printer } from "lucide-react";
 import {
   type Dispatch,
   memo,
   type SetStateAction,
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import useSWR, { useSWRConfig } from "swr";
@@ -26,6 +28,7 @@ import { ArtifactMessages } from "./artifact-messages";
 import type { Artifact as ArtifactClass } from "./create-artifact";
 import { MultimodalInput } from "./multimodal-input";
 import { Toolbar } from "./toolbar";
+import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { useSidebar } from "./ui/sidebar";
 import { VersionFooter } from "./version-footer";
@@ -265,6 +268,7 @@ function PureArtifact({
 
   const [isToolbarVisible, setIsToolbarVisible] = useState(false);
   const [docxPreviewId, setDocxPreviewId] = useState<string | null>(null);
+  const previewIframeRef = useRef<HTMLIFrameElement>(null);
 
   /*
    * NOTE: if there are no documents, or if
@@ -569,12 +573,26 @@ function PureArtifact({
           className="flex max-h-[90dvh] max-w-4xl flex-col gap-0 p-0"
         >
           <DialogHeader className="shrink-0 border-b px-4 py-3">
-            <DialogTitle>Pré-visualização DOCX</DialogTitle>
+            <div className="flex items-center justify-between gap-2">
+              <DialogTitle>Pré-visualização DOCX</DialogTitle>
+              <Button
+                className="h-7 gap-1 px-2 text-xs"
+                onClick={() => {
+                  previewIframeRef.current?.contentWindow?.print();
+                }}
+                size="sm"
+                variant="outline"
+              >
+                <Printer className="size-3" />
+                Imprimir / PDF
+              </Button>
+            </div>
           </DialogHeader>
           <div className="min-h-0 flex-1 overflow-auto" id="docx-preview-desc">
             {docxPreviewId !== null ? (
               <iframe
                 className="h-[75dvh] w-full border-0"
+                ref={previewIframeRef}
                 src={`/api/document/preview?id=${encodeURIComponent(docxPreviewId)}`}
                 title="Pré-visualização do documento em formato Word"
               />

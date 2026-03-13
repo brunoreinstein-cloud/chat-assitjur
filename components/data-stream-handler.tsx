@@ -1,9 +1,15 @@
 "use client";
 
 import { useEffect } from "react";
+import { toast } from "sonner";
 import { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
 import { initialArtifactData, useArtifact } from "@/hooks/use-artifact";
+import { storeRevisorDoc } from "@/lib/revisor-content-store";
+import {
+  resetRevisorProgress,
+  setRevisorCompletedCount,
+} from "@/lib/revisor-progress-store";
 import {
   type ArtifactKind,
   artifactDefinitions,
@@ -12,6 +18,11 @@ import {
 import { useDataStream } from "./data-stream-provider";
 import { useDbFallback } from "./db-fallback-context";
 import { getChatHistoryPaginationKey } from "./sidebar-history";
+
+// Acumuladores de conteúdo do stream para o revisor-content-store
+let _docId = "";
+let _docTitle = "";
+let _docContent = "";
 
 export function DataStreamHandler() {
   const { dataStream, setDataStream } = useDataStream();
@@ -29,12 +40,57 @@ export function DataStreamHandler() {
     setDataStream([]);
 
     for (const delta of newDeltas) {
+      // Acumulação de conteúdo para o revisor-content-store (sem DB).
+      // Usa prefixo rdoc — estes eventos NÃO chegam ao setArtifact abaixo,
+      // pelo que o painel artifact.tsx nunca faz GET /api/document para docs do Revisor.
+      if (delta.type === "data-rdocId") {
+        _docId = delta.data as string;
+        continue;
+      }
+      if (delta.type === "data-rdocTitle") {
+        _docTitle = delta.data as string;
+        continue;
+      }
+      if (delta.type === "data-rdocKind") {
+        continue; // ignorar kind (sempre "text")
+      }
+      if (delta.type === "data-rdocClear") {
+        _docContent = "";
+        continue;
+      }
+      if (delta.type === "data-rdocDelta") {
+        _docContent += delta.data as string;
+        continue;
+      }
+      if (delta.type === "data-rdocFinish") {
+        if (_docId) {
+          storeRevisorDoc(_docId, _docTitle, _docContent);
+        }
+        _docId = "";
+        _docContent = "";
+        continue;
+      }
+
       if (delta.type === "data-chat-title") {
         mutate(unstable_serialize(getChatHistoryPaginationKey));
         continue;
       }
       if (delta.type === "data-db-fallback") {
         setDbFallbackUsed(true);
+        continue;
+      }
+      if (delta.type === "data-generationStatus") {
+        const msg = delta.data as string;
+        toast.info(msg, { duration: 4000, id: "revisor-generation-status" });
+        continue;
+      }
+      if (delta.type === "data-revisorProgress") {
+        const completedCount = delta.data as number;
+        if (completedCount === 1) {
+          // Primeiro doc concluído: reinicia contagem (nova geração iniciada)
+          resetRevisorProgress();
+        }
+        setRevisorCompletedCount(completedCount);
         continue;
       }
       const artifactDefinition = artifactDefinitions.find(
