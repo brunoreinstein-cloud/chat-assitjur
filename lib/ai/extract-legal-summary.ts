@@ -137,7 +137,7 @@ export async function extractLegalSummary(
       model: getTitleModel(),
       system,
       prompt,
-      maxOutputTokens: 3_000,
+      maxOutputTokens: 8_000,
     });
     return text.trim() || null;
   } catch {

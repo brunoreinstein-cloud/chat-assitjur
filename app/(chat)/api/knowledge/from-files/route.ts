@@ -1,7 +1,8 @@
 import { auth } from "@/app/(auth)/auth";
 import { contentTypeFromFilename } from "@/app/(chat)/api/files/upload/route";
-import { createKnowledgeDocument } from "@/lib/db/queries";
+import { createKnowledgeDocument, updateKnowledgeDocumentStructuredSummary } from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
+import { extractLegalSummary } from "@/lib/ai/extract-legal-summary";
 import { vectorizeAndIndex } from "@/lib/rag";
 import { ingestFromBuffer } from "@/lib/rag/ingestion";
 
@@ -56,6 +57,8 @@ export interface FromFilesResult {
   created: Array<{
     id: string;
     title: string;
+    /** Comprimento do texto extraído (chars). Usado pelo cliente para feedback de cobertura. */
+    contentLength: number;
     /** Metadados extraídos pela IA quando disponíveis. */
     metadata?: FromFilesMetadata;
   }>;
@@ -83,7 +86,7 @@ async function processOneFile(
   folderId: string | null,
   skipVectorize: boolean
 ): Promise<
-  | { ok: true; id: string; title: string; metadata?: FromFilesMetadata }
+  | { ok: true; id: string; title: string; contentLength: number; metadata?: FromFilesMetadata }
   | { ok: false; filename: string; error: string }
 > {
   if (!isAcceptedFile(file)) {
@@ -127,11 +130,23 @@ async function processOneFile(
       await vectorizeAndIndex(doc.id, content, {
         meta: { userId: doc.userId, title: doc.title },
       });
+      // Fire-and-forget: extrai resumo estruturado para PI/Contestação
+      extractLegalSummary(content)
+        .then((summary) => {
+          if (summary) {
+            return updateKnowledgeDocumentStructuredSummary({
+              id: doc.id,
+              structuredSummary: summary,
+            });
+          }
+        })
+        .catch(() => {});
     }
     return {
       ok: true,
       id: doc.id,
       title: doc.title,
+      contentLength: content.length,
       ...(metadata ? { metadata } : {}),
     };
   } catch (err) {
@@ -205,6 +220,7 @@ export async function POST(request: Request): Promise<Response> {
       created.push({
         id: result.id,
         title: result.title,
+        contentLength: result.contentLength,
         ...(result.metadata ? { metadata: result.metadata } : {}),
       });
     } else {

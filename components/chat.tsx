@@ -747,6 +747,7 @@ export function Chat({
                 knowledgeDocumentIds={knowledgeDocumentIds}
                 messages={messages}
                 onModelChange={setCurrentModelId}
+                knowledgeSidebarOpen={knowledgeOpen}
                 onOpenKnowledgeSidebar={openKnowledgeSidebar}
                 selectedModelId={currentModelId}
                 selectedVisibilityType={visibilityType}
