@@ -342,6 +342,7 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
                 isActive={activeProcessoId === p.id}
                 key={p.id}
                 onClick={() => onProcessoClick(p)}
+                onMutate={() => mutate("/api/processos")}
                 processo={p}
               />
             ))}

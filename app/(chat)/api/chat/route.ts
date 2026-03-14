@@ -55,6 +55,7 @@ import { createRedatorContestacaoDocument } from "@/lib/ai/tools/create-redator-
 import { createRevisorDefesaDocuments } from "@/lib/ai/tools/create-revisor-defesa-documents";
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import { requestApproval } from "@/lib/ai/tools/human-in-the-loop";
+import { analyzeProcessoPipeline } from "@/lib/ai/tools/analyze-processo-pipeline";
 import { improvePromptTool } from "@/lib/ai/tools/improve-prompt";
 import { createMemoryTools } from "@/lib/ai/tools/memory";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
@@ -276,7 +277,11 @@ function getDocumentPartLabel(documentType: string | undefined): string {
   return "Documento";
 }
 
-/** Trunca texto de documento: para PI preserva início + fim (OAB); caso contrário só início. */
+/**
+ * Trunca texto de documento: para PI preserva início + fim (OAB); caso contrário só início.
+ * Tenta cortar na fronteira do último marcador [Pag. N] que cabe no limite,
+ * para não enviar páginas parciais ao modelo.
+ */
 function truncateDocumentText(
   text: string,
   maxChars: number,
@@ -290,22 +295,41 @@ function truncateDocumentText(
     documentType === "pi" && maxChars > PI_TAIL_CHARS * 2 + notice.length;
   if (needPiTail) {
     const startLen = maxChars - PI_TAIL_CHARS - notice.length - 2; // 2 = "\n\n"
-    return `${text.slice(0, startLen)}${notice}\n\n${text.slice(-PI_TAIL_CHARS)}`;
+    const cutPoint = findLastPageMarker(text, startLen);
+    return `${text.slice(0, cutPoint)}${notice}\n\n${text.slice(-PI_TAIL_CHARS)}`;
   }
-  return text.slice(0, maxChars) + notice;
+  const cutPoint = findLastPageMarker(text, maxChars);
+  return text.slice(0, cutPoint) + notice;
 }
+
+/** Encontra a posição do último marcador [Pag. N] antes de maxPos. Fallback: maxPos. */
+function findLastPageMarker(text: string, maxPos: number): number {
+  const PAGE_MARKER_RE = /\[Pag\.\s*\d+\]/g;
+  let lastMarkerStart = maxPos;
+  let match: RegExpExecArray | null;
+  while ((match = PAGE_MARKER_RE.exec(text)) !== null) {
+    if (match.index > maxPos) break;
+    lastMarkerStart = match.index;
+  }
+  // Se encontrou marcador e está razoavelmente perto do limite (>80%), usar
+  return lastMarkerStart > maxPos * 0.8 ? lastMarkerStart : maxPos;
+}
+
+/** Regra obrigatória de referência de página para todos os documentos. */
+const PAGE_REF_RULE =
+  "REGRA: Para cada valor extraído, citar a folha (fl. XXX) baseada nos marcadores [Pag. N] do texto. Sem referência = 'Não localizado nos autos'.";
 
 /** Dica curta para o modelo localizar dados rapidamente (reduz releituras). */
 function getDocumentPartExtractionHint(
   documentType: string | undefined
 ): string {
   if (documentType === "pi") {
-    return "Extrair prioritariamente: número do processo, vara, partes, DAJ, Admissão/Término/Rescisão (início); OAB e audiência (Notificação Judicial PJe; assinaturas ao final).";
+    return `${PAGE_REF_RULE} Extrair prioritariamente: número do processo, vara, partes, DAJ, Admissão/Término/Rescisão (início); OAB e audiência (Notificação Judicial PJe; assinaturas ao final).`;
   }
   if (documentType === "contestacao") {
-    return "Extrair prioritariamente: dados do contrato, DTC, teses e impugnações por pedido; usar mapeamento pedido×prova.";
+    return `${PAGE_REF_RULE} Extrair prioritariamente: dados do contrato, DTC, teses e impugnações por pedido; usar mapeamento pedido×prova.`;
   }
-  return "";
+  return PAGE_REF_RULE;
 }
 
 function fillKnowledgeFromFullDocsWhenEmpty(
@@ -1327,7 +1351,8 @@ function createStreamExecuteHandler(
     type ActiveToolName =
       | (typeof baseToolNames)[number]
       | "createRevisorDefesaDocuments"
-      | "createRedatorContestacaoDocument";
+      | "createRedatorContestacaoDocument"
+      | "analyzeProcessoPipeline";
     const activeToolNames: ActiveToolName[] = ctx.isReasoningModel
       ? []
       : [
@@ -1337,6 +1362,9 @@ function createStreamExecuteHandler(
             : []),
           ...(ctx.agentConfig.useRedatorContestacaoTool
             ? (["createRedatorContestacaoDocument"] as const)
+            : []),
+          ...(ctx.agentConfig.usePipelineTool
+            ? (["analyzeProcessoPipeline"] as const)
             : []),
         ];
 
@@ -1370,9 +1398,16 @@ function createStreamExecuteHandler(
       createRedatorContestacaoDocument?: ReturnType<
         typeof createRedatorContestacaoDocument
       >;
+      analyzeProcessoPipeline?: ReturnType<typeof analyzeProcessoPipeline>;
     };
     if (ctx.agentConfig.useRevisorDefesaTools) {
       tools.createRevisorDefesaDocuments = createRevisorDefesaDocuments({
+        session: ctx.session,
+        dataStream,
+      });
+    }
+    if (ctx.agentConfig.usePipelineTool) {
+      tools.analyzeProcessoPipeline = analyzeProcessoPipeline({
         session: ctx.session,
         dataStream,
       });
@@ -1402,7 +1437,8 @@ function createStreamExecuteHandler(
       >,
       // Permite múltiplos steps: step 1 = model chama tool; step 2 = model gera texto após tool result (entrega).
       // Sem isto (default stepCountIs(1)) o stream encerra após a tool e o utilizador não vê mensagem.
-      stopWhen: stepCountIs(5),
+      // Master com pipeline pode precisar: pipeline → createDocument → resposta (7 steps).
+      stopWhen: stepCountIs(ctx.agentConfig.usePipelineTool ? 7 : 5),
       experimental_activeTools: activeToolNames,
       providerOptions: ctx.isReasoningModel
         ? {
@@ -1922,8 +1958,20 @@ async function handleChatPostAuthenticated(
 
   const messageText =
     message?.parts?.map((p) => ("text" in p ? p.text : "")).join(" ") ?? "";
+
+  // Pre-fetch processo (se processoId veio no request) para incluir os seus docs KB no RAG.
+  const earlyProc = processoId
+    ? await getProcessoById({
+        id: processoId,
+        userId: authenticatedSession.user.id,
+      })
+    : null;
+
   const effectiveKnowledgeIds = resolveEffectiveKnowledgeIds(
-    knowledgeDocumentIds,
+    [
+      ...(knowledgeDocumentIds ?? []),
+      ...((earlyProc?.knowledgeDocumentIds as string[] | null) ?? []),
+    ],
     agentId,
     messageText,
     agentInstructions
@@ -2048,12 +2096,15 @@ async function handleChatPostAuthenticated(
   );
 
   // Injetar contexto do processo trabalhista no system prompt quando o chat está vinculado a um processo.
-  // Corre em paralelo com saveUserMessageToDb para não aumentar a latência do caminho crítico.
+  // earlyProc já foi fetched acima (quando processoId veio no request).
+  // Se processoId veio do chat existente (batchResult.chat.processoId), faz fetch aqui em paralelo.
   const effectiveProcessoId =
     processoId ?? batchResult.chat?.processoId ?? null;
+  const needsLateFetch =
+    effectiveProcessoId && !earlyProc && effectiveProcessoId !== processoId;
   const t4 = Date.now();
-  const [proc, saveUserErr] = await Promise.all([
-    effectiveProcessoId
+  const [lateProc, saveUserErr] = await Promise.all([
+    needsLateFetch
       ? getProcessoById({
           id: effectiveProcessoId,
           userId: authenticatedSession.user.id,
@@ -2061,6 +2112,7 @@ async function handleChatPostAuthenticated(
       : Promise.resolve(null),
     saveUserMessageToDb(message, id),
   ]);
+  const proc = earlyProc ?? lateProc;
   if (message?.role === "user") {
     debugTracker.phase("saveMessages", t4);
     logTiming("saveMessages(user)", Date.now() - t4);

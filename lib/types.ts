@@ -65,6 +65,8 @@ export interface CustomUIDataTypes {
   "chat-title": string;
   /** Enviado quando o dbBatch usou fallback (BD lenta); cliente mostra aviso "dados parciais". */
   "data-db-fallback": boolean;
+  /** Mensagem de progresso do pipeline multi-chamadas (PDFs grandes). */
+  "pipeline-progress": string;
   /** Mensagem de progresso durante geração dos 3 docs Revisor (ex: "Gerando 2/3 — Roteiro Advogado..."). */
   generationStatus: string;
   /** Quantos docs do Revisor já foram gerados e guardados (0–3). */

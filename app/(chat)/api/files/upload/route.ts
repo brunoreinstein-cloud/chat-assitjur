@@ -284,28 +284,39 @@ async function uploadFile(
 }
 
 /**
- * Extração principal com unpdf (mergePages). Funciona bem para a maioria dos PDFs com camada de texto.
+ * Extração principal com unpdf — agora página a página para preservar marcadores [Pag. N].
+ * Cada página recebe um marcador `[Pag. N]` que permite rastreabilidade de folha.
  */
-async function extractTextFromPdfUnpdf(buffer: ArrayBuffer): Promise<string> {
+async function extractTextFromPdfUnpdf(
+  buffer: ArrayBuffer
+): Promise<{ text: string; pageCount: number }> {
   const { extractText, getDocumentProxy } = await import("unpdf");
   const data = new Uint8Array(buffer);
   const pdf = await getDocumentProxy(data);
-  const result = await extractText(pdf, { mergePages: true });
-  return typeof result.text === "string" ? result.text : "";
+  const numPages = (pdf as { numPages: number }).numPages;
+  // mergePages: false → retorna string[] (uma por página)
+  const result = await extractText(pdf, { mergePages: false });
+  const pages = Array.isArray(result.text) ? result.text : [result.text];
+  const marked = pages.map(
+    (p, i) =>
+      `[Pag. ${i + 1}]\n${typeof p === "string" ? p : ""}`
+  );
+  return { text: marked.join("\n\n"), pageCount: numPages };
 }
 
 /**
  * Fallback: extração página a página com getPage + getTextContent.
  * Pode obter texto em PDFs onde extractText do unpdf devolve vazio (ex.: encoding não padrão).
+ * Cada página recebe marcador `[Pag. N]` para rastreabilidade.
  */
 async function extractTextFromPdfFallback(
   buffer: ArrayBuffer
-): Promise<string> {
+): Promise<{ text: string; pageCount: number }> {
   const { getDocumentProxy } = await import("unpdf");
   const pdf = await getDocumentProxy(new Uint8Array(buffer));
   const numPages = (pdf as { numPages: number }).numPages;
   if (numPages <= 0) {
-    return "";
+    return { text: "", pageCount: 0 };
   }
   const parts: string[] = [];
   for (let i = 1; i <= numPages; i += 1) {
@@ -320,9 +331,9 @@ async function extractTextFromPdfFallback(
     const pageText = (content.items as Array<{ str?: string }>)
       .map((item) => item.str ?? "")
       .join(" ");
-    parts.push(pageText);
+    parts.push(`[Pag. ${i}]\n${pageText}`);
   }
-  return parts.join("\n\n");
+  return { text: parts.join("\n\n"), pageCount: numPages };
 }
 
 /**
@@ -330,14 +341,16 @@ async function extractTextFromPdfFallback(
  * Renderiza cada página como imagem (unpdf + canvas) e extrai texto com Tesseract.js.
  * Chamado automaticamente quando a extração da camada de texto devolve vazio.
  */
-async function extractTextFromPdfWithOcr(buffer: ArrayBuffer): Promise<string> {
+async function extractTextFromPdfWithOcr(
+  buffer: ArrayBuffer
+): Promise<{ text: string; pageCount: number }> {
   const { getDocumentProxy, renderPageAsImage } = await import("unpdf");
   const data = new Uint8Array(buffer);
   const pdf = await getDocumentProxy(data);
   const numPages = (pdf as { numPages: number }).numPages;
   const pagesToProcess = Math.min(numPages, MAX_OCR_PAGES);
   if (pagesToProcess <= 0) {
-    return "";
+    return { text: "", pageCount: 0 };
   }
 
   const Tesseract = await import("tesseract.js");
@@ -364,7 +377,7 @@ async function extractTextFromPdfWithOcr(buffer: ArrayBuffer): Promise<string> {
         const result = await worker.recognize(Buffer.from(imageBuffer));
         const pageText =
           typeof result?.data?.text === "string" ? result.data.text : "";
-        parts.push(pageText);
+        parts.push(`[Pag. ${i}]\n${pageText}`);
       } catch {
         // Ignora falha numa página e continua com as restantes
       }
@@ -374,13 +387,17 @@ async function extractTextFromPdfWithOcr(buffer: ArrayBuffer): Promise<string> {
   }
 
   const text = parts.join("\n\n");
-  return text.length > MAX_EXTRACTED_TEXT_LENGTH
-    ? `${text.slice(0, MAX_EXTRACTED_TEXT_LENGTH)}\n\n[... texto truncado ...]`
-    : text;
+  return {
+    text: text.length > MAX_EXTRACTED_TEXT_LENGTH
+      ? `${text.slice(0, MAX_EXTRACTED_TEXT_LENGTH)}\n\n[... texto truncado ...]`
+      : text,
+    pageCount: numPages,
+  };
 }
 
 interface ExtractPdfResult {
   text: string;
+  pageCount: number;
   lastError?: string;
 }
 
@@ -405,28 +422,35 @@ async function extractTextFromPdf(
   buffer: ArrayBuffer
 ): Promise<ExtractPdfResult> {
   let text = "";
+  let pageCount = 0;
   let lastError: string | undefined;
   try {
-    text = await withPdfWarningsSuppressed(() =>
+    const r = await withPdfWarningsSuppressed(() =>
       extractTextFromPdfUnpdf(buffer.slice(0))
     );
+    text = r.text;
+    pageCount = r.pageCount;
   } catch {
     text = "";
   }
   if (text.trim().length === 0) {
     try {
-      text = await withPdfWarningsSuppressed(() =>
+      const r = await withPdfWarningsSuppressed(() =>
         extractTextFromPdfFallback(buffer.slice(0))
       );
+      text = r.text;
+      pageCount = r.pageCount;
     } catch {
       text = "";
     }
   }
   if (text.trim().length === 0) {
     try {
-      text = await withPdfWarningsSuppressed(() =>
+      const r = await withPdfWarningsSuppressed(() =>
         extractTextFromPdfWithOcr(buffer.slice(0))
       );
+      text = r.text;
+      pageCount = r.pageCount;
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
       text = "";
@@ -435,7 +459,7 @@ async function extractTextFromPdf(
   if (text.length > MAX_EXTRACTED_TEXT_LENGTH) {
     text = `${text.slice(0, MAX_EXTRACTED_TEXT_LENGTH)}\n\n[... texto truncado ...]`;
   }
-  return { text, lastError };
+  return { text, pageCount, lastError };
 }
 
 async function extractTextFromDoc(buffer: ArrayBuffer): Promise<string> {
@@ -581,10 +605,10 @@ function isImageContentType(contentType: string): boolean {
 async function extractTextByContentType(
   fileBuffer: ArrayBuffer,
   contentType: string
-): Promise<{ text: string; detail?: string } | null> {
+): Promise<{ text: string; detail?: string; pageCount?: number } | null> {
   if (contentType === ACCEPTED_PDF_TYPE) {
     const result = await extractTextFromPdf(fileBuffer);
-    return { text: result.text, detail: result.lastError };
+    return { text: result.text, detail: result.lastError, pageCount: result.pageCount };
   }
   if (contentType === ACCEPTED_DOC_TYPE) {
     const text = await extractTextFromDoc(fileBuffer);
@@ -626,8 +650,9 @@ export async function runExtractionAndClassification(
   extractionFailed: boolean;
   documentType?: DocumentType;
   extractionDetail?: string;
+  pageCount?: number;
 }> {
-  let extracted: { text: string; detail?: string } | null = null;
+  let extracted: { text: string; detail?: string; pageCount?: number } | null = null;
   try {
     extracted = await extractTextByContentType(fileBuffer, contentType);
   } catch {
@@ -656,6 +681,7 @@ export async function runExtractionAndClassification(
     extractionFailed,
     documentType,
     extractionDetail: extracted.detail,
+    ...(extracted.pageCount != null ? { pageCount: extracted.pageCount } : {}),
   };
 }
 
@@ -670,6 +696,7 @@ export interface UploadExtractedMetadata {
 interface UploadSuccessOptions {
   extractionDetail?: string;
   extractedMetadata?: UploadExtractedMetadata;
+  pageCount?: number;
 }
 
 function respondUploadSuccess(
@@ -695,6 +722,7 @@ function respondUploadSuccess(
     ...(options?.extractedMetadata
       ? { extractedMetadata: options.extractedMetadata }
       : {}),
+    ...(options?.pageCount != null ? { pageCount: options.pageCount } : {}),
   };
   return NextResponse.json(body);
 }
@@ -746,6 +774,7 @@ export interface PersistExtractionOptions {
   extractionFailed?: boolean;
   documentType?: DocumentType;
   extractionDetail?: string;
+  pageCount?: number;
 }
 
 export async function persistAndRespond(
@@ -769,9 +798,14 @@ export async function persistAndRespond(
       extraction?.extractedText,
       extraction?.extractionFailed,
       extraction?.documentType,
-      extraction?.extractionDetail
-        ? { extractionDetail: extraction.extractionDetail }
-        : {}
+      {
+        ...(extraction?.extractionDetail
+          ? { extractionDetail: extraction.extractionDetail }
+          : {}),
+        ...(extraction?.pageCount != null
+          ? { pageCount: extraction.pageCount }
+          : {}),
+      }
     );
   } catch (err) {
     const message =
@@ -879,6 +913,7 @@ async function handleUploadFormData(
     {
       extractionDetail: extraction.extractionDetail,
       ...(extractedMetadata ? { extractedMetadata } : {}),
+      ...("pageCount" in extraction && extraction.pageCount != null ? { pageCount: extraction.pageCount } : {}),
     }
   );
 }

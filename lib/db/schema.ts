@@ -51,6 +51,10 @@ export const processo = pgTable(
     valorCausa: varchar("valorCausa", { length: 32 }),
     provisao: varchar("provisao", { length: 32 }),
     prazoFatal: timestamp("prazoFatal"),
+    /** IDs de documentos KB associados ao processo (sem FK; IDs órfãos filtrados na query). */
+    knowledgeDocumentIds: json("knowledgeDocumentIds")
+      .$type<string[]>()
+      .default([]),
     createdAt: timestamp("createdAt").notNull().defaultNow(),
   },
   (table) => ({

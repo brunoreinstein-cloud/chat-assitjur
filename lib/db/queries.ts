@@ -2120,6 +2120,27 @@ export async function deleteProcesso({
   }
 }
 
+export async function updateProcessoKnowledgeDocuments({
+  id,
+  userId,
+  knowledgeDocumentIds,
+}: {
+  id: string;
+  userId: string;
+  knowledgeDocumentIds: string[];
+}): Promise<Processo | null> {
+  try {
+    const [updated] = await getDb()
+      .update(processo)
+      .set({ knowledgeDocumentIds })
+      .where(and(eq(processo.id, id), eq(processo.userId, userId)))
+      .returning();
+    return updated ?? null;
+  } catch (err) {
+    toDatabaseError(err, "Failed to update processo knowledge documents");
+  }
+}
+
 export async function replaceVerbasByProcessoId({
   processoId,
   verbas,

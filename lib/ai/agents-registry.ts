@@ -49,6 +49,13 @@ export interface AgentConfig {
    */
   useApprovalTool?: boolean;
   /**
+   * Habilitar Pipeline Multi-Chamadas (analyzeProcessoPipeline).
+   * Quando true, o agente pode processar PDFs grandes (>500 pgs) dividindo-os
+   * em blocos temáticos e analisando cada um separadamente.
+   * Default: false — activar apenas no Master agent.
+   */
+  usePipelineTool?: boolean;
+  /**
    * IDs de modelos LLM permitidos para este agente (ex.: ["anthropic/claude-sonnet-4.6"]).
    * Se omitido ou vazio, todos os modelos do catálogo são permitidos.
    */
@@ -102,6 +109,7 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
     useRedatorContestacaoTool: false,
     useMemoryTools: true,
     useApprovalTool: true, // Master agent pode executar acções — requer aprovação
+    usePipelineTool: true, // Pipeline multi-chamadas para PDFs grandes (>500 pgs)
   },
 };
 

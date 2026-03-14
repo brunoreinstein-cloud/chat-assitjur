@@ -5,6 +5,7 @@ import {
   getProcessoById,
   replaceVerbasByProcessoId,
   updateProcesso,
+  updateProcessoKnowledgeDocuments,
 } from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
 
@@ -45,7 +46,7 @@ export async function PATCH(
     }
     const { id } = await params;
     const body = await request.json();
-    const { verbas, ...fields } = body;
+    const { verbas, knowledgeDocumentIds, ...fields } = body;
 
     await ensureStatementTimeout();
 
@@ -80,6 +81,14 @@ export async function PATCH(
 
     if (Array.isArray(verbas)) {
       await replaceVerbasByProcessoId({ processoId: id, verbas });
+    }
+
+    if (Array.isArray(knowledgeDocumentIds)) {
+      await updateProcessoKnowledgeDocuments({
+        id,
+        userId: session.user.id,
+        knowledgeDocumentIds,
+      });
     }
 
     const result = await getProcessoById({ id, userId: session.user.id });
