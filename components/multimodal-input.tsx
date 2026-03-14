@@ -54,6 +54,7 @@ import type {
   CustomUIDataTypes,
 } from "@/lib/types";
 import { cn, fetcher } from "@/lib/utils";
+import { ContextUsageIndicator } from "./context-usage-indicator";
 import {
   PromptInput,
   PromptInputSubmit,
@@ -1154,6 +1155,33 @@ function PureMultimodalInput({
     return () => textarea.removeEventListener("paste", handlePaste);
   }, [handlePaste]);
 
+  // Window-level drag listeners: extend drop zone to entire viewport
+  useEffect(() => {
+    const onWindowDragOver = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes("Files")) {
+        e.preventDefault();
+        setIsDraggingOver(true);
+      }
+    };
+    const onWindowDragLeave = (e: DragEvent) => {
+      if (e.relatedTarget === null) {
+        setIsDraggingOver(false);
+      }
+    };
+    const onWindowDrop = (e: DragEvent) => {
+      e.preventDefault();
+      setIsDraggingOver(false);
+    };
+    window.addEventListener("dragover", onWindowDragOver);
+    window.addEventListener("dragleave", onWindowDragLeave);
+    window.addEventListener("drop", onWindowDrop);
+    return () => {
+      window.removeEventListener("dragover", onWindowDragOver);
+      window.removeEventListener("dragleave", onWindowDragLeave);
+      window.removeEventListener("drop", onWindowDrop);
+    };
+  }, []);
+
   const _handleDocumentTypeChange = useCallback(
     (attachmentUrl: string) => (documentType: "pi" | "contestacao") => {
       setAttachments((current) =>
@@ -1277,39 +1305,41 @@ function PureMultimodalInput({
           <section
             aria-label="Zona de largar ficheiros para anexar"
             aria-live="polite"
-            className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-[22px] bg-background/90 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background/90 backdrop-blur-sm"
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDropWithOverlay(e)}
           >
-            <p className="font-medium text-foreground text-sm">
-              Solte para anexar
+            <p className="font-semibold text-base text-foreground">
+              Solte os ficheiros aqui
             </p>
-            <div className="flex gap-2">
-              <Button
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.stopPropagation();
-                  handleDropWithOverlay(e, "pi");
-                }}
-                size="sm"
-                type="button"
-                variant="secondary"
-              >
-                Marcar como PI
-              </Button>
-              <Button
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => {
-                  e.stopPropagation();
-                  handleDropWithOverlay(e, "contestacao");
-                }}
-                size="sm"
-                type="button"
-                variant="secondary"
-              >
-                Marcar como Contestação
-              </Button>
-            </div>
+            {isRevisorAgent && (
+              <div className="flex gap-2">
+                <Button
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.stopPropagation();
+                    handleDropWithOverlay(e, "pi");
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="secondary"
+                >
+                  Marcar como PI
+                </Button>
+                <Button
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.stopPropagation();
+                    handleDropWithOverlay(e, "contestacao");
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="secondary"
+                >
+                  Marcar como Contestação
+                </Button>
+              </div>
+            )}
           </section>
         )}
         {messages.length === 0 && agentId === "revisor-defesas" && (
@@ -1496,6 +1526,11 @@ function PureMultimodalInput({
               )}
             </div>
           ))}
+        <ContextUsageIndicator
+          attachments={attachments}
+          knowledgeDocCount={knowledgeDocumentIds.length}
+          messages={messages}
+        />
         <div className="relative flex flex-row items-start gap-1 sm:gap-2">
           {atPopoverOpen && setKnowledgeDocumentIds && (
             <section
