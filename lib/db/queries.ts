@@ -941,10 +941,16 @@ export async function updateKnowledgeDocumentIndexingStatus({
 export async function getKnowledgeDocumentsByUserId({
   userId,
   folderId,
+  limit,
+  offset,
 }: {
   userId: string;
   /** Se definido, filtra documentos desta pasta (null = raiz). */
   folderId?: string | null;
+  /** Número máximo de documentos a devolver. Sem limite se omitido. */
+  limit?: number;
+  /** Número de documentos a saltar (para paginação por offset). */
+  offset?: number;
 }) {
   try {
     const conditions = [eq(knowledgeDocument.userId, userId)];
@@ -955,11 +961,18 @@ export async function getKnowledgeDocumentsByUserId({
         conditions.push(eq(knowledgeDocument.folderId, folderId));
       }
     }
-    return await getDb()
+    const query = getDb()
       .select()
       .from(knowledgeDocument)
       .where(and(...conditions))
       .orderBy(desc(knowledgeDocument.createdAt));
+    if (limit !== undefined) {
+      query.limit(limit);
+    }
+    if (offset !== undefined && offset > 0) {
+      query.offset(offset);
+    }
+    return await query;
   } catch (err) {
     toDatabaseError(err, "Failed to get knowledge documents by user id");
   }
@@ -1102,6 +1115,20 @@ export async function deleteKnowledgeDocumentById({
   } catch (err) {
     toDatabaseError(err, "Failed to delete knowledge document");
   }
+}
+
+/** Salva o resumo estruturado extraído por IA (PI/Contestação) no documento. */
+export async function updateKnowledgeDocumentStructuredSummary({
+  id,
+  structuredSummary,
+}: {
+  id: string;
+  structuredSummary: string;
+}): Promise<void> {
+  await getDb()
+    .update(knowledgeDocument)
+    .set({ structuredSummary })
+    .where(eq(knowledgeDocument.id, id));
 }
 
 export async function createUserFile({

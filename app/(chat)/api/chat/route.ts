@@ -43,6 +43,13 @@ import { getPromptCachingCacheControl } from "@/lib/ai/prompt-caching-config";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
 import {
+  buildKnowledgeContext,
+  BANCO_TESES_MENTION_RE,
+  MAX_KNOWLEDGE_CONTEXT_CHARS,
+  REDATOR_BANCO_UNAVAILABLE_MESSAGE,
+  resolveEffectiveKnowledgeIds,
+} from "@/lib/ai/resolve-knowledge-ids";
+import {
   REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID,
   REDATOR_BANCO_SYSTEM_USER_ID,
 } from "@/lib/ai/redator-banco-rag";
@@ -248,17 +255,15 @@ function wrapKnowledgeDocument(
 }
 
 /** Máximo de caracteres por documento no prompt (evita "prompt is too long" ~200k tokens). */
-const MAX_CHARS_PER_DOCUMENT = 35_000;
+const MAX_CHARS_PER_DOCUMENT = 80_000;
 /** Máximo total de caracteres de documentos numa única mensagem. */
-const MAX_TOTAL_DOC_CHARS = 100_000;
+const MAX_TOTAL_DOC_CHARS = 180_000;
 /** Na PI, ao truncar, preservar este número de caracteres do final (OAB/assinaturas). */
 const PI_TAIL_CHARS = 2500;
 
 /** Últimas N mensagens a carregar para contexto (reduz BD e tamanho do prompt; a qualidade mantém-se com contexto recente). */
 const CHAT_MESSAGES_LIMIT = 80;
 
-/** Máximo de caracteres da base de conhecimento no system prompt (reduz custo de tokens). */
-const MAX_KNOWLEDGE_CONTEXT_CHARS = 50_000;
 
 /** Timeouts e limites do batch de BD (runChatDbBatch). */
 const DB_BATCH_TIMEOUT_MS = 120_000;
@@ -312,12 +317,15 @@ function getDocumentPartExtractionHint(
 
 function fillKnowledgeFromFullDocsWhenEmpty(
   parts: string[],
-  docs: Array<{ id: string; title: string; content: string }>
+  docs: Array<{ id: string; title: string; content: string; structuredSummary?: string | null }>
 ): void {
   const shouldFillFromFullDocs = parts.length === 0;
   if (shouldFillFromFullDocs) {
     for (const doc of docs) {
-      parts.push(wrapKnowledgeDocument(doc.id, doc.title, doc.content));
+      // Documentos com resumo estruturado já foram injetados antes; usar conteúdo bruto só sem resumo
+      if (!doc.structuredSummary) {
+        parts.push(wrapKnowledgeDocument(doc.id, doc.title, doc.content));
+      }
     }
   }
 }
@@ -446,41 +454,6 @@ function getStreamContext() {
   }
 }
 
-function resolveEffectiveKnowledgeIds(
-  knowledgeDocumentIds: string[] | undefined,
-  _userId: string | undefined,
-  agentId: string
-): string[] {
-  // Chamado apenas após getEarlyValidationResponse; userId está garantido pelo fluxo.
-  if (knowledgeDocumentIds?.length) {
-    return knowledgeDocumentIds;
-  }
-  if (agentId === AGENT_ID_REDATOR_CONTESTACAO) {
-    return [REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID];
-  }
-  return [];
-}
-
-const REDATOR_BANCO_UNAVAILABLE_MESSAGE =
-  "[Banco de Teses Padrão não disponível. Para satisfazer (B), o utilizador deve selecionar documentos na Base de conhecimento (sidebar) ou anexar modelo/banco de teses.]";
-
-function buildKnowledgeContext(
-  rawKnowledgeContext: string,
-  agentId: string,
-  effectiveKnowledgeIds: string[]
-): string | undefined {
-  if (rawKnowledgeContext.length > MAX_KNOWLEDGE_CONTEXT_CHARS) {
-    return `${rawKnowledgeContext.slice(0, MAX_KNOWLEDGE_CONTEXT_CHARS)}\n\n[... base de conhecimento truncada para caber no limite ...]`;
-  }
-  const redatorBancoIntendedButEmpty =
-    agentId === AGENT_ID_REDATOR_CONTESTACAO &&
-    effectiveKnowledgeIds.includes(REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID) &&
-    rawKnowledgeContext.length === 0;
-  if (redatorBancoIntendedButEmpty) {
-    return REDATOR_BANCO_UNAVAILABLE_MESSAGE;
-  }
-  return rawKnowledgeContext || undefined;
-}
 
 const TRUNCATE_SUFFIX =
   "\n\n[Truncado: o documento excedeu o limite de caracteres.]";
@@ -1054,10 +1027,23 @@ function buildKnowledgeContextFromParts(
   ragChunks: Awaited<ReturnType<typeof retrieveKnowledgeContext>>,
   knowledgeDocsResult: Awaited<ReturnType<typeof getKnowledgeDocumentsByIds>>,
   userFilesFromArchivos: Awaited<ReturnType<typeof getUserFilesByIds>>,
-  agentId: string,
   effectiveKnowledgeIds: string[]
 ): string | undefined {
   const knowledgeDocParts: string[] = [];
+
+  // Injetar resumos estruturados (PI/Contestação) sempre que disponíveis — visão completa sem truncamento
+  for (const doc of knowledgeDocsResult) {
+    if (doc.structuredSummary) {
+      knowledgeDocParts.push(
+        wrapKnowledgeDocument(
+          doc.id,
+          `${doc.title} [Resumo Estruturado]`,
+          doc.structuredSummary
+        )
+      );
+    }
+  }
+
   if (ragChunks.length > 0) {
     const byDoc = new Map<string, { title: string; texts: string[] }>();
     for (const c of ragChunks) {
@@ -1094,11 +1080,7 @@ function buildKnowledgeContextFromParts(
     knowledgeDocParts.length > 0
       ? `<knowledge_base>\n${knowledgeDocParts.join("\n\n")}\n</knowledge_base>`
       : "";
-  return buildKnowledgeContext(
-    rawKnowledgeContext,
-    agentId,
-    effectiveKnowledgeIds
-  );
+  return buildKnowledgeContext(rawKnowledgeContext, effectiveKnowledgeIds);
 }
 
 /** Guarda a mensagem do utilizador na BD; devolve Response em caso de erro. */
@@ -1941,16 +1923,21 @@ async function handleChatPostAuthenticated(
   const isToolApprovalFlow = Boolean(messages);
   const initialCredits = entitlementsByUserType[userType].initialCredits;
 
+  const messageText =
+    message?.parts
+      ?.map((p) => ("text" in p ? p.text : ""))
+      .join(" ") ?? "";
   const effectiveKnowledgeIds = resolveEffectiveKnowledgeIds(
     knowledgeDocumentIds,
-    authenticatedSession.user.id,
-    agentId
+    agentId,
+    messageText,
+    agentInstructions
   );
-  const redatorBancoAllowedUserIds =
-    agentId === AGENT_ID_REDATOR_CONTESTACAO &&
-    effectiveKnowledgeIds.includes(REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID)
-      ? [REDATOR_BANCO_SYSTEM_USER_ID]
-      : undefined;
+  const redatorBancoAllowedUserIds = effectiveKnowledgeIds.includes(
+    REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID
+  )
+    ? [REDATOR_BANCO_SYSTEM_USER_ID]
+    : undefined;
 
   await ensureUserExistsInDb(
     authenticatedSession.user.id,
@@ -2062,7 +2049,6 @@ async function handleChatPostAuthenticated(
     ragChunks,
     batchResult.knowledgeDocsResult,
     userFilesFromArchivos,
-    agentId,
     effectiveKnowledgeIds
   );
 

@@ -308,6 +308,8 @@ export const knowledgeDocument = pgTable(
     indexingStatus: varchar("indexingStatus", { length: 32 })
       .notNull()
       .default("indexed"),
+    /** Resumo estruturado extraído por IA para PI e Contestação (markdown, ~8-12k chars). Null para outros tipos. */
+    structuredSummary: text("structuredSummary"),
     createdAt: timestamp("createdAt").notNull().defaultNow(),
   },
   (table) => ({

@@ -26,6 +26,9 @@ const EMBED_BATCH_SIZE = 100;
  */
 const EMBED_BATCH_DELAY_MS = 300;
 
+/** Número máximo de tentativas por batch em caso de erro transitório. */
+const EMBED_BATCH_MAX_RETRIES = 3;
+
 /** Aguarda ms milissegundos. */
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -86,7 +89,11 @@ export async function embedQuery(value: string): Promise<number[] | null> {
       value: normalizeForEmbedding(value),
     });
     return embedding;
-  } catch {
+  } catch (err) {
+    console.error(
+      "[embedQuery] Falha ao gerar embedding:",
+      err instanceof Error ? err.message : err
+    );
     return null;
   }
 }
@@ -111,7 +118,11 @@ export async function embedChunks(
       values: values.map(normalizeForEmbedding),
     });
     return embeddings.map((embedding) => ({ embedding }));
-  } catch {
+  } catch (err) {
+    console.error(
+      "[embedChunks] Falha ao gerar embeddings:",
+      err instanceof Error ? err.message : err
+    );
     return null;
   }
 }
@@ -147,17 +158,33 @@ export async function embedChunksInBatches(
 
     const batch = values.slice(i, i + batchSize).map(normalizeForEmbedding);
 
-    try {
-      const { embeddings } = await embedMany({
-        model: EMBEDDING_MODEL_ID,
-        values: batch,
-      });
-      results.push(...embeddings.map((embedding) => ({ embedding })));
-    } catch (err) {
-      // Em caso de erro num batch, retorna null para que o chamador possa tratar
+    let lastErr: unknown;
+    let succeeded = false;
+    for (let attempt = 0; attempt < EMBED_BATCH_MAX_RETRIES; attempt++) {
+      if (attempt > 0) {
+        // Backoff exponencial: 1s, 2s, 4s…
+        await sleep(1000 * 2 ** (attempt - 1));
+      }
+      try {
+        const { embeddings } = await embedMany({
+          model: EMBEDDING_MODEL_ID,
+          values: batch,
+        });
+        results.push(...embeddings.map((embedding) => ({ embedding })));
+        succeeded = true;
+        break;
+      } catch (err) {
+        lastErr = err;
+        console.warn(
+          `[embedChunksInBatches] Tentativa ${attempt + 1}/${EMBED_BATCH_MAX_RETRIES} falhou no batch ${i}–${i + batchSize}:`,
+          err instanceof Error ? err.message : err
+        );
+      }
+    }
+    if (!succeeded) {
       console.error(
-        `[embedChunksInBatches] Erro no batch ${i}–${i + batchSize}:`,
-        err instanceof Error ? err.message : err
+        `[embedChunksInBatches] Batch ${i}–${i + batchSize} falhou após ${EMBED_BATCH_MAX_RETRIES} tentativas:`,
+        lastErr instanceof Error ? lastErr.message : lastErr
       );
       return null;
     }

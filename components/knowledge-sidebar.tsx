@@ -1445,7 +1445,7 @@ export function KnowledgeSidebarContent({
                 webkitdirectory: "",
               } as React.InputHTMLAttributes<HTMLInputElement>)}
             />
-            <button
+            <div
               aria-label="Adicionar documentos por ficheiros ou pasta"
               className={dropzoneClassName}
               onDragLeave={() => setIsDraggingOver(false)}
@@ -1464,7 +1464,8 @@ export function KnowledgeSidebarContent({
                   filesInputRef.current?.click();
                 }
               }}
-              type="button"
+              role="button"
+              tabIndex={0}
             >
               {isAddingFromFiles ? (
                 <div
@@ -1532,7 +1533,7 @@ export function KnowledgeSidebarContent({
                   </button>
                 </>
               )}
-            </button>
+            </div>
 
             <form className="grid gap-2" onSubmit={handleAddDocument}>
               <Label htmlFor="kb-new-title">Ou criar manualmente</Label>
