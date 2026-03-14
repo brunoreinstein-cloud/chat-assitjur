@@ -31,7 +31,9 @@ export function resolveEffectiveKnowledgeIds(
   }
   const mentionsBanco =
     BANCO_TESES_MENTION_RE.test(messageText) ||
-    (agentInstructions ? BANCO_TESES_MENTION_RE.test(agentInstructions) : false);
+    (agentInstructions
+      ? BANCO_TESES_MENTION_RE.test(agentInstructions)
+      : false);
   if (agentId === AGENT_ID_REDATOR_CONTESTACAO || mentionsBanco) {
     return [REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID];
   }

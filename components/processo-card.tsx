@@ -51,7 +51,10 @@ export function ProcessoCard({
           <span
             className={`flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] uppercase tracking-wide ${riscoClass}`}
           >
-            <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${riscoDot}`} />
+            <span
+              aria-hidden
+              className={`h-1.5 w-1.5 rounded-full ${riscoDot}`}
+            />
             {RISCO_LABEL[risco]}
           </span>
         )}
@@ -60,7 +63,9 @@ export function ProcessoCard({
       {/* Linha 2: partes */}
       <div className="mb-1.5 truncate text-[11.5px] text-foreground dark:text-white/80">
         {primeiroNomeReclamante}{" "}
-        <span className="text-muted-foreground dark:text-assistjur-gray">×</span>{" "}
+        <span className="text-muted-foreground dark:text-assistjur-gray">
+          ×
+        </span>{" "}
         {primeiroNomeReclamada}
       </div>
 

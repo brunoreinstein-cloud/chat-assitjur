@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
+import { extractLegalSummary } from "@/lib/ai/extract-legal-summary";
 import {
   createKnowledgeDocument,
   deleteKnowledgeDocumentById,
@@ -10,7 +11,6 @@ import {
 } from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
 import { vectorizeAndIndex } from "@/lib/rag";
-import { extractLegalSummary } from "@/lib/ai/extract-legal-summary";
 
 const createBodySchema = z.object({
   title: z.string().min(1).max(512),
@@ -147,7 +147,9 @@ export async function POST(request: Request) {
             });
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          /* fire-and-forget; ignore */
+        });
     }
 
     return Response.json(doc, { status: 201 });

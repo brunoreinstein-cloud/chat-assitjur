@@ -19,7 +19,9 @@ export async function GET() {
     const processos = await getProcessosByUserId({ userId: session.user.id });
     return Response.json(processos);
   } catch (error) {
-    if (error instanceof ChatbotError) return error.toResponse();
+    if (error instanceof ChatbotError) {
+      return error.toResponse();
+    }
     return Response.json({ message: "Internal error" }, { status: 500 });
   }
 }
@@ -48,7 +50,7 @@ export async function POST(request: Request) {
       verbas,
     } = body;
 
-    if (!numeroAutos?.trim() || !reclamante?.trim() || !reclamada?.trim()) {
+    if (!(numeroAutos?.trim() && reclamante?.trim() && reclamada?.trim())) {
       return Response.json(
         { message: "numeroAutos, reclamante e reclamada são obrigatórios" },
         { status: 400 }
@@ -81,7 +83,9 @@ export async function POST(request: Request) {
 
     return Response.json({ ...created, verbas: verbas ?? [] }, { status: 201 });
   } catch (error) {
-    if (error instanceof ChatbotError) return error.toResponse();
+    if (error instanceof ChatbotError) {
+      return error.toResponse();
+    }
     return Response.json({ message: "Internal error" }, { status: 500 });
   }
 }

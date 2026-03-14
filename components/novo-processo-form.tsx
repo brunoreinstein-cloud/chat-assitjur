@@ -11,13 +11,21 @@ const CNJ_REGEX = /^\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}$/;
 /** Aplica máscara CNJ enquanto o utilizador digita. */
 function applyCNJMask(raw: string): string {
   const d = raw.replace(/\D/g, "").slice(0, 20);
-  if (d.length <= 7) return d;
-  if (d.length <= 9) return `${d.slice(0, 7)}-${d.slice(7)}`;
-  if (d.length <= 13) return `${d.slice(0, 7)}-${d.slice(7, 9)}.${d.slice(9)}`;
-  if (d.length <= 14)
+  if (d.length <= 7) {
+    return d;
+  }
+  if (d.length <= 9) {
+    return `${d.slice(0, 7)}-${d.slice(7)}`;
+  }
+  if (d.length <= 13) {
+    return `${d.slice(0, 7)}-${d.slice(7, 9)}.${d.slice(9)}`;
+  }
+  if (d.length <= 14) {
     return `${d.slice(0, 7)}-${d.slice(7, 9)}.${d.slice(9, 13)}.${d.slice(13)}`;
-  if (d.length <= 16)
+  }
+  if (d.length <= 16) {
     return `${d.slice(0, 7)}-${d.slice(7, 9)}.${d.slice(9, 13)}.${d.slice(13, 14)}.${d.slice(14)}`;
+  }
   return `${d.slice(0, 7)}-${d.slice(7, 9)}.${d.slice(9, 13)}.${d.slice(13, 14)}.${d.slice(14, 16)}.${d.slice(16)}`;
 }
 
@@ -66,7 +74,10 @@ const btnPrimary =
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function NovoProcessoForm({ onCreated, onCancel }: NovoProcessoFormProps) {
+export function NovoProcessoForm({
+  onCreated,
+  onCancel,
+}: NovoProcessoFormProps) {
   const [mode, setMode] = useState<Mode>("entry");
   const [form, setForm] = useState<FormFields>(EMPTY_FORM);
   /** Número CNJ digitado na entrada (antes de ir para review). */
@@ -130,11 +141,14 @@ export function NovoProcessoForm({ onCreated, onCancel }: NovoProcessoFormProps)
 
   async function handleSave() {
     if (
-      !form.numeroAutos.trim() ||
-      !form.reclamante.trim() ||
-      !form.reclamada.trim()
-    )
+      !(
+        form.numeroAutos.trim() &&
+        form.reclamante.trim() &&
+        form.reclamada.trim()
+      )
+    ) {
       return;
+    }
     setMode("saving");
     setError(null);
     try {
@@ -147,7 +161,9 @@ export function NovoProcessoForm({ onCreated, onCancel }: NovoProcessoFormProps)
           prazoFatal: null,
         }),
       });
-      if (!res.ok) throw new Error("Erro ao criar processo");
+      if (!res.ok) {
+        throw new Error("Erro ao criar processo");
+      }
       const created = await res.json();
       onCreated(created);
     } catch {
@@ -162,8 +178,8 @@ export function NovoProcessoForm({ onCreated, onCancel }: NovoProcessoFormProps)
     return (
       <div className="space-y-3 px-0.5">
         {/* Drop zone */}
-        <div
-          className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-5 text-center transition-colors ${
+        <button
+          className={`flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed bg-transparent px-4 py-5 text-left text-inherit outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
             isDragging
               ? "border-assistjur-gold bg-assistjur-gold/5"
               : "border-border hover:border-assistjur-gold/50 hover:bg-muted/30 dark:border-white/15"
@@ -182,15 +198,26 @@ export function NovoProcessoForm({ onCreated, onCancel }: NovoProcessoFormProps)
             e.preventDefault();
             setIsDragging(false);
             const file = e.dataTransfer.files?.[0];
-            if (file) handleFile(file);
+            if (file) {
+              handleFile(file);
+            }
           }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
+          type="button"
         >
           <input
             accept=".pdf,application/pdf"
             className="sr-only"
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) handleFile(file);
+              if (file) {
+                handleFile(file);
+              }
             }}
             ref={fileInputRef}
             type="file"
@@ -206,20 +233,20 @@ export function NovoProcessoForm({ onCreated, onCancel }: NovoProcessoFormProps)
           >
             <title>Ficheiro PDF</title>
             <path
+              d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
               strokeLinecap="round"
               strokeLinejoin="round"
-              d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
             />
           </svg>
           <div>
-            <p className="text-[12px] font-medium text-foreground dark:text-white">
+            <p className="font-medium text-[12px] text-foreground dark:text-white">
               {isDragging ? "Solte o PDF aqui" : "Arraste o PDF do processo"}
             </p>
             <p className="text-[11px] text-muted-foreground dark:text-assistjur-gray">
               ou clique para selecionar
             </p>
           </div>
-        </div>
+        </button>
 
         {/* Divider */}
         <div className="flex items-center gap-2">
@@ -242,9 +269,7 @@ export function NovoProcessoForm({ onCreated, onCancel }: NovoProcessoFormProps)
         />
 
         {/* Error */}
-        {error && (
-          <p className="text-[11px] text-red-400">{error}</p>
-        )}
+        {error && <p className="text-[11px] text-red-400">{error}</p>}
 
         {/* Actions */}
         <div className="flex gap-2 pt-0.5">
@@ -316,7 +341,7 @@ export function NovoProcessoForm({ onCreated, onCancel }: NovoProcessoFormProps)
     >
       {/* Section header */}
       <div className="flex items-center gap-2">
-        <span className="shrink-0 text-[9px] font-semibold uppercase tracking-widest text-assistjur-gold">
+        <span className="shrink-0 font-semibold text-[9px] text-assistjur-gold uppercase tracking-widest">
           Confirme os dados
         </span>
         <div className="h-px flex-1 bg-assistjur-gold/20" />

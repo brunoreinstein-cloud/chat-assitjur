@@ -85,12 +85,16 @@ interface KnowledgeDoc {
 }
 
 /** Limites em chars para classificação de cobertura (espelha extract-legal-summary.ts e chat/route.ts). */
-const COVERAGE_FULL_LIMIT = 78_000;     // cabe inteiro no structured summary sem amostragem
+const COVERAGE_FULL_LIMIT = 78_000; // cabe inteiro no structured summary sem amostragem
 const COVERAGE_SAMPLED_LIMIT = 200_000; // amostragem início+fim; cobertura boa mas não total
-const LEGAL_DOC_RE = /petição\s+inicial|contestação|peticao\s+inicial|contestacao/i;
+const LEGAL_DOC_RE =
+  /petição\s+inicial|contestação|peticao\s+inicial|contestacao/i;
 
 /** Avalia a cobertura esperada de um documento com base no tamanho e tipo. */
-export function getDocumentCoverageInfo(contentLength: number, documentType?: string): {
+export function getDocumentCoverageInfo(
+  contentLength: number,
+  documentType?: string
+): {
   level: "full" | "structured" | "sampled" | "truncated";
   label: string;
   detail: string;
@@ -135,7 +139,8 @@ function parseSummaryBadge(summary: string): {
   // Conta linhas de tabela de pedidos (linhas com | que não são cabeçalho/separador)
   const tableRows = summary.match(/^\|\s*\d+\s*\|/gm);
   const pedidosCount = tableRows?.length ?? 0;
-  const isPartial = summary.includes("NÃO VISÍVEL") || summary.includes("não visível");
+  const isPartial =
+    summary.includes("NÃO VISÍVEL") || summary.includes("não visível");
   return { docType, pedidosCount, isPartial };
 }
 
@@ -219,7 +224,9 @@ export function KnowledgeSidebarContent({
   const [newDocContent, setNewDocContent] = useState("");
   const [isAddingDoc, setIsAddingDoc] = useState(false);
   const [addDocError, setAddDocError] = useState<string | null>(null);
-  const [generatingSummaryIds, setGeneratingSummaryIds] = useState<Set<string>>(new Set());
+  const [generatingSummaryIds, setGeneratingSummaryIds] = useState<Set<string>>(
+    new Set()
+  );
   const [isAddingFromFiles, setIsAddingFromFiles] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{
     processed: number;
@@ -315,18 +322,28 @@ export function KnowledgeSidebarContent({
    */
   const pollForSummaries = useCallback(
     (createdIds: string[]) => {
-      if (createdIds.length === 0) return;
+      if (createdIds.length === 0) {
+        return;
+      }
       const MAX_POLL_ATTEMPTS = 5;
-      const POLL_INTERVAL_MS = 3_000;
+      const POLL_INTERVAL_MS = 3000;
       let attempts = 0;
       const poll = async () => {
         attempts += 1;
         await Promise.all([mutate(docsKey), mutateRecent()]);
         if (attempts < MAX_POLL_ATTEMPTS) {
-          setTimeout(() => { void poll(); }, POLL_INTERVAL_MS);
+          setTimeout(() => {
+            poll().catch(() => {
+              /* fire-and-forget */
+            });
+          }, POLL_INTERVAL_MS);
         }
       };
-      setTimeout(() => { void poll(); }, POLL_INTERVAL_MS);
+      setTimeout(() => {
+        poll().catch(() => {
+          /* fire-and-forget */
+        });
+      }, POLL_INTERVAL_MS);
     },
     [docsKey, mutate, mutateRecent]
   );
@@ -423,7 +440,12 @@ export function KnowledgeSidebarContent({
       currentFile: allFiles[0]?.name,
     });
     setAddDocError(null);
-    const totalCreated: Array<{ id: string; title: string; contentLength?: number; metadata?: { documentType?: string } }> = [];
+    const totalCreated: Array<{
+      id: string;
+      title: string;
+      contentLength?: number;
+      metadata?: { documentType?: string };
+    }> = [];
     const totalFailed: Array<{ filename: string; error: string }> = [];
     const batches = (() => {
       const b: File[][] = [];
@@ -701,9 +723,12 @@ export function KnowledgeSidebarContent({
   const handleGenerateSummary = async (docId: string) => {
     setGeneratingSummaryIds((prev) => new Set(prev).add(docId));
     try {
-      await fetch(`/api/knowledge/${encodeURIComponent(docId)}/generate-summary`, {
-        method: "POST",
-      });
+      await fetch(
+        `/api/knowledge/${encodeURIComponent(docId)}/generate-summary`,
+        {
+          method: "POST",
+        }
+      );
       await Promise.all([mutate(docsKey), mutateRecent()]);
     } finally {
       setGeneratingSummaryIds((prev) => {
@@ -715,16 +740,23 @@ export function KnowledgeSidebarContent({
   };
 
   const handleGenerateAllSummaries = async () => {
-    const pending = knowledgeDocs.filter((d) => !d.structuredSummary && d.indexingStatus !== "pending");
-    if (pending.length === 0) return;
+    const pending = knowledgeDocs.filter(
+      (d) => !d.structuredSummary && d.indexingStatus !== "pending"
+    );
+    if (pending.length === 0) {
+      return;
+    }
     const ids = pending.map((d) => d.id);
     setGeneratingSummaryIds(new Set(ids));
     try {
       // Processa sequencialmente para não sobrecarregar o servidor
       for (const id of ids) {
-        await fetch(`/api/knowledge/${encodeURIComponent(id)}/generate-summary`, {
-          method: "POST",
-        });
+        await fetch(
+          `/api/knowledge/${encodeURIComponent(id)}/generate-summary`,
+          {
+            method: "POST",
+          }
+        );
         setGeneratingSummaryIds((prev) => {
           const next = new Set(prev);
           next.delete(id);
@@ -968,23 +1000,29 @@ export function KnowledgeSidebarContent({
                     Erro
                   </span>
                 )}
-                {doc.structuredSummary && (() => {
-                  const { docType, pedidosCount, isPartial } = parseSummaryBadge(doc.structuredSummary);
-                  const label = docType === "pi" ? "PI" : "Cont.";
-                  const pedidosLabel = pedidosCount > 0 ? ` • ${pedidosCount} pedidos` : "";
-                  const partialLabel = isPartial ? " • ⚠️ parcial" : "";
-                  const tooltip = docType === "pi"
-                    ? `Petição Inicial — resumo estruturado gerado por IA${pedidosCount > 0 ? ` (${pedidosCount} pedidos mapeados)` : ""}${isPartial ? " — cobertura parcial (documento muito grande)" : " — cobertura completa"}`
-                    : `Contestação — resumo estruturado gerado por IA${isPartial ? " — cobertura parcial (documento muito grande)" : " — cobertura completa"}`;
-                  return (
-                    <span
-                      className={`shrink-0 rounded px-1.5 py-0 text-[10px] ${isPartial ? "bg-amber-500/20 text-amber-700 dark:text-amber-400" : "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400"}`}
-                      title={tooltip}
-                    >
-                      📋 {label}{pedidosLabel}{partialLabel}
-                    </span>
-                  );
-                })()}
+                {doc.structuredSummary &&
+                  (() => {
+                    const { docType, pedidosCount, isPartial } =
+                      parseSummaryBadge(doc.structuredSummary);
+                    const label = docType === "pi" ? "PI" : "Cont.";
+                    const pedidosLabel =
+                      pedidosCount > 0 ? ` • ${pedidosCount} pedidos` : "";
+                    const partialLabel = isPartial ? " • ⚠️ parcial" : "";
+                    const tooltip =
+                      docType === "pi"
+                        ? `Petição Inicial — resumo estruturado gerado por IA${pedidosCount > 0 ? ` (${pedidosCount} pedidos mapeados)` : ""}${isPartial ? " — cobertura parcial (documento muito grande)" : " — cobertura completa"}`
+                        : `Contestação — resumo estruturado gerado por IA${isPartial ? " — cobertura parcial (documento muito grande)" : " — cobertura completa"}`;
+                    return (
+                      <span
+                        className={`shrink-0 rounded px-1.5 py-0 text-[10px] ${isPartial ? "bg-amber-500/20 text-amber-700 dark:text-amber-400" : "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400"}`}
+                        title={tooltip}
+                      >
+                        📋 {label}
+                        {pedidosLabel}
+                        {partialLabel}
+                      </span>
+                    );
+                  })()}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -1020,15 +1058,24 @@ export function KnowledgeSidebarContent({
                       disabled={generatingSummaryIds.has(doc.id)}
                       onSelect={(e) => {
                         e.preventDefault();
-                        void handleGenerateSummary(doc.id);
+                        handleGenerateSummary(doc.id).catch(() => {
+                          /* fire-and-forget */
+                        });
                       }}
                     >
                       {generatingSummaryIds.has(doc.id) ? (
                         <Loader2 aria-hidden className="size-4 animate-spin" />
                       ) : (
-                        <span aria-hidden className="size-4 text-center leading-none">📋</span>
+                        <span
+                          aria-hidden
+                          className="size-4 text-center leading-none"
+                        >
+                          📋
+                        </span>
                       )}
-                      {doc.structuredSummary ? "Regenerar resumo" : "Gerar resumo"}
+                      {doc.structuredSummary
+                        ? "Regenerar resumo"
+                        : "Gerar resumo"}
                     </DropdownMenuItem>
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger>
@@ -1168,8 +1215,8 @@ export function KnowledgeSidebarContent({
             type="button"
             variant="secondary"
           >
-            <Loader2 aria-hidden className="size-3.5 animate-spin" />
-            A gerar resumo… ({generatingSummaryIds.size} restante(s))
+            <Loader2 aria-hidden className="size-3.5 animate-spin" />A gerar
+            resumo… ({generatingSummaryIds.size} restante(s))
           </Button>
         )}
         <div className="relative mt-2">
@@ -1668,9 +1715,10 @@ export function KnowledgeSidebarContent({
                 webkitdirectory: "",
               } as React.InputHTMLAttributes<HTMLInputElement>)}
             />
-            <div
+            <button
               aria-label="Adicionar documentos por ficheiros ou pasta"
               className={dropzoneClassName}
+              onClick={() => filesInputRef.current?.click()}
               onDragLeave={() => setIsDraggingOver(false)}
               onDragOver={(e) => {
                 e.preventDefault();
@@ -1687,8 +1735,7 @@ export function KnowledgeSidebarContent({
                   filesInputRef.current?.click();
                 }
               }}
-              role="button"
-              tabIndex={0}
+              type="button"
             >
               {isAddingFromFiles ? (
                 <div
@@ -1701,7 +1748,10 @@ export function KnowledgeSidebarContent({
                         aria-hidden
                         className="size-4 shrink-0 animate-spin"
                       />
-                      <span className="min-w-0 truncate" title={uploadProgress.currentFile}>
+                      <span
+                        className="min-w-0 truncate"
+                        title={uploadProgress.currentFile}
+                      >
                         {uploadProgress.currentFile}
                       </span>
                     </span>
@@ -1777,7 +1827,7 @@ export function KnowledgeSidebarContent({
                   </button>
                 </>
               )}
-            </div>
+            </button>
 
             <form className="grid gap-2" onSubmit={handleAddDocument}>
               <Label htmlFor="kb-new-title">Ou criar manualmente</Label>

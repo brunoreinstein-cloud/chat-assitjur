@@ -44,8 +44,8 @@ import {
   userCreditBalance,
   userFile,
   userMemory,
-  verbaProcesso,
   type VerbaProcesso,
+  verbaProcesso,
   vote,
 } from "./schema";
 import { generateHashedPassword } from "./utils";
@@ -1991,7 +1991,9 @@ export async function getProcessosByUserId({
       .where(eq(processo.userId, userId))
       .orderBy(desc(processo.createdAt));
 
-    if (processos.length === 0) return [];
+    if (processos.length === 0) {
+      return [];
+    }
 
     const processoIds = processos.map((p) => p.id);
     const verbas = await getDb()
@@ -2028,7 +2030,9 @@ export async function getProcessoById({
         .where(eq(verbaProcesso.processoId, id)),
     ]);
 
-    if (!p) return null;
+    if (!p) {
+      return null;
+    }
     return { ...p, verbas };
   } catch (err) {
     toDatabaseError(err, "Failed to get processo by id");
@@ -2151,10 +2155,7 @@ export async function linkProcessoToChat({
   processoId: string | null;
 }) {
   try {
-    await getDb()
-      .update(chat)
-      .set({ processoId })
-      .where(eq(chat.id, chatId));
+    await getDb().update(chat).set({ processoId }).where(eq(chat.id, chatId));
   } catch {
     // Ignorar falha de vinculação processo↔chat
   }

@@ -1161,7 +1161,9 @@ function PureMultimodalInput({
   // Window-level drag listeners: extend drop zone to entire viewport
   useEffect(() => {
     const onWindowDragOver = (e: DragEvent) => {
-      if (knowledgeSidebarOpen) return;
+      if (knowledgeSidebarOpen) {
+        return;
+      }
       if (e.dataTransfer?.types.includes("Files")) {
         e.preventDefault();
         setIsDraggingOver(true);

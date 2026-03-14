@@ -745,9 +745,9 @@ export function Chat({
                 input={input}
                 inputRef={inputRef}
                 knowledgeDocumentIds={knowledgeDocumentIds}
+                knowledgeSidebarOpen={knowledgeOpen}
                 messages={messages}
                 onModelChange={setCurrentModelId}
-                knowledgeSidebarOpen={knowledgeOpen}
                 onOpenKnowledgeSidebar={openKnowledgeSidebar}
                 selectedModelId={currentModelId}
                 selectedVisibilityType={visibilityType}

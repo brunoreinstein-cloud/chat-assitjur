@@ -3,8 +3,8 @@
 import { isToday } from "date-fns";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
 import type { User } from "next-auth";
+import { useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import useSWRInfinite from "swr/infinite";
 import { AssistJurLogo } from "@/components/assistjur-logo";
@@ -99,7 +99,9 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
     : undefined;
 
   // Sidebar tabs: conversas | processos
-  const [sidebarTab, setSidebarTab] = useState<"conversas" | "processos">("conversas");
+  const [sidebarTab, setSidebarTab] = useState<"conversas" | "processos">(
+    "conversas"
+  );
   const [showNovoForm, setShowNovoForm] = useState(false);
   const activeProcessoId = isNewChat ? searchParams.get("processo") : null;
 
@@ -181,13 +183,16 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
         <div className="flex border-border border-b dark:border-white/8">
           {(["conversas", "processos"] as const).map((tab) => (
             <button
-              className={`flex-1 py-2 text-[11px] font-medium transition-colors ${
+              className={`flex-1 py-2 font-medium text-[11px] transition-colors ${
                 sidebarTab === tab
                   ? "border-assistjur-gold border-b-2 text-assistjur-gold"
-                  : "border-b-2 border-transparent text-muted-foreground hover:text-foreground dark:text-assistjur-gray dark:hover:text-white"
+                  : "border-transparent border-b-2 text-muted-foreground hover:text-foreground dark:text-assistjur-gray dark:hover:text-white"
               }`}
               key={tab}
-              onClick={() => { setSidebarTab(tab); setShowNovoForm(false); }}
+              onClick={() => {
+                setSidebarTab(tab);
+                setShowNovoForm(false);
+              }}
               type="button"
             >
               {tab === "conversas" ? "Conversas" : "Processos"}
@@ -282,7 +287,9 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
           {/* Header da aba */}
           <div className="flex items-center justify-between border-border border-b px-3 py-2 dark:border-white/8">
             <p className="font-semibold text-[10px] text-muted-foreground uppercase tracking-widest dark:text-assistjur-gray">
-              {processos ? `${processos.length} processo${processos.length !== 1 ? "s" : ""}` : "Processos"}
+              {processos
+                ? `${processos.length} processo${processos.length !== 1 ? "s" : ""}`
+                : "Processos"}
             </p>
             {!showNovoForm && (
               <button

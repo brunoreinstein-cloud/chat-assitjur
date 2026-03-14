@@ -70,7 +70,9 @@ const MAX_TEXT = 15_000;
 
 // ── Extração de texto do PDF ──────────────────────────────────────────────────
 
-type PdfProxy = Awaited<ReturnType<Awaited<typeof import("unpdf")>["getDocumentProxy"]>>;
+type PdfProxy = Awaited<
+  ReturnType<Awaited<typeof import("unpdf")>["getDocumentProxy"]>
+>;
 
 async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
   // Importar e criar o proxy uma única vez — partilhado pelas duas tentativas.
@@ -88,7 +90,9 @@ async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
   try {
     const result = await unpdf.extractText(pdf, { mergePages: true });
     const text = typeof result.text === "string" ? result.text.trim() : "";
-    if (text.length > 0) return text;
+    if (text.length > 0) {
+      return text;
+    }
   } catch {
     // cai para o fallback
   }

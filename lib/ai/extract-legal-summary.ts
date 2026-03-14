@@ -10,26 +10,31 @@ import { getTitleModel } from "@/lib/ai/providers";
 /** Máx. chars do início do documento enviados ao LLM. */
 const SAMPLE_HEAD_CHARS = 70_000;
 /** Chars do final do documento (captura OAB/assinaturas da PI e requerimentos da Contestação). */
-const SAMPLE_TAIL_CHARS = 8_000;
+const SAMPLE_TAIL_CHARS = 8000;
 
 /** Detecta se o conteúdo é uma Petição Inicial trabalhista. */
 function isPeticaoInicial(content: string): boolean {
-  const sample = content.slice(0, 3_000).toUpperCase();
+  const sample = content.slice(0, 3000).toUpperCase();
   return (
     sample.includes("PETIÇÃO INICIAL") ||
     sample.includes("PETICAO INICIAL") ||
-    (sample.includes("RECLAMANTE") && sample.includes("RECLAMADA") && sample.includes("EXCELENTÍSSIMO")) ||
-    (sample.includes("RECLAMANTE") && sample.includes("RECLAMADA") && sample.includes("EXCELENTISSIMO"))
+    (sample.includes("RECLAMANTE") &&
+      sample.includes("RECLAMADA") &&
+      sample.includes("EXCELENTÍSSIMO")) ||
+    (sample.includes("RECLAMANTE") &&
+      sample.includes("RECLAMADA") &&
+      sample.includes("EXCELENTISSIMO"))
   );
 }
 
 /** Detecta se o conteúdo é uma Contestação trabalhista. */
 function isContestacao(content: string): boolean {
-  const sample = content.slice(0, 3_000).toUpperCase();
+  const sample = content.slice(0, 3000).toUpperCase();
   return (
     sample.includes("CONTESTAÇÃO") ||
     sample.includes("CONTESTACAO") ||
-    (sample.includes("RECLAMADA") && (sample.includes("IMPUGNA") || sample.includes("CONTESTA")))
+    (sample.includes("RECLAMADA") &&
+      (sample.includes("IMPUGNA") || sample.includes("CONTESTA")))
   );
 }
 
@@ -43,9 +48,11 @@ function buildSample(content: string): string {
   return `${head}\n\n[... trecho intermediário omitido para caber no limite ...]\n\n--- FINAL DO DOCUMENTO (últimos ${SAMPLE_TAIL_CHARS} chars) ---\n${tail}`;
 }
 
-const SYSTEM_PI = `Você é um extrator de informações jurídicas trabalhistas. Recebe o texto (completo ou amostrado) de uma Petição Inicial e devolve um resumo estruturado em markdown PT-BR. Seja exaustivo nos pedidos — liste TODOS que encontrar. Máx. 12.000 chars.`;
+const SYSTEM_PI =
+  "Você é um extrator de informações jurídicas trabalhistas. Recebe o texto (completo ou amostrado) de uma Petição Inicial e devolve um resumo estruturado em markdown PT-BR. Seja exaustivo nos pedidos — liste TODOS que encontrar. Máx. 12.000 chars.";
 
-const SYSTEM_CONTESTACAO = `Você é um extrator de informações jurídicas trabalhistas. Recebe o texto (completo ou amostrado) de uma Contestação e devolve um resumo estruturado em markdown PT-BR. Seja exaustivo nas impugnações — cubra TODOS os pedidos visíveis. Máx. 12.000 chars.`;
+const SYSTEM_CONTESTACAO =
+  "Você é um extrator de informações jurídicas trabalhistas. Recebe o texto (completo ou amostrado) de uma Contestação e devolve um resumo estruturado em markdown PT-BR. Seja exaustivo nas impugnações — cubra TODOS os pedidos visíveis. Máx. 12.000 chars.";
 
 function buildPromptPI(sample: string): string {
   return `Texto da Petição Inicial:
@@ -124,7 +131,7 @@ export async function extractLegalSummary(
   const isPI = isPeticaoInicial(trimmed);
   const isCont = !isPI && isContestacao(trimmed);
 
-  if (!isPI && !isCont) {
+  if (!(isPI || isCont)) {
     return null;
   }
 
@@ -137,7 +144,7 @@ export async function extractLegalSummary(
       model: getTitleModel(),
       system,
       prompt,
-      maxOutputTokens: 8_000,
+      maxOutputTokens: 8000,
     });
     return text.trim() || null;
   } catch {

@@ -120,7 +120,9 @@ export function ChatTopbar({
               ? `${processo.numeroAutos.slice(0, 20)}…`
               : processo.numeroAutos}
           </span>
-          <span className="text-muted-foreground/40 text-[10px] dark:text-assistjur-gray/40">·</span>
+          <span className="text-[10px] text-muted-foreground/40 dark:text-assistjur-gray/40">
+            ·
+          </span>
           <span className="text-[11px] text-foreground dark:text-white/80">
             {processo.reclamante.split(" ")[0]}
           </span>

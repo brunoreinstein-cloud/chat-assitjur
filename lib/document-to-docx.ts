@@ -3,6 +3,7 @@ import "server-only";
 import {
   AlignmentType,
   BorderStyle,
+  convertMillimetersToTwip,
   Document,
   type FileChild,
   Footer,
@@ -16,7 +17,6 @@ import {
   TableRow,
   TextRun,
   WidthType,
-  convertMillimetersToTwip,
 } from "docx";
 
 const FONT_SIZE = 24; // 12pt = 24 half-points
@@ -157,7 +157,9 @@ function paragraphH2Assistjur(text: string): Paragraph {
 }
 
 /** Segmento inline com formatação opcional. */
-type InlineSegment = string | { text: string; bold?: boolean; italic?: boolean };
+type InlineSegment =
+  | string
+  | { text: string; bold?: boolean; italic?: boolean };
 
 /**
  * Analisa **negrito** e *itálico* numa linha de texto.
@@ -176,11 +178,13 @@ function parseInlineFormatting(line: string): InlineSegment[] {
       if (rem[i] === "*") {
         const nextIsStar = rem[i + 1] === "*";
         const prevIsStar = i > 0 && rem[i - 1] === "*";
-        if (!nextIsStar && !prevIsStar) {
+        if (!(nextIsStar || prevIsStar)) {
           italicIdx = i;
           break;
         }
-        if (nextIsStar) i++; // saltar o segundo * de **
+        if (nextIsStar) {
+          i++; // saltar o segundo * de **
+        }
       }
     }
 
@@ -192,11 +196,15 @@ function parseInlineFormatting(line: string): InlineSegment[] {
           : Math.min(boldIdx, italicIdx);
 
     if (nextIdx === -1) {
-      if (rem) result.push(rem);
+      if (rem) {
+        result.push(rem);
+      }
       break;
     }
 
-    if (nextIdx > 0) result.push(rem.slice(0, nextIdx));
+    if (nextIdx > 0) {
+      result.push(rem.slice(0, nextIdx));
+    }
     rem = rem.slice(nextIdx);
 
     if (rem.startsWith("**")) {
@@ -236,7 +244,9 @@ function parseInlineFormatting(line: string): InlineSegment[] {
 
 function inlineToRuns(segments: InlineSegment[]): TextRun[] {
   return segments.map((seg) => {
-    if (typeof seg === "string") return new TextRun({ text: seg, ...runBase });
+    if (typeof seg === "string") {
+      return new TextRun({ text: seg, ...runBase });
+    }
     return new TextRun({
       text: seg.text,
       ...runBase,
@@ -266,7 +276,9 @@ function contentToChildren(
   const borders = isAssistjur ? TABLE_BORDERS_MASTER : TABLE_BORDERS_DEFAULT;
 
   function flushTable() {
-    if (tableRows.length === 0) return;
+    if (tableRows.length === 0) {
+      return;
+    }
     const rows = tableRows.map(([cell1, cell2], i) => {
       const isHeaderRow = isAssistjur && i === 0;
       const run = isHeaderRow

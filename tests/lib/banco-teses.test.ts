@@ -116,24 +116,28 @@ describe("buildKnowledgeContext", () => {
   });
 
   it("trunca quando excede MAX_KNOWLEDGE_CONTEXT_CHARS", () => {
-    const big = "x".repeat(MAX_KNOWLEDGE_CONTEXT_CHARS + 1_000);
+    const big = "x".repeat(MAX_KNOWLEDGE_CONTEXT_CHARS + 1000);
     const ctx = buildKnowledgeContext(big, []);
     expect(ctx).toContain("[... base de conhecimento truncada");
-    expect(ctx!.length).toBeLessThanOrEqual(
+    expect(ctx?.length).toBeLessThanOrEqual(
       MAX_KNOWLEDGE_CONTEXT_CHARS + 200 // sufixo de truncagem
     );
   });
 
   it("banco intencionado mas RAG vazio → usa fallback do ficheiro .md (não retorna mensagem de erro)", () => {
-    const ctx = buildKnowledgeContext("", [REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID]);
+    const ctx = buildKnowledgeContext("", [
+      REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID,
+    ]);
     // O ficheiro banco-teses-redator.md existe no repo → fallback deve ter conteúdo
     expect(ctx).not.toBe(REDATOR_BANCO_UNAVAILABLE_MESSAGE);
     expect(ctx).toBeTruthy();
-    expect(ctx!.length).toBeGreaterThan(100);
+    expect(ctx?.length).toBeGreaterThan(100);
   });
 
   it("banco intencionado mas RAG vazio → fallback contém teses trabalhistas", () => {
-    const ctx = buildKnowledgeContext("", [REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID]);
+    const ctx = buildKnowledgeContext("", [
+      REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID,
+    ]);
     expect(ctx).toContain("prescrição");
   });
 

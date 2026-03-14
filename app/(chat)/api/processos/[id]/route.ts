@@ -22,10 +22,14 @@ export async function GET(
     const { id } = await params;
     await ensureStatementTimeout();
     const p = await getProcessoById({ id, userId: session.user.id });
-    if (!p) return Response.json({ message: "Not found" }, { status: 404 });
+    if (!p) {
+      return Response.json({ message: "Not found" }, { status: 404 });
+    }
     return Response.json(p);
   } catch (error) {
-    if (error instanceof ChatbotError) return error.toResponse();
+    if (error instanceof ChatbotError) {
+      return error.toResponse();
+    }
     return Response.json({ message: "Internal error" }, { status: 500 });
   }
 }
@@ -70,7 +74,9 @@ export async function PATCH(
       },
     });
 
-    if (!updated) return Response.json({ message: "Not found" }, { status: 404 });
+    if (!updated) {
+      return Response.json({ message: "Not found" }, { status: 404 });
+    }
 
     if (Array.isArray(verbas)) {
       await replaceVerbasByProcessoId({ processoId: id, verbas });
@@ -79,7 +85,9 @@ export async function PATCH(
     const result = await getProcessoById({ id, userId: session.user.id });
     return Response.json(result);
   } catch (error) {
-    if (error instanceof ChatbotError) return error.toResponse();
+    if (error instanceof ChatbotError) {
+      return error.toResponse();
+    }
     return Response.json({ message: "Internal error" }, { status: 500 });
   }
 }
@@ -98,7 +106,9 @@ export async function DELETE(
     await deleteProcesso({ id, userId: session.user.id });
     return new Response(null, { status: 204 });
   } catch (error) {
-    if (error instanceof ChatbotError) return error.toResponse();
+    if (error instanceof ChatbotError) {
+      return error.toResponse();
+    }
     return Response.json({ message: "Internal error" }, { status: 500 });
   }
 }

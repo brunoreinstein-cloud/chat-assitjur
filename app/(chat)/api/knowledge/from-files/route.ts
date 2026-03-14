@@ -1,8 +1,11 @@
 import { auth } from "@/app/(auth)/auth";
 import { contentTypeFromFilename } from "@/app/(chat)/api/files/upload/route";
-import { createKnowledgeDocument, updateKnowledgeDocumentStructuredSummary } from "@/lib/db/queries";
-import { ChatbotError } from "@/lib/errors";
 import { extractLegalSummary } from "@/lib/ai/extract-legal-summary";
+import {
+  createKnowledgeDocument,
+  updateKnowledgeDocumentStructuredSummary,
+} from "@/lib/db/queries";
+import { ChatbotError } from "@/lib/errors";
 import { vectorizeAndIndex } from "@/lib/rag";
 import { ingestFromBuffer } from "@/lib/rag/ingestion";
 
@@ -86,7 +89,13 @@ async function processOneFile(
   folderId: string | null,
   skipVectorize: boolean
 ): Promise<
-  | { ok: true; id: string; title: string; contentLength: number; metadata?: FromFilesMetadata }
+  | {
+      ok: true;
+      id: string;
+      title: string;
+      contentLength: number;
+      metadata?: FromFilesMetadata;
+    }
   | { ok: false; filename: string; error: string }
 > {
   if (!isAcceptedFile(file)) {
@@ -140,7 +149,9 @@ async function processOneFile(
             });
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          /* fire-and-forget; ignore */
+        });
     }
     return {
       ok: true,

@@ -43,16 +43,13 @@ import { getPromptCachingCacheControl } from "@/lib/ai/prompt-caching-config";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
 import {
-  buildKnowledgeContext,
-  BANCO_TESES_MENTION_RE,
-  MAX_KNOWLEDGE_CONTEXT_CHARS,
-  REDATOR_BANCO_UNAVAILABLE_MESSAGE,
-  resolveEffectiveKnowledgeIds,
-} from "@/lib/ai/resolve-knowledge-ids";
-import {
   REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID,
   REDATOR_BANCO_SYSTEM_USER_ID,
 } from "@/lib/ai/redator-banco-rag";
+import {
+  buildKnowledgeContext,
+  resolveEffectiveKnowledgeIds,
+} from "@/lib/ai/resolve-knowledge-ids";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { createRedatorContestacaoDocument } from "@/lib/ai/tools/create-redator-contestacao-document";
 import { createRevisorDefesaDocuments } from "@/lib/ai/tools/create-revisor-defesa-documents";
@@ -66,6 +63,7 @@ import { validationToolsForValidate } from "@/lib/ai/tools/validation-tools";
 import { getCachedBuiltInAgentOverrides } from "@/lib/cache/agent-overrides-cache";
 import { creditsCache } from "@/lib/cache/credits-cache";
 import { isProductionEnvironment } from "@/lib/constants";
+import { FASE_LABEL, RISCO_LABEL } from "@/lib/constants/processo";
 import {
   addCreditsToUser,
   createStreamId,
@@ -88,10 +86,6 @@ import {
   updateChatTitleById,
   updateMessage,
 } from "@/lib/db/queries";
-import {
-  FASE_LABEL,
-  RISCO_LABEL,
-} from "@/lib/constants/processo";
 import {
   ChatbotError,
   databaseUnavailableResponse,
@@ -264,7 +258,6 @@ const PI_TAIL_CHARS = 2500;
 /** Últimas N mensagens a carregar para contexto (reduz BD e tamanho do prompt; a qualidade mantém-se com contexto recente). */
 const CHAT_MESSAGES_LIMIT = 80;
 
-
 /** Timeouts e limites do batch de BD (runChatDbBatch). */
 const DB_BATCH_TIMEOUT_MS = 120_000;
 /** Fallback por query: 12s para falhar mais cedo em serverless (Vercel 60s); deixa margem ao stream. */
@@ -317,7 +310,12 @@ function getDocumentPartExtractionHint(
 
 function fillKnowledgeFromFullDocsWhenEmpty(
   parts: string[],
-  docs: Array<{ id: string; title: string; content: string; structuredSummary?: string | null }>
+  docs: Array<{
+    id: string;
+    title: string;
+    content: string;
+    structuredSummary?: string | null;
+  }>
 ): void {
   const shouldFillFromFullDocs = parts.length === 0;
   if (shouldFillFromFullDocs) {
@@ -453,7 +451,6 @@ function getStreamContext() {
     return null;
   }
 }
-
 
 const TRUNCATE_SUFFIX =
   "\n\n[Truncado: o documento excedeu o limite de caracteres.]";
@@ -1924,9 +1921,7 @@ async function handleChatPostAuthenticated(
   const initialCredits = entitlementsByUserType[userType].initialCredits;
 
   const messageText =
-    message?.parts
-      ?.map((p) => ("text" in p ? p.text : ""))
-      .join(" ") ?? "";
+    message?.parts?.map((p) => ("text" in p ? p.text : "")).join(" ") ?? "";
   const effectiveKnowledgeIds = resolveEffectiveKnowledgeIds(
     knowledgeDocumentIds,
     agentId,
@@ -2054,11 +2049,15 @@ async function handleChatPostAuthenticated(
 
   // Injetar contexto do processo trabalhista no system prompt quando o chat está vinculado a um processo.
   // Corre em paralelo com saveUserMessageToDb para não aumentar a latência do caminho crítico.
-  const effectiveProcessoId = processoId ?? batchResult.chat?.processoId ?? null;
+  const effectiveProcessoId =
+    processoId ?? batchResult.chat?.processoId ?? null;
   const t4 = Date.now();
   const [proc, saveUserErr] = await Promise.all([
     effectiveProcessoId
-      ? getProcessoById({ id: effectiveProcessoId, userId: authenticatedSession.user.id })
+      ? getProcessoById({
+          id: effectiveProcessoId,
+          userId: authenticatedSession.user.id,
+        })
       : Promise.resolve(null),
     saveUserMessageToDb(message, id),
   ]);
@@ -2066,7 +2065,9 @@ async function handleChatPostAuthenticated(
     debugTracker.phase("saveMessages", t4);
     logTiming("saveMessages(user)", Date.now() - t4);
   }
-  if (saveUserErr) return saveUserErr;
+  if (saveUserErr) {
+    return saveUserErr;
+  }
 
   let processoContext: string | undefined;
   if (proc) {

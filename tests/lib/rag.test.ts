@@ -61,11 +61,7 @@ describe("chunkText", () => {
 // rerankByDiversity
 // ---------------------------------------------------------------------------
 
-function makeChunk(
-  id: string,
-  docId: string,
-  text: string
-): RetrievalChunk {
+function makeChunk(id: string, docId: string, text: string): RetrievalChunk {
   return { id, knowledgeDocumentId: docId, text, chunkIndex: 0, similarity: 1 };
 }
 
@@ -91,7 +87,7 @@ describe("rerankByDiversity", () => {
       "rescisão contrato trabalho aviso prévio indenização compensatória";
     const chunks = [
       makeChunk("1", "doc-a", base),
-      makeChunk("2", "doc-b", base + " adicional"),
+      makeChunk("2", "doc-b", `${base} adicional`),
     ];
     const result = rerankByDiversity(chunks, {
       maxChunksPerDoc: 5,
