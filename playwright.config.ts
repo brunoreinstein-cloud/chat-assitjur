@@ -10,8 +10,8 @@ config({
   path: ".env.local",
 });
 
-/* Port for E2E: 3301 to avoid conflict with `pnpm dev` (3300). Override with PORT env. */
-const PORT = process.env.PORT ?? 3301;
+/* Port for E2E: 3301 to avoid conflict with `pnpm dev` (3300). Se 3301 estiver em uso, use PORT=3302 pnpm test. */
+const PORT = Number(process.env.PORT) || 3301;
 
 /**
  * Se PLAYWRIGHT_TEST_BASE_URL estiver definido, usa esse servidor (ex.: pnpm dev já a correr em 3300).
@@ -99,6 +99,7 @@ export default defineConfig({
           reuseExistingServer: !process.env.CI,
           env: {
             ...process.env,
+            PORT: String(PORT),
             AUTH_URL: defaultBaseURL,
             NEXT_PUBLIC_APP_URL: defaultBaseURL,
             /** Garante que GET /api/credits usa timeouts curtos (E2E) mesmo quando se corre `pnpm exec playwright test` sem `pnpm test`. */
