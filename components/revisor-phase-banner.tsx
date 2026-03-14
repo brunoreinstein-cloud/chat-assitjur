@@ -1,5 +1,6 @@
 "use client";
 
+import { CheckIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,6 +56,74 @@ export function findLastAssistantIndexWithGate05(
   return -1;
 }
 
+// ─── Stepper ──────────────────────────────────────────────────────────────────
+
+const STEPS = [
+  { label: "Fase A", description: "Extração" },
+  { label: "Gate 0.5", description: "Confirmação" },
+  { label: "Fase B", description: "Documentos" },
+  { label: "Concluído", description: "" },
+] as const;
+
+type StepIndex = 0 | 1 | 2 | 3;
+
+function WorkflowStepper({ activeStep }: { readonly activeStep: StepIndex }) {
+  return (
+    <div className="flex w-full items-center justify-center gap-0">
+      {STEPS.map((step, i) => {
+        const isDone = i < activeStep;
+        const isActive = i === activeStep;
+        return (
+          <div className="flex items-center" key={step.label}>
+            {/* Step node */}
+            <div className="flex flex-col items-center gap-0.5">
+              <div
+                className={[
+                  "flex size-6 items-center justify-center rounded-full font-semibold text-[11px] transition-all",
+                  isDone
+                    ? "bg-green-500 text-white"
+                    : isActive
+                      ? "bg-primary text-primary-foreground ring-2 ring-primary/30"
+                      : "border-2 border-muted-foreground/40 text-muted-foreground/50",
+                ].join(" ")}
+              >
+                {isDone ? (
+                  <CheckIcon className="size-3" />
+                ) : (
+                  <span>{i + 1}</span>
+                )}
+              </div>
+              <span
+                className={[
+                  "whitespace-nowrap font-medium text-[10px]",
+                  isActive
+                    ? "text-primary"
+                    : isDone
+                      ? "text-green-600 dark:text-green-400"
+                      : "text-muted-foreground/50",
+                ].join(" ")}
+              >
+                {step.label}
+              </span>
+            </div>
+            {/* Connector line */}
+            {i < STEPS.length - 1 && (
+              <div
+                className={[
+                  "mx-1 mb-3 h-[2px] w-8 rounded-full transition-all sm:w-12",
+                  i < activeStep ? "bg-green-500" : "bg-muted-foreground/20",
+                ].join(" ")}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Main Banner ──────────────────────────────────────────────────────────────
+
 interface RevisorPhaseBannerProps {
   readonly messages: ChatMessage[];
   readonly status: string;
@@ -108,7 +177,29 @@ export function RevisorPhaseBanner({
     (isStreaming || lastMessage?.role === "assistant") &&
     idx === -1;
 
-  // Cronómetro: inicia quando entramos em FASE B em streaming, limpa quando termina
+  // Determine active step for stepper
+  const isConcluido =
+    !isStreaming &&
+    userRepliedToGate05 &&
+    lastMessage?.role === "assistant" &&
+    !showErroAposConfirmar;
+  const activeStep: StepIndex = (() => {
+    if (isConcluido) {
+      return 3;
+    }
+    if (showFaseB) {
+      return 2;
+    }
+    if (idx !== -1 && !userRepliedToGate05) {
+      return 1;
+    }
+    if (showFaseA) {
+      return 0;
+    }
+    return 0;
+  })();
+
+  // Timer: starts when entering FASE B in streaming
   useEffect(() => {
     if (showFaseB && isStreaming) {
       setStartTime((prev) => prev ?? Date.now());
@@ -129,58 +220,18 @@ export function RevisorPhaseBanner({
     return () => clearInterval(id);
   }, [startTime]);
 
-  if (showFaseA) {
-    return (
-      <output
-        aria-live="polite"
-        className="mx-2 mb-1 block rounded-md border border-border bg-muted/50 px-3 py-2 text-center text-muted-foreground text-sm md:mx-4"
-      >
-        FASE A — Extração e mapeamento. Aguarde o resumo para CONFIRMAR ou
-        CORRIGIR.
-      </output>
-    );
-  }
-
-  if (idx === -1) {
+  // Nothing to show before any assistant message
+  if (!hasAnyAssistantMessage) {
     return null;
   }
 
-  if (showErroAposConfirmar) {
-    return (
-      <output
-        aria-live="polite"
-        className="mx-2 mb-1 block rounded-md border border-border bg-destructive/10 px-3 py-2 text-center text-destructive text-sm md:mx-4"
-      >
-        Ocorreu um erro ao gerar os documentos. Pode tentar novamente ou usar
-        CORRIGIR para ajustar o resumo.
-      </output>
-    );
-  }
-
-  if (showFaseB) {
-    return (
-      <output
-        aria-live="polite"
-        className="mx-2 mb-1 block rounded-md border border-border bg-muted/50 px-3 py-2 text-center text-muted-foreground text-sm md:mx-4"
-      >
-        <span className="block">
-          FASE B — Gerando os 3 documentos (Avaliação da defesa, Roteiro
-          Advogado, Roteiro Preposto). O primeiro aparecerá em breve.
-        </span>
-        {startTime !== null && (
-          <span
-            aria-label={`Tempo decorrido: ${formatElapsed(elapsedSeconds)}`}
-            className="mt-1 block font-medium tabular-nums"
-            role="timer"
-          >
-            Tempo: {formatElapsed(elapsedSeconds)}
-          </span>
-        )}
-      </output>
-    );
-  }
-
-  if (userRepliedToGate05) {
+  // After user replied and workflow completed (no more content to show)
+  if (
+    userRepliedToGate05 &&
+    !showFaseB &&
+    !showErroAposConfirmar &&
+    !isConcluido
+  ) {
     return null;
   }
 
@@ -198,45 +249,86 @@ export function RevisorPhaseBanner({
     }, 0);
   };
 
-  if (isReadonly) {
-    return (
-      <output
-        aria-live="polite"
-        className="mx-2 mb-1 block rounded-md border border-border bg-muted/50 px-3 py-2 text-center text-muted-foreground text-sm md:mx-4"
-      >
-        Por favor, CONFIRME se os dados acima estão corretos ou CORRIJA
-        eventuais inconsistências.
-      </output>
-    );
-  }
-
   return (
     <output
       aria-live="polite"
-      className="mx-2 mb-1 flex flex-col items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2 text-center text-muted-foreground text-sm md:mx-4 md:flex-row md:justify-center"
+      className="mx-2 mb-1 block rounded-md border border-border bg-muted/50 px-3 py-3 md:mx-4"
     >
-      <span className="shrink-0">
-        Por favor, CONFIRME se os dados acima estão corretos ou CORRIJA
-        eventuais inconsistências.
-      </span>
-      <div className="flex gap-2">
-        <Button
-          onClick={handleConfirmar}
-          size="sm"
-          type="button"
-          variant="default"
-        >
-          CONFIRMAR
-        </Button>
-        <Button
-          onClick={handleCorrigir}
-          size="sm"
-          type="button"
-          variant="outline"
-        >
-          CORRIGIR
-        </Button>
-      </div>
+      {/* Progress stepper — only shown from Fase A onward */}
+      <WorkflowStepper activeStep={activeStep} />
+
+      {/* Phase-specific content */}
+      {showFaseA && (
+        <p className="mt-2 text-center text-muted-foreground text-sm">
+          Extração e mapeamento em curso. Aguarde o resumo para CONFIRMAR ou
+          CORRIGIR.
+        </p>
+      )}
+
+      {idx !== -1 && !userRepliedToGate05 && !isReadonly && (
+        <div className="mt-3 flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
+          <span className="text-center text-muted-foreground text-sm">
+            Confirme se os dados estão corretos ou corrija eventuais
+            inconsistências.
+          </span>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleConfirmar}
+              size="sm"
+              type="button"
+              variant="default"
+            >
+              CONFIRMAR
+            </Button>
+            <Button
+              onClick={handleCorrigir}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              CORRIGIR
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {idx !== -1 && !userRepliedToGate05 && isReadonly && (
+        <p className="mt-2 text-center text-muted-foreground text-sm">
+          Por favor, CONFIRME se os dados acima estão corretos ou CORRIJA
+          eventuais inconsistências.
+        </p>
+      )}
+
+      {showFaseB && (
+        <div className="mt-2 text-center text-muted-foreground text-sm">
+          <span>
+            Gerando os 3 documentos (Avaliação da defesa, Roteiro Advogado,
+            Roteiro Preposto). O primeiro aparecerá em breve.
+          </span>
+          {startTime !== null && (
+            <span
+              aria-label={`Tempo decorrido: ${formatElapsed(elapsedSeconds)}`}
+              className="mt-1 block font-medium tabular-nums"
+              role="timer"
+            >
+              Tempo: {formatElapsed(elapsedSeconds)}
+            </span>
+          )}
+        </div>
+      )}
+
+      {showErroAposConfirmar && (
+        <p className="mt-2 text-center text-destructive text-sm">
+          Ocorreu um erro ao gerar os documentos. Pode tentar novamente ou usar
+          CORRIGIR para ajustar o resumo.
+        </p>
+      )}
+
+      {isConcluido && (
+        <p className="mt-2 text-center text-green-600 text-sm dark:text-green-400">
+          Workflow concluído. Os 3 documentos foram gerados.
+        </p>
+      )}
     </output>
   );
 }
