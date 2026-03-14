@@ -9,6 +9,8 @@
   },
   "files": {
     "includes": [
+      "!!.claude",
+      "!!**/.claude",
       "!!.pnpm-store",
       "!!**/.pnpm-store",
       "!!.next",

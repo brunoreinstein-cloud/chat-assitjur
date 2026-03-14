@@ -18,8 +18,8 @@ const nextConfig: NextConfig = {
   },
   // OCR (PDF digitalizado): evita bundle de tesseract.js e @napi-rs/canvas
   serverExternalPackages: ["tesseract.js", "@napi-rs/canvas"],
-  // Raiz absoluta evita aviso de múltiplos lockfiles e funciona na Vercel
-  turbopack: { root: path.resolve(process.cwd()) },
+  // Raiz apontada para o repo principal para o junction de node_modules funcionar no worktree
+  turbopack: { root: path.resolve(process.cwd(), "../../..") },
   images: {
     remotePatterns: [
       {

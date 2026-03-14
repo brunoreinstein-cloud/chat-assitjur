@@ -34,6 +34,8 @@ import {
   knowledgeFolder,
   llmUsageRecord,
   message,
+  type Processo,
+  processo,
   type Suggestion,
   stream,
   suggestion,
@@ -42,6 +44,8 @@ import {
   userCreditBalance,
   userFile,
   userMemory,
+  type VerbaProcesso,
+  verbaProcesso,
   vote,
 } from "./schema";
 import { generateHashedPassword } from "./utils";
@@ -284,12 +288,14 @@ export async function saveChat({
   title,
   visibility,
   agentId = DEFAULT_CHAT_AGENT_ID,
+  processoId,
 }: {
   id: string;
   userId: string;
   title: string;
   visibility: VisibilityType;
   agentId?: string;
+  processoId?: string | null;
 }) {
   try {
     return await getDb()
@@ -301,6 +307,7 @@ export async function saveChat({
         title,
         visibility,
         agentId: agentId ?? DEFAULT_CHAT_AGENT_ID,
+        processoId: processoId ?? null,
       });
   } catch (error: unknown) {
     const err = error as {
@@ -934,10 +941,16 @@ export async function updateKnowledgeDocumentIndexingStatus({
 export async function getKnowledgeDocumentsByUserId({
   userId,
   folderId,
+  limit,
+  offset,
 }: {
   userId: string;
   /** Se definido, filtra documentos desta pasta (null = raiz). */
   folderId?: string | null;
+  /** Número máximo de documentos a devolver. Sem limite se omitido. */
+  limit?: number;
+  /** Número de documentos a saltar (para paginação por offset). */
+  offset?: number;
 }) {
   try {
     const conditions = [eq(knowledgeDocument.userId, userId)];
@@ -948,11 +961,18 @@ export async function getKnowledgeDocumentsByUserId({
         conditions.push(eq(knowledgeDocument.folderId, folderId));
       }
     }
-    return await getDb()
+    const query = getDb()
       .select()
       .from(knowledgeDocument)
       .where(and(...conditions))
       .orderBy(desc(knowledgeDocument.createdAt));
+    if (limit !== undefined) {
+      query.limit(limit);
+    }
+    if (offset !== undefined && offset > 0) {
+      query.offset(offset);
+    }
+    return await query;
   } catch (err) {
     toDatabaseError(err, "Failed to get knowledge documents by user id");
   }
@@ -1095,6 +1115,20 @@ export async function deleteKnowledgeDocumentById({
   } catch (err) {
     toDatabaseError(err, "Failed to delete knowledge document");
   }
+}
+
+/** Salva o resumo estruturado extraído por IA (PI/Contestação) no documento. */
+export async function updateKnowledgeDocumentStructuredSummary({
+  id,
+  structuredSummary,
+}: {
+  id: string;
+  structuredSummary: string;
+}): Promise<void> {
+  await getDb()
+    .update(knowledgeDocument)
+    .set({ structuredSummary })
+    .where(eq(knowledgeDocument.id, id));
 }
 
 export async function createUserFile({
@@ -1938,5 +1972,191 @@ export async function deleteUserMemory({
       .where(and(eq(userMemory.userId, userId), eq(userMemory.key, key)));
   } catch (err) {
     toDatabaseError(err, "Failed to delete user memory");
+  }
+}
+
+// ─── PROCESSOS ────────────────────────────────────────────────────────────────
+
+export type ProcessoComVerbas = Processo & { verbas: VerbaProcesso[] };
+
+export async function getProcessosByUserId({
+  userId,
+}: {
+  userId: string;
+}): Promise<ProcessoComVerbas[]> {
+  try {
+    const processos = await getDb()
+      .select()
+      .from(processo)
+      .where(eq(processo.userId, userId))
+      .orderBy(desc(processo.createdAt));
+
+    if (processos.length === 0) {
+      return [];
+    }
+
+    const processoIds = processos.map((p) => p.id);
+    const verbas = await getDb()
+      .select()
+      .from(verbaProcesso)
+      .where(inArray(verbaProcesso.processoId, processoIds));
+
+    return processos.map((p) => ({
+      ...p,
+      verbas: verbas.filter((v) => v.processoId === p.id),
+    }));
+  } catch (err) {
+    toDatabaseError(err, "Failed to get processos by user id");
+  }
+}
+
+export async function getProcessoById({
+  id,
+  userId,
+}: {
+  id: string;
+  userId: string;
+}): Promise<ProcessoComVerbas | null> {
+  try {
+    // Ambas as queries correm em paralelo; descartamos verbas se o processo não existir.
+    const [[p], verbas] = await Promise.all([
+      getDb()
+        .select()
+        .from(processo)
+        .where(and(eq(processo.id, id), eq(processo.userId, userId))),
+      getDb()
+        .select()
+        .from(verbaProcesso)
+        .where(eq(verbaProcesso.processoId, id)),
+    ]);
+
+    if (!p) {
+      return null;
+    }
+    return { ...p, verbas };
+  } catch (err) {
+    toDatabaseError(err, "Failed to get processo by id");
+  }
+}
+
+export async function createProcesso({
+  userId,
+  data,
+}: {
+  userId: string;
+  data: {
+    numeroAutos: string;
+    reclamante: string;
+    reclamada: string;
+    vara?: string;
+    comarca?: string;
+    tribunal?: string;
+    rito?: string;
+    fase?: string;
+    riscoGlobal?: string;
+    valorCausa?: string;
+    provisao?: string;
+    prazoFatal?: Date | null;
+  };
+}): Promise<Processo> {
+  try {
+    const [created] = await getDb()
+      .insert(processo)
+      .values({ userId, ...data })
+      .returning();
+    return created;
+  } catch (err) {
+    toDatabaseError(err, "Failed to create processo");
+  }
+}
+
+export async function updateProcesso({
+  id,
+  userId,
+  data,
+}: {
+  id: string;
+  userId: string;
+  data: Partial<{
+    numeroAutos: string;
+    reclamante: string;
+    reclamada: string;
+    vara: string;
+    comarca: string;
+    tribunal: string;
+    rito: string;
+    fase: string;
+    riscoGlobal: string;
+    valorCausa: string;
+    provisao: string;
+    prazoFatal: Date | null;
+  }>;
+}): Promise<Processo | null> {
+  try {
+    const [updated] = await getDb()
+      .update(processo)
+      .set(data)
+      .where(and(eq(processo.id, id), eq(processo.userId, userId)))
+      .returning();
+    return updated ?? null;
+  } catch (err) {
+    toDatabaseError(err, "Failed to update processo");
+  }
+}
+
+export async function deleteProcesso({
+  id,
+  userId,
+}: {
+  id: string;
+  userId: string;
+}) {
+  try {
+    await getDb()
+      .delete(processo)
+      .where(and(eq(processo.id, id), eq(processo.userId, userId)));
+  } catch (err) {
+    toDatabaseError(err, "Failed to delete processo");
+  }
+}
+
+export async function replaceVerbasByProcessoId({
+  processoId,
+  verbas,
+}: {
+  processoId: string;
+  verbas: Array<{
+    verba: string;
+    risco: string;
+    valorMin?: number | null;
+    valorMax?: number | null;
+  }>;
+}) {
+  try {
+    await getDb()
+      .delete(verbaProcesso)
+      .where(eq(verbaProcesso.processoId, processoId));
+
+    if (verbas.length > 0) {
+      await getDb()
+        .insert(verbaProcesso)
+        .values(verbas.map((v) => ({ processoId, ...v })));
+    }
+  } catch (err) {
+    toDatabaseError(err, "Failed to replace verbas by processo id");
+  }
+}
+
+export async function linkProcessoToChat({
+  chatId,
+  processoId,
+}: {
+  chatId: string;
+  processoId: string | null;
+}) {
+  try {
+    await getDb().update(chat).set({ processoId }).where(eq(chat.id, chatId));
+  } catch {
+    // Ignorar falha de vinculação processo↔chat
   }
 }

@@ -65,6 +65,7 @@ export const systemPrompt = ({
   requestHints,
   agentInstructions,
   knowledgeContext,
+  processoContext,
 }: {
   selectedChatModel: string;
   requestHints: RequestHints;
@@ -72,6 +73,8 @@ export const systemPrompt = ({
   agentInstructions?: string;
   /** Optional context from the knowledge base to ground answers. */
   knowledgeContext?: string;
+  /** Optional structured context about the linked labour case (processo trabalhista). */
+  processoContext?: string;
 }) => {
   const requestPrompt = getRequestPromptFromHints(requestHints);
 
@@ -80,6 +83,10 @@ export const systemPrompt = ({
     selectedChatModel.includes("thinking")
       ? `${regularPrompt}\n\n${requestPrompt}`
       : `${regularPrompt}\n\n${requestPrompt}\n\n${artifactsPrompt}`;
+
+  if (processoContext?.trim()) {
+    base += `\n\n## Contexto do Processo Trabalhista\n${processoContext.trim()}`;
+  }
 
   // Ordem otimizada para contexto longo: documentos primeiro, instruções do agente depois, query nas mensagens (até ~30% melhor desempenho).
   if (knowledgeContext?.trim()) {

@@ -718,7 +718,7 @@ async function uploadToStorage(
   if (uploadResult.ok) {
     return { url: uploadResult.url, pathname: uploadResult.pathname };
   }
-  // Supabase falhou (ex.: ficheiro > 5 MiB no bucket chat-files); tentar Blob como fallback
+  // Supabase falhou (ex.: ficheiro > 50 MiB ou tipo não aceite no bucket chat-files); tentar Blob como fallback
   if (uploadResult.reason === "storage_error" && isDev) {
     console.warn(
       "[upload] Supabase storage_error, a tentar Blob:",

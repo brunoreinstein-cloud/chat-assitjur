@@ -80,6 +80,68 @@ interface KnowledgeDoc {
   createdAt?: string;
   /** pending = só guardado; indexed = chunks disponíveis; failed = erro ao vetorizar. */
   indexingStatus?: "pending" | "indexed" | "failed";
+  /** Resumo estruturado extraído por IA para PI/Contestação. Null para outros tipos. */
+  structuredSummary?: string | null;
+}
+
+/** Limites em chars para classificação de cobertura (espelha extract-legal-summary.ts e chat/route.ts). */
+const COVERAGE_FULL_LIMIT = 78_000; // cabe inteiro no structured summary sem amostragem
+const COVERAGE_SAMPLED_LIMIT = 200_000; // amostragem início+fim; cobertura boa mas não total
+const LEGAL_DOC_RE =
+  /petição\s+inicial|contestação|peticao\s+inicial|contestacao/i;
+
+/** Avalia a cobertura esperada de um documento com base no tamanho e tipo. */
+export function getDocumentCoverageInfo(
+  contentLength: number,
+  documentType?: string
+): {
+  level: "full" | "structured" | "sampled" | "truncated";
+  label: string;
+  detail: string;
+} {
+  const isLegal = documentType ? LEGAL_DOC_RE.test(documentType) : false;
+  if (contentLength <= COVERAGE_FULL_LIMIT) {
+    return {
+      level: "full",
+      label: "Cobertura total",
+      detail: `${Math.round(contentLength / 1000)}k chars — documento completo no contexto`,
+    };
+  }
+  if (isLegal && contentLength <= COVERAGE_SAMPLED_LIMIT) {
+    return {
+      level: "structured",
+      label: "Resumo estruturado",
+      detail: `${Math.round(contentLength / 1000)}k chars — PI/Contestação: resumo estruturado em geração (~10s)`,
+    };
+  }
+  if (isLegal) {
+    return {
+      level: "sampled",
+      label: "Resumo com amostragem",
+      detail: `${Math.round(contentLength / 1000)}k chars — documento muito grande; início+fim amostrados`,
+    };
+  }
+  return {
+    level: "truncated",
+    label: "⚠️ Truncado",
+    detail: `${Math.round(contentLength / 1000)}k chars — excede 80k; texto será truncado. Considere dividir o documento.`,
+  };
+}
+
+/** Extrai informações do resumo estruturado para exibir no badge. */
+function parseSummaryBadge(summary: string): {
+  docType: "pi" | "contestacao";
+  pedidosCount: number;
+  isPartial: boolean;
+} {
+  const isPI = summary.includes("Petição Inicial");
+  const docType = isPI ? "pi" : "contestacao";
+  // Conta linhas de tabela de pedidos (linhas com | que não são cabeçalho/separador)
+  const tableRows = summary.match(/^\|\s*\d+\s*\|/gm);
+  const pedidosCount = tableRows?.length ?? 0;
+  const isPartial =
+    summary.includes("NÃO VISÍVEL") || summary.includes("não visível");
+  return { docType, pedidosCount, isPartial };
 }
 
 interface KnowledgeFolderType {
@@ -162,10 +224,14 @@ export function KnowledgeSidebarContent({
   const [newDocContent, setNewDocContent] = useState("");
   const [isAddingDoc, setIsAddingDoc] = useState(false);
   const [addDocError, setAddDocError] = useState<string | null>(null);
+  const [generatingSummaryIds, setGeneratingSummaryIds] = useState<Set<string>>(
+    new Set()
+  );
   const [isAddingFromFiles, setIsAddingFromFiles] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{
     processed: number;
     total: number;
+    currentFile?: string;
   } | null>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
@@ -200,6 +266,7 @@ export function KnowledgeSidebarContent({
   const archivosSectionRef = useRef<HTMLElement>(null);
 
   const [currentFolderId, setCurrentFolderId] = useKnowledgeFolderFromUrl();
+
   const docsKey =
     currentFolderId === null
       ? "/api/knowledge?folderId=root"
@@ -224,6 +291,10 @@ export function KnowledgeSidebarContent({
     (d) => d.indexingStatus === "pending"
   ).length;
 
+  const withoutSummaryCount = knowledgeDocs.filter(
+    (d) => !d.structuredSummary && d.indexingStatus !== "pending"
+  ).length;
+
   const idsForChat =
     knowledgeDocumentIds.length > 0
       ? `/api/knowledge?ids=${knowledgeDocumentIds.join(",")}`
@@ -244,6 +315,38 @@ export function KnowledgeSidebarContent({
   const { data: userFiles = [], mutate: mutateArchivos } = useSWR<
     UserFileType[]
   >("/api/arquivos", fetcher);
+
+  /**
+   * Polling após upload: re-fetch a cada 3s até MAX_POLL_ATTEMPTS tentativas.
+   * Para documentos jurídicos (PI/Contestação), aguarda o resumo estruturado async.
+   */
+  const pollForSummaries = useCallback(
+    (createdIds: string[]) => {
+      if (createdIds.length === 0) {
+        return;
+      }
+      const MAX_POLL_ATTEMPTS = 5;
+      const POLL_INTERVAL_MS = 3000;
+      let attempts = 0;
+      const poll = async () => {
+        attempts += 1;
+        await Promise.all([mutate(docsKey), mutateRecent()]);
+        if (attempts < MAX_POLL_ATTEMPTS) {
+          setTimeout(() => {
+            poll().catch(() => {
+              /* fire-and-forget */
+            });
+          }, POLL_INTERVAL_MS);
+        }
+      };
+      setTimeout(() => {
+        poll().catch(() => {
+          /* fire-and-forget */
+        });
+      }, POLL_INTERVAL_MS);
+    },
+    [docsKey, mutate, mutateRecent]
+  );
 
   const handleAddDocument = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -280,6 +383,8 @@ export function KnowledgeSidebarContent({
       await mutate("/api/knowledge");
       await mutate(docsKey);
       await mutateRecent();
+      // Polling para capturar resumo estruturado assim que estiver pronto
+      pollForSummaries([created.id]);
     } finally {
       setIsAddingDoc(false);
     }
@@ -329,9 +434,18 @@ export function KnowledgeSidebarContent({
       return;
     }
     setIsAddingFromFiles(true);
-    setUploadProgress({ processed: 0, total: allFiles.length });
+    setUploadProgress({
+      processed: 0,
+      total: allFiles.length,
+      currentFile: allFiles[0]?.name,
+    });
     setAddDocError(null);
-    const totalCreated: Array<{ id: string; title: string }> = [];
+    const totalCreated: Array<{
+      id: string;
+      title: string;
+      contentLength?: number;
+      metadata?: { documentType?: string };
+    }> = [];
     const totalFailed: Array<{ filename: string; error: string }> = [];
     const batches = (() => {
       const b: File[][] = [];
@@ -354,6 +468,17 @@ export function KnowledgeSidebarContent({
         if (skipVectorize) {
           formData.set("skipVectorize", "true");
         }
+        setUploadProgress((prev) =>
+          prev
+            ? {
+                ...prev,
+                currentFile:
+                  batch.length === 1
+                    ? batch[0].name
+                    : `${batch[0].name} +${batch.length - 1}`,
+              }
+            : prev
+        );
         const res = await fetch("/api/knowledge/from-files", {
           method: "POST",
           body: formData,
@@ -388,10 +513,34 @@ export function KnowledgeSidebarContent({
           prev.length < MAX_KNOWLEDGE_SELECT ? [...prev, id] : prev
         );
       }
+      // Polling para capturar resumo estruturado assim que estiver pronto
       if (totalCreated.length > 0) {
+        pollForSummaries(totalCreated.map(({ id }) => id));
+      }
+      if (totalCreated.length > 0) {
+        // Feedback de cobertura por documento
+        const warnings: string[] = [];
+        const structuredPending: string[] = [];
+        for (const doc of totalCreated) {
+          const docType = doc.metadata?.documentType;
+          const cl = doc.contentLength ?? 0;
+          if (cl > 0) {
+            const cov = getDocumentCoverageInfo(cl, docType);
+            if (cov.level === "truncated") {
+              warnings.push(`"${doc.title.slice(0, 40)}" — ${cov.detail}`);
+            } else if (cov.level === "structured" || cov.level === "sampled") {
+              structuredPending.push(`"${doc.title.slice(0, 40)}"`);
+            }
+          }
+        }
         toast.success(
-          `${totalCreated.length} documento(s) adicionado(s). Título a partir do nome do ficheiro; conteúdo extraído automaticamente.`
+          totalCreated.length === 1
+            ? `Documento adicionado.${structuredPending.length > 0 ? " Resumo estruturado a ser gerado (~10s)." : ""}`
+            : `${totalCreated.length} documentos adicionados.${structuredPending.length > 0 ? ` Resumo estruturado a ser gerado para ${structuredPending.length} documento(s) (~10s).` : ""}`
         );
+        for (const w of warnings) {
+          toast.warning(`Documento grande — pode ser truncado: ${w}`);
+        }
       }
       if (totalFailed.length > 0) {
         toast.warning(
@@ -568,6 +717,55 @@ export function KnowledgeSidebarContent({
       toast.error("Erro ao mover documento.");
     } finally {
       setIsPatchingDoc(false);
+    }
+  };
+
+  const handleGenerateSummary = async (docId: string) => {
+    setGeneratingSummaryIds((prev) => new Set(prev).add(docId));
+    try {
+      await fetch(
+        `/api/knowledge/${encodeURIComponent(docId)}/generate-summary`,
+        {
+          method: "POST",
+        }
+      );
+      await Promise.all([mutate(docsKey), mutateRecent()]);
+    } finally {
+      setGeneratingSummaryIds((prev) => {
+        const next = new Set(prev);
+        next.delete(docId);
+        return next;
+      });
+    }
+  };
+
+  const handleGenerateAllSummaries = async () => {
+    const pending = knowledgeDocs.filter(
+      (d) => !d.structuredSummary && d.indexingStatus !== "pending"
+    );
+    if (pending.length === 0) {
+      return;
+    }
+    const ids = pending.map((d) => d.id);
+    setGeneratingSummaryIds(new Set(ids));
+    try {
+      // Processa sequencialmente para não sobrecarregar o servidor
+      for (const id of ids) {
+        await fetch(
+          `/api/knowledge/${encodeURIComponent(id)}/generate-summary`,
+          {
+            method: "POST",
+          }
+        );
+        setGeneratingSummaryIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        await Promise.all([mutate(docsKey), mutateRecent()]);
+      }
+    } finally {
+      setGeneratingSummaryIds(new Set());
     }
   };
 
@@ -802,6 +1000,29 @@ export function KnowledgeSidebarContent({
                     Erro
                   </span>
                 )}
+                {doc.structuredSummary &&
+                  (() => {
+                    const { docType, pedidosCount, isPartial } =
+                      parseSummaryBadge(doc.structuredSummary);
+                    const label = docType === "pi" ? "PI" : "Cont.";
+                    const pedidosLabel =
+                      pedidosCount > 0 ? ` • ${pedidosCount} pedidos` : "";
+                    const partialLabel = isPartial ? " • ⚠️ parcial" : "";
+                    const tooltip =
+                      docType === "pi"
+                        ? `Petição Inicial — resumo estruturado gerado por IA${pedidosCount > 0 ? ` (${pedidosCount} pedidos mapeados)` : ""}${isPartial ? " — cobertura parcial (documento muito grande)" : " — cobertura completa"}`
+                        : `Contestação — resumo estruturado gerado por IA${isPartial ? " — cobertura parcial (documento muito grande)" : " — cobertura completa"}`;
+                    return (
+                      <span
+                        className={`shrink-0 rounded px-1.5 py-0 text-[10px] ${isPartial ? "bg-amber-500/20 text-amber-700 dark:text-amber-400" : "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400"}`}
+                        title={tooltip}
+                      >
+                        📋 {label}
+                        {pedidosLabel}
+                        {partialLabel}
+                      </span>
+                    );
+                  })()}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -832,6 +1053,29 @@ export function KnowledgeSidebarContent({
                     >
                       <Pencil aria-hidden className="size-4" />
                       Renomear
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={generatingSummaryIds.has(doc.id)}
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        handleGenerateSummary(doc.id).catch(() => {
+                          /* fire-and-forget */
+                        });
+                      }}
+                    >
+                      {generatingSummaryIds.has(doc.id) ? (
+                        <Loader2 aria-hidden className="size-4 animate-spin" />
+                      ) : (
+                        <span
+                          aria-hidden
+                          className="size-4 text-center leading-none"
+                        >
+                          📋
+                        </span>
+                      )}
+                      {doc.structuredSummary
+                        ? "Regenerar resumo"
+                        : "Gerar resumo"}
                     </DropdownMenuItem>
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger>
@@ -947,6 +1191,32 @@ export function KnowledgeSidebarContent({
             {isIndexingPending
               ? "A indexar…"
               : `Indexar ${pendingCount} pendente(s)`}
+          </Button>
+        )}
+        {withoutSummaryCount > 0 && generatingSummaryIds.size === 0 && (
+          <Button
+            aria-label="Gerar resumo estruturado para todos os documentos sem resumo"
+            className="mt-2 gap-1.5 text-xs"
+            onClick={handleGenerateAllSummaries}
+            size="sm"
+            title="Extrai resumo estruturado (PI/Contestação) para todos os documentos que ainda não têm."
+            type="button"
+            variant="secondary"
+          >
+            <span aria-hidden>📋</span>
+            Gerar resumo para todos ({withoutSummaryCount})
+          </Button>
+        )}
+        {generatingSummaryIds.size > 0 && (
+          <Button
+            className="mt-2 gap-1.5 text-xs"
+            disabled
+            size="sm"
+            type="button"
+            variant="secondary"
+          >
+            <Loader2 aria-hidden className="size-3.5 animate-spin" />A gerar
+            resumo… ({generatingSummaryIds.size} restante(s))
           </Button>
         )}
         <div className="relative mt-2">
@@ -1448,6 +1718,7 @@ export function KnowledgeSidebarContent({
             <button
               aria-label="Adicionar documentos por ficheiros ou pasta"
               className={dropzoneClassName}
+              onClick={() => filesInputRef.current?.click()}
               onDragLeave={() => setIsDraggingOver(false)}
               onDragOver={(e) => {
                 e.preventDefault();
@@ -1471,21 +1742,45 @@ export function KnowledgeSidebarContent({
                   aria-live="polite"
                   className="flex w-full max-w-[240px] flex-col items-center gap-2"
                 >
-                  <span className="flex items-center gap-2 text-muted-foreground text-sm">
-                    <Loader2
-                      aria-hidden
-                      className="size-4 shrink-0 animate-spin"
-                    />
-                    A adicionar ficheiros…
-                  </span>
+                  {uploadProgress?.currentFile ? (
+                    <span className="flex w-full items-center gap-2 text-muted-foreground text-sm">
+                      <Loader2
+                        aria-hidden
+                        className="size-4 shrink-0 animate-spin"
+                      />
+                      <span
+                        className="min-w-0 truncate"
+                        title={uploadProgress.currentFile}
+                      >
+                        {uploadProgress.currentFile}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2 text-muted-foreground text-sm">
+                      <Loader2
+                        aria-hidden
+                        className="size-4 shrink-0 animate-spin"
+                      />
+                      A adicionar ficheiros…
+                    </span>
+                  )}
                   {uploadProgress && (
                     <>
                       <output
                         aria-label={`${uploadProgress.processed} de ${uploadProgress.total} ficheiros processados`}
-                        className="text-muted-foreground/90 text-xs tabular-nums"
+                        className="flex w-full items-center justify-between text-muted-foreground/90 text-xs tabular-nums"
                       >
-                        {uploadProgress.processed}/{uploadProgress.total}{" "}
-                        ficheiros
+                        <span>
+                          {uploadProgress.processed}/{uploadProgress.total}{" "}
+                          ficheiros
+                        </span>
+                        <span>
+                          {Math.round(
+                            (uploadProgress.processed / uploadProgress.total) *
+                              100
+                          )}
+                          %
+                        </span>
                       </output>
                       <progress
                         aria-label={`${uploadProgress.processed} de ${uploadProgress.total} ficheiros`}

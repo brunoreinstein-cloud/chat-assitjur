@@ -46,6 +46,10 @@ import {
   REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID,
   REDATOR_BANCO_SYSTEM_USER_ID,
 } from "@/lib/ai/redator-banco-rag";
+import {
+  buildKnowledgeContext,
+  resolveEffectiveKnowledgeIds,
+} from "@/lib/ai/resolve-knowledge-ids";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { createRedatorContestacaoDocument } from "@/lib/ai/tools/create-redator-contestacao-document";
 import { createRevisorDefesaDocuments } from "@/lib/ai/tools/create-revisor-defesa-documents";
@@ -59,6 +63,7 @@ import { validationToolsForValidate } from "@/lib/ai/tools/validation-tools";
 import { getCachedBuiltInAgentOverrides } from "@/lib/cache/agent-overrides-cache";
 import { creditsCache } from "@/lib/cache/credits-cache";
 import { isProductionEnvironment } from "@/lib/constants";
+import { FASE_LABEL, RISCO_LABEL } from "@/lib/constants/processo";
 import {
   addCreditsToUser,
   createStreamId,
@@ -72,6 +77,7 @@ import {
   getMessageCountByUserId,
   getMessagesByChatId,
   getOrCreateCreditBalance,
+  getProcessoById,
   getUserFilesByIds,
   saveChat,
   saveMessages,
@@ -243,17 +249,14 @@ function wrapKnowledgeDocument(
 }
 
 /** Máximo de caracteres por documento no prompt (evita "prompt is too long" ~200k tokens). */
-const MAX_CHARS_PER_DOCUMENT = 35_000;
+const MAX_CHARS_PER_DOCUMENT = 80_000;
 /** Máximo total de caracteres de documentos numa única mensagem. */
-const MAX_TOTAL_DOC_CHARS = 100_000;
+const MAX_TOTAL_DOC_CHARS = 180_000;
 /** Na PI, ao truncar, preservar este número de caracteres do final (OAB/assinaturas). */
 const PI_TAIL_CHARS = 2500;
 
 /** Últimas N mensagens a carregar para contexto (reduz BD e tamanho do prompt; a qualidade mantém-se com contexto recente). */
 const CHAT_MESSAGES_LIMIT = 80;
-
-/** Máximo de caracteres da base de conhecimento no system prompt (reduz custo de tokens). */
-const MAX_KNOWLEDGE_CONTEXT_CHARS = 50_000;
 
 /** Timeouts e limites do batch de BD (runChatDbBatch). */
 const DB_BATCH_TIMEOUT_MS = 120_000;
@@ -307,12 +310,20 @@ function getDocumentPartExtractionHint(
 
 function fillKnowledgeFromFullDocsWhenEmpty(
   parts: string[],
-  docs: Array<{ id: string; title: string; content: string }>
+  docs: Array<{
+    id: string;
+    title: string;
+    content: string;
+    structuredSummary?: string | null;
+  }>
 ): void {
   const shouldFillFromFullDocs = parts.length === 0;
   if (shouldFillFromFullDocs) {
     for (const doc of docs) {
-      parts.push(wrapKnowledgeDocument(doc.id, doc.title, doc.content));
+      // Documentos com resumo estruturado já foram injetados antes; usar conteúdo bruto só sem resumo
+      if (!doc.structuredSummary) {
+        parts.push(wrapKnowledgeDocument(doc.id, doc.title, doc.content));
+      }
     }
   }
 }
@@ -439,42 +450,6 @@ function getStreamContext() {
   } catch {
     return null;
   }
-}
-
-function resolveEffectiveKnowledgeIds(
-  knowledgeDocumentIds: string[] | undefined,
-  _userId: string | undefined,
-  agentId: string
-): string[] {
-  // Chamado apenas após getEarlyValidationResponse; userId está garantido pelo fluxo.
-  if (knowledgeDocumentIds?.length) {
-    return knowledgeDocumentIds;
-  }
-  if (agentId === AGENT_ID_REDATOR_CONTESTACAO) {
-    return [REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID];
-  }
-  return [];
-}
-
-const REDATOR_BANCO_UNAVAILABLE_MESSAGE =
-  "[Banco de Teses Padrão não disponível. Para satisfazer (B), o utilizador deve selecionar documentos na Base de conhecimento (sidebar) ou anexar modelo/banco de teses.]";
-
-function buildKnowledgeContext(
-  rawKnowledgeContext: string,
-  agentId: string,
-  effectiveKnowledgeIds: string[]
-): string | undefined {
-  if (rawKnowledgeContext.length > MAX_KNOWLEDGE_CONTEXT_CHARS) {
-    return `${rawKnowledgeContext.slice(0, MAX_KNOWLEDGE_CONTEXT_CHARS)}\n\n[... base de conhecimento truncada para caber no limite ...]`;
-  }
-  const redatorBancoIntendedButEmpty =
-    agentId === AGENT_ID_REDATOR_CONTESTACAO &&
-    effectiveKnowledgeIds.includes(REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID) &&
-    rawKnowledgeContext.length === 0;
-  if (redatorBancoIntendedButEmpty) {
-    return REDATOR_BANCO_UNAVAILABLE_MESSAGE;
-  }
-  return rawKnowledgeContext || undefined;
 }
 
 const TRUNCATE_SUFFIX =
@@ -901,7 +876,8 @@ async function persistChatAndGetTitlePromise(
   message: PostRequestBody["message"],
   agentId: string,
   selectedVisibilityType: PostRequestBody["selectedVisibilityType"],
-  _isToolApprovalFlow: boolean
+  _isToolApprovalFlow: boolean,
+  processoId?: string | null
 ): Promise<{ titlePromise: Promise<string> | null } | Response> {
   if (chat) {
     if (chat.userId !== session.user.id) {
@@ -925,6 +901,7 @@ async function persistChatAndGetTitlePromise(
       title: "New chat",
       visibility: selectedVisibilityType,
       agentId,
+      processoId: processoId ?? null,
     });
   } catch (saveChatErr) {
     if (
@@ -1047,10 +1024,23 @@ function buildKnowledgeContextFromParts(
   ragChunks: Awaited<ReturnType<typeof retrieveKnowledgeContext>>,
   knowledgeDocsResult: Awaited<ReturnType<typeof getKnowledgeDocumentsByIds>>,
   userFilesFromArchivos: Awaited<ReturnType<typeof getUserFilesByIds>>,
-  agentId: string,
   effectiveKnowledgeIds: string[]
 ): string | undefined {
   const knowledgeDocParts: string[] = [];
+
+  // Injetar resumos estruturados (PI/Contestação) sempre que disponíveis — visão completa sem truncamento
+  for (const doc of knowledgeDocsResult) {
+    if (doc.structuredSummary) {
+      knowledgeDocParts.push(
+        wrapKnowledgeDocument(
+          doc.id,
+          `${doc.title} [Resumo Estruturado]`,
+          doc.structuredSummary
+        )
+      );
+    }
+  }
+
   if (ragChunks.length > 0) {
     const byDoc = new Map<string, { title: string; texts: string[] }>();
     for (const c of ragChunks) {
@@ -1087,11 +1077,7 @@ function buildKnowledgeContextFromParts(
     knowledgeDocParts.length > 0
       ? `<knowledge_base>\n${knowledgeDocParts.join("\n\n")}\n</knowledge_base>`
       : "";
-  return buildKnowledgeContext(
-    rawKnowledgeContext,
-    agentId,
-    effectiveKnowledgeIds
-  );
+  return buildKnowledgeContext(rawKnowledgeContext, effectiveKnowledgeIds);
 }
 
 /** Guarda a mensagem do utilizador na BD; devolve Response em caso de erro. */
@@ -1181,6 +1167,7 @@ interface ChatStreamParams {
   uiMessages: ChatMessage[];
   requestHints: RequestHints;
   knowledgeContext: string | undefined;
+  processoContext: string | undefined;
   /** true se o dbBatch usou fallback (timeout); o stream envia chunk para o cliente mostrar aviso. */
   dbUsedFallback?: boolean;
 }
@@ -1209,6 +1196,7 @@ async function prepareModelMessagesForStream(
     uiMessages,
     requestHints,
     knowledgeContext,
+    processoContext,
   } = params;
   const t5 = Date.now();
   const visionEnabled = modelSupportsVision(effectiveModel);
@@ -1220,6 +1208,7 @@ async function prepareModelMessagesForStream(
     requestHints,
     agentInstructions: effectiveAgentInstructionsForContext,
     knowledgeContext,
+    processoContext,
   });
   const messagesToSend = applyContextEditing(normalizedMessages);
   const estimatedInputTokens = estimateInputTokens(
@@ -1282,6 +1271,7 @@ interface StreamExecuteContext {
   effectiveModel: string;
   requestHints: RequestHints;
   knowledgeContext: string | undefined;
+  processoContext: string | undefined;
   messagesForModel: Awaited<ReturnType<typeof withPromptCachingForAnthropic>>;
   isReasoningModel: boolean;
   titlePromise: Promise<string> | null;
@@ -1405,6 +1395,7 @@ function createStreamExecuteHandler(
         requestHints: ctx.requestHints,
         agentInstructions: effectiveAgentInstructions,
         knowledgeContext: ctx.knowledgeContext,
+        processoContext: ctx.processoContext,
       }),
       messages: ctx.messagesForModel as Awaited<
         ReturnType<typeof convertToModelMessages>
@@ -1671,6 +1662,7 @@ function buildStreamAndResponse(
     uiMessages,
     requestHints,
     knowledgeContext,
+    processoContext,
   } = params;
   const { messagesForModel, preStreamEnd } = prepared;
 
@@ -1691,6 +1683,7 @@ function buildStreamAndResponse(
     effectiveModel,
     requestHints,
     knowledgeContext,
+    processoContext,
     messagesForModel,
     isReasoningModel,
     titlePromise,
@@ -1820,6 +1813,7 @@ interface CreditsAndPersistParams {
   agentId: string;
   selectedVisibilityType: PostRequestBody["selectedVisibilityType"];
   isToolApprovalFlow: boolean;
+  processoId?: string | null;
 }
 
 /** Executa verificação de créditos e persistência do chat; devolve Response ou titlePromise. */
@@ -1843,7 +1837,8 @@ async function runCreditsAndPersist(
     params.message,
     params.agentId,
     params.selectedVisibilityType,
-    params.isToolApprovalFlow
+    params.isToolApprovalFlow,
+    params.processoId
   );
   if (persistResult instanceof Response) {
     return persistResult;
@@ -1893,6 +1888,7 @@ async function handleChatPostAuthenticated(
     knowledgeDocumentIds,
     archivoIds,
     agentId: agentIdFromBody,
+    processoId,
   } = requestBody;
 
   const agentId = resolveAgentId(agentIdFromBody);
@@ -1924,16 +1920,19 @@ async function handleChatPostAuthenticated(
   const isToolApprovalFlow = Boolean(messages);
   const initialCredits = entitlementsByUserType[userType].initialCredits;
 
+  const messageText =
+    message?.parts?.map((p) => ("text" in p ? p.text : "")).join(" ") ?? "";
   const effectiveKnowledgeIds = resolveEffectiveKnowledgeIds(
     knowledgeDocumentIds,
-    authenticatedSession.user.id,
-    agentId
+    agentId,
+    messageText,
+    agentInstructions
   );
-  const redatorBancoAllowedUserIds =
-    agentId === AGENT_ID_REDATOR_CONTESTACAO &&
-    effectiveKnowledgeIds.includes(REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID)
-      ? [REDATOR_BANCO_SYSTEM_USER_ID]
-      : undefined;
+  const redatorBancoAllowedUserIds = effectiveKnowledgeIds.includes(
+    REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID
+  )
+    ? [REDATOR_BANCO_SYSTEM_USER_ID]
+    : undefined;
 
   await ensureUserExistsInDb(
     authenticatedSession.user.id,
@@ -1988,6 +1987,7 @@ async function handleChatPostAuthenticated(
     agentId,
     selectedVisibilityType,
     isToolApprovalFlow,
+    processoId: processoId ?? null,
   });
   if (creditsPersistResult instanceof Response) {
     return creditsPersistResult;
@@ -2044,18 +2044,50 @@ async function handleChatPostAuthenticated(
     ragChunks,
     batchResult.knowledgeDocsResult,
     userFilesFromArchivos,
-    agentId,
     effectiveKnowledgeIds
   );
 
+  // Injetar contexto do processo trabalhista no system prompt quando o chat está vinculado a um processo.
+  // Corre em paralelo com saveUserMessageToDb para não aumentar a latência do caminho crítico.
+  const effectiveProcessoId =
+    processoId ?? batchResult.chat?.processoId ?? null;
   const t4 = Date.now();
-  const saveUserErr = await saveUserMessageToDb(message, id);
-  if (saveUserErr) {
-    return saveUserErr;
-  }
+  const [proc, saveUserErr] = await Promise.all([
+    effectiveProcessoId
+      ? getProcessoById({
+          id: effectiveProcessoId,
+          userId: authenticatedSession.user.id,
+        })
+      : Promise.resolve(null),
+    saveUserMessageToDb(message, id),
+  ]);
   if (message?.role === "user") {
     debugTracker.phase("saveMessages", t4);
     logTiming("saveMessages(user)", Date.now() - t4);
+  }
+  if (saveUserErr) {
+    return saveUserErr;
+  }
+
+  let processoContext: string | undefined;
+  if (proc) {
+    processoContext = [
+      `Número: ${proc.numeroAutos}`,
+      `Reclamante: ${proc.reclamante}`,
+      `Reclamada: ${proc.reclamada}`,
+      proc.vara ? `Vara: ${proc.vara}` : null,
+      proc.comarca ? `Comarca: ${proc.comarca}` : null,
+      proc.tribunal ? `Tribunal: ${proc.tribunal}` : null,
+      proc.rito
+        ? `Rito: ${proc.rito === "sumarissimo" ? "Sumaríssimo" : "Ordinário"}`
+        : null,
+      proc.fase ? `Fase atual: ${FASE_LABEL[proc.fase] ?? proc.fase}` : null,
+      proc.riscoGlobal
+        ? `Risco global: ${RISCO_LABEL[proc.riscoGlobal] ?? proc.riscoGlobal}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
   }
 
   return buildChatStreamResponse({
@@ -2072,6 +2104,7 @@ async function handleChatPostAuthenticated(
     uiMessages,
     requestHints,
     knowledgeContext,
+    processoContext,
     dbUsedFallback: batchResult.usedFallback ?? false,
   });
 }

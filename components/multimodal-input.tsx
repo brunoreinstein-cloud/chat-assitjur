@@ -499,6 +499,8 @@ type PureMultimodalInputProps = Readonly<{
   setAgentInstructions?: (value: string) => void;
   /** Abre a barra lateral da base de conhecimento (ex.: ao clicar no botão no rodapé). */
   onOpenKnowledgeSidebar?: () => void;
+  /** Quando true, desativa o overlay de drag-and-drop para não interceptar drops destinados à KB sidebar. */
+  knowledgeSidebarOpen?: boolean;
 }>;
 
 interface ImproveTextOptions {
@@ -591,6 +593,7 @@ function PureMultimodalInput({
   setAgentId,
   setAgentInstructions,
   onOpenKnowledgeSidebar,
+  knowledgeSidebarOpen = false,
 }: PureMultimodalInputProps) {
   const [atPopoverOpen, setAtPopoverOpen] = useState(false);
   const [agentInstructionsDialogOpen, setAgentInstructionsDialogOpen] =
@@ -1158,6 +1161,9 @@ function PureMultimodalInput({
   // Window-level drag listeners: extend drop zone to entire viewport
   useEffect(() => {
     const onWindowDragOver = (e: DragEvent) => {
+      if (knowledgeSidebarOpen) {
+        return;
+      }
       if (e.dataTransfer?.types.includes("Files")) {
         e.preventDefault();
         setIsDraggingOver(true);
@@ -1180,7 +1186,14 @@ function PureMultimodalInput({
       window.removeEventListener("dragleave", onWindowDragLeave);
       window.removeEventListener("drop", onWindowDrop);
     };
-  }, []);
+  }, [knowledgeSidebarOpen]);
+
+  // Reset overlay when KB sidebar opens
+  useEffect(() => {
+    if (knowledgeSidebarOpen) {
+      setIsDraggingOver(false);
+    }
+  }, [knowledgeSidebarOpen]);
 
   const _handleDocumentTypeChange = useCallback(
     (attachmentUrl: string) => (documentType: "pi" | "contestacao") => {

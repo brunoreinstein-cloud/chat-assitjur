@@ -1,11 +1,13 @@
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
+import { extractLegalSummary } from "@/lib/ai/extract-legal-summary";
 import {
   createKnowledgeDocument,
   deleteKnowledgeDocumentById,
   getKnowledgeDocumentsByIds,
   getKnowledgeDocumentsByUserId,
   getKnowledgeDocumentsRecentByUserId,
+  updateKnowledgeDocumentStructuredSummary,
 } from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
 import { vectorizeAndIndex } from "@/lib/rag";
@@ -74,9 +76,20 @@ export async function GET(request: Request) {
         ? null
         : (folderIdParam ?? undefined);
 
+    const pageParam = Number.parseInt(searchParams.get("page") ?? "1", 10);
+    const limitParam = Number.parseInt(searchParams.get("limit") ?? "0", 10);
+    const page = Number.isFinite(pageParam) && pageParam > 0 ? pageParam : 1;
+    const pageSize =
+      Number.isFinite(limitParam) && limitParam > 0
+        ? Math.min(limitParam, 200)
+        : undefined;
+    const offset = pageSize !== undefined ? (page - 1) * pageSize : undefined;
+
     const documents = await getKnowledgeDocumentsByUserId({
       userId: session.user.id,
       folderId,
+      limit: pageSize,
+      offset,
     });
     return Response.json(documents);
   } catch (error) {
@@ -124,6 +137,19 @@ export async function POST(request: Request) {
       await vectorizeAndIndex(doc.id, body.content, {
         meta: { userId: doc.userId, title: doc.title },
       });
+      // Fire-and-forget: extrai resumo estruturado para PI/Contestação sem bloquear a resposta
+      extractLegalSummary(body.content)
+        .then((summary) => {
+          if (summary) {
+            return updateKnowledgeDocumentStructuredSummary({
+              id: doc.id,
+              structuredSummary: summary,
+            });
+          }
+        })
+        .catch(() => {
+          /* fire-and-forget; ignore */
+        });
     }
 
     return Response.json(doc, { status: 201 });

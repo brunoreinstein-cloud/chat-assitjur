@@ -1,6 +1,7 @@
 /**
  * Revisa variáveis de ambiente (após puxar da Vercel com vercel:env:prod).
  * Valida POSTGRES_URL (porta 6543 no Supabase), formato da URL e variáveis obrigatórias.
+ * Não faz ping à BD (para usar mesmo quando a BD de produção não é acessível a partir de local).
  *
  * Uso: pnpm run vercel:env:prod && pnpm run vercel:review
  * Ou:  pnpm exec tsx scripts/vercel-review-env.ts  (com .env.local já preenchido)

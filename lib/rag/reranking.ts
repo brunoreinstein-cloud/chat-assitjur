@@ -14,6 +14,108 @@ import type { RetrievalChunk } from "./types";
 const DEFAULT_MAX_CHUNKS_PER_DOC = 3;
 const DEFAULT_TEXT_OVERLAP_THRESHOLD = 0.6; // 60% Jaccard → considerar duplicata
 
+/**
+ * Stopwords comuns em português — excluídas da tokenização Jaccard para
+ * evitar similaridade inflacionada entre chunks semanticamente distintos.
+ */
+const PT_STOPWORDS = new Set([
+  "a",
+  "ao",
+  "aos",
+  "as",
+  "até",
+  "com",
+  "como",
+  "da",
+  "das",
+  "de",
+  "dela",
+  "delas",
+  "dele",
+  "deles",
+  "depois",
+  "do",
+  "dos",
+  "e",
+  "é",
+  "ela",
+  "elas",
+  "ele",
+  "eles",
+  "em",
+  "entre",
+  "era",
+  "essa",
+  "essas",
+  "esse",
+  "esses",
+  "esta",
+  "estas",
+  "este",
+  "estes",
+  "eu",
+  "foi",
+  "for",
+  "foram",
+  "há",
+  "isso",
+  "isto",
+  "já",
+  "lhe",
+  "lhes",
+  "mas",
+  "me",
+  "mesmo",
+  "meu",
+  "meus",
+  "minha",
+  "minhas",
+  "muito",
+  "na",
+  "nas",
+  "não",
+  "no",
+  "nos",
+  "o",
+  "os",
+  "ou",
+  "para",
+  "pela",
+  "pelas",
+  "pelo",
+  "pelos",
+  "por",
+  "qual",
+  "quando",
+  "que",
+  "se",
+  "sem",
+  "seu",
+  "seus",
+  "só",
+  "sua",
+  "suas",
+  "também",
+  "te",
+  "tem",
+  "tendo",
+  "ter",
+  "tinha",
+  "tive",
+  "toda",
+  "todas",
+  "todo",
+  "todos",
+  "tu",
+  "um",
+  "uma",
+  "umas",
+  "uns",
+  "você",
+  "vocês",
+  "vos",
+]);
+
 export interface RerankOptions {
   /** Máximo de chunks por documento fonte. Default: 3. */
   maxChunksPerDoc?: number;
@@ -30,7 +132,12 @@ export interface RerankOptions {
  */
 function jaccardSimilarity(a: string, b: string): number {
   const tokenize = (s: string) =>
-    new Set(s.toLowerCase().split(/\s+/).filter(Boolean));
+    new Set(
+      s
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((w) => w.length > 1 && !PT_STOPWORDS.has(w))
+    );
   const setA = tokenize(a);
   const setB = tokenize(b);
   let intersection = 0;

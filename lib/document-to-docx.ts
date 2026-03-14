@@ -1,22 +1,33 @@
 import "server-only";
 
 import {
+  AlignmentType,
+  BorderStyle,
+  convertMillimetersToTwip,
   Document,
   type FileChild,
   Footer,
   Header,
   HeadingLevel,
   Packer,
+  PageNumber,
   Paragraph,
   Table,
   TableCell,
   TableRow,
   TextRun,
+  WidthType,
 } from "docx";
 
 const FONT_SIZE = 24; // 12pt = 24 half-points
 const FONT_SIZE_HEADING = 28; // 14pt
+const FONT_SIZE_SMALL = 20; // 10pt para cabeçalho/rodapé
 const FONT_FAMILY = "Arial";
+
+/** Espaçamento após cada parágrafo (twips). 120 ≈ 6pt; melhora legibilidade. */
+const SPACING_AFTER = 120;
+/** Margem de página em todos os lados (25.4 mm = 1 polegada). */
+const PAGE_MARGIN = convertMillimetersToTwip(25.4);
 
 const runBase = { font: FONT_FAMILY, size: FONT_SIZE } as const;
 const runHeading = { font: FONT_FAMILY, size: FONT_SIZE_HEADING } as const;
@@ -27,6 +38,55 @@ const ASSISTJUR = {
   dourado: "B8860B",
   douradoClaro: "F5E6C8",
   branco: "FFFFFF",
+  bordaTabela: "AAAAAA", // cinza claro para bordas
+} as const;
+
+/** Bordas de tabela padrão (cinza claro, 0.5pt). */
+const TABLE_BORDERS_DEFAULT = {
+  top: { style: BorderStyle.SINGLE, size: 4, color: ASSISTJUR.bordaTabela },
+  bottom: { style: BorderStyle.SINGLE, size: 4, color: ASSISTJUR.bordaTabela },
+  left: { style: BorderStyle.SINGLE, size: 4, color: ASSISTJUR.bordaTabela },
+  right: { style: BorderStyle.SINGLE, size: 4, color: ASSISTJUR.bordaTabela },
+  insideHorizontal: {
+    style: BorderStyle.SINGLE,
+    size: 4,
+    color: ASSISTJUR.bordaTabela,
+  },
+  insideVertical: {
+    style: BorderStyle.SINGLE,
+    size: 4,
+    color: ASSISTJUR.bordaTabela,
+  },
+} as const;
+
+/** Bordas de tabela Master: topo dourado, restantes cinza. */
+const TABLE_BORDERS_MASTER = {
+  top: { style: BorderStyle.SINGLE, size: 8, color: ASSISTJUR.dourado },
+  bottom: { style: BorderStyle.SINGLE, size: 4, color: ASSISTJUR.bordaTabela },
+  left: { style: BorderStyle.SINGLE, size: 4, color: ASSISTJUR.bordaTabela },
+  right: { style: BorderStyle.SINGLE, size: 4, color: ASSISTJUR.bordaTabela },
+  insideHorizontal: {
+    style: BorderStyle.SINGLE,
+    size: 4,
+    color: ASSISTJUR.bordaTabela,
+  },
+  insideVertical: {
+    style: BorderStyle.SINGLE,
+    size: 4,
+    color: ASSISTJUR.bordaTabela,
+  },
+} as const;
+
+/** Propriedades de margem de página (aplicadas a todas as secções). */
+const PAGE_MARGIN_PROPS = {
+  page: {
+    margin: {
+      top: PAGE_MARGIN,
+      right: PAGE_MARGIN,
+      bottom: PAGE_MARGIN,
+      left: PAGE_MARGIN,
+    },
+  },
 } as const;
 
 const TABLE_SEP_TAB = "\t";
@@ -53,6 +113,15 @@ function parseTableRow(line: string): [string, string] {
   return [line.slice(0, idx).trim(), line.slice(idx + sep.length).trim()];
 }
 
+/**
+ * Detecta linha de lista com "- " ou "* " no início.
+ * Retorna o texto do item (sem o marcador) ou null se não for lista.
+ */
+function getBulletText(line: string): string | null {
+  const m = /^[-*]\s+(.+)$/.exec(line);
+  return m ? (m[1] ?? null) : null;
+}
+
 /** Layout de export DOCX: default (simples) ou assistjur-master (paleta cinza/dourado, header/footer). */
 export type DocxLayout = "default" | "assistjur-master";
 
@@ -68,6 +137,7 @@ function paragraphH1Assistjur(text: string): Paragraph {
       }),
     ],
     shading: { fill: ASSISTJUR.charcoal },
+    spacing: { after: SPACING_AFTER },
   });
 }
 
@@ -82,13 +152,118 @@ function paragraphH2Assistjur(text: string): Paragraph {
         bold: true,
       }),
     ],
+    spacing: { after: SPACING_AFTER },
+  });
+}
+
+/** Segmento inline com formatação opcional. */
+type InlineSegment =
+  | string
+  | { text: string; bold?: boolean; italic?: boolean };
+
+/**
+ * Analisa **negrito** e *itálico* numa linha de texto.
+ * Processa ** antes de * para evitar ambiguidades.
+ */
+function parseInlineFormatting(line: string): InlineSegment[] {
+  const result: InlineSegment[] = [];
+  let rem = line;
+
+  while (rem.length > 0) {
+    const boldIdx = rem.indexOf("**");
+
+    // Localizar primeiro * simples (não parte de **)
+    let italicIdx = -1;
+    for (let i = 0; i < rem.length; i++) {
+      if (rem[i] === "*") {
+        const nextIsStar = rem[i + 1] === "*";
+        const prevIsStar = i > 0 && rem[i - 1] === "*";
+        if (!(nextIsStar || prevIsStar)) {
+          italicIdx = i;
+          break;
+        }
+        if (nextIsStar) {
+          i++; // saltar o segundo * de **
+        }
+      }
+    }
+
+    const nextIdx =
+      boldIdx === -1
+        ? italicIdx
+        : italicIdx === -1
+          ? boldIdx
+          : Math.min(boldIdx, italicIdx);
+
+    if (nextIdx === -1) {
+      if (rem) {
+        result.push(rem);
+      }
+      break;
+    }
+
+    if (nextIdx > 0) {
+      result.push(rem.slice(0, nextIdx));
+    }
+    rem = rem.slice(nextIdx);
+
+    if (rem.startsWith("**")) {
+      rem = rem.slice(2);
+      const close = rem.indexOf("**");
+      if (close === -1) {
+        result.push(`**${rem}`);
+        break;
+      }
+      result.push({ text: rem.slice(0, close), bold: true });
+      rem = rem.slice(close + 2);
+    } else if (rem.startsWith("*")) {
+      rem = rem.slice(1);
+      // Encontrar * simples de fecho
+      let closeIdx = -1;
+      for (let i = 0; i < rem.length; i++) {
+        if (
+          rem[i] === "*" &&
+          rem[i + 1] !== "*" &&
+          (i === 0 || rem[i - 1] !== "*")
+        ) {
+          closeIdx = i;
+          break;
+        }
+      }
+      if (closeIdx === -1) {
+        result.push(`*${rem}`);
+        break;
+      }
+      result.push({ text: rem.slice(0, closeIdx), italic: true });
+      rem = rem.slice(closeIdx + 1);
+    }
+  }
+
+  return result;
+}
+
+function inlineToRuns(segments: InlineSegment[]): TextRun[] {
+  return segments.map((seg) => {
+    if (typeof seg === "string") {
+      return new TextRun({ text: seg, ...runBase });
+    }
+    return new TextRun({
+      text: seg.text,
+      ...runBase,
+      bold: seg.bold ?? false,
+      italics: seg.italic ?? false,
+    });
   });
 }
 
 /**
- * Converte texto com formatação simples (**negrito**, ##/###/####, tabelas com \t)
- * em filhos de secção DOCX (Paragraph, Table, headings com Arial 12pt/14pt).
- * Com layout "assistjur-master": secções ## com fundo charcoal e texto branco; ### em dourado.
+ * Converte texto com formatação simples (**negrito**, *itálico*, ##/###/####,
+ * listas com "- " ou "* ", tabelas com \t ou " | ")
+ * em filhos de secção DOCX (Paragraph, Table).
+ * Fonte Arial 12pt (títulos 14pt), espaçamento 6pt após cada parágrafo.
+ *
+ * Com layout "assistjur-master": secções ## com fundo charcoal e texto branco;
+ * ### em dourado; bordas de tabela douradas no topo; rodapé com número de página.
  */
 function contentToChildren(
   content: string,
@@ -98,6 +273,7 @@ function contentToChildren(
   const lines = content.split(/\r?\n/);
   let tableRows: [string, string][] = [];
   const isAssistjur = layout === "assistjur-master";
+  const borders = isAssistjur ? TABLE_BORDERS_MASTER : TABLE_BORDERS_DEFAULT;
 
   function flushTable() {
     if (tableRows.length === 0) {
@@ -106,11 +282,7 @@ function contentToChildren(
     const rows = tableRows.map(([cell1, cell2], i) => {
       const isHeaderRow = isAssistjur && i === 0;
       const run = isHeaderRow
-        ? {
-            ...runBase,
-            color: ASSISTJUR.branco,
-            bold: true as const,
-          }
+        ? { ...runBase, color: ASSISTJUR.branco, bold: true as const }
         : runBase;
       const cellShading = isHeaderRow
         ? { fill: ASSISTJUR.charcoal }
@@ -120,24 +292,34 @@ function contentToChildren(
         children: [
           new TableCell({
             shading: cellShading,
+            width: { size: 2000, type: WidthType.PERCENTAGE }, // 40%
             children: [
               new Paragraph({
                 children: [new TextRun({ text: cell1, ...run })],
+                spacing: { after: 60 },
               }),
             ],
           }),
           new TableCell({
             shading: cellShading,
+            width: { size: 3000, type: WidthType.PERCENTAGE }, // 60%
             children: [
               new Paragraph({
                 children: [new TextRun({ text: cell2, ...run })],
+                spacing: { after: 60 },
               }),
             ],
           }),
         ],
       });
     });
-    result.push(new Table({ rows }));
+    result.push(
+      new Table({
+        rows,
+        borders,
+        width: { size: 5000, type: WidthType.PERCENTAGE }, // 100%
+      })
+    );
     tableRows = [];
   }
 
@@ -146,7 +328,7 @@ function contentToChildren(
 
     if (trimmed.length === 0) {
       flushTable();
-      result.push(new Paragraph({ text: "" }));
+      result.push(new Paragraph({ text: "", spacing: { after: 60 } }));
       continue;
     }
 
@@ -166,6 +348,7 @@ function contentToChildren(
               text: h1[1].trim(),
               heading: HeadingLevel.HEADING_1,
               run: runHeading,
+              spacing: { after: SPACING_AFTER },
             })
       );
       continue;
@@ -180,6 +363,7 @@ function contentToChildren(
               text: h2[1].trim(),
               heading: HeadingLevel.HEADING_2,
               run: runHeading,
+              spacing: { after: SPACING_AFTER },
             })
       );
       continue;
@@ -194,78 +378,70 @@ function contentToChildren(
           run: isAssistjur
             ? { ...runHeading, color: ASSISTJUR.dourado }
             : runHeading,
+          spacing: { after: SPACING_AFTER },
         })
       );
       continue;
     }
 
-    // Parágrafo com **negrito**
-    const runs = parseBoldSegments(trimmed);
-    if (
-      runs.length === 1 &&
-      typeof runs[0] === "string" &&
-      !runs[0].includes("**")
-    ) {
+    // Linha de lista (- item ou * item)
+    const bulletText = getBulletText(trimmed);
+    if (bulletText !== null) {
+      const segs = parseInlineFormatting(bulletText);
+      result.push(
+        new Paragraph({
+          indent: { left: 360, hanging: 180 },
+          spacing: { after: 80 },
+          children: [
+            new TextRun({
+              text: "•  ",
+              bold: true,
+              font: FONT_FAMILY,
+              size: FONT_SIZE,
+            }),
+            ...inlineToRuns(segs),
+          ],
+        })
+      );
+      continue;
+    }
+
+    // Parágrafo normal com inline formatting (**negrito**, *itálico*)
+    const segs = parseInlineFormatting(trimmed);
+    const hasFormatting = segs.some((s) => typeof s !== "string");
+    if (!hasFormatting && segs.length === 1 && typeof segs[0] === "string") {
       result.push(
         new Paragraph({
           children: [new TextRun({ text: trimmed, ...runBase })],
+          spacing: { after: SPACING_AFTER },
         })
       );
-      continue;
+    } else {
+      result.push(
+        new Paragraph({
+          children: inlineToRuns(segs),
+          spacing: { after: SPACING_AFTER },
+        })
+      );
     }
-
-    result.push(
-      new Paragraph({
-        children: runs.map((r) =>
-          typeof r === "string"
-            ? new TextRun({ text: r, ...runBase })
-            : new TextRun({ text: r.text, bold: true, ...runBase })
-        ),
-      })
-    );
   }
 
   flushTable();
   return result;
 }
 
-type BoldSegment = string | { text: string };
-
-function parseBoldSegments(line: string): BoldSegment[] {
-  const result: BoldSegment[] = [];
-  let remaining = line;
-
-  while (remaining.length > 0) {
-    const open = remaining.indexOf("**");
-    if (open === -1) {
-      if (remaining.length > 0) {
-        result.push(remaining);
-      }
-      break;
-    }
-    if (open > 0) {
-      result.push(remaining.slice(0, open));
-    }
-    remaining = remaining.slice(open + 2);
-    const close = remaining.indexOf("**");
-    if (close === -1) {
-      result.push(`**${remaining}`);
-      break;
-    }
-    result.push({ text: remaining.slice(0, close) });
-    remaining = remaining.slice(close + 2);
-  }
-
-  return result;
-}
-
 /**
  * Gera um buffer DOCX a partir do título e do conteúdo em texto.
  * Usado para exportar artefactos de documento (ex.: Revisor, AssistJur) como ficheiro Word.
- * Inclui título no topo; suporta ##/###/####, **negrito** e linhas com \t ou " | " como tabela de 2 colunas.
- * Fonte Arial 12pt (títulos 14pt).
  *
- * @param layout "assistjur-master" — cabeçalho/rodapé BR Consultoria, secções ## com fundo charcoal e texto branco, ### em dourado, primeira linha de tabelas com fundo charcoal.
+ * Inclui:
+ * - Título no topo
+ * - Suporte a ##/###/####, **negrito**, *itálico*, listas (- / *), tabelas (\t ou " | ")
+ * - Fonte Arial 12pt (títulos 14pt), espaçamento 6pt entre parágrafos
+ * - Margens 25mm, bordas visíveis em tabelas
+ *
+ * @param layout "assistjur-master" — cabeçalho/rodapé BR Consultoria, paleta charcoal/dourado,
+ *   primeira linha de tabelas com fundo charcoal, rodapé com número de página.
  */
 export async function createDocxBuffer(
   title: string,
@@ -283,8 +459,8 @@ export async function createDocxBuffer(
             layout === "assistjur-master"
               ? { ...runHeading, color: ASSISTJUR.dourado }
               : runHeading,
+          spacing: { after: SPACING_AFTER * 2 },
         }),
-        new Paragraph({ text: "" }),
         ...bodyChildren,
       ]
     : bodyChildren;
@@ -304,7 +480,7 @@ export async function createDocxBuffer(
                     new TextRun({
                       text: headerText,
                       font: FONT_FAMILY,
-                      size: 20,
+                      size: FONT_SIZE_SMALL,
                       color: ASSISTJUR.charcoal,
                     }),
                   ],
@@ -316,11 +492,30 @@ export async function createDocxBuffer(
             default: new Footer({
               children: [
                 new Paragraph({
+                  alignment: AlignmentType.RIGHT,
                   children: [
                     new TextRun({
-                      text: footerText,
+                      text: `${footerText}    Pág. `,
                       font: FONT_FAMILY,
-                      size: 18,
+                      size: FONT_SIZE_SMALL,
+                      color: ASSISTJUR.charcoal,
+                    }),
+                    new TextRun({
+                      children: [PageNumber.CURRENT],
+                      font: FONT_FAMILY,
+                      size: FONT_SIZE_SMALL,
+                      color: ASSISTJUR.charcoal,
+                    }),
+                    new TextRun({
+                      text: " / ",
+                      font: FONT_FAMILY,
+                      size: FONT_SIZE_SMALL,
+                      color: ASSISTJUR.charcoal,
+                    }),
+                    new TextRun({
+                      children: [PageNumber.TOTAL_PAGES],
+                      font: FONT_FAMILY,
+                      size: FONT_SIZE_SMALL,
                       color: ASSISTJUR.charcoal,
                     }),
                   ],
@@ -328,7 +523,7 @@ export async function createDocxBuffer(
               ],
             }),
           },
-          properties: {},
+          properties: PAGE_MARGIN_PROPS,
           children:
             children.length > 0 ? children : [new Paragraph({ text: "" })],
         },
@@ -340,7 +535,7 @@ export async function createDocxBuffer(
   const doc = new Document({
     sections: [
       {
-        properties: {},
+        properties: PAGE_MARGIN_PROPS,
         children:
           children.length > 0 ? children : [new Paragraph({ text: "" })],
       },
