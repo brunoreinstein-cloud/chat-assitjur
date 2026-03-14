@@ -197,7 +197,8 @@ function buildChatRequestBody(
   lastMessage: unknown,
   refs: ChatRequestRefs,
   initialChatModel: string,
-  visibilityType: string
+  visibilityType: string,
+  processoId?: string | null
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {
     id: request.id,
@@ -218,6 +219,9 @@ function buildChatRequestBody(
   }
   if (refs.archivoIdsForChatRef.current.length > 0) {
     body.archivoIds = refs.archivoIdsForChatRef.current;
+  }
+  if (processoId) {
+    body.processoId = processoId;
   }
   return body;
 }
@@ -520,7 +524,8 @@ export function Chat({
             truncatedLastMessage,
             refs,
             initialChatModel,
-            visibilityType ?? "private"
+            visibilityType ?? "private",
+            processoIdFromUrl
           ),
         };
       },
@@ -547,6 +552,7 @@ export function Chat({
 
   const searchParams = useSearchParams();
   const query = searchParams.get("query");
+  const processoIdFromUrl = searchParams.get("processo");
   const [knowledgeOpen, setKnowledgeOpen] = useState(false);
   useKnowledgeOpenFromSearchParams(searchParams, setKnowledgeOpen);
 
@@ -674,6 +680,7 @@ export function Chat({
             isReadonly={isReadonly}
             onKnowledgeBase={openKnowledgeSidebar}
             onSaveToKnowledge={openSaveToKnowledgeDialog}
+            processoId={processoIdFromUrl}
             selectedVisibilityType={visibilityType}
           />
 

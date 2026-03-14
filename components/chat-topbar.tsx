@@ -1,6 +1,7 @@
 "use client";
 
 import { BookMarkedIcon } from "lucide-react";
+import useSWR from "swr";
 import { CreditsBalance } from "@/components/credits-balance";
 import { SidebarToggle } from "@/components/sidebar-toggle";
 import {
@@ -15,6 +16,9 @@ import {
   AGENT_ID_REVISOR_DEFESAS,
   getAgentConfig,
 } from "@/lib/ai/agents-registry-metadata";
+import { RISCO_DOT } from "@/lib/constants/processo";
+import type { ProcessoComVerbas } from "@/lib/db/queries";
+import { fetcher } from "@/lib/utils";
 
 interface ChatTopbarProps {
   readonly activeAgent: AgentId | string;
@@ -26,6 +30,8 @@ interface ChatTopbarProps {
   readonly selectedVisibilityType?: VisibilityType;
   readonly hasAssistantMessage?: boolean;
   readonly onSaveToKnowledge?: () => void;
+  /** ID do processo vinculado ao chat (se houver). */
+  readonly processoId?: string | null;
 }
 
 const AGENT_DOTS: Record<string, string> = {
@@ -53,8 +59,18 @@ export function ChatTopbar({
   selectedVisibilityType,
   hasAssistantMessage,
   onSaveToKnowledge,
+  processoId,
 }: ChatTopbarProps) {
   const meta = getAgentMeta(activeAgent);
+  // Reutiliza o cache da sidebar (/api/processos) em vez de um request individual.
+  // Se a sidebar já buscou a lista, isso é um hit de cache sem network round-trip.
+  const { data: processos } = useSWR<ProcessoComVerbas[]>(
+    processoId ? "/api/processos" : null,
+    fetcher
+  );
+  const processo = processoId
+    ? (processos?.find((p) => p.id === processoId) ?? null)
+    : null;
 
   return (
     <header className="flex h-[52px] shrink-0 items-center gap-2.5 border-border border-b bg-background px-5 dark:border-white/8 dark:bg-assistjur-purple-darker">
@@ -91,6 +107,25 @@ export function ChatTopbar({
       >
         ⚙ Configurações rápidas
       </button>
+
+      {/* Badge do processo vinculado */}
+      {processo && (
+        <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted px-2.5 py-1.5 dark:border-white/8 dark:bg-assistjur-purple-dark">
+          <span
+            aria-hidden
+            className={`h-2 w-2 shrink-0 rounded-full ${RISCO_DOT[processo.riscoGlobal ?? ""] ?? "bg-muted-foreground/40"}`}
+          />
+          <span className="font-mono text-[11px] text-muted-foreground dark:text-assistjur-gray-light">
+            {processo.numeroAutos.length > 20
+              ? `${processo.numeroAutos.slice(0, 20)}…`
+              : processo.numeroAutos}
+          </span>
+          <span className="text-muted-foreground/40 text-[10px] dark:text-assistjur-gray/40">·</span>
+          <span className="text-[11px] text-foreground dark:text-white/80">
+            {processo.reclamante.split(" ")[0]}
+          </span>
+        </div>
+      )}
 
       <div className="flex-1" />
 

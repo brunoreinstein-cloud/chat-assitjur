@@ -72,6 +72,7 @@ import {
   getMessageCountByUserId,
   getMessagesByChatId,
   getOrCreateCreditBalance,
+  getProcessoById,
   getUserFilesByIds,
   saveChat,
   saveMessages,
@@ -80,6 +81,10 @@ import {
   updateChatTitleById,
   updateMessage,
 } from "@/lib/db/queries";
+import {
+  FASE_LABEL,
+  RISCO_LABEL,
+} from "@/lib/constants/processo";
 import {
   ChatbotError,
   databaseUnavailableResponse,
@@ -901,7 +906,8 @@ async function persistChatAndGetTitlePromise(
   message: PostRequestBody["message"],
   agentId: string,
   selectedVisibilityType: PostRequestBody["selectedVisibilityType"],
-  _isToolApprovalFlow: boolean
+  _isToolApprovalFlow: boolean,
+  processoId?: string | null
 ): Promise<{ titlePromise: Promise<string> | null } | Response> {
   if (chat) {
     if (chat.userId !== session.user.id) {
@@ -925,6 +931,7 @@ async function persistChatAndGetTitlePromise(
       title: "New chat",
       visibility: selectedVisibilityType,
       agentId,
+      processoId: processoId ?? null,
     });
   } catch (saveChatErr) {
     if (
@@ -1181,6 +1188,7 @@ interface ChatStreamParams {
   uiMessages: ChatMessage[];
   requestHints: RequestHints;
   knowledgeContext: string | undefined;
+  processoContext: string | undefined;
   /** true se o dbBatch usou fallback (timeout); o stream envia chunk para o cliente mostrar aviso. */
   dbUsedFallback?: boolean;
 }
@@ -1209,6 +1217,7 @@ async function prepareModelMessagesForStream(
     uiMessages,
     requestHints,
     knowledgeContext,
+    processoContext,
   } = params;
   const t5 = Date.now();
   const visionEnabled = modelSupportsVision(effectiveModel);
@@ -1220,6 +1229,7 @@ async function prepareModelMessagesForStream(
     requestHints,
     agentInstructions: effectiveAgentInstructionsForContext,
     knowledgeContext,
+    processoContext,
   });
   const messagesToSend = applyContextEditing(normalizedMessages);
   const estimatedInputTokens = estimateInputTokens(
@@ -1282,6 +1292,7 @@ interface StreamExecuteContext {
   effectiveModel: string;
   requestHints: RequestHints;
   knowledgeContext: string | undefined;
+  processoContext: string | undefined;
   messagesForModel: Awaited<ReturnType<typeof withPromptCachingForAnthropic>>;
   isReasoningModel: boolean;
   titlePromise: Promise<string> | null;
@@ -1405,6 +1416,7 @@ function createStreamExecuteHandler(
         requestHints: ctx.requestHints,
         agentInstructions: effectiveAgentInstructions,
         knowledgeContext: ctx.knowledgeContext,
+        processoContext: ctx.processoContext,
       }),
       messages: ctx.messagesForModel as Awaited<
         ReturnType<typeof convertToModelMessages>
@@ -1671,6 +1683,7 @@ function buildStreamAndResponse(
     uiMessages,
     requestHints,
     knowledgeContext,
+    processoContext,
   } = params;
   const { messagesForModel, preStreamEnd } = prepared;
 
@@ -1691,6 +1704,7 @@ function buildStreamAndResponse(
     effectiveModel,
     requestHints,
     knowledgeContext,
+    processoContext,
     messagesForModel,
     isReasoningModel,
     titlePromise,
@@ -1820,6 +1834,7 @@ interface CreditsAndPersistParams {
   agentId: string;
   selectedVisibilityType: PostRequestBody["selectedVisibilityType"];
   isToolApprovalFlow: boolean;
+  processoId?: string | null;
 }
 
 /** Executa verificação de créditos e persistência do chat; devolve Response ou titlePromise. */
@@ -1843,7 +1858,8 @@ async function runCreditsAndPersist(
     params.message,
     params.agentId,
     params.selectedVisibilityType,
-    params.isToolApprovalFlow
+    params.isToolApprovalFlow,
+    params.processoId
   );
   if (persistResult instanceof Response) {
     return persistResult;
@@ -1893,6 +1909,7 @@ async function handleChatPostAuthenticated(
     knowledgeDocumentIds,
     archivoIds,
     agentId: agentIdFromBody,
+    processoId,
   } = requestBody;
 
   const agentId = resolveAgentId(agentIdFromBody);
@@ -1988,6 +2005,7 @@ async function handleChatPostAuthenticated(
     agentId,
     selectedVisibilityType,
     isToolApprovalFlow,
+    processoId: processoId ?? null,
   });
   if (creditsPersistResult instanceof Response) {
     return creditsPersistResult;
@@ -2048,14 +2066,41 @@ async function handleChatPostAuthenticated(
     effectiveKnowledgeIds
   );
 
+  // Injetar contexto do processo trabalhista no system prompt quando o chat está vinculado a um processo.
+  // Corre em paralelo com saveUserMessageToDb para não aumentar a latência do caminho crítico.
+  const effectiveProcessoId = processoId ?? batchResult.chat?.processoId ?? null;
   const t4 = Date.now();
-  const saveUserErr = await saveUserMessageToDb(message, id);
-  if (saveUserErr) {
-    return saveUserErr;
-  }
+  const [proc, saveUserErr] = await Promise.all([
+    effectiveProcessoId
+      ? getProcessoById({ id: effectiveProcessoId, userId: authenticatedSession.user.id })
+      : Promise.resolve(null),
+    saveUserMessageToDb(message, id),
+  ]);
   if (message?.role === "user") {
     debugTracker.phase("saveMessages", t4);
     logTiming("saveMessages(user)", Date.now() - t4);
+  }
+  if (saveUserErr) return saveUserErr;
+
+  let processoContext: string | undefined;
+  if (proc) {
+    processoContext = [
+      `Número: ${proc.numeroAutos}`,
+      `Reclamante: ${proc.reclamante}`,
+      `Reclamada: ${proc.reclamada}`,
+      proc.vara ? `Vara: ${proc.vara}` : null,
+      proc.comarca ? `Comarca: ${proc.comarca}` : null,
+      proc.tribunal ? `Tribunal: ${proc.tribunal}` : null,
+      proc.rito
+        ? `Rito: ${proc.rito === "sumarissimo" ? "Sumaríssimo" : "Ordinário"}`
+        : null,
+      proc.fase ? `Fase atual: ${FASE_LABEL[proc.fase] ?? proc.fase}` : null,
+      proc.riscoGlobal
+        ? `Risco global: ${RISCO_LABEL[proc.riscoGlobal] ?? proc.riscoGlobal}`
+        : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
   }
 
   return buildChatStreamResponse({
@@ -2072,6 +2117,7 @@ async function handleChatPostAuthenticated(
     uiMessages,
     requestHints,
     knowledgeContext,
+    processoContext,
     dbUsedFallback: batchResult.usedFallback ?? false,
   });
 }

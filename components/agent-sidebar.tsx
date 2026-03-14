@@ -3,20 +3,26 @@
 import { isToday } from "date-fns";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
 import type { User } from "next-auth";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import useSWRInfinite from "swr/infinite";
 import { AssistJurLogo } from "@/components/assistjur-logo";
+import { NovoProcessoForm } from "@/components/novo-processo-form";
+import { ProcessoCard } from "@/components/processo-card";
 import {
   type ChatHistory,
   getChatHistoryPaginationKey,
 } from "@/components/sidebar-history";
 import { SidebarUserNav } from "@/components/sidebar-user-nav";
 import {
+  AGENT_ID_ASSISTJUR_MASTER,
   AGENT_IDS,
   type AgentId,
   getAgentConfig,
 } from "@/lib/ai/agents-registry-metadata";
+import { FASE_TO_AGENT } from "@/lib/constants/processo";
+import type { ProcessoComVerbas } from "@/lib/db/queries";
 import type { Chat } from "@/lib/db/schema";
 import { fetcher, historyFetcher } from "@/lib/utils";
 
@@ -81,6 +87,7 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { mutate } = useSWRConfig();
   const isNewChat = pathname === "/chat";
   const agentFromUrl = searchParams.get("agent");
   const activeAgent: AgentId =
@@ -91,6 +98,11 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
     ? (pathname.split("/")[2] ?? undefined)
     : undefined;
 
+  // Sidebar tabs: conversas | processos
+  const [sidebarTab, setSidebarTab] = useState<"conversas" | "processos">("conversas");
+  const [showNovoForm, setShowNovoForm] = useState(false);
+  const activeProcessoId = isNewChat ? searchParams.get("processo") : null;
+
   const { data: paginatedHistories } = useSWRInfinite<ChatHistory>(
     (pageIndex, prev) =>
       user ? getChatHistoryPaginationKey(pageIndex, prev) : null,
@@ -99,6 +111,12 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
   );
   const { data: creditsData } = useSWR<CreditsData>(
     user ? "/api/credits" : null,
+    fetcher
+  );
+  // Lazy: só busca quando a aba Processos está activa para não desperdiçar
+  // bandwidth em sessões que nunca abrem essa aba.
+  const { data: processos } = useSWR<ProcessoComVerbas[]>(
+    user && !isGuest && sidebarTab === "processos" ? "/api/processos" : null,
     fetcher
   );
 
@@ -120,6 +138,11 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
   const onAgentChange = (id: AgentId) => {
     router.push(`/chat?agent=${encodeURIComponent(id)}`);
     router.refresh();
+  };
+
+  const onProcessoClick = (p: Pick<ProcessoComVerbas, "id" | "fase">) => {
+    const agent = FASE_TO_AGENT[p.fase ?? ""] ?? AGENT_ID_ASSISTJUR_MASTER;
+    router.push(`/chat?agent=${agent}&processo=${p.id}`);
   };
 
   return (
@@ -153,80 +176,171 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
         </Link>
       </div>
 
-      {/* Agentes */}
-      <div className="border-border border-b px-3 py-3 dark:border-white/8">
-        <p className="mb-1.5 px-1 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest dark:text-assistjur-gray">
-          Agentes
-        </p>
-        {AGENT_IDS.map((id) => {
-          const config = getAgentConfig(id);
-          return (
+      {/* Tabs: Conversas | Processos */}
+      {!isGuest && (
+        <div className="flex border-border border-b dark:border-white/8">
+          {(["conversas", "processos"] as const).map((tab) => (
             <button
-              className={`flex w-full items-center gap-2 rounded-md px-2.5 py-[7px] font-medium text-[13px] text-foreground transition-colors dark:text-white ${
-                activeAgent === id
-                  ? "bg-assistjur-purple/15 dark:bg-assistjur-purple-dark"
-                  : "hover:bg-muted dark:hover:bg-white/10"
+              className={`flex-1 py-2 text-[11px] font-medium transition-colors ${
+                sidebarTab === tab
+                  ? "border-assistjur-gold border-b-2 text-assistjur-gold"
+                  : "border-b-2 border-transparent text-muted-foreground hover:text-foreground dark:text-assistjur-gray dark:hover:text-white"
               }`}
-              key={id}
-              onClick={() => onAgentChange(id)}
+              key={tab}
+              onClick={() => { setSidebarTab(tab); setShowNovoForm(false); }}
               type="button"
             >
-              <span
-                aria-hidden
-                className={`h-[7px] w-[7px] shrink-0 rounded-full ${AGENT_DOTS[id]}`}
-              />
-              {config.label}
+              {tab === "conversas" ? "Conversas" : "Processos"}
             </button>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
 
-      {/* Histórico */}
-      <div className="flex-1 overflow-y-auto px-3 py-3">
-        {(
-          [
-            ["Hoje", todayChats],
-            ["Esta semana", weekChats],
-          ] as [string, ChatItem[]][]
-        ).map(([label, items]) =>
-          items.length === 0 ? null : (
-            <div className="mb-3" key={label}>
-              <p className="mb-1 px-1 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest dark:text-assistjur-gray">
-                {label}
-              </p>
-              {items.map((chat: ChatItem) => (
-                <Link href={`/chat/${chat.id}`} key={chat.id}>
-                  <div
-                    className={`flex cursor-pointer items-center gap-2 rounded-md px-2 py-[7px] text-[12.5px] transition-colors ${
-                      activeChatId === chat.id
-                        ? "bg-assistjur-purple/10 text-foreground dark:bg-assistjur-purple-dark dark:text-white"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground dark:text-assistjur-gray-light dark:hover:bg-white/10 dark:hover:text-white"
-                    }`}
-                  >
-                    <svg
-                      aria-hidden
-                      className="h-3 w-3 shrink-0 opacity-50"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      viewBox="0 0 24 24"
-                    >
-                      <title>Chat</title>
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                    </svg>
-                    <span className="min-w-0 flex-1 truncate">
-                      {chat.title}
-                    </span>
-                    <span className="shrink-0 text-[11px] text-muted-foreground dark:text-assistjur-gray">
-                      {chat.timeLabel}
-                    </span>
-                  </div>
-                </Link>
-              ))}
+      {/* ── ABA CONVERSAS ── */}
+      {sidebarTab === "conversas" && (
+        <>
+          {/* Agentes */}
+          <div className="border-border border-b px-3 py-3 dark:border-white/8">
+            <p className="mb-1.5 px-1 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest dark:text-assistjur-gray">
+              Agentes
+            </p>
+            {AGENT_IDS.map((id) => {
+              const config = getAgentConfig(id);
+              return (
+                <button
+                  className={`flex w-full items-center gap-2 rounded-md px-2.5 py-[7px] font-medium text-[13px] text-foreground transition-colors dark:text-white ${
+                    activeAgent === id
+                      ? "bg-assistjur-purple/15 dark:bg-assistjur-purple-dark"
+                      : "hover:bg-muted dark:hover:bg-white/10"
+                  }`}
+                  key={id}
+                  onClick={() => onAgentChange(id)}
+                  type="button"
+                >
+                  <span
+                    aria-hidden
+                    className={`h-[7px] w-[7px] shrink-0 rounded-full ${AGENT_DOTS[id]}`}
+                  />
+                  {config.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Histórico */}
+          <div className="flex-1 overflow-y-auto px-3 py-3">
+            {(
+              [
+                ["Hoje", todayChats],
+                ["Esta semana", weekChats],
+              ] as [string, ChatItem[]][]
+            ).map(([label, items]) =>
+              items.length === 0 ? null : (
+                <div className="mb-3" key={label}>
+                  <p className="mb-1 px-1 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest dark:text-assistjur-gray">
+                    {label}
+                  </p>
+                  {items.map((chat: ChatItem) => (
+                    <Link href={`/chat/${chat.id}`} key={chat.id}>
+                      <div
+                        className={`flex cursor-pointer items-center gap-2 rounded-md px-2 py-[7px] text-[12.5px] transition-colors ${
+                          activeChatId === chat.id
+                            ? "bg-assistjur-purple/10 text-foreground dark:bg-assistjur-purple-dark dark:text-white"
+                            : "text-muted-foreground hover:bg-muted hover:text-foreground dark:text-assistjur-gray-light dark:hover:bg-white/10 dark:hover:text-white"
+                        }`}
+                      >
+                        <svg
+                          aria-hidden
+                          className="h-3 w-3 shrink-0 opacity-50"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          viewBox="0 0 24 24"
+                        >
+                          <title>Chat</title>
+                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                        </svg>
+                        <span className="min-w-0 flex-1 truncate">
+                          {chat.title}
+                        </span>
+                        <span className="shrink-0 text-[11px] text-muted-foreground dark:text-assistjur-gray">
+                          {chat.timeLabel}
+                        </span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ── ABA PROCESSOS ── */}
+      {sidebarTab === "processos" && (
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {/* Header da aba */}
+          <div className="flex items-center justify-between border-border border-b px-3 py-2 dark:border-white/8">
+            <p className="font-semibold text-[10px] text-muted-foreground uppercase tracking-widest dark:text-assistjur-gray">
+              {processos ? `${processos.length} processo${processos.length !== 1 ? "s" : ""}` : "Processos"}
+            </p>
+            {!showNovoForm && (
+              <button
+                className="rounded px-1.5 py-0.5 text-[11px] text-assistjur-gold hover:bg-assistjur-gold/10"
+                onClick={() => setShowNovoForm(true)}
+                type="button"
+              >
+                + Novo
+              </button>
+            )}
+          </div>
+
+          {/* Formulário novo processo */}
+          {showNovoForm && (
+            <div className="border-border border-b px-3 py-3 dark:border-white/8">
+              <NovoProcessoForm
+                onCancel={() => setShowNovoForm(false)}
+                onCreated={(p) => {
+                  mutate("/api/processos");
+                  setShowNovoForm(false);
+                  onProcessoClick(p);
+                }}
+              />
             </div>
-          )
-        )}
-      </div>
+          )}
+
+          {/* Lista de processos */}
+          <div className="flex-1 space-y-1.5 overflow-y-auto px-3 py-2">
+            {!processos && (
+              <p className="py-6 text-center text-[11px] text-muted-foreground dark:text-assistjur-gray">
+                Carregando…
+              </p>
+            )}
+            {processos && processos.length === 0 && !showNovoForm && (
+              <div className="py-8 text-center">
+                <p className="text-[12px] text-muted-foreground dark:text-assistjur-gray-light">
+                  Nenhum processo ainda.
+                </p>
+                <button
+                  className="mt-2 text-[11px] text-assistjur-gold hover:underline"
+                  onClick={() => setShowNovoForm(true)}
+                  type="button"
+                >
+                  + Adicionar primeiro processo
+                </button>
+              </div>
+            )}
+            {processos?.map((p) => (
+              <ProcessoCard
+                isActive={activeProcessoId === p.id}
+                key={p.id}
+                onClick={() => onProcessoClick(p)}
+                processo={p}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Créditos */}
       <div className="border-border border-t px-3 py-2.5 dark:border-white/8">

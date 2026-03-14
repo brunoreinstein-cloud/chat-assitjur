@@ -69,6 +69,8 @@ export const postRequestBodySchema = z
         z.string().uuid(),
       ])
       .optional(),
+    /** ID do processo trabalhista vinculado a este chat (opcional). */
+    processoId: z.string().uuid().optional(),
   })
   .refine(
     (data) => data.message !== undefined || (data.messages?.length ?? 0) > 0,

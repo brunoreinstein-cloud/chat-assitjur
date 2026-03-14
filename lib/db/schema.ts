@@ -24,6 +24,60 @@ export const user = pgTable("User", {
 
 export type User = InferSelectModel<typeof user>;
 
+/**
+ * Processos trabalhistas: registo de cada processo associado ao utilizador.
+ * Permite gerir risco, verbas e fase do pipeline (Recebimento → Protocolo).
+ */
+export const processo = pgTable(
+  "Processo",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /** Número do processo no formato CNJ: 0000000-00.0000.5.00.0000 */
+    numeroAutos: varchar("numeroAutos", { length: 64 }).notNull(),
+    reclamante: varchar("reclamante", { length: 256 }).notNull(),
+    reclamada: varchar("reclamada", { length: 256 }).notNull(),
+    vara: varchar("vara", { length: 256 }),
+    comarca: varchar("comarca", { length: 128 }),
+    tribunal: varchar("tribunal", { length: 64 }),
+    /** ordinario | sumarissimo */
+    rito: varchar("rito", { length: 32 }),
+    /** Fase atual do pipeline: recebimento | analise_risco | estrategia | elaboracao | revisao | protocolo */
+    fase: varchar("fase", { length: 32 }),
+    /** Classificação global de risco: provavel | possivel | remoto */
+    riscoGlobal: varchar("riscoGlobal", { length: 16 }),
+    valorCausa: varchar("valorCausa", { length: 32 }),
+    provisao: varchar("provisao", { length: 32 }),
+    prazoFatal: timestamp("prazoFatal"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdCreatedAtIdx: index("Processo_userId_createdAt_idx").on(
+      table.userId,
+      table.createdAt
+    ),
+  })
+);
+
+export type Processo = InferSelectModel<typeof processo>;
+
+/** Verbas do processo com classificação de risco individual. */
+export const verbaProcesso = pgTable("VerbaProcesso", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  processoId: uuid("processoId")
+    .notNull()
+    .references(() => processo.id, { onDelete: "cascade" }),
+  verba: varchar("verba", { length: 256 }).notNull(),
+  /** provavel | possivel | remoto */
+  risco: varchar("risco", { length: 16 }).notNull(),
+  valorMin: integer("valorMin"),
+  valorMax: integer("valorMax"),
+});
+
+export type VerbaProcesso = InferSelectModel<typeof verbaProcesso>;
+
 export const chat = pgTable(
   "Chat",
   {
@@ -40,6 +94,10 @@ export const chat = pgTable(
     activeStreamId: text("activeStreamId"),
     /** Agente do chat: built-in (revisor-defesas, redator-contestacao) ou UUID de agente personalizado. Default revisor-defesas. */
     agentId: varchar("agentId", { length: 64 }).default("revisor-defesas"),
+    /** Processo associado a este chat (opcional). SET NULL ao apagar o processo. */
+    processoId: uuid("processoId").references(() => processo.id, {
+      onDelete: "set null",
+    }),
   },
   (table) => ({
     /** GET /api/history: listar chats por userId ordenados por createdAt DESC. */
