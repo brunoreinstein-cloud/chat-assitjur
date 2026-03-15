@@ -9,13 +9,6 @@ import { pingDatabase } from "@/lib/db/queries";
 const HEALTH_DB_TIMEOUT_MS = process.env.VERCEL === "1" ? 30_000 : 15_000;
 
 /**
- * Timeout máximo do health check (ms).
- * Em produção o cold start da BD (Supabase/Neon) pode levar 10–30s; 30s evita 503 no primeiro pedido.
- * Em dev, 15s cobre connect_timeout (10s) + margem.
- */
-const HEALTH_DB_TIMEOUT_MS = process.env.VERCEL === "1" ? 30_000 : 15_000;
-
-/**
  * GET /api/health/db — Healthcheck da base de dados no mesmo processo que serve o chat.
  * Valida POSTGRES_URL e que a BD responde (SELECT 1). Não exige autenticação (para monitores).
  *

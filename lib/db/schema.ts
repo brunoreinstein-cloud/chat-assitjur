@@ -489,3 +489,16 @@ export const userMemory = pgTable(
 );
 
 export type UserMemory = InferSelectModel<typeof userMemory>;
+
+// ─── Leads (LP / página de captura) ─────────────────────────────────────────
+
+export const lead = pgTable("Lead", {
+  id: uuid("id").primaryKey().notNull().defaultRandom(),
+  name: varchar("name", { length: 256 }).notNull(),
+  email: varchar("email", { length: 256 }).notNull(),
+  phone: varchar("phone", { length: 32 }),
+  area: varchar("area", { length: 128 }),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+});
+
+export type Lead = InferSelectModel<typeof lead>;
