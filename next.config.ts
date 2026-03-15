@@ -18,8 +18,10 @@ const nextConfig: NextConfig = {
   },
   // OCR (PDF digitalizado): evita bundle de tesseract.js e @napi-rs/canvas
   serverExternalPackages: ["tesseract.js", "@napi-rs/canvas"],
-  // Raiz apontada para o repo principal para o junction de node_modules funcionar no worktree
-  turbopack: { root: path.resolve(process.cwd(), "../../..") },
+  // Turbopack root: apontar para a raiz do repo para resolver symlinks/junctions em worktrees.
+  // outputFileTracingRoot deve ter o mesmo valor para evitar warnings no build.
+  outputFileTracingRoot: path.resolve(import.meta.dirname),
+  turbopack: { root: path.resolve(import.meta.dirname) },
   images: {
     remotePatterns: [
       {
