@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "next-dev",
+      "runtimeExecutable": "cmd.exe",
+      "runtimeArgs": ["/c", "set BASELINE_BROWSER_MAPPING_IGNORE_OLD_DATA=true && node_modules\\.bin\\next dev --turbo"],
+      "port": 3300,
+      "autoPort": true
+    },
+    {
+      "name": "drizzle-studio",
+      "runtimeExecutable": "cmd.exe",
+      "runtimeArgs": ["/c", "node_modules\\.bin\\drizzle-kit studio"],
+      "port": 4983
+    }
+  ]
+}

@@ -5,6 +5,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
 import { extractDocumentMetadata } from "@/lib/ai/extract-metadata";
+import {
+  MIN_SIZE_TO_OPTIMIZE,
+  optimizePdfBuffer,
+} from "@/lib/pdf/pdf-optimizer";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 /** PDFs enormes (muitas páginas ou OCR) podem demorar; permite até 5 min na Vercel (Pro). */
@@ -928,13 +932,38 @@ async function handleUploadFormData(
 
   const filename =
     (file instanceof File ? file.name : undefined) ?? "documento";
-  const fileBuffer = await file.arrayBuffer();
-  const bufferForStorage = fileBuffer.slice(0);
+  let fileBuffer = await file.arrayBuffer();
   const rawType = file.type;
   const contentType =
     rawType === "" || rawType === OCTET_STREAM
       ? contentTypeFromFilename(filename)
       : rawType;
+
+  // Otimizar PDF via Ghostscript antes de extrair texto e armazenar.
+  // Reduz tamanho de PDFs digitalizados (scanned) comuns em processos trabalhistas.
+  if (
+    contentType === ACCEPTED_PDF_TYPE &&
+    fileBuffer.byteLength > MIN_SIZE_TO_OPTIMIZE
+  ) {
+    const optimized = await optimizePdfBuffer(
+      Buffer.from(fileBuffer),
+      filename,
+      { mode: "ebook" }
+    );
+    if (optimized.success && optimized.reductionPercent > 0) {
+      fileBuffer = optimized.outputBuffer.buffer.slice(
+        optimized.outputBuffer.byteOffset,
+        optimized.outputBuffer.byteOffset + optimized.outputBuffer.byteLength
+      ) as ArrayBuffer;
+      if (isDev) {
+        console.info(
+          `[upload] PDF otimizado: ${filename} (-${optimized.reductionPercent}%) em ${optimized.durationMs}ms`
+        );
+      }
+    }
+  }
+
+  const bufferForStorage = fileBuffer.slice(0);
 
   const extractionPromise = needsExtraction(contentType)
     ? runExtractionAndClassification(fileBuffer, contentType)

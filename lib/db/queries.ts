@@ -32,6 +32,7 @@ import {
   knowledgeChunk,
   knowledgeDocument,
   knowledgeFolder,
+  lead,
   llmUsageRecord,
   message,
   type Processo,
@@ -2180,4 +2181,22 @@ export async function linkProcessoToChat({
   } catch {
     // Ignorar falha de vinculação processo↔chat
   }
+}
+
+// ─── Leads (LP) ───────────────────────────────────────────────────────────────
+
+export async function saveLead(data: {
+  name: string;
+  email: string;
+  phone?: string | null;
+  area?: string | null;
+}) {
+  await getDb()
+    .insert(lead)
+    .values({
+      name: data.name,
+      email: data.email,
+      phone: data.phone ?? null,
+      area: data.area ?? null,
+    });
 }
