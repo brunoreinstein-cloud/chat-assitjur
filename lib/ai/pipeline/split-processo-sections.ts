@@ -61,7 +61,8 @@ const SECTION_PATTERNS: Array<{
   },
   {
     label: "Procuração / Documentos Iniciais",
-    pattern: /\b(?:PROCURA[ÇC][ÃA]O|SUBSTABELECIMENTO|CARTA\s+DE\s+PREPOSTO)\b/i,
+    pattern:
+      /\b(?:PROCURA[ÇC][ÃA]O|SUBSTABELECIMENTO|CARTA\s+DE\s+PREPOSTO)\b/i,
     phaseType: "identificacao",
   },
   {
@@ -92,8 +93,7 @@ const SECTION_PATTERNS: Array<{
   },
   {
     label: "Sentença",
-    pattern:
-      /\b(?:SENTEN[ÇC]A|DECIS[ÃA]O|VISTOS|ISTO\s+POSTO|DISPOSITIVO)\b/i,
+    pattern: /\b(?:SENTEN[ÇC]A|DECIS[ÃA]O|VISTOS|ISTO\s+POSTO|DISPOSITIVO)\b/i,
     phaseType: "sentenca",
   },
   {
@@ -127,8 +127,7 @@ const SECTION_PATTERNS: Array<{
   },
   {
     label: "Penhora / Bloqueio / Alvará",
-    pattern:
-      /\b(?:PENHORA|BLOQUEIO|ALVAR[ÁA]|BACENJUD|RENAJUD)\b/i,
+    pattern: /\b(?:PENHORA|BLOQUEIO|ALVAR[ÁA]|BACENJUD|RENAJUD)\b/i,
     phaseType: "execucao",
   },
   // --- Fim padrões de Execução ---
@@ -153,10 +152,11 @@ const SECTION_PATTERNS: Array<{
 function findPageAtOffset(text: string, offset: number): number {
   const PAGE_RE = /\[Pag\.\s*(\d+)\]/g;
   let page = 1;
-  let match: RegExpExecArray | null;
-  while ((match = PAGE_RE.exec(text)) !== null) {
-    if (match.index > offset) break;
-    page = parseInt(match[1], 10);
+  for (const match of text.matchAll(PAGE_RE)) {
+    if (match.index > offset) {
+      break;
+    }
+    page = Number.parseInt(match[1], 10);
   }
   return page;
 }
@@ -165,10 +165,11 @@ function findPageAtOffset(text: string, offset: number): number {
 function findMaxPage(text: string): number {
   const PAGE_RE = /\[Pag\.\s*(\d+)\]/g;
   let max = 1;
-  let match: RegExpExecArray | null;
-  while ((match = PAGE_RE.exec(text)) !== null) {
-    const p = parseInt(match[1], 10);
-    if (p > max) max = p;
+  for (const match of text.matchAll(PAGE_RE)) {
+    const p = Number.parseInt(match[1], 10);
+    if (p > max) {
+      max = p;
+    }
   }
   return max;
 }
@@ -183,15 +184,18 @@ function findMaxPage(text: string): number {
  */
 export function splitIntoSections(fullText: string): ProcessoSection[] {
   // 1. Encontrar todas as ocorrências de marcos processuais
-  const markers: Array<{ label: string; offset: number; phaseType: PhaseType }> = [];
+  const markers: Array<{
+    label: string;
+    offset: number;
+    phaseType: PhaseType;
+  }> = [];
 
   for (const { label, pattern, phaseType } of SECTION_PATTERNS) {
     const global = new RegExp(pattern.source, "gi");
-    let match: RegExpExecArray | null;
-    while ((match = global.exec(fullText)) !== null) {
+    for (const match of fullText.matchAll(global)) {
       // Evitar duplicatas muito próximas (<500 chars) do mesmo label
       const isDuplicate = markers.some(
-        (m) => m.label === label && Math.abs(m.offset - match!.index) < 500
+        (m) => m.label === label && Math.abs(m.offset - match.index) < 500
       );
       if (!isDuplicate) {
         markers.push({ label, offset: match.index, phaseType });
@@ -231,7 +235,8 @@ export function splitIntoSections(fullText: string): ProcessoSection[] {
 
   for (let i = 0; i < markers.length; i++) {
     const start = markers[i].offset;
-    const end = i + 1 < markers.length ? markers[i + 1].offset : fullText.length;
+    const end =
+      i + 1 < markers.length ? markers[i + 1].offset : fullText.length;
     const sectionText = fullText.slice(start, end);
     sections.push({
       label: markers[i].label,
@@ -255,7 +260,7 @@ export function splitIntoSections(fullText: string): ProcessoSection[] {
  */
 export function mergeSectionsIntoBlocks(
   sections: ProcessoSection[],
-  targetBlocks: number = 6
+  targetBlocks = 6
 ): ProcessoBlock[] {
   if (sections.length <= targetBlocks) {
     // Cada secção vira um bloco
@@ -280,7 +285,10 @@ export function mergeSectionsIntoBlocks(
     currentChars += section.text.length;
 
     // Fechar bloco se atingiu tamanho alvo ou se é uma secção "âncora"
-    const isAnchor = /Sentença|Acórdão|Cálculos|Laudo|Ata de Audiência|Embargos à Execução/i.test(section.label);
+    const isAnchor =
+      /Sentença|Acórdão|Cálculos|Laudo|Ata de Audiência|Embargos à Execução/i.test(
+        section.label
+      );
     if (currentChars >= targetCharsPerBlock || isAnchor) {
       blocks.push(buildBlock(currentSections));
       currentSections = [];
@@ -292,11 +300,13 @@ export function mergeSectionsIntoBlocks(
   if (currentSections.length > 0) {
     // Fundir com último bloco se for pequeno, senão criar novo
     if (blocks.length > 0 && currentChars < targetCharsPerBlock * 0.3) {
+      // biome-ignore lint/style/useAtIndex: length already checked
       const lastBlock = blocks[blocks.length - 1];
       lastBlock.sections.push(...currentSections);
-      lastBlock.text += "\n\n" + currentSections.map((s) => s.text).join("\n\n");
-      lastBlock.label += " + " + currentSections.map((s) => s.label).join(" + ");
+      lastBlock.text += `\n\n${currentSections.map((s) => s.text).join("\n\n")}`;
+      lastBlock.label += ` + ${currentSections.map((s) => s.label).join(" + ")}`;
       lastBlock.pageRange[1] =
+        // biome-ignore lint/style/useAtIndex: length already checked
         currentSections[currentSections.length - 1].endPage;
     } else {
       blocks.push(buildBlock(currentSections));
@@ -327,10 +337,8 @@ function buildBlock(sections: ProcessoSection[]): ProcessoBlock {
     label: labels.join(" + "),
     sections,
     text: sections.map((s) => s.text).join("\n\n"),
-    pageRange: [
-      sections[0].startPage,
-      sections[sections.length - 1].endPage,
-    ],
+    // biome-ignore lint/style/useAtIndex: length already checked
+    pageRange: [sections[0].startPage, sections[sections.length - 1].endPage],
     primaryPhase,
   };
 }

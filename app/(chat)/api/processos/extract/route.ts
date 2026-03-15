@@ -15,7 +15,7 @@ export const maxDuration = 60;
 /** Opções padrão para getDocumentProxy — resolve warning de standardFontDataUrl. */
 const PDFJS_OPTIONS = {
   standardFontDataUrl: pathToFileURL(
-    join(process.cwd(), "node_modules", "pdfjs-dist", "standard_fonts") + "/"
+    `${join(process.cwd(), "node_modules", "pdfjs-dist", "standard_fonts")}/`
   ).href,
 };
 

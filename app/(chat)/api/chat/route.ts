@@ -50,12 +50,12 @@ import {
   buildKnowledgeContext,
   resolveEffectiveKnowledgeIds,
 } from "@/lib/ai/resolve-knowledge-ids";
+import { analyzeProcessoPipeline } from "@/lib/ai/tools/analyze-processo-pipeline";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { createRedatorContestacaoDocument } from "@/lib/ai/tools/create-redator-contestacao-document";
 import { createRevisorDefesaDocuments } from "@/lib/ai/tools/create-revisor-defesa-documents";
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import { requestApproval } from "@/lib/ai/tools/human-in-the-loop";
-import { analyzeProcessoPipeline } from "@/lib/ai/tools/analyze-processo-pipeline";
 import { improvePromptTool } from "@/lib/ai/tools/improve-prompt";
 import { createMemoryTools } from "@/lib/ai/tools/memory";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
@@ -306,9 +306,10 @@ function truncateDocumentText(
 function findLastPageMarker(text: string, maxPos: number): number {
   const PAGE_MARKER_RE = /\[Pag\.\s*\d+\]/g;
   let lastMarkerStart = maxPos;
-  let match: RegExpExecArray | null;
-  while ((match = PAGE_MARKER_RE.exec(text)) !== null) {
-    if (match.index > maxPos) break;
+  for (const match of text.matchAll(PAGE_MARKER_RE)) {
+    if (match.index > maxPos) {
+      break;
+    }
     lastMarkerStart = match.index;
   }
   // Se encontrou marcador e está razoavelmente perto do limite (>80%), usar

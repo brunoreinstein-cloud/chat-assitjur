@@ -9,6 +9,7 @@
   },
   "files": {
     "includes": [
+      "!!docs",
       "!!.claude",
       "!!**/.claude",
       "!!.pnpm-store",
