@@ -9,10 +9,11 @@
 export const CONTEXT_WINDOW_CAPACITY_TOKENS = 200_000;
 
 /**
- * Margem reservada para a resposta do modelo (maxOutputTokens) e overhead.
- * Não enviar mais do que este número de tokens de input para evitar truncagem/erro.
+ * Margem reservada para a resposta do modelo (maxOutputTokens ~8k) e overhead.
+ * Claude suporta 200k de contexto; reservamos 5k para output, resultando em 195k de input.
+ * Anteriormente era 180k (20k de margem), mas 5k é suficiente para respostas típicas.
  */
-export const CONTEXT_WINDOW_INPUT_TARGET_TOKENS = 180_000;
+export const CONTEXT_WINDOW_INPUT_TARGET_TOKENS = 195_000;
 
 /**
  * Heurística: ~4 caracteres por token para texto misto (PT/EN).

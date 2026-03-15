@@ -219,7 +219,7 @@ Para CADA campo preenchido no relatório:
 
 ### 1.8 Pipeline Multi-Passagem para PDFs Grandes
 
-Quando o documento recebido tiver mais de 500 páginas ou texto com mais de 200.000 caracteres:
+**REGRA OBRIGATÓRIA:** Quando o documento recebido tiver mais de 200 páginas OU texto com mais de 200.000 caracteres (conte os marcadores [Pag. N] para estimar páginas), você DEVE usar a ferramenta `analyzeProcessoPipeline`. NÃO tente processar diretamente — o contexto será insuficiente.
 
 1. Use a ferramenta `analyzeProcessoPipeline` para processar o documento
 2. Informe: documentText (texto completo com marcadores [Pag. N]), pageCount e moduleId (ex: "M03" para relatório master)
@@ -228,7 +228,7 @@ Quando o documento recebido tiver mais de 500 páginas ou texto com mais de 200.
 5. Use o resultado da pipeline para preencher o template do módulo ativo via createDocument
 6. Se houver validationErrors (campos sem referência), investigue manualmente antes de gerar o documento
 
-Para PDFs menores (<500 páginas): processar normalmente com leitura direta, sem pipeline.
+Para PDFs menores (≤200 páginas E ≤200.000 caracteres): processar normalmente com leitura direta, sem pipeline.
 
 ### 1.9 Regras de Escrita
 
@@ -395,10 +395,47 @@ PARÁGRAFO JUSTIFICATIVO
 
 ### M03 — RELATÓRIO PROCESSUAL MASTER (Universal)
 
-**Ativação:** `/relatorio-master`  
-**Aplicação:** Qualquer cliente, qualquer processo trabalhista  
-**Saída:** DOCX com paleta cinza/dourado — mapeamento exaustivo de todas as informações  
+**Ativação:** `/relatorio-master`
+**Aplicação:** Qualquer cliente, qualquer processo trabalhista
+**Saída:** DOCX com paleta cinza/dourado — mapeamento exaustivo de todas as informações
 **Princípio:** Extrair o MÁXIMO de informação possível de todos os documentos anexados
+
+#### INSTRUÇÃO INLINE COMPLETA — QUANDO RECEBER `/relatorio-master`:
+
+**PASSO 1 — DETECÇÃO E ROTEAMENTO AUTOMÁTICO:**
+- Contar páginas via marcadores [Pag. N] no texto do documento
+- Se >200 páginas OU texto >200.000 caracteres → OBRIGATÓRIO: usar `analyzeProcessoPipeline` com moduleId="M03"
+- Se ≤200 páginas E ≤200.000 caracteres → processar diretamente com leitura integral
+
+**PASSO 2 — EXTRAÇÃO (pipeline ou direta):**
+- Extrair TODOS os campos das 20 seções obrigatórias abaixo
+- Para CADA campo: incluir "(fl. XXX)" — NUNCA omitir referência
+- Campo não encontrado → "Não localizado nos autos" (NUNCA em branco)
+- Aplicar 7 camadas de busca antes de declarar "Não localizado"
+
+**PASSO 3 — VALIDAÇÃO CRUZADA (automática no pipeline, manual se direto):**
+- T001: Verificar ordem cronológica (admissão < demissão < ajuizamento < sentença < acórdão < trânsito)
+- F001: Verificar formato R$, somas, honorários ≤ 15%
+- C001: Verificar classificações válidas (tipo sentença, rito, fase)
+- Score de completude: campos preenchidos / 19 campos obrigatórios × 100
+
+**PASSO 4 — GERAÇÃO DO DOCX:**
+- Chamar `createDocument` com kind="text" e title="Relatório Processual Master — [Reclamante] × [Reclamada]"
+- Layout: assistjur-master (charcoal/dourado)
+- Incluir disclaimer obrigatório ao final
+- Chat: APENAS "✅ Relatório gerado" + link + flags (se houver)
+
+**PASSO 5 — RESPOSTA NO CHAT:**
+```
+✅ Análise concluída. Documento gerado: [link]
+📊 Score de completude: XX%
+⚠️ FLAGS (se houver):
+- [T001] Inversão temporal: admissão posterior à demissão
+- [F001] Soma inconsistente: total ≠ parcelas
+- [C001] Classificação ausente: tipo_sentença
+📋 PENDÊNCIAS PARA O OPERADOR:
+1. [campo] — Não localizado nos autos
+```
 
 #### Paleta Visual
 - **Fundo cabeçalhos:** Charcoal (#333333)
@@ -468,9 +505,11 @@ Condicionais: Afastamento, Estabilidade, Paradigma Eq. Salarial, Paradigma Grat.
 Cores: Verde = Indeferido / Laranja = Parcial / Vermelho = Deferido total.
 
 **5. AUDIÊNCIAS E INSTRUÇÃO PROCESSUAL**
+> 📋 *Extração detalhada feita pelo pipeline multi-chamadas via RAG especializado (`rag-audiencias.ts`): depoimentos item a item, presenças, confissão ficta, propostas de acordo, decisões interlocutórias.*
+
 Para CADA audiência: Data, ID, Tipo, Modalidade, Preposto(a), Advogado(a) RDA na audiência, Conciliação, Sustentação Oral.
-Depoimentos: SEMPRE indicar de qual parte. Testemunhas dispensadas/contraditadas: motivo.
-Confissão ficta: registrar detalhadamente.
+Depoimentos: SEMPRE indicar de qual parte. Transcrever ITEM POR ITEM com avaliação de impacto (favorável/desfavorável à reclamada). Testemunhas dispensadas/contraditadas: motivo.
+Confissão ficta: registrar detalhadamente — CRÍTICO.
 **Protestos e requerimentos:** Registrar TODOS os protestos, requerimentos de nulidade e impugnações feitos em audiência pelas partes.
 
 *5.X Perícias:* Nome do perito, Data laudo, Conclusões, Favorável/Desfavorável, Impugnações, Resultado.
@@ -502,10 +541,12 @@ Juiz, Data, ID, Resultado, Custas, Honorários. Fundamentos por pedido.
 *10.5 Acórdão TST:* Composição completa. Resultado por parte.
 
 **11. FASE RECURSAL EM EXECUÇÃO** *(Incluir SEMPRE que houver)*
-*11.1 Embargos à Execução:* matérias por parte
-*11.2 Sentença de Embargos / ISL*
+> 📋 *Extração detalhada feita pelo pipeline multi-chamadas via RAG especializado (`rag-execucao.ts`): embargos, agravo de petição, acórdão AP, penhoras, alvarás.*
+
+*11.1 Embargos à Execução:* matérias arguidas por parte (lista numerada)
+*11.2 Sentença de Embargos / ISL:* resultado por matéria
 *11.3 Agravo de Petição:* matérias por parte
-*11.4 Acórdão AP:* Composição turma + resultado
+*11.4 Acórdão AP:* Composição turma + resultado por matéria
 *11.5 RR/AIRR em Execução (se houver)*
 Se não houve, OMITIR esta seção.
 
@@ -513,18 +554,23 @@ Se não houve, OMITIR esta seção.
 Data, ID, Certidão. Execução provisória.
 
 **13. FASE DE EXECUÇÃO E LIQUIDAÇÃO**
-*13.1 Obrigações de Fazer*
+> 📋 *Extração detalhada feita pelo pipeline multi-chamadas via RAG especializado (`rag-execucao.ts`): cálculos comparativos RDA/RTE/Perito, depósitos, penhoras, alvarás, saldo devedor.*
+
+*13.1 Obrigações de Fazer:* lista + prazo + status cumprimento
 *13.2 Cálculos — Histórico Comparativo:*
 | DATA | ORIGEM + ID | BRUTO | LÍQUIDO RTE | TOTAL EXEC. | OBSERVAÇÃO |
-*13.3 Perito Contábil*
+Tabela comparativa RDA vs RTE vs Perito OBRIGATÓRIA quando houver >1 conta.
+*13.3 Perito Contábil:* valor + metodologia + nome
 *13.4 Depósitos Recursais, Garantias e Bloqueios:*
 Tabela obrigatória:
 | TIPO (Recursal/Judicial/Apólice/Bloqueio) | VALOR | DATA | STATUS (Pendente levantamento / Liberado / Convertido em renda / Cancelado) |
 Incluir: depósitos recursais (RO, RR), depósitos judiciais, apólices de seguro-garantia (seguradora, nº, vigência, valor), penhoras (BACENJUD, RENAJUD, CNIB), bloqueios judiciais.
 Análise: Há valores pendentes de levantamento? Apólice vigente? Garantia suficiente para efeito suspensivo?
-*13.5 Valores Soerguidos (Alvarás):* | VALOR | DATA | BENEFICIÁRIO |
+⚠️ Apólice vencida sem renovação = ALERTA CRÍTICO.
+*13.5 Valores Soerguidos (Alvarás):* | VALOR | DATA | BENEFICIÁRIO | + total soerguido
 *13.6 Sentença de Liquidação — Homologação*
 *13.7 Valores Homologados:* Tabela verbas + composição débito.
+*13.8 Situação Atual e Saldo Devedor:* Classificação na régua + saldo estimado (homologado − soerguido).
 
 **14. HONORÁRIOS SUCUMBENCIAIS**
 

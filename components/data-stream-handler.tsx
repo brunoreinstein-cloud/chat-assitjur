@@ -4,7 +4,9 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
+import type { PipelineDashboardData } from "@/components/pipeline-quality-dashboard";
 import { initialArtifactData, useArtifact } from "@/hooks/use-artifact";
+import { setPipelineDashboardData } from "@/lib/pipeline-dashboard-store";
 import { storeRevisorDoc } from "@/lib/revisor-content-store";
 import {
   resetRevisorProgress,
@@ -82,6 +84,22 @@ export function DataStreamHandler() {
       if (delta.type === "data-generationStatus") {
         const msg = delta.data as string;
         toast.info(msg, { duration: 4000, id: "revisor-generation-status" });
+        continue;
+      }
+      if (delta.type === "data-pipeline-dashboard") {
+        try {
+          const parsed = JSON.parse(
+            delta.data as string
+          ) as PipelineDashboardData;
+          setPipelineDashboardData(parsed);
+        } catch {
+          // ignore malformed JSON
+        }
+        continue;
+      }
+      if (delta.type === "data-pipeline-progress") {
+        const msg = delta.data as string;
+        toast.info(msg, { duration: 5000, id: "pipeline-progress" });
         continue;
       }
       if (delta.type === "data-revisorProgress") {

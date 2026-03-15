@@ -1,13 +1,25 @@
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { put } from "@vercel/blob";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-
 import { auth } from "@/app/(auth)/auth";
 import { extractDocumentMetadata } from "@/lib/ai/extract-metadata";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 /** PDFs enormes (muitas páginas ou OCR) podem demorar; permite até 5 min na Vercel (Pro). */
 export const maxDuration = 300;
+
+/**
+ * Opções padrão para getDocumentProxy (unpdf).
+ * Configura standardFontDataUrl para eliminar o warning
+ * "Ensure that the standardFontDataUrl API parameter is provided".
+ */
+const PDFJS_OPTIONS = {
+  standardFontDataUrl: pathToFileURL(
+    `${join(process.cwd(), "node_modules", "pdfjs-dist", "standard_fonts")}/`
+  ).href,
+};
 
 const SUPABASE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET ?? "chat-files";
 
@@ -80,7 +92,7 @@ export function contentTypeFromFilename(filename: string): string {
   }
   return OCTET_STREAM;
 }
-const MAX_EXTRACTED_TEXT_LENGTH = 600_000; // ~600k caracteres (PI + Contestação grandes)
+const MAX_EXTRACTED_TEXT_LENGTH = 1_500_000; // ~1.5M chars — processos trabalhistas grandes (500+ págs). Schema aceita 2M.
 /** Máximo de páginas a processar por OCR (PDFs digitalizados). PDFs enormes: pode demorar; maxDuration na rota permite até 5 min. */
 const MAX_OCR_PAGES = 50;
 
@@ -292,14 +304,13 @@ async function extractTextFromPdfUnpdf(
 ): Promise<{ text: string; pageCount: number }> {
   const { extractText, getDocumentProxy } = await import("unpdf");
   const data = new Uint8Array(buffer);
-  const pdf = await getDocumentProxy(data);
+  const pdf = await getDocumentProxy(data, PDFJS_OPTIONS);
   const numPages = (pdf as { numPages: number }).numPages;
   // mergePages: false → retorna string[] (uma por página)
   const result = await extractText(pdf, { mergePages: false });
   const pages = Array.isArray(result.text) ? result.text : [result.text];
   const marked = pages.map(
-    (p, i) =>
-      `[Pag. ${i + 1}]\n${typeof p === "string" ? p : ""}`
+    (p, i) => `[Pag. ${i + 1}]\n${typeof p === "string" ? p : ""}`
   );
   return { text: marked.join("\n\n"), pageCount: numPages };
 }
@@ -313,7 +324,7 @@ async function extractTextFromPdfFallback(
   buffer: ArrayBuffer
 ): Promise<{ text: string; pageCount: number }> {
   const { getDocumentProxy } = await import("unpdf");
-  const pdf = await getDocumentProxy(new Uint8Array(buffer));
+  const pdf = await getDocumentProxy(new Uint8Array(buffer), PDFJS_OPTIONS);
   const numPages = (pdf as { numPages: number }).numPages;
   if (numPages <= 0) {
     return { text: "", pageCount: 0 };
@@ -346,7 +357,7 @@ async function extractTextFromPdfWithOcr(
 ): Promise<{ text: string; pageCount: number }> {
   const { getDocumentProxy, renderPageAsImage } = await import("unpdf");
   const data = new Uint8Array(buffer);
-  const pdf = await getDocumentProxy(data);
+  const pdf = await getDocumentProxy(data, PDFJS_OPTIONS);
   const numPages = (pdf as { numPages: number }).numPages;
   const pagesToProcess = Math.min(numPages, MAX_OCR_PAGES);
   if (pagesToProcess <= 0) {
@@ -388,9 +399,10 @@ async function extractTextFromPdfWithOcr(
 
   const text = parts.join("\n\n");
   return {
-    text: text.length > MAX_EXTRACTED_TEXT_LENGTH
-      ? `${text.slice(0, MAX_EXTRACTED_TEXT_LENGTH)}\n\n[... texto truncado ...]`
-      : text,
+    text:
+      text.length > MAX_EXTRACTED_TEXT_LENGTH
+        ? `${text.slice(0, MAX_EXTRACTED_TEXT_LENGTH)}\n\n[... texto truncado ...]`
+        : text,
     pageCount: numPages,
   };
 }
@@ -401,12 +413,18 @@ interface ExtractPdfResult {
   lastError?: string;
 }
 
-/** Suprime avisos do PDF.js (ex.: "TT: undefined function") durante a extração. */
+/** Suprime avisos do PDF.js (ex.: "TT: undefined function", "Type3 font resource") durante a extração. */
 async function withPdfWarningsSuppressed<T>(fn: () => Promise<T>): Promise<T> {
   const originalWarn = console.warn;
   console.warn = (...args: unknown[]) => {
     const msg = args[0];
-    if (typeof msg === "string" && msg.includes("TT:")) {
+    if (
+      typeof msg === "string" &&
+      (msg.includes("TT:") ||
+        msg.includes("Type3 font") ||
+        msg.includes("standardFontDataUrl") ||
+        msg.includes("UnknownErrorException"))
+    ) {
       return;
     }
     originalWarn.apply(console, args);
@@ -424,40 +442,68 @@ async function extractTextFromPdf(
   let text = "";
   let pageCount = 0;
   let lastError: string | undefined;
+
+  const t0 = Date.now();
+
+  // Reutilizar o mesmo buffer (sem .slice(0) desnecessário) — poupa memória em PDFs grandes
   try {
     const r = await withPdfWarningsSuppressed(() =>
-      extractTextFromPdfUnpdf(buffer.slice(0))
+      extractTextFromPdfUnpdf(buffer)
     );
     text = r.text;
     pageCount = r.pageCount;
+    if (isDev) {
+      console.log(
+        `[pdf-extract] unpdf: ${Date.now() - t0}ms, ${pageCount} págs, ${text.length} chars`
+      );
+    }
   } catch {
     text = "";
   }
+
   if (text.trim().length === 0) {
+    const t1 = Date.now();
     try {
       const r = await withPdfWarningsSuppressed(() =>
-        extractTextFromPdfFallback(buffer.slice(0))
+        extractTextFromPdfFallback(buffer)
       );
       text = r.text;
       pageCount = r.pageCount;
+      if (isDev) {
+        console.log(
+          `[pdf-extract] fallback: ${Date.now() - t1}ms, ${pageCount} págs, ${text.length} chars`
+        );
+      }
     } catch {
       text = "";
     }
   }
+
   if (text.trim().length === 0) {
+    const t2 = Date.now();
     try {
       const r = await withPdfWarningsSuppressed(() =>
-        extractTextFromPdfWithOcr(buffer.slice(0))
+        extractTextFromPdfWithOcr(buffer)
       );
       text = r.text;
       pageCount = r.pageCount;
+      if (isDev) {
+        console.log(
+          `[pdf-extract] OCR: ${Date.now() - t2}ms, ${pageCount} págs, ${text.length} chars`
+        );
+      }
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
       text = "";
     }
   }
+
   if (text.length > MAX_EXTRACTED_TEXT_LENGTH) {
     text = `${text.slice(0, MAX_EXTRACTED_TEXT_LENGTH)}\n\n[... texto truncado ...]`;
+  }
+
+  if (isDev) {
+    console.log(`[pdf-extract] total: ${Date.now() - t0}ms`);
   }
   return { text, pageCount, lastError };
 }
@@ -608,7 +654,11 @@ async function extractTextByContentType(
 ): Promise<{ text: string; detail?: string; pageCount?: number } | null> {
   if (contentType === ACCEPTED_PDF_TYPE) {
     const result = await extractTextFromPdf(fileBuffer);
-    return { text: result.text, detail: result.lastError, pageCount: result.pageCount };
+    return {
+      text: result.text,
+      detail: result.lastError,
+      pageCount: result.pageCount,
+    };
   }
   if (contentType === ACCEPTED_DOC_TYPE) {
     const text = await extractTextFromDoc(fileBuffer);
@@ -652,7 +702,8 @@ export async function runExtractionAndClassification(
   extractionDetail?: string;
   pageCount?: number;
 }> {
-  let extracted: { text: string; detail?: string; pageCount?: number } | null = null;
+  let extracted: { text: string; detail?: string; pageCount?: number } | null =
+    null;
   try {
     extracted = await extractTextByContentType(fileBuffer, contentType);
   } catch {
@@ -737,10 +788,13 @@ async function uploadToStorage(
   fileBuffer: ArrayBuffer,
   contentType: string
 ): Promise<{ url: string; pathname: string }> {
+  // Clone the buffer before Supabase upload — Supabase SDK may detach the original
+  // ArrayBuffer, making it unusable for the Blob fallback.
+  const bufferForSupabase = fileBuffer.slice(0);
   const uploadResult = await uploadFile(
     userId,
     filename,
-    fileBuffer,
+    bufferForSupabase,
     contentType
   );
   if (uploadResult.ok) {
@@ -755,6 +809,7 @@ async function uploadToStorage(
     );
   }
   try {
+    // Use original fileBuffer (not the detached clone sent to Supabase)
     const data = await put(filename, fileBuffer, { access: "public" });
     return { url: data.url, pathname: data.pathname ?? filename };
   } catch {
@@ -913,7 +968,9 @@ async function handleUploadFormData(
     {
       extractionDetail: extraction.extractionDetail,
       ...(extractedMetadata ? { extractedMetadata } : {}),
-      ...("pageCount" in extraction && extraction.pageCount != null ? { pageCount: extraction.pageCount } : {}),
+      ...("pageCount" in extraction && extraction.pageCount != null
+        ? { pageCount: extraction.pageCount }
+        : {}),
     }
   );
 }

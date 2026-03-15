@@ -67,6 +67,8 @@ export interface CustomUIDataTypes {
   "data-db-fallback": boolean;
   /** Mensagem de progresso do pipeline multi-chamadas (PDFs grandes). */
   "pipeline-progress": string;
+  /** Dashboard de qualidade do pipeline (JSON stringificado com validationScore, blockSummary, etc.) */
+  "pipeline-dashboard": string;
   /** Mensagem de progresso durante geração dos 3 docs Revisor (ex: "Gerando 2/3 — Roteiro Advogado..."). */
   generationStatus: string;
   /** Quantos docs do Revisor já foram gerados e guardados (0–3). */
@@ -126,4 +128,6 @@ export interface Attachment {
   documentType?: DocumentTypeLabel;
   /** true quando o backend não conseguiu extrair texto do PDF/DOCX; utilizador deve colar o texto */
   extractionFailed?: boolean;
+  /** Número de páginas do PDF (quando disponível) */
+  pageCount?: number;
 }
