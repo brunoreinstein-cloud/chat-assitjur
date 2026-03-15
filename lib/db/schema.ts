@@ -371,6 +371,8 @@ export const userFile = pgTable("UserFile", {
   contentType: varchar("contentType", { length: 128 }).notNull(),
   /** Texto extraído em cache; evita re-extração ao converter em conhecimento. */
   extractedTextCache: text("extractedTextCache"),
+  /** Resumo estruturado (markdown) gerado por IA para PI/Contestação; evita perda de dados na truncagem. */
+  structuredSummary: text("structuredSummary"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 });
 

@@ -1,14 +1,25 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
 import { ArrowDownIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useMessages } from "@/hooks/use-messages";
 import type { AgentId } from "@/lib/ai/agents-registry-metadata";
 import type { Vote } from "@/lib/db/schema";
+import {
+  getPipelineDashboardData,
+  subscribePipelineDashboard,
+} from "@/lib/pipeline-dashboard-store";
 import type { Attachment, ChatMessage } from "@/lib/types";
 import { ChatEmptyState } from "./chat-empty-state";
 import { useDataStream } from "./data-stream-provider";
 import { Greeting } from "./greeting";
 import { PreviewMessage, ThinkingMessage } from "./message";
+import { PipelineQualityDashboard } from "./pipeline-quality-dashboard";
 import { RedatorContestacaoHint } from "./redator-contestacao-hint";
 import { RevisorChecklist } from "./revisor-checklist";
 import {
@@ -95,6 +106,12 @@ function PureMessages({
   }, [status]);
 
   useDataStream();
+
+  const pipelineDashboard = useSyncExternalStore(
+    subscribePipelineDashboard,
+    getPipelineDashboardData,
+    () => null
+  );
 
   const focusInput = useCallback(() => {
     setTimeout(() => inputRef.current?.focus(), 0);
@@ -219,6 +236,12 @@ function PureMessages({
               }
             />
           ))}
+
+          {pipelineDashboard && (
+            <div className="mx-auto w-full max-w-[640px]">
+              <PipelineQualityDashboard data={pipelineDashboard} />
+            </div>
+          )}
 
           {status === "submitted" && !hasApprovalResponded && (
             <div className="flex flex-col gap-2">

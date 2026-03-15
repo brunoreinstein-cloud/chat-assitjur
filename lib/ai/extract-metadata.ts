@@ -33,8 +33,12 @@ const METADATA_SCHEMA = z.object({
     ),
 });
 
-/** Máximo de caracteres do texto enviado ao LLM (reduz custo e latência). */
-const MAX_TEXT_FOR_METADATA = 12_000;
+/** Caracteres do início do texto enviados ao LLM. */
+const MAX_TEXT_HEAD = 10_000;
+/** Caracteres do final do texto (captura OAB/assinaturas em PDFs PJe). */
+const MAX_TEXT_TAIL = 4000;
+/** Total máximo de texto enviado ao LLM (head + tail). */
+const MAX_TEXT_FOR_METADATA = MAX_TEXT_HEAD + MAX_TEXT_TAIL;
 
 const METADATA_SYSTEM = `És um assistente que extrai metadados de documentos jurídicos e gerais.
 Analisa o texto e o nome do ficheiro e devolve em JSON: título (curto e descritivo), autor(es) ou signatário (se identificável), tipo de documento e informações-chave (resumo breve).
@@ -67,7 +71,7 @@ export async function extractDocumentMetadata(
 
   const textSample =
     trimmed.length > MAX_TEXT_FOR_METADATA
-      ? `${trimmed.slice(0, MAX_TEXT_FOR_METADATA)}\n[...]`
+      ? `${trimmed.slice(0, MAX_TEXT_HEAD)}\n[... meio omitido ...]\n${trimmed.slice(-MAX_TEXT_TAIL)}`
       : trimmed;
 
   const prompt = buildMetadataPrompt(textSample, filename);

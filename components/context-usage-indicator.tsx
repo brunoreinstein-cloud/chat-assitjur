@@ -22,6 +22,11 @@ interface ContextUsageIndicatorProps {
 const SYSTEM_PROMPT_ESTIMATE_TOKENS = 2000;
 const TOKENS_PER_KNOWLEDGE_DOC = 15_000;
 
+/** Limites para o semáforo de capacidade da sessão */
+const THRESHOLD_YELLOW = 60;
+const THRESHOLD_ORANGE = 80;
+const THRESHOLD_RED = 93;
+
 export function ContextUsageIndicator({
   messages,
   attachments,
@@ -53,33 +58,52 @@ export function ContextUsageIndicator({
     100,
     Math.round((tokens / CONTEXT_WINDOW_INPUT_TARGET_TOKENS) * 100)
   );
-  const kTokens = Math.round(tokens / 1000);
 
-  const barColor =
-    pct >= 85 ? "bg-red-500" : pct >= 60 ? "bg-yellow-500" : "bg-green-500";
+  // --- Semáforo: 0-60% verde (discreto), 60-80% amarelo, 80-93% laranja, 93%+ vermelho ---
 
-  const labelColor =
-    pct >= 85
-      ? "text-red-500"
-      : pct >= 60
-        ? "text-yellow-500"
-        : "text-muted-foreground";
+  // Abaixo de 60%: só mostrar um indicador verde discreto, sem texto alarmante
+  if (pct < THRESHOLD_YELLOW) {
+    return (
+      <div className="flex items-center gap-1.5 px-1 pb-1">
+        <div className="size-1.5 shrink-0 rounded-full bg-green-500" />
+        <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-green-500/60 transition-all duration-500"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Acima de 60%: mostrar label + barra
+  let dotColor: string;
+  let barColor: string;
+  let label: string;
+  let labelColor: string;
+
+  if (pct < THRESHOLD_ORANGE) {
+    dotColor = "bg-yellow-500";
+    barColor = "bg-yellow-500";
+    labelColor = "text-yellow-600 dark:text-yellow-400";
+    label = "Sessão com bastante conteúdo";
+  } else if (pct < THRESHOLD_RED) {
+    dotColor = "bg-orange-500";
+    barColor = "bg-orange-500";
+    labelColor = "text-orange-600 dark:text-orange-400";
+    label = "Sessão quase cheia — considere nova conversa";
+  } else {
+    dotColor = "bg-red-500";
+    barColor = "bg-red-500";
+    labelColor = "text-red-600 dark:text-red-400";
+    label = "Limite próximo — inicie nova sessão para continuar";
+  }
 
   return (
     <div className="px-1 pb-1">
-      <div className="mb-0.5 flex items-center justify-between">
-        <span className={`text-[10px] tabular-nums ${labelColor}`}>
-          Contexto: {pct}%{" "}
-          <span className="opacity-70">
-            (~{kTokens}k /{" "}
-            {Math.round(CONTEXT_WINDOW_INPUT_TARGET_TOKENS / 1000)}k tokens)
-          </span>
-        </span>
-        {pct >= 85 && (
-          <span className="font-medium text-[10px] text-red-500">
-            Limite próximo
-          </span>
-        )}
+      <div className="mb-0.5 flex items-center gap-1.5">
+        <div className={`size-2 shrink-0 rounded-full ${dotColor}`} />
+        <span className={`font-medium text-[10px] ${labelColor}`}>{label}</span>
       </div>
       <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
         <div

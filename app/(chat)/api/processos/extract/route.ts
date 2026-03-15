@@ -3,12 +3,21 @@
  * Recebe um ficheiro PDF e devolve os campos do processo extraídos por IA.
  */
 
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { generateText, Output } from "ai";
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
 import { getTitleModel } from "@/lib/ai/providers";
 
 export const maxDuration = 60;
+
+/** Opções padrão para getDocumentProxy — resolve warning de standardFontDataUrl. */
+const PDFJS_OPTIONS = {
+  standardFontDataUrl: pathToFileURL(
+    `${join(process.cwd(), "node_modules", "pdfjs-dist", "standard_fonts")}/`
+  ).href,
+};
 
 // ── Schema de extração ────────────────────────────────────────────────────────
 
@@ -81,7 +90,7 @@ async function extractPdfText(buffer: ArrayBuffer): Promise<string> {
   let pdf: PdfProxy;
   try {
     unpdf = await import("unpdf");
-    pdf = await unpdf.getDocumentProxy(data);
+    pdf = await unpdf.getDocumentProxy(data, PDFJS_OPTIONS);
   } catch {
     return "";
   }

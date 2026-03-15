@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import { useCallback, useState } from "react";
+import { getExtractionQuality } from "@/lib/extraction-quality";
 import type { Attachment, DocumentTypeLabel } from "@/lib/types";
 import { Loader } from "./elements/loader";
 import { CrossSmallIcon } from "./icons";
@@ -257,6 +258,31 @@ export const PreviewAttachment = ({
           Texto não extraído. Cole o texto na caixa de mensagem.
         </p>
       )}
+
+      {!isUploading &&
+        (() => {
+          const quality = getExtractionQuality(attachment);
+          if (!quality) {
+            return null;
+          }
+          return (
+            <div className="px-1 pb-0.5">
+              <span
+                className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 font-medium text-[10px] ${quality.color}`}
+                title={quality.title}
+              >
+                {quality.label}
+              </span>
+              {quality.chars > 0 && (
+                <span className="ml-1 text-[9px] text-muted-foreground">
+                  {quality.chars >= 1000
+                    ? `${(quality.chars / 1000).toFixed(0)}k chars`
+                    : `${quality.chars} chars`}
+                </span>
+              )}
+            </div>
+          );
+        })()}
 
       {showDocumentTypeSelector && (
         <div className="px-1 pb-1">

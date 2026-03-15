@@ -8,8 +8,8 @@ import {
   RISCO_DOT,
   RISCO_LABEL,
 } from "@/lib/constants/processo";
-import type { KnowledgeDocument } from "@/lib/db/schema";
 import type { ProcessoComVerbas } from "@/lib/db/queries";
+import type { KnowledgeDocument } from "@/lib/db/schema";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -146,7 +146,7 @@ export function ProcessoCard({
       </button>
 
       {/* Linha de documentos */}
-      <div className="border-t border-border/40 dark:border-white/6">
+      <div className="border-border/40 border-t dark:border-white/6">
         <button
           className="flex w-full items-center gap-1 px-2.5 py-1.5 text-left text-[10px] text-muted-foreground transition-colors hover:bg-muted/40 dark:hover:bg-white/4"
           onClick={(e) => {
@@ -174,8 +174,8 @@ export function ProcessoCard({
               <div className="mb-1.5 flex flex-col gap-0.5">
                 {linkedDocs.map((doc) => (
                   <div
-                    key={doc.id}
                     className="flex items-center gap-1 rounded px-1 py-0.5 text-[10px] text-foreground dark:text-white/80"
+                    key={doc.id}
                   >
                     <span className="min-w-0 flex-1 truncate">{doc.title}</span>
                     <button
@@ -197,10 +197,10 @@ export function ProcessoCard({
 
             {/* Buscador */}
             <input
-              ref={searchRef}
               className="mb-1.5 w-full rounded border border-border/60 bg-background px-2 py-1 text-[10px] text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-assistjur-gold/50 dark:border-white/10 dark:bg-white/4"
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar no KB…"
+              ref={searchRef}
               type="text"
               value={search}
             />
@@ -221,13 +221,13 @@ export function ProcessoCard({
                 const linked = linkedIds.includes(doc.id);
                 return (
                   <button
-                    key={doc.id}
                     className={`flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-left text-[10px] transition-colors ${
                       linked
                         ? "bg-assistjur-gold/10 text-foreground dark:text-white/90"
                         : "text-muted-foreground hover:bg-muted/50 dark:hover:bg-white/5"
                     } disabled:opacity-40`}
                     disabled={saving}
+                    key={doc.id}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleToggleDoc(doc.id, linked);

@@ -188,16 +188,31 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const { body } = parsed;
+  const isDev = process.env.NODE_ENV === "development";
+  const t0 = Date.now();
   const fetched = await fetchBlobBuffer(body.url);
   if (!fetched.ok) {
     return fetched.response;
   }
+  if (isDev) {
+    const sizeMB = (fetched.buffer.byteLength / (1024 * 1024)).toFixed(1);
+    console.log(`[process] download: ${Date.now() - t0}ms (${sizeMB} MB)`);
+  }
 
   try {
+    // Clone the buffer before extraction — PDF.js may detach the original ArrayBuffer,
+    // making it unusable for the subsequent storage upload in persistAndRespond.
+    const bufferForStorage = fetched.buffer.slice(0);
+    const t1 = Date.now();
     const extraction = await runExtractionAndClassification(
       fetched.buffer,
       body.contentType
     );
+    if (isDev) {
+      console.log(
+        `[process] extraction+classification: ${Date.now() - t1}ms | total: ${Date.now() - t0}ms`
+      );
+    }
     const documentType =
       extraction.documentType ??
       classifyDocumentTypeFromFilename(body.filename);
@@ -205,13 +220,16 @@ export async function POST(request: Request): Promise<NextResponse> {
     return await persistAndRespond(
       session.user.id,
       body.filename,
-      fetched.buffer,
+      bufferForStorage,
       body.contentType,
       {
         extractedText: extraction.extractedText,
         extractionFailed: extraction.extractionFailed,
         documentType,
         extractionDetail: extraction.extractionDetail,
+        ...(extraction.pageCount != null
+          ? { pageCount: extraction.pageCount }
+          : {}),
       }
     );
   } catch (err) {

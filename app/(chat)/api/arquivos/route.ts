@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
-import { createUserFile, getUserFilesByUserId } from "@/lib/db/queries";
+import { extractLegalSummary } from "@/lib/ai/extract-legal-summary";
+import {
+  createUserFile,
+  getUserFilesByUserId,
+  updateUserFileStructuredSummary,
+} from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
 
 const createBodySchema = z.object({
@@ -63,6 +68,24 @@ export async function POST(request: Request) {
       contentType,
       extractedTextCache: extractedTextCache ?? null,
     });
+
+    // Fire-and-forget: extrai resumo estruturado para PI/Contestação (não bloqueia resposta)
+    const textForSummary = extractedTextCache?.trim();
+    if (textForSummary && textForSummary.length >= 500) {
+      extractLegalSummary(textForSummary)
+        .then((summary) => {
+          if (summary) {
+            return updateUserFileStructuredSummary({
+              id: created.id,
+              structuredSummary: summary,
+            });
+          }
+        })
+        .catch(() => {
+          /* fire-and-forget: falha silenciosa */
+        });
+    }
+
     return Response.json(
       {
         id: created.id,

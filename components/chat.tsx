@@ -63,8 +63,8 @@ import type { VisibilityType } from "./visibility-selector";
 
 const MAX_KNOWLEDGE_SELECT = 50;
 
-/** Alinhado ao máximo extraído no upload (600k). Margem abaixo do schema (2M) para evitar 400 por tamanho. */
-const MAX_PART_TEXT_CLIENT = 600_000;
+/** Alinhado ao schema do servidor (2M). Pipeline multi-chamadas processa docs grandes em blocos. */
+const MAX_PART_TEXT_CLIENT = 2_000_000;
 
 const TRUNCATE_SUFFIX_CLIENT =
   "\n\n[Truncado: o documento excedeu o limite de caracteres.]";
@@ -496,10 +496,11 @@ export function Chat({
           didTruncate,
           truncatedTotal,
         } = truncateMessagePartsForRequest([...request.messages]);
-        if (didTruncate && truncatedTotal > 0) {
+        // Só avisar se a truncagem for significativa (>1% do limite, ~6000+ chars)
+        if (didTruncate && truncatedTotal > MAX_PART_TEXT_CLIENT * 0.01) {
           toast({
             type: "error",
-            description: `Documento muito longo; o texto foi truncado (${truncatedTotal.toLocaleString("pt-PT")} caracteres). Apenas o início é enviado ao modelo. Pode anexar menos documentos ou peças mais curtas.`,
+            description: `Documento muito longo; o texto foi truncado (${truncatedTotal.toLocaleString("pt-PT")} caracteres removidos). Apenas o início é enviado ao modelo. Pode anexar menos documentos ou peças mais curtas.`,
           });
         }
         const isContinuation = isToolApprovalContinuation(

@@ -8,6 +8,7 @@ import {
   BookOpenIcon,
   CheckIcon,
   FileTextIcon,
+  Loader2Icon,
   LoaderIcon,
   MoreHorizontalIcon,
   PencilIcon,
@@ -30,6 +31,7 @@ import {
 import { toast } from "sonner";
 import useSWR from "swr";
 import { useLocalStorage, useWindowSize } from "usehooks-ts";
+import { getExtractionQuality } from "@/lib/extraction-quality";
 
 interface CustomAgentRow {
   id: string;
@@ -40,9 +42,24 @@ interface CustomAgentRow {
   createdAt: string;
 }
 
+type UploadPhase = "uploading" | "extracting" | "classifying" | "done";
+
+const PHASE_LABELS: Record<UploadPhase, string> = {
+  uploading: "Enviando…",
+  extracting: "Extraindo texto…",
+  classifying: "Classificando…",
+  done: "Concluído",
+};
+
 interface UploadQueueItem {
   id: string;
   label: string;
+  /** Current phase of the upload pipeline */
+  phase: UploadPhase;
+  /** Upload progress 0-100 (only meaningful during 'uploading' phase) */
+  percent: number;
+  /** File size in bytes */
+  fileSize?: number;
 }
 
 import { MIN_CREDITS_TO_START_CHAT } from "@/lib/ai/credits";
@@ -161,6 +178,7 @@ interface FileUploadResponse {
   extractionFailed?: boolean;
   extractionDetail?: string;
   documentType?: "pi" | "contestacao";
+  pageCount?: number;
 }
 
 function buildAttachmentFromUploadResponse(
@@ -199,6 +217,9 @@ function buildAttachmentFromUploadResponse(
     ...(typeof extractedText === "string" ? { extractedText } : {}),
     ...(extractionFailed === true ? { extractionFailed: true } : {}),
     ...(docType ? { documentType: docType } : {}),
+    ...(typeof data.pageCount === "number"
+      ? { pageCount: data.pageCount }
+      : {}),
   };
 }
 
@@ -369,7 +390,9 @@ function buildAttachmentParts(
   return parts;
 }
 
-async function getUploadErrorFromResponse(response: Response): Promise<string> {
+async function _getUploadErrorFromResponse(
+  response: Response
+): Promise<string> {
   if (response.status === 401) {
     return "Inicie sessão para anexar ficheiros. Use «Continuar como visitante» ou entre na sua conta.";
   }
@@ -392,7 +415,8 @@ async function getUploadErrorFromResponse(response: Response): Promise<string> {
 }
 
 async function uploadLargeFile(
-  file: File
+  file: File,
+  onPhase?: (phase: UploadPhase, percent: number) => void
 ): Promise<ReturnType<typeof buildAttachmentFromUploadResponse> | undefined> {
   const tokenCheckRes = await fetch("/api/files/upload-token", {
     method: "GET",
@@ -409,10 +433,12 @@ async function uploadLargeFile(
     return undefined;
   }
   try {
+    onPhase?.("uploading", 10);
     const blob = await uploadToBlob(file.name, file, {
       access: "public",
       handleUploadUrl: "/api/files/upload-token",
     });
+    onPhase?.("extracting", 50);
     const processRes = await fetch("/api/files/process", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -434,7 +460,9 @@ async function uploadLargeFile(
       toast.error(msg);
       return undefined;
     }
+    onPhase?.("classifying", 90);
     const data = (await processRes.json()) as FileUploadResponse;
+    onPhase?.("done", 100);
     return buildAttachmentFromUploadResponse(data, file);
   } catch (directError: unknown) {
     const msg =
@@ -449,20 +477,65 @@ async function uploadLargeFile(
 }
 
 async function uploadSmallFile(
-  file: File
+  file: File,
+  onPhase?: (phase: UploadPhase, percent: number) => void
 ): Promise<ReturnType<typeof buildAttachmentFromUploadResponse> | undefined> {
+  onPhase?.("uploading", 0);
   const formData = new FormData();
   formData.append("file", file);
-  const response = await fetch("/api/files/upload", {
-    method: "POST",
-    body: formData,
+
+  // Use XHR for real upload progress tracking
+  const result = await new Promise<{
+    ok: boolean;
+    status: number;
+    body: string;
+  }>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/files/upload");
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const pct = Math.round((e.loaded / e.total) * 60); // Upload = 0-60%
+        onPhase?.("uploading", pct);
+      }
+    };
+    xhr.onload = () => {
+      onPhase?.("extracting", 65);
+      resolve({
+        ok: xhr.status >= 200 && xhr.status < 300,
+        status: xhr.status,
+        body: xhr.responseText,
+      });
+    };
+    xhr.onerror = () => reject(new Error("Network error"));
+    xhr.send(formData);
   });
-  if (response.ok) {
-    const data = (await response.json()) as FileUploadResponse;
-    return buildAttachmentFromUploadResponse(data, file);
+
+  if (result.ok) {
+    onPhase?.("classifying", 90);
+    try {
+      const data = JSON.parse(result.body) as FileUploadResponse;
+      onPhase?.("done", 100);
+      return buildAttachmentFromUploadResponse(data, file);
+    } catch {
+      toast.error("Resposta inválida do servidor.");
+      return undefined;
+    }
   }
-  const errorMessage = await getUploadErrorFromResponse(response);
-  toast.error(errorMessage);
+
+  // Error handling
+  try {
+    const errData = JSON.parse(result.body) as {
+      error?: string;
+      message?: string;
+    };
+    toast.error(
+      errData.error ??
+        errData.message ??
+        "Falha ao enviar o arquivo. Tente novamente."
+    );
+  } catch {
+    toast.error("Falha ao enviar o arquivo. Tente novamente.");
+  }
   return undefined;
 }
 
@@ -972,12 +1045,19 @@ function PureMultimodalInput({
     messages.length,
   ]);
 
-  const uploadFile = useCallback(async (file: File) => {
+  const uploadFile = useCallback(async (file: File, queueId?: string) => {
+    const onPhase = queueId
+      ? (phase: UploadPhase, percent: number) => {
+          setUploadQueue((prev) =>
+            prev.map((q) => (q.id === queueId ? { ...q, phase, percent } : q))
+          );
+        }
+      : undefined;
     try {
       if (file.size > BODY_SIZE_LIMIT_BYTES) {
-        return await uploadLargeFile(file);
+        return await uploadLargeFile(file, onPhase);
       }
-      return await uploadSmallFile(file);
+      return await uploadSmallFile(file, onPhase);
     } catch {
       toast.error(
         "Falha ao enviar o arquivo. Verifique a ligação e tente novamente."
@@ -992,14 +1072,21 @@ function PureMultimodalInput({
         return;
       }
       const now = Date.now();
+      const queueIds = files.map((_, i) => `uq-${now}-${i}`);
       setUploadQueue((prev) => [
         ...prev,
-        ...files.map((f, i) => ({ id: `uq-${now}-${i}`, label: f.name })),
+        ...files.map((f, i) => ({
+          id: queueIds[i],
+          label: f.name,
+          phase: "uploading" as UploadPhase,
+          percent: 0,
+          fileSize: f.size,
+        })),
       ]);
       try {
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
-          const attachment = await uploadFile(file);
+          const attachment = await uploadFile(file, queueIds[i]);
           if (attachment !== undefined && typeof attachment.url === "string") {
             // Preferir tipo pelo nome do ficheiro quando explícito (ex.: "Contestação - RO.pdf") para evitar classificação errada pelo conteúdo
             const docType =
@@ -1117,16 +1204,22 @@ function PureMultimodalInput({
       // Prevent default paste behavior for images
       event.preventDefault();
 
+      const imgQueueId = `uq-${Date.now()}-img`;
       setUploadQueue((prev) => [
         ...prev,
-        { id: `uq-${Date.now()}-img`, label: "Imagem colada" },
+        {
+          id: imgQueueId,
+          label: "Imagem colada",
+          phase: "uploading" as UploadPhase,
+          percent: 0,
+        },
       ]);
 
       try {
         const uploadPromises = imageItems
           .map((item) => item.getAsFile())
           .filter((file): file is File => file !== null)
-          .map((file) => uploadFile(file));
+          .map((file) => uploadFile(file, imgQueueId));
 
         const uploadedAttachments = await Promise.all(uploadPromises);
         const successfullyUploadedAttachments = uploadedAttachments.filter(
@@ -1439,6 +1532,23 @@ function PureMultimodalInput({
                           sem texto
                         </span>
                       )}
+                      {(() => {
+                        const quality = getExtractionQuality(attachment);
+                        if (!quality) {
+                          return null;
+                        }
+                        return (
+                          <span
+                            className={cn(
+                              "shrink-0 rounded px-1 py-0.5 font-medium text-[9px]",
+                              quality.color
+                            )}
+                            title={quality.title}
+                          >
+                            {quality.label}
+                          </span>
+                        );
+                      })()}
                       <Button
                         aria-label="Remover anexo"
                         className="size-5 shrink-0 rounded-full p-0"
@@ -1452,18 +1562,26 @@ function PureMultimodalInput({
                   ))}
                   {visibleQueue.map((item) => (
                     <div
-                      className="flex max-w-[200px] items-center gap-1.5 rounded-full border border-border/60 bg-muted/50 px-2.5 py-1 text-xs"
+                      className="relative flex max-w-[240px] items-center gap-1.5 overflow-hidden rounded-full border border-border/60 bg-muted/50 px-2.5 py-1 text-xs"
                       key={item.id}
                     >
-                      <FileTextIcon
+                      {/* Progress bar background */}
+                      <div
                         aria-hidden
-                        className="size-3.5 shrink-0 text-muted-foreground"
+                        className="absolute inset-y-0 left-0 bg-primary/10 transition-all duration-300"
+                        style={{ width: `${item.percent}%` }}
                       />
-                      <span className="min-w-0 truncate text-muted-foreground">
+                      <Loader2Icon
+                        aria-hidden
+                        className="relative size-3.5 shrink-0 animate-spin text-primary"
+                      />
+                      <span className="relative min-w-0 truncate text-muted-foreground">
                         {item.label}
                       </span>
-                      <span className="shrink-0 text-[10px] text-muted-foreground">
-                        extraindo…
+                      <span className="relative shrink-0 font-medium text-[10px] text-primary">
+                        {item.percent > 0 && item.phase === "uploading"
+                          ? `${item.percent}%`
+                          : PHASE_LABELS[item.phase]}
                       </span>
                     </div>
                   ))}

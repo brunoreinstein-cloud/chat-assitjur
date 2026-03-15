@@ -37,6 +37,10 @@ import {
 } from "@/lib/ai/context-window";
 import { MIN_CREDITS_TO_START_CHAT, tokensToCredits } from "@/lib/ai/credits";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
+import {
+  extractStructuredFields,
+  formatStructuredFieldsAsHeader,
+} from "@/lib/ai/extract-structured-fields";
 import { modelSupportsVision } from "@/lib/ai/models";
 import { stripImageParts } from "@/lib/ai/multimodal";
 import { getPromptCachingCacheControl } from "@/lib/ai/prompt-caching-config";
@@ -50,12 +54,12 @@ import {
   buildKnowledgeContext,
   resolveEffectiveKnowledgeIds,
 } from "@/lib/ai/resolve-knowledge-ids";
+import { analyzeProcessoPipeline } from "@/lib/ai/tools/analyze-processo-pipeline";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { createRedatorContestacaoDocument } from "@/lib/ai/tools/create-redator-contestacao-document";
 import { createRevisorDefesaDocuments } from "@/lib/ai/tools/create-revisor-defesa-documents";
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import { requestApproval } from "@/lib/ai/tools/human-in-the-loop";
-import { analyzeProcessoPipeline } from "@/lib/ai/tools/analyze-processo-pipeline";
 import { improvePromptTool } from "@/lib/ai/tools/improve-prompt";
 import { createMemoryTools } from "@/lib/ai/tools/memory";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
@@ -254,7 +258,7 @@ const MAX_CHARS_PER_DOCUMENT = 80_000;
 /** Máximo total de caracteres de documentos numa única mensagem. */
 const MAX_TOTAL_DOC_CHARS = 180_000;
 /** Na PI, ao truncar, preservar este número de caracteres do final (OAB/assinaturas). */
-const PI_TAIL_CHARS = 2500;
+const PI_TAIL_CHARS = 8000;
 
 /** Últimas N mensagens a carregar para contexto (reduz BD e tamanho do prompt; a qualidade mantém-se com contexto recente). */
 const CHAT_MESSAGES_LIMIT = 80;
@@ -306,9 +310,10 @@ function truncateDocumentText(
 function findLastPageMarker(text: string, maxPos: number): number {
   const PAGE_MARKER_RE = /\[Pag\.\s*\d+\]/g;
   let lastMarkerStart = maxPos;
-  let match: RegExpExecArray | null;
-  while ((match = PAGE_MARKER_RE.exec(text)) !== null) {
-    if (match.index > maxPos) break;
+  for (const match of text.matchAll(PAGE_MARKER_RE)) {
+    if (match.index > maxPos) {
+      break;
+    }
     lastMarkerStart = match.index;
   }
   // Se encontrou marcador e está razoavelmente perto do limite (>80%), usar
@@ -426,18 +431,28 @@ function normalizeMessageParts(
       if (remaining <= 0) {
         return [];
       }
+
+      // Extração regex no texto COMPLETO (antes da truncagem)
+      const regexFields = extractStructuredFields(p.text);
+      const regexHeader = formatStructuredFieldsAsHeader(regexFields);
+
       const maxForThis = Math.min(MAX_CHARS_PER_DOCUMENT, remaining);
       const truncated = truncateDocumentText(
         p.text,
         maxForThis,
         p.documentType
       );
-      totalDocChars += truncated.length;
+      totalDocChars += truncated.length + regexHeader.length;
       const label = getDocumentPartLabel(p.documentType);
       const hint = getDocumentPartExtractionHint(p.documentType);
-      const header = hint
-        ? `[${label}: ${p.name}]\n${hint}\n\n`
-        : `[${label}: ${p.name}]\n\n`;
+      const headerParts = [`[${label}: ${p.name}]`];
+      if (hint) {
+        headerParts.push(hint);
+      }
+      if (regexHeader) {
+        headerParts.push(regexHeader);
+      }
+      const header = `${headerParts.join("\n")}\n\n`;
       return [
         {
           type: "text" as const,
@@ -1088,6 +1103,16 @@ function buildKnowledgeContextFromParts(
     fillKnowledgeFromFullDocsWhenEmpty(knowledgeDocParts, knowledgeDocsResult);
   }
   for (const uf of userFilesFromArchivos) {
+    // Injetar resumo estruturado se disponível (mesmo padrão dos KnowledgeDocuments)
+    if (uf.structuredSummary) {
+      knowledgeDocParts.push(
+        wrapKnowledgeDocument(
+          uf.id,
+          `${uf.filename} [Resumo Estruturado]`,
+          uf.structuredSummary
+        )
+      );
+    }
     if (
       typeof uf.extractedTextCache === "string" &&
       uf.extractedTextCache.trim().length > 0

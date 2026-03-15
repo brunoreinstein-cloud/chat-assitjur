@@ -12,6 +12,7 @@ import {
   Packer,
   PageNumber,
   Paragraph,
+  ShadingType,
   Table,
   TableCell,
   TableRow,
@@ -20,9 +21,11 @@ import {
 } from "docx";
 
 const FONT_SIZE = 24; // 12pt = 24 half-points
-const FONT_SIZE_HEADING = 28; // 14pt
+const FONT_SIZE_H1 = 36; // 18pt — títulos de seção (H1)
+const FONT_SIZE_H2 = 28; // 14pt — subtítulos (H2)
+const FONT_SIZE_HEADING = FONT_SIZE_H2; // alias para compatibilidade
 const FONT_SIZE_SMALL = 20; // 10pt para cabeçalho/rodapé
-const FONT_FAMILY = "Arial";
+const FONT_FAMILY = "Calibri";
 
 /** Espaçamento após cada parágrafo (twips). 120 ≈ 6pt; melhora legibilidade. */
 const SPACING_AFTER = 120;
@@ -131,12 +134,12 @@ function paragraphH1Assistjur(text: string): Paragraph {
       new TextRun({
         text,
         font: FONT_FAMILY,
-        size: FONT_SIZE_HEADING,
+        size: FONT_SIZE_H1,
         color: ASSISTJUR.branco,
         bold: true,
       }),
     ],
-    shading: { fill: ASSISTJUR.charcoal },
+    shading: { fill: ASSISTJUR.charcoal, type: ShadingType.CLEAR },
     spacing: { after: SPACING_AFTER },
   });
 }
@@ -285,7 +288,7 @@ function contentToChildren(
         ? { ...runBase, color: ASSISTJUR.branco, bold: true as const }
         : runBase;
       const cellShading = isHeaderRow
-        ? { fill: ASSISTJUR.charcoal }
+        ? { fill: ASSISTJUR.charcoal, type: ShadingType.CLEAR }
         : undefined;
       return new TableRow({
         tableHeader: isHeaderRow,
