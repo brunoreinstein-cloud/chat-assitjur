@@ -43,7 +43,7 @@ import {
   extractStructuredFields,
   formatStructuredFieldsAsHeader,
 } from "@/lib/ai/extract-structured-fields";
-import { modelSupportsVision } from "@/lib/ai/models";
+import { modelReasoningType, modelSupportsVision } from "@/lib/ai/models";
 import { stripImageParts } from "@/lib/ai/multimodal";
 import { getPromptCachingCacheControl } from "@/lib/ai/prompt-caching-config";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
@@ -1322,6 +1322,7 @@ interface StreamExecuteContext {
   processoContext: string | undefined;
   messagesForModel: Awaited<ReturnType<typeof withPromptCachingForAnthropic>>;
   isReasoningModel: boolean;
+  isAdaptiveThinking: boolean;
   titlePromise: Promise<string> | null;
   id: string;
   requestStart: number;
@@ -1484,7 +1485,9 @@ function createStreamExecuteHandler(
               },
             },
           }
-        : undefined,
+        : ctx.isAdaptiveThinking
+          ? { anthropic: { thinking: { type: "adaptive" } } }
+          : undefined,
       tools,
       experimental_telemetry: buildAiSdkTelemetry({
         isEnabled: isProductionEnvironment,
@@ -1739,6 +1742,7 @@ function buildStreamAndResponse(
 
   const isReasoningModel =
     effectiveModel.includes("reasoning") || effectiveModel.includes("thinking");
+  const isAdaptiveThinking = modelReasoningType(effectiveModel) === "adaptive";
 
   // Ref partilhada entre execute e onFinish: o SDK invoca execute antes de onFinish,
   // pelo que onFinish pode ler streamTextResultRef.current com segurança.
@@ -1757,6 +1761,7 @@ function buildStreamAndResponse(
     processoContext,
     messagesForModel,
     isReasoningModel,
+    isAdaptiveThinking,
     titlePromise,
     id,
     requestStart,

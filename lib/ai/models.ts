@@ -12,6 +12,15 @@ export interface ChatModel {
    * Quando false, partes de imagem são removidas antes de enviar ao LLM.
    */
   supportsVision?: boolean;
+  /**
+   * Tipo de raciocínio suportado pelo modelo.
+   * - 'adaptive': o modelo decide quando e quanto pensar (ex.: Claude 4.6).
+   *   Compatível com ferramentas (tools). Usa thinking: { type: 'adaptive' }.
+   * - 'extended': raciocínio explícito com budgetTokens (ex.: Claude 3.7 Sonnet).
+   *   Ferramentas desactivadas nos modelos com sufixo -thinking no ID.
+   * - undefined: sem raciocínio (comportamento padrão).
+   */
+  reasoningType?: "adaptive" | "extended";
 }
 
 export const chatModels: ChatModel[] = [
@@ -22,6 +31,7 @@ export const chatModels: ChatModel[] = [
     provider: "anthropic",
     description: "Fast and affordable, great for everyday tasks",
     supportsVision: true,
+    reasoningType: "extended",
   },
   {
     id: "anthropic/claude-sonnet-4.5",
@@ -29,6 +39,7 @@ export const chatModels: ChatModel[] = [
     provider: "anthropic",
     description: "Best balance of speed, intelligence, and cost",
     supportsVision: true,
+    reasoningType: "extended",
   },
   {
     id: "anthropic/claude-sonnet-4.6",
@@ -37,6 +48,7 @@ export const chatModels: ChatModel[] = [
     description:
       "Latest Sonnet: coding, agents, long context, adaptive thinking",
     supportsVision: true,
+    reasoningType: "adaptive",
   },
   {
     id: "anthropic/claude-opus-4.5",
@@ -44,6 +56,7 @@ export const chatModels: ChatModel[] = [
     provider: "anthropic",
     description: "Most capable Anthropic model",
     supportsVision: true,
+    reasoningType: "extended",
   },
   {
     id: "anthropic/claude-opus-4.6",
@@ -51,6 +64,7 @@ export const chatModels: ChatModel[] = [
     provider: "anthropic",
     description: "Latest Opus, maximum capability",
     supportsVision: true,
+    reasoningType: "adaptive",
   },
   // OpenAI — GPT-4 series com visão
   {
@@ -97,6 +111,7 @@ export const chatModels: ChatModel[] = [
     provider: "reasoning",
     description: "Extended thinking for complex problems",
     supportsVision: true,
+    reasoningType: "extended",
   },
   {
     id: "xai/grok-code-fast-1-thinking",
@@ -107,10 +122,32 @@ export const chatModels: ChatModel[] = [
   },
 ];
 
-/** IDs de modelos sem extended thinking (reasoning). Usado pelo Revisor de Defesas para garantir ferramentas ativas e primeira resposta rápida. */
+/**
+ * IDs de modelos compatíveis com ferramentas (tools activas).
+ * Exclui apenas modelos com extended thinking EXPLÍCITO (sufixo -thinking/-reasoning no ID)
+ * que desactivam ferramentas no route.ts (isReasoningModel = true).
+ * Modelos adaptive (Claude 4.6) e extended sem sufixo (Claude 4.5) mantêm tools activas.
+ * Usado pelo Revisor de Defesas para garantir ferramentas activas e primeira resposta rápida.
+ */
 export const nonReasoningChatModelIds = chatModels
-  .filter((m) => !(m.id.includes("reasoning") || m.id.includes("thinking")))
+  .filter((m) => !m.id.includes("reasoning") && !m.id.includes("thinking"))
   .map((m) => m.id);
+
+/**
+ * Retorna o tipo de raciocínio suportado pelo modelo, ou null se não suportar.
+ * - 'adaptive': Claude 4.6+ — o modelo decide quando pensar; compatível com tools.
+ * - 'extended': Claude 3.7 / 4.5 — raciocínio explícito com budgetTokens.
+ * - null: sem raciocínio.
+ */
+export function modelReasoningType(
+  modelId: string
+): "adaptive" | "extended" | null {
+  const model = chatModels.find((m) => m.id === modelId);
+  if (model?.reasoningType) return model.reasoningType;
+  // Fallback para modelos não listados com sufixo -thinking
+  if (modelId.includes("thinking")) return "extended";
+  return null;
+}
 
 // Group models by provider for UI
 export const modelsByProvider = chatModels.reduce(
