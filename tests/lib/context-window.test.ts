@@ -4,13 +4,13 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  applyContextEditing,
   CONTEXT_WINDOW_CAPACITY_TOKENS,
   CONTEXT_WINDOW_INPUT_TARGET_TOKENS,
-  MAX_CHARS_PER_DOCUMENT,
-  MAX_TOTAL_DOC_CHARS,
-  applyContextEditing,
   estimateInputTokens,
   estimateTokensFromText,
+  MAX_CHARS_PER_DOCUMENT,
+  MAX_TOTAL_DOC_CHARS,
   TOOL_RESULT_PLACEHOLDER,
 } from "@/lib/ai/context-window";
 
@@ -82,9 +82,7 @@ describe("estimateInputTokens", () => {
   it("conta tool-result serializado", () => {
     const messages = [
       {
-        parts: [
-          { type: "tool-result", result: { key: "value" } },
-        ],
+        parts: [{ type: "tool-result", result: { key: "value" } }],
       },
     ];
     const tokens = estimateInputTokens(0, messages);
@@ -175,9 +173,7 @@ describe("lógica de cap do indicador de contexto", () => {
           remaining
         );
         totalDocChars += cappedLen;
-        tokens += estimateTokensFromText(
-          att.extractedText.slice(0, cappedLen)
-        );
+        tokens += estimateTokensFromText(att.extractedText.slice(0, cappedLen));
       }
     }
     return tokens;
@@ -186,7 +182,7 @@ describe("lógica de cap do indicador de contexto", () => {
   it("doc pequeno (10K chars) não é truncado", () => {
     const text = "x".repeat(10_000);
     const tokens = calcAttachmentTokens([{ extractedText: text }]);
-    expect(tokens).toBe(2_500); // 10_000 / 4
+    expect(tokens).toBe(2500); // 10_000 / 4
   });
 
   it("doc grande (3M chars) é limitado a MAX_CHARS_PER_DOCUMENT", () => {
@@ -212,9 +208,7 @@ describe("lógica de cap do indicador de contexto", () => {
   it("PDF 1868 págs (~3.1M chars) mostra uso razoável, não 900%", () => {
     const text = "x".repeat(3_142_616); // simulando o PDF real
     const tokens = calcAttachmentTokens([{ extractedText: text }]);
-    const pct = Math.round(
-      (tokens / CONTEXT_WINDOW_INPUT_TARGET_TOKENS) * 100
-    );
+    const pct = Math.round((tokens / CONTEXT_WINDOW_INPUT_TARGET_TOKENS) * 100);
     // 80K chars → 20K tokens → 20K/195K ≈ 10%
     expect(pct).toBeLessThanOrEqual(15);
     expect(pct).toBeGreaterThan(5);
