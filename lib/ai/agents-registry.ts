@@ -56,6 +56,13 @@ export interface AgentConfig {
    */
   usePipelineTool?: boolean;
   /**
+   * Habilitar createMasterDocuments (geração DOCX direta + ZIP).
+   * Quando true, o agente gera documentos DOCX via stream direto (sem artifact)
+   * e oferece download individual e compactado.
+   * Default: false — activar apenas no Master agent.
+   */
+  useMasterDocumentsTool?: boolean;
+  /**
    * IDs de modelos LLM permitidos para este agente (ex.: ["anthropic/claude-sonnet-4.6"]).
    * Se omitido ou vazio, todos os modelos do catálogo são permitidos.
    */
@@ -110,6 +117,7 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
     useMemoryTools: true,
     useApprovalTool: true, // Master agent pode executar acções — requer aprovação
     usePipelineTool: true, // Pipeline multi-chamadas para PDFs grandes (>500 pgs)
+    useMasterDocumentsTool: true, // Geração DOCX direta + ZIP download
   },
 };
 

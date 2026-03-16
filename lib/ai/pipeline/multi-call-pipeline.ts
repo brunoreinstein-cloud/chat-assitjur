@@ -7,6 +7,7 @@
 import { generateText } from "ai";
 
 import { getLanguageModel } from "@/lib/ai/providers";
+import { extractJsonObject } from "./json-utils";
 import { getAudienciasExtractionPrompt } from "./rag-audiencias";
 import { getExecucaoExtractionPrompt } from "./rag-execucao";
 import {
@@ -15,6 +16,11 @@ import {
   type ProcessoBlock,
   splitIntoSections,
 } from "./split-processo-sections";
+import {
+  getModuleSynthesisConfig,
+  getSynthesisPrompt,
+} from "./synthesis-prompts";
+import { getValidationPrompt } from "./validation-prompts";
 
 // ---------------------------------------------------------------------------
 // Tipos públicos
@@ -90,12 +96,13 @@ export interface PipelineResult {
 
 /** Timeout por chamada de bloco (ms) */
 const BLOCK_CALL_TIMEOUT_MS = 45_000;
-/** Timeout para chamada de síntese/compilação (ms) — aumentado para 90s dado maxOutputTokens 12288 */
-const SYNTHESIS_CALL_TIMEOUT_MS = 90_000;
 /** Timeout para chamada de validação cruzada (ms) */
 const VALIDATION_CALL_TIMEOUT_MS = 40_000;
 /** Máximo de caracteres por bloco para enviar ao modelo */
 const MAX_BLOCK_CHARS = 120_000;
+/** Regex para detectar blocos críticos (retry obrigatório em caso de falha) */
+const CRITICAL_BLOCK_LABELS =
+  /Senten[çc]a|Ac[óo]rd[ãa]o|C[áa]lculos|Liquida[çc][ãa]o|Embargos/i;
 
 // ---------------------------------------------------------------------------
 // Regras base de extração (compartilhadas com RAGs especializados)
@@ -187,12 +194,19 @@ CAMPOS A EXTRAIR DESTA SECÇÃO (Sentença/Decisão):
 CAMPOS A EXTRAIR DESTA SECÇÃO (Acórdão):
 - orgao_julgador: Turma/Câmara
 - relator: Desembargador relator
+- revisor: Desembargador revisor
+- terceiro_votante: Terceiro votante ou juiz convocado
+- redator_designado: Redator designado (se diferente do relator)
 - resultado: Provido/Desprovido/Parcialmente provido
-- reformas: O que foi reformado da sentença
+- resultado_reclamada: Resultado específico do recurso da reclamada
+- resultado_reclamante: Resultado específico do recurso do reclamante
+- reformas: O que foi reformado da sentença (lista por pedido)
 - manutencoes: O que foi mantido
+- voto_vencido: Resumo do voto vencido (se houve divergência)
+- tipo_recurso: Tipo do recurso julgado (RO/RR/AIRR/AP/ED)
 - data_julgamento: Data do julgamento
 - data_publicacao: Data de publicação (DEJT)
-- votos_divergentes: Se houve divergência`;
+- ed_ao_acordao: Embargos de Declaração ao Acórdão — matérias arguidas + resultado (se houver)`;
   }
 
   // --- RAGs especializados (Sprint 3) — avaliados ANTES dos genéricos ---
@@ -273,51 +287,8 @@ CAMPOS A EXTRAIR DESTA SECÇÃO (${blockLabel}):
 }
 
 // ---------------------------------------------------------------------------
-// Prompt de síntese
+// Prompt de síntese — importado de synthesis-prompts.ts (dinâmico por módulo)
 // ---------------------------------------------------------------------------
-
-function getSynthesisPrompt(moduleId: string): string {
-  return `Você é um especialista jurídico trabalhista. Recebeu extrações parciais de diferentes secções de um processo.
-
-TAREFA: Sintetize todas as extrações num relatório Markdown unificado e estruturado.
-
-REGRAS:
-- Mantenha TODAS as referências "(fl. XXX)" originais.
-- Campos com informações conflitantes → marque como "DIVERGÊNCIA: [versão A] (fl. X) | [versão B] (fl. Y)".
-- Campos não encontrados em nenhum bloco → "Não localizado nos autos".
-- NÃO invente dados. Use apenas o que foi extraído.
-- Organize pelo template do módulo ${moduleId}.
-
-ESTRUTURA DO RELATÓRIO:
-## 1. Dados do Processo
-## 2. Partes e Representantes
-## 3. Dados Contratuais
-## 4. Objeto da Ação (Pedidos)
-## 5. Defesa (Principais Teses)
-## 6. Audiências e Instrução Processual
-  - Para CADA audiência: data, tipo, presenças, modalidade
-  - Depoimentos do reclamante e preposto: ITEM POR ITEM com impacto e relevância
-  - Testemunhas: nome, qualificação, pontos-chave, contradita
-  - Confissão ficta: destacar se houve (crítico)
-  - Propostas de acordo em audiência
-## 7. Instrução Probatória (Perícias)
-## 8. Sentença
-## 9. Recursos e Acórdão
-## 10. Cálculos e Liquidação
-## 11. Fase de Execução Detalhada
-  - Tabela comparativa: RDA vs RTE vs Perito (quando houver >1 conta)
-  - Embargos à execução: matérias arguidas e resultado
-  - Agravo de petição: matérias e acórdão AP
-  - Depósitos, garantias e penhoras: tabela consolidada com status
-  - Alvarás e valores soerguidos: total levantado
-  - Obrigações de fazer: lista + status cumprimento
-  - Situação atual da execução + saldo devedor estimado
-## 12. Trânsito em Julgado / Acordo
-## 13. Riscos e Alertas
-## 14. Observações
-
-Para cada campo, inclua a referência de folha. Ex: **Reclamante:** João da Silva (fl. 1)`;
-}
 
 // ---------------------------------------------------------------------------
 // Pipeline principal
@@ -351,47 +322,99 @@ export async function runMultiCallPipeline(
   );
 
   // 3. Chamadas 1–N: Extração por bloco (Sonnet — rápido/barato)
+  //    Blocos > MAX_BLOCK_CHARS são divididos em sub-blocos.
+  //    Blocos críticos (Sentença, Acórdão, etc.) têm retry em caso de falha.
   const blockResults: BlockResult[] = [];
   let totalTokens = 0;
 
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i];
-    onProgress?.(
-      `⏳ [Sonnet] Extraindo bloco ${i + 1}/${blocks.length}: ${block.label} (pp. ${block.pageRange[0]}–${block.pageRange[1]})...`
-    );
 
-    try {
-      const result = await processBlock(
-        block,
-        extractionModelId,
-        BLOCK_CALL_TIMEOUT_MS
-      );
-      blockResults.push(result);
-      totalTokens += result.tokensUsed;
+    // Sub-blocos: dividir se excede MAX_BLOCK_CHARS
+    const subBlocks =
+      block.text.length > MAX_BLOCK_CHARS
+        ? splitBlockIntoSubBlocks(block, MAX_BLOCK_CHARS)
+        : [block];
+
+    if (subBlocks.length > 1) {
       onProgress?.(
-        `✅ Bloco ${i + 1} concluído: ${Object.keys(result.extractedFields).length} campos extraídos.`
+        `📦 Bloco ${i + 1}/${blocks.length}: ${block.label} dividido em ${subBlocks.length} sub-blocos.`
       );
-    } catch (error) {
-      blockResults.push({
-        blockLabel: block.label,
-        pageRange: block.pageRange,
-        extractedFields: {},
-        rawAnalysis: `⚠️ Erro ao processar bloco: ${error instanceof Error ? error.message : "timeout"}`,
-        tokensUsed: 0,
-      });
-      onProgress?.(`⚠️ Bloco ${i + 1} falhou — continuando com os restantes.`);
+    }
+
+    const mergedFields: Record<string, string> = {};
+    const mergedAnalysisParts: string[] = [];
+    let mergedTokens = 0;
+    let anySuccess = false;
+
+    for (let j = 0; j < subBlocks.length; j++) {
+      const sub = subBlocks[j];
+      const subLabel =
+        subBlocks.length > 1
+          ? `${block.label} (sub-bloco ${j + 1}/${subBlocks.length})`
+          : block.label;
+
+      onProgress?.(
+        `⏳ [Sonnet] Extraindo bloco ${i + 1}/${blocks.length}: ${subLabel} (pp. ${sub.pageRange[0]}–${sub.pageRange[1]})...`
+      );
+
+      try {
+        const result = await processBlockWithRetry(
+          sub,
+          extractionModelId,
+          BLOCK_CALL_TIMEOUT_MS,
+          CRITICAL_BLOCK_LABELS.test(sub.label) ? 1 : 0,
+          onProgress
+        );
+        // Merge fields: valores posteriores sobrescrevem, salvo divergência
+        for (const [key, value] of Object.entries(result.extractedFields)) {
+          if (mergedFields[key] && mergedFields[key] !== value) {
+            mergedFields[key] = `DIVERGÊNCIA: ${mergedFields[key]} | ${value}`;
+          } else {
+            mergedFields[key] = value;
+          }
+        }
+        mergedAnalysisParts.push(result.rawAnalysis);
+        mergedTokens += result.tokensUsed;
+        anySuccess = true;
+        onProgress?.(
+          `✅ ${subLabel} concluído: ${Object.keys(result.extractedFields).length} campos extraídos.`
+        );
+      } catch (error) {
+        mergedAnalysisParts.push(
+          `⚠️ Erro ao processar ${subLabel}: ${error instanceof Error ? error.message : "timeout"}`
+        );
+        onProgress?.(`⚠️ ${subLabel} falhou — continuando com os restantes.`);
+      }
+    }
+
+    blockResults.push({
+      blockLabel: block.label,
+      pageRange: block.pageRange,
+      extractedFields: mergedFields,
+      rawAnalysis: mergedAnalysisParts.join("\n\n"),
+      tokensUsed: mergedTokens,
+    });
+
+    if (!anySuccess) {
+      onProgress?.(
+        `⚠️ Bloco ${i + 1} (${block.label}) falhou completamente — continuando.`
+      );
     }
   }
 
   // 4. Chamada de compilação/síntese (Opus — mais inteligente)
+  //    maxOutputTokens e timeout dinâmicos por módulo.
+  const synthesisConfig = getModuleSynthesisConfig(moduleId);
   onProgress?.(
-    "🔄 [Opus] Compilando relatório unificado + seções estratégicas..."
+    `🔄 [Opus] Compilando relatório unificado (${synthesisConfig.sections.length} seções, max ${synthesisConfig.maxOutputTokens} tokens)...`
   );
   const synthesized = await synthesizeResults(
     blockResults,
     moduleId,
     synthesisModelId,
-    SYNTHESIS_CALL_TIMEOUT_MS
+    synthesisConfig.synthesisTimeoutMs,
+    synthesisConfig.maxOutputTokens
   );
   totalTokens += synthesized.tokensUsed;
 
@@ -399,6 +422,7 @@ export async function runMultiCallPipeline(
   const pageRefErrors = validatePageReferences(synthesized.report);
 
   // 6. Chamada de validação cruzada T001/F001/C001/A001/E001 (Sonnet — custo controlado)
+  //    Prompt dinâmico por módulo (campos obrigatórios variam).
   onProgress?.(
     "🔍 [Sonnet] Validação cruzada T001/F001/C001/A001/E001 + score de completude..."
   );
@@ -407,7 +431,8 @@ export async function runMultiCallPipeline(
     blockResults,
     validationModelId,
     VALIDATION_CALL_TIMEOUT_MS,
-    blocks.map((b) => ({ label: b.label, primaryPhase: b.primaryPhase }))
+    blocks.map((b) => ({ label: b.label, primaryPhase: b.primaryPhase })),
+    moduleId
   );
   totalTokens += validationScore.tokensUsed;
 
@@ -439,11 +464,11 @@ async function processBlock(
   modelId: string,
   timeoutMs: number
 ): Promise<BlockResult> {
-  // Truncar bloco se muito grande
+  // Sub-blocos já garantem que o texto está dentro do limite.
+  // Segurança extra: truncar com aviso se ainda exceder (não deveria acontecer).
   const blockText =
     block.text.length > MAX_BLOCK_CHARS
-      ? block.text.slice(0, MAX_BLOCK_CHARS) +
-        "\n\n[... bloco truncado para caber no limite ...]"
+      ? `${block.text.slice(0, MAX_BLOCK_CHARS)}\n\n[... bloco truncado por segurança ...]`
       : block.text;
 
   const { text, usage } = await generateText({
@@ -455,24 +480,18 @@ async function processBlock(
     prompt: `Analise o seguinte trecho do processo (páginas ${block.pageRange[0]} a ${block.pageRange[1]}):\n\n${blockText}`,
   });
 
-  // Parse JSON da resposta
+  // Parse JSON da resposta (parser robusto com fallback em camadas)
   let extractedFields: Record<string, string> = {};
   let rawAnalysis = text;
 
-  try {
-    // Tentar extrair JSON da resposta (pode estar em code block)
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]) as {
-        fields?: Record<string, string>;
-        analysis?: string;
-      };
-      extractedFields = parsed.fields ?? {};
-      rawAnalysis = parsed.analysis ?? text;
-    }
-  } catch {
-    // Se não for JSON válido, usar texto completo como análise
-    rawAnalysis = text;
+  const parsed = extractJsonObject(text) as {
+    fields?: Record<string, string>;
+    analysis?: string;
+  } | null;
+
+  if (parsed?.fields) {
+    extractedFields = parsed.fields;
+    rawAnalysis = parsed.analysis ?? text;
   }
 
   return {
@@ -485,6 +504,127 @@ async function processBlock(
 }
 
 // ---------------------------------------------------------------------------
+// Retry para blocos críticos
+// ---------------------------------------------------------------------------
+
+async function processBlockWithRetry(
+  block: ProcessoBlock,
+  modelId: string,
+  timeoutMs: number,
+  maxRetries: number,
+  onProgress?: (message: string) => void
+): Promise<BlockResult> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const effectiveTimeout =
+        attempt === 0 ? timeoutMs : Math.round(timeoutMs * 1.5);
+      return await processBlock(block, modelId, effectiveTimeout);
+    } catch (error) {
+      lastError = error;
+      if (attempt < maxRetries) {
+        const waitMs = 2000 * (attempt + 1);
+        onProgress?.(
+          `🔄 Retentando bloco crítico: ${block.label} (tentativa ${attempt + 2}/${maxRetries + 1}, aguardando ${waitMs / 1000}s)...`
+        );
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+      }
+    }
+  }
+
+  // Todas as tentativas falharam
+  throw lastError;
+}
+
+// ---------------------------------------------------------------------------
+// Divisão de blocos grandes em sub-blocos
+// ---------------------------------------------------------------------------
+
+function splitBlockIntoSubBlocks(
+  block: ProcessoBlock,
+  maxChars: number
+): ProcessoBlock[] {
+  const text = block.text;
+  const subBlocks: ProcessoBlock[] = [];
+
+  // Encontrar todos os marcadores [Pag. N] com suas posições
+  const pageMarkers: Array<{ offset: number; page: number }> = [];
+  const PAGE_RE = /\[Pag\.\s*(\d+)\]/g;
+  for (const match of text.matchAll(PAGE_RE)) {
+    pageMarkers.push({
+      offset: match.index,
+      page: Number.parseInt(match[1], 10),
+    });
+  }
+
+  // Se poucos marcadores, dividir pela metade do texto
+  if (pageMarkers.length < 2) {
+    const mid = Math.floor(text.length / 2);
+    subBlocks.push({
+      label: block.label,
+      sections: block.sections,
+      text: text.slice(0, mid),
+      pageRange: [block.pageRange[0], block.pageRange[0]],
+      primaryPhase: block.primaryPhase,
+    });
+    subBlocks.push({
+      label: block.label,
+      sections: block.sections,
+      text: text.slice(mid),
+      pageRange: [block.pageRange[0], block.pageRange[1]],
+      primaryPhase: block.primaryPhase,
+    });
+    return subBlocks;
+  }
+
+  // Dividir nos marcadores mais próximos dos limites de maxChars
+  let startOffset = 0;
+  let startPage = block.pageRange[0];
+
+  while (startOffset < text.length) {
+    const endTarget = startOffset + maxChars;
+
+    if (endTarget >= text.length) {
+      // Último sub-bloco
+      subBlocks.push({
+        label: block.label,
+        sections: block.sections,
+        text: text.slice(startOffset),
+        pageRange: [startPage, block.pageRange[1]],
+        primaryPhase: block.primaryPhase,
+      });
+      break;
+    }
+
+    // Encontrar o marcador [Pag. N] mais próximo (antes) do endTarget
+    let bestMarker = pageMarkers.find((m) => m.offset >= endTarget);
+    if (!bestMarker) {
+      // Sem marcador após endTarget, usar o último disponível antes
+      bestMarker = [...pageMarkers]
+        .reverse()
+        .find((m) => m.offset > startOffset && m.offset <= endTarget);
+    }
+
+    const splitAt = bestMarker?.offset ?? endTarget;
+    const endPage = bestMarker?.page ?? startPage;
+
+    subBlocks.push({
+      label: block.label,
+      sections: block.sections,
+      text: text.slice(startOffset, splitAt),
+      pageRange: [startPage, endPage],
+      primaryPhase: block.primaryPhase,
+    });
+
+    startOffset = splitAt;
+    startPage = endPage;
+  }
+
+  return subBlocks;
+}
+
+// ---------------------------------------------------------------------------
 // Síntese dos resultados
 // ---------------------------------------------------------------------------
 
@@ -492,7 +632,8 @@ async function synthesizeResults(
   blockResults: BlockResult[],
   moduleId: string,
   modelId: string,
-  timeoutMs: number
+  timeoutMs: number,
+  maxTokens?: number
 ): Promise<{ report: string; tokensUsed: number }> {
   // Montar contexto com todos os resultados parciais
   const blocksContext = blockResults
@@ -507,7 +648,7 @@ async function synthesizeResults(
   const { text, usage } = await generateText({
     model: getLanguageModel(modelId),
     temperature: 0.15,
-    maxOutputTokens: 12_288,
+    maxOutputTokens: maxTokens ?? 16_384,
     abortSignal: AbortSignal.timeout(timeoutMs),
     system: getSynthesisPrompt(moduleId),
     prompt: `Extrações parciais dos blocos do processo:\n\n${blocksContext}\n\nGere o relatório unificado em Markdown.`,
@@ -521,83 +662,16 @@ async function synthesizeResults(
 
 // ---------------------------------------------------------------------------
 // Chamada 6: Validação cruzada T001/F001/C001 (LLM)
+// Prompt dinâmico por módulo — importado de validation-prompts.ts
 // ---------------------------------------------------------------------------
-
-const VALIDATION_PROMPT = `Você é um auditor jurídico. Analise o relatório abaixo e execute 5 validações:
-
-## T001 — VALIDAÇÃO TEMPORAL
-Verifique se as datas extraídas estão em ordem cronológica:
-admissão < demissão < ajuizamento < sentença < acórdão < trânsito em julgado
-Reporte CADA inversão temporal encontrada.
-
-## F001 — VALIDAÇÃO FINANCEIRA
-Verifique:
-- Valores em formato R$ válido (R$ #.###,##)
-- |Total - (Parcelas somadas)| < 0.5% do Total (quando aplicável)
-- Honorários ≤ 15% do valor total
-- Valor da causa > 0
-Reporte CADA inconsistência financeira.
-
-## C001 — VALIDAÇÃO DE CLASSIFICAÇÃO
-Verifique se as classificações são válidas:
-- tipo_sentença ∈ {procedente, improcedente, parcialmente procedente, extinto, acordo, homologação}
-- rito ∈ {ordinário, sumaríssimo, sumário} (quando informado)
-- fase ∈ {conhecimento, recursal, execução, encerrado} (quando informado)
-Reporte classificações inválidas ou ausentes obrigatórias.
-
-## A001 — VALIDAÇÃO DE AUDIÊNCIA
-Verifique consistência dos dados de audiência:
-- Se há data de audiência, deve haver registro de presenças das partes
-- Se houve audiência de instrução, deve haver ao menos 1 depoimento (reclamante OU preposto)
-- Se há testemunha listada, deve ter pelo menos 1 ponto-chave registrado
-- Se há confissão ficta, deve indicar de qual parte e motivo
-Reporte CADA inconsistência de audiência encontrada.
-
-## E001 — VALIDAÇÃO DE EXECUÇÃO
-Verifique consistência dos dados de execução:
-- Se há cálculos RDA, deve haver cálculos RTE (e vice-versa, quando em fase de execução)
-- Valores de depósitos/garantias devem estar em formato R$ válido
-- Se há embargos à execução, deve haver sentença de embargos (ou indicar "pendente de julgamento")
-- Datas de cálculos em ordem cronológica
-- Se há apólice de seguro garantia, verificar se vigência não está vencida
-Reporte CADA inconsistência de execução encontrada.
-
-## SCORE DE COMPLETUDE
-Conte quantos dos seguintes campos obrigatórios estão preenchidos (com valor real, não "Não localizado"):
-
-Campos base (19):
-numero_processo, vara, reclamante, reclamada, advogado_reclamante, data_admissao, data_demissao,
-funcao_cargo, ultimo_salario, pedidos, valor_causa, tipo_sentenca, pedidos_deferidos,
-valor_condenacao, honorarios, data_sentenca, resultado_recurso, valor_liquido, data_transito
-
-Campos audiência (5) — contar apenas se existir seção de audiência no relatório:
-audiencia_data, audiencia_tipo, depoimento_reclamante, depoimento_preposto, testemunhas
-
-Campos execução (4) — contar apenas se existir seção de execução no relatório:
-calculos_reclamante_rda, calculos_reclamado_rte, homologacao_calculos, situacao_execucao
-
-IMPORTANTE: total_count é dinâmico — 19 base + 5 se há audiência + 4 se há execução.
-Se o relatório não contém seção de audiência, não conte os 5 campos de audiência.
-Se o relatório não contém seção de execução, não conte os 4 campos de execução.
-
-Responda em JSON:
-{
-  "temporal_errors": ["descrição do erro 1", ...],
-  "financial_errors": ["descrição do erro 1", ...],
-  "classification_errors": ["descrição do erro 1", ...],
-  "audiencia_errors": ["descrição do erro 1", ...],
-  "execucao_errors": ["descrição do erro 1", ...],
-  "filled_count": <número>,
-  "total_count": <19 a 28, conforme seções presentes>,
-  "completude_score": <0-100>
-}`;
 
 async function runCrossValidation(
   report: string,
   _blockResults: BlockResult[],
   modelId: string,
   timeoutMs: number,
-  blockMeta?: Array<{ label: string; primaryPhase?: PhaseType }>
+  blockMeta?: Array<{ label: string; primaryPhase?: PhaseType }>,
+  moduleId?: string
 ): Promise<{
   score: ValidationScore;
   errors: string[];
@@ -614,14 +688,14 @@ async function runCrossValidation(
       temperature: 0.05,
       maxOutputTokens: 2048,
       abortSignal: AbortSignal.timeout(timeoutMs),
-      system: VALIDATION_PROMPT,
+      system: getValidationPrompt(moduleId ?? "DEFAULT"),
       prompt: `Relatório para validação:\n\n${report.slice(0, 80_000)}${metaSection}`,
     });
 
-    // Parse JSON
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]) as {
+    // Parse JSON (parser robusto)
+    const jsonResult = extractJsonObject(text);
+    if (jsonResult) {
+      const parsed = jsonResult as {
         temporal_errors?: string[];
         financial_errors?: string[];
         classification_errors?: string[];

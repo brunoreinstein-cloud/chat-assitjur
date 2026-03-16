@@ -9,6 +9,14 @@
 export const CONTEXT_WINDOW_CAPACITY_TOKENS = 200_000;
 
 /**
+ * Limites de truncagem aplicados server-side em route.ts.
+ * Exportados aqui para que o indicador de contexto no cliente
+ * possa espelhar a mesma lógica sem duplicar constantes.
+ */
+export const MAX_CHARS_PER_DOCUMENT = 80_000;
+export const MAX_TOTAL_DOC_CHARS = 180_000;
+
+/**
  * Margem reservada para a resposta do modelo (maxOutputTokens ~8k) e overhead.
  * Claude suporta 200k de contexto; reservamos 5k para output, resultando em 195k de input.
  * Anteriormente era 180k (20k de margem), mas 5k é suficiente para respostas típicas.

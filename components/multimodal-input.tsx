@@ -51,6 +51,16 @@ const PHASE_LABELS: Record<UploadPhase, string> = {
   done: "Concluído",
 };
 
+/** Tamanho a partir do qual mostra label estendida na extração (10 MB). */
+const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024;
+
+function getPhaseLabel(phase: UploadPhase, fileSize?: number): string {
+  if (phase === "extracting" && fileSize && fileSize > LARGE_FILE_THRESHOLD) {
+    return "Extraindo texto (documento grande, pode levar 30s+)…";
+  }
+  return PHASE_LABELS[phase];
+}
+
 interface UploadQueueItem {
   id: string;
   label: string;
@@ -1581,7 +1591,7 @@ function PureMultimodalInput({
                       <span className="relative shrink-0 font-medium text-[10px] text-primary">
                         {item.percent > 0 && item.phase === "uploading"
                           ? `${item.percent}%`
-                          : PHASE_LABELS[item.phase]}
+                          : getPhaseLabel(item.phase, item.fileSize)}
                       </span>
                     </div>
                   ))}

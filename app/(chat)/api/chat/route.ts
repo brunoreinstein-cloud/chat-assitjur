@@ -34,6 +34,8 @@ import {
   applyContextEditing,
   CONTEXT_WINDOW_INPUT_TARGET_TOKENS,
   estimateInputTokens,
+  MAX_CHARS_PER_DOCUMENT,
+  MAX_TOTAL_DOC_CHARS,
 } from "@/lib/ai/context-window";
 import { MIN_CREDITS_TO_START_CHAT, tokensToCredits } from "@/lib/ai/credits";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
@@ -52,6 +54,7 @@ import {
 } from "@/lib/ai/resolve-knowledge-ids";
 import { analyzeProcessoPipeline } from "@/lib/ai/tools/analyze-processo-pipeline";
 import { createDocument } from "@/lib/ai/tools/create-document";
+import { createMasterDocuments } from "@/lib/ai/tools/create-master-documents";
 import { createRedatorContestacaoDocument } from "@/lib/ai/tools/create-redator-contestacao-document";
 import { createRevisorDefesaDocuments } from "@/lib/ai/tools/create-revisor-defesa-documents";
 import { getWeather } from "@/lib/ai/tools/get-weather";
@@ -249,10 +252,6 @@ function wrapKnowledgeDocument(
   return `<document id="${id}" title="${safeTitle}">${cdataBody}</document>`;
 }
 
-/** Máximo de caracteres por documento no prompt (evita "prompt is too long" ~200k tokens). */
-const MAX_CHARS_PER_DOCUMENT = 80_000;
-/** Máximo total de caracteres de documentos numa única mensagem. */
-const MAX_TOTAL_DOC_CHARS = 180_000;
 /** Na PI, ao truncar, preservar este número de caracteres do final (OAB/assinaturas). */
 const PI_TAIL_CHARS = 2500;
 
@@ -1353,7 +1352,8 @@ function createStreamExecuteHandler(
       | (typeof baseToolNames)[number]
       | "createRevisorDefesaDocuments"
       | "createRedatorContestacaoDocument"
-      | "analyzeProcessoPipeline";
+      | "analyzeProcessoPipeline"
+      | "createMasterDocuments";
     const activeToolNames: ActiveToolName[] = ctx.isReasoningModel
       ? []
       : [
@@ -1366,6 +1366,9 @@ function createStreamExecuteHandler(
             : []),
           ...(ctx.agentConfig.usePipelineTool
             ? (["analyzeProcessoPipeline"] as const)
+            : []),
+          ...(ctx.agentConfig.useMasterDocumentsTool
+            ? (["createMasterDocuments"] as const)
             : []),
         ];
 
@@ -1400,6 +1403,7 @@ function createStreamExecuteHandler(
         typeof createRedatorContestacaoDocument
       >;
       analyzeProcessoPipeline?: ReturnType<typeof analyzeProcessoPipeline>;
+      createMasterDocuments?: ReturnType<typeof createMasterDocuments>;
     };
     if (ctx.agentConfig.useRevisorDefesaTools) {
       tools.createRevisorDefesaDocuments = createRevisorDefesaDocuments({
@@ -1420,6 +1424,12 @@ function createStreamExecuteHandler(
           dataStream,
         }
       );
+    }
+    if (ctx.agentConfig.useMasterDocumentsTool) {
+      tools.createMasterDocuments = createMasterDocuments({
+        session: ctx.session,
+        dataStream,
+      });
     }
 
     const result = streamText({

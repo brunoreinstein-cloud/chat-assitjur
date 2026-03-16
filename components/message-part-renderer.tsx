@@ -7,6 +7,10 @@ import { cn, sanitizeText } from "@/lib/utils";
 import { DocumentToolResult } from "./document";
 import { MessageContent } from "./elements/message";
 import { Response } from "./elements/response";
+import {
+  type MasterDocumentsOutput,
+  MasterDocumentsResult,
+} from "./master-documents-result";
 import { MessageDocumentTool } from "./message-document-tool";
 import { MessageEditor } from "./message-editor";
 import { MessageReasoning } from "./message-reasoning";
@@ -170,6 +174,15 @@ function renderToolPart(
       />
     );
   }
+  if (type === "tool-createMasterDocuments") {
+    return (
+      <MasterDocumentsResult
+        isReadonly={ctx.isReadonly}
+        key={part.toolCallId}
+        output={part.output as MasterDocumentsOutput}
+      />
+    );
+  }
   if (type === "tool-createRedatorContestacaoDocument") {
     const output = part.output as
       | { id?: string; title?: string; error?: unknown }
@@ -237,6 +250,7 @@ function renderPartByType(
     type === "tool-createDocument" ||
     type === "tool-updateDocument" ||
     type === "tool-createRevisorDefesaDocuments" ||
+    type === "tool-createMasterDocuments" ||
     type === "tool-createRedatorContestacaoDocument" ||
     type === "tool-requestSuggestions"
   ) {

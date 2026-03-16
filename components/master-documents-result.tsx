@@ -7,40 +7,34 @@ import {
   downloadDocxFromPost,
   downloadZipFromPost,
 } from "@/lib/document-download-utils";
-import { getRevisorDoc, getRevisorDocs } from "@/lib/revisor-content-store";
-import { useRevisorCompletedCount } from "@/lib/revisor-progress-store";
+import { getMasterDoc, getMasterDocs } from "@/lib/master-content-store";
+import { useMasterCompletedCount } from "@/lib/master-progress-store";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Skeleton } from "./ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 
-export interface RevisorDefesaDocumentsOutput {
+export interface MasterDocumentsOutput {
   ids?: string[];
   titles?: string[];
   error?: unknown;
 }
 
-interface RevisorDefesaDocumentsResultProps {
-  output: RevisorDefesaDocumentsOutput | undefined;
+interface MasterDocumentsResultProps {
+  output: MasterDocumentsOutput | undefined;
   isReadonly: boolean;
 }
 
-const DOC_LABELS = [
-  "Avaliação",
-  "Roteiro Advogado",
-  "Roteiro Preposto",
-] as const;
-
-function downloadRevisorDocx(id: string, layout?: DocxLayout): void {
-  const doc = getRevisorDoc(id);
+function downloadMasterDocx(id: string, layout?: DocxLayout): void {
+  const doc = getMasterDoc(id);
   if (!doc) {
     return;
   }
   downloadDocxFromPost(doc.title, doc.content, layout);
 }
 
-function downloadRevisorZip(ids: string[], layout?: DocxLayout): void {
-  const docs = getRevisorDocs(ids);
+function downloadMasterZip(ids: string[], layout?: DocxLayout): void {
+  const docs = getMasterDocs(ids);
   downloadZipFromPost(
     docs.map(({ title, content }) => ({ title, content })),
     layout
@@ -48,15 +42,16 @@ function downloadRevisorZip(ids: string[], layout?: DocxLayout): void {
 }
 
 /**
- * Renderiza o resultado da tool createRevisorDefesaDocuments:
- * - Estado de carregamento com skeleton por doc (usa revisorProgress store)
- * - 3 docs em tabs com preview markdown directo (sem iframe/DB) e downloads sem DB
+ * Renderiza o resultado da tool createMasterDocuments:
+ * - Estado de carregamento com skeleton por doc (usa masterProgress store)
+ * - Docs em tabs (se >1) ou card simples (se 1) com preview e downloads
+ * - Layout fixo assistjur-master para download DOCX
  */
-export function RevisorDefesaDocumentsResult({
+export function MasterDocumentsResult({
   output,
   isReadonly,
-}: Readonly<RevisorDefesaDocumentsResultProps>) {
-  const completedCount = useRevisorCompletedCount();
+}: Readonly<MasterDocumentsResultProps>) {
+  const completedCount = useMasterCompletedCount();
   const [previewState, setPreviewState] = useState<{
     ids: string[];
     titles: string[];
@@ -67,7 +62,7 @@ export function RevisorDefesaDocumentsResult({
   if (output && typeof output === "object" && "error" in output) {
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-500 dark:bg-red-950/50">
-        Erro ao criar os 3 documentos: {String(output.error)}
+        Erro ao criar documentos: {String(output.error)}
       </div>
     );
   }
@@ -78,12 +73,16 @@ export function RevisorDefesaDocumentsResult({
 
   // Estado de carregamento com skeleton por doc
   if (isLoading) {
+    const loadingTitles = Array.from(
+      { length: Math.max(1, completedCount + 1) },
+      (_, i) => `Documento ${i + 1}`
+    );
     return (
       <div className="flex flex-col gap-2 rounded-xl border bg-muted/50 p-3">
         <p className="font-medium text-muted-foreground text-xs">
           A criar documentos…
         </p>
-        {DOC_LABELS.map((label, i) => {
+        {loadingTitles.map((label, i) => {
           const isDone = i < completedCount;
           const isActive = i === completedCount;
           return (
@@ -122,41 +121,77 @@ export function RevisorDefesaDocumentsResult({
     );
   }
 
-  // Documentos prontos
-  const tabLabels = titles.length === 3 ? titles : DOC_LABELS;
-
   function openPreviewAt(index: number) {
-    setPreviewState({ ids, titles: tabLabels as string[], index });
+    setPreviewState({ ids, titles, index });
   }
 
   const previewContent =
     previewState !== null
-      ? (getRevisorDoc(previewState.ids[previewState.index])?.content ?? "")
+      ? (getMasterDoc(previewState.ids[previewState.index])?.content ?? "")
       : "";
 
+  // Documento único — card simples sem tabs
+  if (ids.length === 1) {
+    return (
+      <>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2 text-muted-foreground text-sm">
+            <FileText className="size-4 shrink-0" />
+            <span className="truncate font-medium text-foreground">
+              {titles[0] ?? "Relatório"}
+            </span>
+          </div>
+          {!isReadonly && (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                className="h-7 gap-1 px-2 text-xs"
+                onClick={() => openPreviewAt(0)}
+                size="sm"
+                variant="outline"
+              >
+                <Eye className="size-3" />
+                Ver conteúdo
+              </Button>
+              <Button
+                className="h-7 gap-1 px-2 text-xs"
+                onClick={() => downloadMasterDocx(ids[0], "assistjur-master")}
+                size="sm"
+                variant="outline"
+              >
+                <Download className="size-3" />
+                DOCX
+              </Button>
+            </div>
+          )}
+        </div>
+        {renderPreviewModal()}
+      </>
+    );
+  }
+
+  // Múltiplos documentos — tabs
   return (
     <>
       <div className="flex flex-col gap-2">
         <Tabs onValueChange={setActiveTab} value={activeTab}>
           <TabsList className="w-full">
-            {tabLabels.map((label, i) => (
+            {titles.map((title, i) => (
               <TabsTrigger
                 className="flex-1 truncate text-xs"
                 key={ids[i] ?? i}
                 value={String(i)}
               >
-                {DOC_LABELS[i] ?? label}
+                {title}
               </TabsTrigger>
             ))}
           </TabsList>
 
           {ids.map((id, i) => (
             <TabsContent key={id} value={String(i)}>
-              {/* Card estático — sem chamadas à BD; conteúdo disponível via store em memória */}
               <div className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2 text-muted-foreground text-sm">
                 <FileText className="size-4 shrink-0" />
                 <span className="truncate font-medium text-foreground">
-                  {tabLabels[i] ?? `Documento ${i + 1}`}
+                  {titles[i] ?? `Documento ${i + 1}`}
                 </span>
               </div>
               {!isReadonly && (
@@ -172,21 +207,12 @@ export function RevisorDefesaDocumentsResult({
                   </Button>
                   <Button
                     className="h-7 gap-1 px-2 text-xs"
-                    onClick={() => downloadRevisorDocx(id)}
+                    onClick={() => downloadMasterDocx(id, "assistjur-master")}
                     size="sm"
                     variant="outline"
                   >
                     <Download className="size-3" />
                     DOCX
-                  </Button>
-                  <Button
-                    className="h-7 gap-1 px-2 text-xs"
-                    onClick={() => downloadRevisorDocx(id, "assistjur-master")}
-                    size="sm"
-                    variant="outline"
-                  >
-                    <Download className="size-3" />
-                    Master
                   </Button>
                 </div>
               )}
@@ -194,31 +220,26 @@ export function RevisorDefesaDocumentsResult({
           ))}
         </Tabs>
 
-        {!isReadonly && ids.length > 0 && (
+        {!isReadonly && ids.length > 1 && (
           <div className="flex gap-2 pt-1">
             <Button
               className="h-7 gap-1 px-2 text-xs"
-              onClick={() => downloadRevisorZip(ids)}
+              onClick={() => downloadMasterZip(ids, "assistjur-master")}
               size="sm"
               variant="outline"
             >
               <Archive className="size-3" />
               ZIP todos
             </Button>
-            <Button
-              className="h-7 gap-1 px-2 text-xs"
-              onClick={() => downloadRevisorZip(ids, "assistjur-master")}
-              size="sm"
-              variant="outline"
-            >
-              <Archive className="size-3" />
-              ZIP Master
-            </Button>
           </div>
         )}
       </div>
+      {renderPreviewModal()}
+    </>
+  );
 
-      {/* Modal de preview com conteúdo markdown directo (sem iframe/DB) */}
+  function renderPreviewModal() {
+    return (
       <Dialog
         onOpenChange={(open) => {
           if (!open) {
@@ -228,7 +249,7 @@ export function RevisorDefesaDocumentsResult({
         open={previewState !== null}
       >
         <DialogContent
-          aria-describedby="revisor-preview-desc"
+          aria-describedby="master-preview-desc"
           className="flex max-h-[90dvh] max-w-4xl flex-col gap-0 p-0"
         >
           <DialogHeader className="shrink-0 border-b px-4 py-3">
@@ -277,7 +298,10 @@ export function RevisorDefesaDocumentsResult({
                   <Button
                     className="ml-1 h-7 gap-1 px-2 text-xs"
                     onClick={() =>
-                      downloadRevisorDocx(previewState.ids[previewState.index])
+                      downloadMasterDocx(
+                        previewState.ids[previewState.index],
+                        "assistjur-master"
+                      )
                     }
                     size="sm"
                     variant="outline"
@@ -291,7 +315,7 @@ export function RevisorDefesaDocumentsResult({
           </DialogHeader>
           <div
             className="min-h-0 flex-1 overflow-auto px-6 py-4"
-            id="revisor-preview-desc"
+            id="master-preview-desc"
           >
             <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed">
               {previewContent}
@@ -299,6 +323,6 @@ export function RevisorDefesaDocumentsResult({
           </div>
         </DialogContent>
       </Dialog>
-    </>
-  );
+    );
+  }
 }

@@ -165,6 +165,7 @@ function PureMessages({
             <>
               {showNewEmptyState ? (
                 <ChatEmptyState
+                  agentId={agentId as AgentId}
                   onAgentSelect={onAgentSelect}
                   onQuickPrompt={(text) => {
                     onQuickPrompt(text);

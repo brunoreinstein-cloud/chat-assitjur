@@ -6,6 +6,11 @@ import { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
 import type { PipelineDashboardData } from "@/components/pipeline-quality-dashboard";
 import { initialArtifactData, useArtifact } from "@/hooks/use-artifact";
+import { storeMasterDoc } from "@/lib/master-content-store";
+import {
+  resetMasterProgress,
+  setMasterCompletedCount,
+} from "@/lib/master-progress-store";
 import { setPipelineDashboardData } from "@/lib/pipeline-dashboard-store";
 import { storeRevisorDoc } from "@/lib/revisor-content-store";
 import {
@@ -25,6 +30,11 @@ import { getChatHistoryPaginationKey } from "./sidebar-history";
 let _docId = "";
 let _docTitle = "";
 let _docContent = "";
+
+// Acumuladores de conteúdo do stream para o master-content-store
+let _mdocId = "";
+let _mdocTitle = "";
+let _mdocContent = "";
 
 export function DataStreamHandler() {
   const { dataStream, setDataStream } = useDataStream();
@@ -70,6 +80,47 @@ export function DataStreamHandler() {
         }
         _docId = "";
         _docContent = "";
+        continue;
+      }
+
+      // Acumulação de conteúdo para o master-content-store (sem DB).
+      // Usa prefixo mdoc — estes eventos NÃO activam o painel artifact.
+      if (delta.type === "data-mdocId") {
+        _mdocId = delta.data as string;
+        continue;
+      }
+      if (delta.type === "data-mdocTitle") {
+        _mdocTitle = delta.data as string;
+        continue;
+      }
+      if (delta.type === "data-mdocClear") {
+        _mdocContent = "";
+        continue;
+      }
+      if (delta.type === "data-mdocDelta") {
+        _mdocContent += delta.data as string;
+        continue;
+      }
+      if (delta.type === "data-mdocFinish") {
+        if (_mdocId) {
+          storeMasterDoc(_mdocId, _mdocTitle, _mdocContent);
+        }
+        _mdocId = "";
+        _mdocContent = "";
+        continue;
+      }
+      if (delta.type === "data-mdocStart" || delta.type === "data-mdocDone") {
+        continue; // Apenas sinalização — tratamento no UI component
+      }
+      if (delta.type === "data-mdocProgress") {
+        continue; // Progresso visual tratado via masterProgress
+      }
+      if (delta.type === "data-masterProgress") {
+        const completedCount = delta.data as number;
+        if (completedCount === 1) {
+          resetMasterProgress();
+        }
+        setMasterCompletedCount(completedCount);
         continue;
       }
 

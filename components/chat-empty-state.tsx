@@ -18,38 +18,100 @@ const AGENT_CARD_STYLE: Record<AgentId, { emoji: string; bg: string }> = {
   [AGENT_ID_ASSISTJUR_MASTER]: { emoji: "🧠", bg: "bg-assistjur-purple/15" },
 };
 
-const QUICK_PROMPTS: Array<{ label: string; text: string }> = [
-  {
-    label: "📎 Revisar defesa anexada",
-    text: "Quero revisar a defesa que vou anexar agora.",
-  },
-  {
-    label: "📝 Redigir contestação",
-    text: "Preciso redigir uma contestação trabalhista.",
-  },
-  {
-    label: "🏛️ Buscar jurisprudência TST",
-    text: "Busque jurisprudência recente no TST sobre:",
-  },
-  {
-    label: "📋 Estruturar tese defensiva",
-    text: "Ajude-me a estruturar uma tese defensiva para:",
-  },
-  {
-    label: "⚡ Horas extras — principais teses",
-    text: "Quais as principais teses defensivas para horas extras?",
-  },
-];
+interface QuickPrompt {
+  label: string;
+  text: string;
+}
+
+const QUICK_PROMPTS_BY_AGENT: Record<AgentId, QuickPrompt[]> = {
+  [AGENT_ID_ASSISTENTE_GERAL]: [
+    {
+      label: "💬 Tirar dúvida jurídica",
+      text: "Tenho uma dúvida sobre direito trabalhista:",
+    },
+    {
+      label: "📄 Resumir documento",
+      text: "Resuma o documento anexado destacando os pontos principais.",
+    },
+    {
+      label: "📋 Calcular prazos",
+      text: "Me ajude a calcular os prazos processuais para:",
+    },
+    {
+      label: "🔍 Explicar conceito",
+      text: "Explique de forma clara o conceito jurídico de:",
+    },
+  ],
+  [AGENT_ID_REVISOR_DEFESAS]: [
+    {
+      label: "📎 Revisar defesa anexada",
+      text: "Quero revisar a defesa que vou anexar agora.",
+    },
+    {
+      label: "🔍 Auditar contestação",
+      text: "Auditar minha contestação: segue em anexo a Petição Inicial e a Contestação.",
+    },
+    {
+      label: "📋 Estruturar tese defensiva",
+      text: "Ajude-me a estruturar uma tese defensiva para:",
+    },
+    {
+      label: "⚡ Horas extras — principais teses",
+      text: "Quais as principais teses defensivas para horas extras?",
+    },
+  ],
+  [AGENT_ID_REDATOR_CONTESTACAO]: [
+    {
+      label: "✍️ Redigir contestação",
+      text: "Preciso redigir uma contestação trabalhista. Segue a PI em anexo.",
+    },
+    {
+      label: "📝 Contestar pedido específico",
+      text: "Preciso contestar o seguinte pedido da inicial:",
+    },
+    {
+      label: "🏛️ Incluir jurisprudência",
+      text: "Inclua jurisprudência favorável à defesa sobre:",
+    },
+    {
+      label: "📋 Preliminares e prejudiciais",
+      text: "Elabore as preliminares e prejudiciais de mérito para:",
+    },
+  ],
+  [AGENT_ID_ASSISTJUR_MASTER]: [
+    {
+      label: "🧠 Análise completa",
+      text: "Faça uma análise completa do processo anexado, identificando pontos críticos e gerando relatório.",
+    },
+    {
+      label: "📊 Mapear pedidos e riscos",
+      text: "Mapeie todos os pedidos da inicial anexada e avalie o risco de cada um.",
+    },
+    {
+      label: "⚖️ Estratégia defensiva",
+      text: "Elabore uma estratégia defensiva completa para o caso anexado.",
+    },
+    {
+      label: "📑 Gerar relatório DOCX",
+      text: "Analise o documento anexado e gere um relatório completo em DOCX.",
+    },
+  ],
+};
 
 interface ChatEmptyStateProps {
+  readonly agentId?: AgentId;
   readonly onAgentSelect: (id: AgentId) => void;
   readonly onQuickPrompt: (text: string) => void;
 }
 
 export function ChatEmptyState({
+  agentId,
   onAgentSelect,
   onQuickPrompt,
 }: ChatEmptyStateProps) {
+  const quickPrompts =
+    QUICK_PROMPTS_BY_AGENT[agentId ?? AGENT_ID_ASSISTENTE_GERAL] ??
+    QUICK_PROMPTS_BY_AGENT[AGENT_ID_ASSISTENTE_GERAL];
   return (
     <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden px-6 py-10">
       {/* Glow — tema claro: sutil; tema escuro: roxo/dourado */}
@@ -131,7 +193,7 @@ export function ChatEmptyState({
 
         {/* Quick prompts */}
         <div className="flex flex-wrap justify-center gap-1.5">
-          {QUICK_PROMPTS.map((q) => (
+          {quickPrompts.map((q) => (
             <button
               className="whitespace-nowrap rounded-full border border-border bg-muted/80 px-3 py-1.5 text-[12px] text-muted-foreground transition-all hover:border-assistjur-purple/40 hover:bg-assistjur-purple/5 hover:text-foreground"
               key={q.label}

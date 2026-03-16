@@ -3,6 +3,8 @@
 import {
   CONTEXT_WINDOW_INPUT_TARGET_TOKENS,
   estimateTokensFromText,
+  MAX_CHARS_PER_DOCUMENT,
+  MAX_TOTAL_DOC_CHARS,
 } from "@/lib/ai/context-window";
 
 interface MessageLike {
@@ -42,9 +44,19 @@ export function ContextUsageIndicator({
     }
   }
 
+  // Espelha a truncagem server-side: cada doc é limitado a MAX_CHARS_PER_DOCUMENT
+  // e o total de chars de documentos é limitado a MAX_TOTAL_DOC_CHARS.
+  let totalDocChars = 0;
   for (const att of attachments) {
     if (att.extractedText) {
-      tokens += estimateTokensFromText(att.extractedText);
+      const remaining = Math.max(0, MAX_TOTAL_DOC_CHARS - totalDocChars);
+      const cappedLen = Math.min(
+        att.extractedText.length,
+        MAX_CHARS_PER_DOCUMENT,
+        remaining
+      );
+      totalDocChars += cappedLen;
+      tokens += estimateTokensFromText(att.extractedText.slice(0, cappedLen));
     }
   }
 
@@ -86,17 +98,17 @@ export function ContextUsageIndicator({
     dotColor = "bg-yellow-500";
     barColor = "bg-yellow-500";
     labelColor = "text-yellow-600 dark:text-yellow-400";
-    label = "Sessão com bastante conteúdo";
+    label = `Contexto ${pct}% utilizado`;
   } else if (pct < THRESHOLD_RED) {
     dotColor = "bg-orange-500";
     barColor = "bg-orange-500";
     labelColor = "text-orange-600 dark:text-orange-400";
-    label = "Sessão quase cheia — considere nova conversa";
+    label = `Contexto ${pct}% utilizado — considere iniciar nova conversa`;
   } else {
     dotColor = "bg-red-500";
     barColor = "bg-red-500";
     labelColor = "text-red-600 dark:text-red-400";
-    label = "Limite próximo — inicie nova sessão para continuar";
+    label = `Contexto ${pct}% utilizado — inicie nova conversa para melhores resultados`;
   }
 
   return (
