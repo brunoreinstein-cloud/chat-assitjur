@@ -1233,6 +1233,20 @@ export async function deleteUserFileById({
   }
 }
 
+/** Salva o resumo estruturado extraído por IA (PI/Contestação) no ficheiro do utilizador. */
+export async function updateUserFileStructuredSummary({
+  id,
+  structuredSummary,
+}: {
+  id: string;
+  structuredSummary: string;
+}): Promise<void> {
+  await getDb()
+    .update(userFile)
+    .set({ structuredSummary })
+    .where(eq(userFile.id, id));
+}
+
 export async function getKnowledgeFoldersByUserId({
   userId,
 }: {

@@ -39,6 +39,10 @@ import {
 } from "@/lib/ai/context-window";
 import { MIN_CREDITS_TO_START_CHAT, tokensToCredits } from "@/lib/ai/credits";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
+import {
+  extractStructuredFields,
+  formatStructuredFieldsAsHeader,
+} from "@/lib/ai/extract-structured-fields";
 import { modelSupportsVision } from "@/lib/ai/models";
 import { stripImageParts } from "@/lib/ai/multimodal";
 import { getPromptCachingCacheControl } from "@/lib/ai/prompt-caching-config";
@@ -253,7 +257,7 @@ function wrapKnowledgeDocument(
 }
 
 /** Na PI, ao truncar, preservar este número de caracteres do final (OAB/assinaturas). */
-const PI_TAIL_CHARS = 2500;
+const PI_TAIL_CHARS = 8000;
 
 /** Últimas N mensagens a carregar para contexto (reduz BD e tamanho do prompt; a qualidade mantém-se com contexto recente). */
 const CHAT_MESSAGES_LIMIT = 80;
@@ -426,18 +430,28 @@ function normalizeMessageParts(
       if (remaining <= 0) {
         return [];
       }
+
+      // Extração regex no texto COMPLETO (antes da truncagem)
+      const regexFields = extractStructuredFields(p.text);
+      const regexHeader = formatStructuredFieldsAsHeader(regexFields);
+
       const maxForThis = Math.min(MAX_CHARS_PER_DOCUMENT, remaining);
       const truncated = truncateDocumentText(
         p.text,
         maxForThis,
         p.documentType
       );
-      totalDocChars += truncated.length;
+      totalDocChars += truncated.length + regexHeader.length;
       const label = getDocumentPartLabel(p.documentType);
       const hint = getDocumentPartExtractionHint(p.documentType);
-      const header = hint
-        ? `[${label}: ${p.name}]\n${hint}\n\n`
-        : `[${label}: ${p.name}]\n\n`;
+      const headerParts = [`[${label}: ${p.name}]`];
+      if (hint) {
+        headerParts.push(hint);
+      }
+      if (regexHeader) {
+        headerParts.push(regexHeader);
+      }
+      const header = `${headerParts.join("\n")}\n\n`;
       return [
         {
           type: "text" as const,
@@ -1088,6 +1102,16 @@ function buildKnowledgeContextFromParts(
     fillKnowledgeFromFullDocsWhenEmpty(knowledgeDocParts, knowledgeDocsResult);
   }
   for (const uf of userFilesFromArchivos) {
+    // Injetar resumo estruturado se disponível (mesmo padrão dos KnowledgeDocuments)
+    if (uf.structuredSummary) {
+      knowledgeDocParts.push(
+        wrapKnowledgeDocument(
+          uf.id,
+          `${uf.filename} [Resumo Estruturado]`,
+          uf.structuredSummary
+        )
+      );
+    }
     if (
       typeof uf.extractedTextCache === "string" &&
       uf.extractedTextCache.trim().length > 0
