@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AssistJur.IA — Copiloto Jurídico</title>
+  <link rel="stylesheet" href="styles/sidepanel.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-brand">
+        <svg class="header-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/>
+          <line x1="4.22" y1="4.22" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.78" y2="19.78"/>
+          <line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.78" y2="4.22"/>
+        </svg>
+        <span class="brand-text">
+          <span class="brand-assist">Assist</span><span class="brand-jur">Jur.</span><span class="brand-ia">IA</span>
+        </span>
+      </div>
+      <div class="header-actions">
+        <button id="btn-extract" class="btn-icon" title="Extrair dados da página">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+        </button>
+        <button id="btn-new-chat" class="btn-icon" title="Novo chat">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+        <button id="btn-settings" class="btn-icon" title="Configurações">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Setup screen (shown when API URL is not configured) -->
+    <div id="screen-setup" class="screen" style="display:none">
+      <div class="setup-card">
+        <h2>Configuração</h2>
+        <p class="setup-desc">Configure a URL da sua instância AssistJur para começar.</p>
+        <div class="form-group">
+          <label for="input-api-url">URL da API</label>
+          <input id="input-api-url" type="url" placeholder="https://sua-instancia.vercel.app" />
+        </div>
+        <button id="btn-save-config" class="btn btn-primary">Salvar e Conectar</button>
+        <p id="setup-error" class="error-text" style="display:none"></p>
+      </div>
+    </div>
+
+    <!-- Login screen -->
+    <div id="screen-login" class="screen" style="display:none">
+      <div class="setup-card">
+        <h2>Entrar</h2>
+        <div class="form-group">
+          <label for="input-email">E-mail</label>
+          <input id="input-email" type="email" placeholder="seu@email.com" />
+        </div>
+        <div class="form-group">
+          <label for="input-password">Senha</label>
+          <input id="input-password" type="password" placeholder="Sua senha" />
+        </div>
+        <button id="btn-login" class="btn btn-primary">Entrar</button>
+        <div class="login-divider"><span>ou</span></div>
+        <button id="btn-guest" class="btn btn-secondary">Entrar como Visitante</button>
+        <p id="login-error" class="error-text" style="display:none"></p>
+      </div>
+    </div>
+
+    <!-- Main chat screen -->
+    <div id="screen-chat" class="screen" style="display:none">
+      <!-- Quick actions bar -->
+      <div class="quick-actions">
+        <button class="quick-action" data-action="analyze">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          Analisar Processo
+        </button>
+        <button class="quick-action" data-action="risks">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          Identificar Riscos
+        </button>
+        <button class="quick-action" data-action="deadlines">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Prazos
+        </button>
+        <button class="quick-action" data-action="contest">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Elaborar Contestação
+        </button>
+      </div>
+
+      <!-- Messages area -->
+      <div id="messages" class="messages">
+        <div class="welcome-message">
+          <div class="welcome-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/>
+              <line x1="4.22" y1="4.22" x2="6.34" y2="6.34"/><line x1="17.66" y1="17.66" x2="19.78" y2="19.78"/>
+              <line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/>
+              <line x1="4.22" y1="19.78" x2="6.34" y2="17.66"/><line x1="17.66" y1="6.34" x2="19.78" y2="4.22"/>
+            </svg>
+          </div>
+          <h3>Copiloto Jurídico</h3>
+          <p>Navegue até um processo no PJe, e-SAJ ou outro sistema judicial e clique em <strong>"Analisar Processo"</strong> para começar.</p>
+          <p class="welcome-hint">Você também pode selecionar texto na página e clicar com o botão direito para analisar.</p>
+        </div>
+      </div>
+
+      <!-- Input area -->
+      <div class="input-area">
+        <div class="input-wrapper">
+          <textarea id="input-message" placeholder="Pergunte sobre o processo..." rows="1"></textarea>
+          <button id="btn-send" class="btn-send" title="Enviar">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+        </div>
+        <div class="input-footer">
+          <span id="status-indicator" class="status-dot status-disconnected"></span>
+          <span id="status-text" class="status-text">Desconectado</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="scripts/sidepanel.js"></script>
+</body>
+</html>

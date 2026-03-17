@@ -1,0 +1,67 @@
+{
+  "manifest_version": 3,
+  "name": "AssistJur.IA — Copiloto Jurídico",
+  "version": "1.0.0",
+  "description": "Copiloto jurídico com IA para advogados. Analisa processos em PJe, e-SAJ, TRT e outros sistemas judiciais diretamente no navegador.",
+  "permissions": [
+    "activeTab",
+    "sidePanel",
+    "storage",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "https://pje.trt*.jus.br/*",
+    "https://pje.trt*.gov.br/*",
+    "https://pje*.jus.br/*",
+    "https://pje*.gov.br/*",
+    "https://esaj.tjsp.jus.br/*",
+    "https://esaj.tj*.jus.br/*",
+    "https://eproc.trf*.jus.br/*",
+    "https://eproc.jf*.jus.br/*",
+    "https://projudi.tj*.jus.br/*",
+    "https://sei.*.gov.br/*",
+    "https://consultasaj.tjsp.jus.br/*",
+    "https://*.cnj.jus.br/*"
+  ],
+  "background": {
+    "service_worker": "scripts/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://pje.trt*.jus.br/*",
+        "https://pje.trt*.gov.br/*",
+        "https://pje*.jus.br/*",
+        "https://pje*.gov.br/*",
+        "https://esaj.tjsp.jus.br/*",
+        "https://esaj.tj*.jus.br/*",
+        "https://eproc.trf*.jus.br/*",
+        "https://eproc.jf*.jus.br/*",
+        "https://projudi.tj*.jus.br/*",
+        "https://consultasaj.tjsp.jus.br/*",
+        "https://*.cnj.jus.br/*"
+      ],
+      "js": ["scripts/content.js"],
+      "css": ["styles/content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "AssistJur.IA — Copiloto Jurídico"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
