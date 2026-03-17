@@ -65,7 +65,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, userId, delta });
   } catch (err) {
     if (err instanceof ChatbotError) {
-      return NextResponse.json({ error: err.message }, { status: 500 });
+      // Usa o statusCode já calculado pelo ChatbotError (400, 404, 500, etc.)
+      return NextResponse.json(
+        { error: err.message },
+        { status: err.statusCode }
+      );
     }
     return NextResponse.json(
       { error: "Failed to add credits" },

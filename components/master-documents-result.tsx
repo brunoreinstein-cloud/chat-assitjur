@@ -1,14 +1,19 @@
 "use client";
 
 import { Archive, Download, Eye, FileText, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   type DocxLayout,
+  downloadDocxFromGet,
   downloadDocxFromPost,
+  downloadZipFromGet,
   downloadZipFromPost,
 } from "@/lib/document-download-utils";
 import { getMasterDoc, getMasterDocs } from "@/lib/master-content-store";
-import { useMasterCompletedCount } from "@/lib/master-progress-store";
+import {
+  useMasterCompletedCount,
+  useMasterDocTitles,
+} from "@/lib/master-progress-store";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Skeleton } from "./ui/skeleton";
@@ -25,20 +30,29 @@ interface MasterDocumentsResultProps {
   isReadonly: boolean;
 }
 
-function downloadMasterDocx(id: string, layout?: DocxLayout): void {
+async function downloadMasterDocx(id: string, layout?: DocxLayout): Promise<void> {
   const doc = getMasterDoc(id);
-  if (!doc) {
-    return;
+  if (doc) {
+    // Conteúdo disponível em memória (sessão atual)
+    await downloadDocxFromPost(doc.title, doc.content, layout);
+  } else {
+    // Fallback: buscar da BD via GET (sessão nova / reload de página)
+    await downloadDocxFromGet(id, layout);
   }
-  downloadDocxFromPost(doc.title, doc.content, layout);
 }
 
-function downloadMasterZip(ids: string[], layout?: DocxLayout): void {
+async function downloadMasterZip(ids: string[], layout?: DocxLayout): Promise<void> {
   const docs = getMasterDocs(ids);
-  downloadZipFromPost(
-    docs.map(({ title, content }) => ({ title, content })),
-    layout
-  );
+  if (docs.length > 0) {
+    // Conteúdo disponível em memória (sessão atual)
+    await downloadZipFromPost(
+      docs.map(({ title, content }) => ({ title, content })),
+      layout
+    );
+  } else {
+    // Fallback: buscar da BD via GET (sessão nova / reload de página)
+    await downloadZipFromGet(ids, layout);
+  }
 }
 
 /**
@@ -52,12 +66,49 @@ export function MasterDocumentsResult({
   isReadonly,
 }: Readonly<MasterDocumentsResultProps>) {
   const completedCount = useMasterCompletedCount();
+  const streamTitles = useMasterDocTitles();
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadingZip, setDownloadingZip] = useState(false);
   const [previewState, setPreviewState] = useState<{
     ids: string[];
     titles: string[];
     index: number;
   } | null>(null);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("0");
+
+  // Fetch rendered HTML from the preview API whenever the active preview doc changes
+  const currentPreviewId = previewState?.ids[previewState.index] ?? null;
+  useEffect(() => {
+    if (!currentPreviewId) {
+      setPreviewHtml(null);
+      setPreviewLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setPreviewLoading(true);
+    setPreviewHtml(null);
+    fetch(
+      `/api/document/preview?id=${encodeURIComponent(currentPreviewId)}&layout=assistjur-master`
+    )
+      .then(async (res) => {
+        if (!res.ok) throw new Error("not_ok");
+        return res.text();
+      })
+      .then((html) => {
+        if (!cancelled) setPreviewHtml(html);
+      })
+      .catch(() => {
+        if (!cancelled) setPreviewHtml(null); // fallback para <pre>
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentPreviewId]);
 
   if (output && typeof output === "object" && "error" in output) {
     return (
@@ -73,22 +124,21 @@ export function MasterDocumentsResult({
 
   // Estado de carregamento com skeleton por doc
   if (isLoading) {
-    const loadingTitles = Array.from(
-      { length: Math.max(1, completedCount + 1) },
-      (_, i) => `Documento ${i + 1}`
-    );
+    const slotCount = Math.max(1, completedCount + 1);
     return (
       <div className="flex flex-col gap-2 rounded-xl border bg-muted/50 p-3">
         <p className="font-medium text-muted-foreground text-xs">
           A criar documentos…
         </p>
-        {loadingTitles.map((label, i) => {
+        {Array.from({ length: slotCount }, (_, i) => {
           const isDone = i < completedCount;
           const isActive = i === completedCount;
+          // Usa título real recebido via stream, com fallback genérico
+          const label = streamTitles[i] ?? `Documento ${i + 1}`;
           return (
             <div
               className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2"
-              key={label}
+              key={i}
             >
               {isActive ? (
                 <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
@@ -141,8 +191,8 @@ export function MasterDocumentsResult({
               {titles[0] ?? "Relatório"}
             </span>
           </div>
-          {!isReadonly && (
-            <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2">
+            {!isReadonly && (
               <Button
                 className="h-7 gap-1 px-2 text-xs"
                 onClick={() => openPreviewAt(0)}
@@ -152,17 +202,26 @@ export function MasterDocumentsResult({
                 <Eye className="size-3" />
                 Ver conteúdo
               </Button>
-              <Button
-                className="h-7 gap-1 px-2 text-xs"
-                onClick={() => downloadMasterDocx(ids[0], "assistjur-master")}
-                size="sm"
-                variant="outline"
-              >
+            )}
+            <Button
+              className="h-7 gap-1 px-2 text-xs"
+              disabled={downloadingId === ids[0]}
+              onClick={async () => {
+                setDownloadingId(ids[0]);
+                await downloadMasterDocx(ids[0], "assistjur-master");
+                setDownloadingId(null);
+              }}
+              size="sm"
+              variant="outline"
+            >
+              {downloadingId === ids[0] ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
                 <Download className="size-3" />
-                DOCX
-              </Button>
-            </div>
-          )}
+              )}
+              DOCX
+            </Button>
+          </div>
         </div>
         {renderPreviewModal()}
       </>
@@ -194,8 +253,8 @@ export function MasterDocumentsResult({
                   {titles[i] ?? `Documento ${i + 1}`}
                 </span>
               </div>
-              {!isReadonly && (
-                <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-2 flex flex-wrap gap-2">
+                {!isReadonly && (
                   <Button
                     className="h-7 gap-1 px-2 text-xs"
                     onClick={() => openPreviewAt(i)}
@@ -205,30 +264,48 @@ export function MasterDocumentsResult({
                     <Eye className="size-3" />
                     Ver conteúdo
                   </Button>
-                  <Button
-                    className="h-7 gap-1 px-2 text-xs"
-                    onClick={() => downloadMasterDocx(id, "assistjur-master")}
-                    size="sm"
-                    variant="outline"
-                  >
+                )}
+                <Button
+                  className="h-7 gap-1 px-2 text-xs"
+                  disabled={downloadingId === id}
+                  onClick={async () => {
+                    setDownloadingId(id);
+                    await downloadMasterDocx(id, "assistjur-master");
+                    setDownloadingId(null);
+                  }}
+                  size="sm"
+                  variant="outline"
+                >
+                  {downloadingId === id ? (
+                    <Loader2 className="size-3 animate-spin" />
+                  ) : (
                     <Download className="size-3" />
-                    DOCX
-                  </Button>
-                </div>
-              )}
+                  )}
+                  DOCX
+                </Button>
+              </div>
             </TabsContent>
           ))}
         </Tabs>
 
-        {!isReadonly && ids.length > 1 && (
+        {ids.length > 1 && (
           <div className="flex gap-2 pt-1">
             <Button
               className="h-7 gap-1 px-2 text-xs"
-              onClick={() => downloadMasterZip(ids, "assistjur-master")}
+              disabled={downloadingZip}
+              onClick={async () => {
+                setDownloadingZip(true);
+                await downloadMasterZip(ids, "assistjur-master");
+                setDownloadingZip(false);
+              }}
               size="sm"
               variant="outline"
             >
-              <Archive className="size-3" />
+              {downloadingZip ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <Archive className="size-3" />
+              )}
               ZIP todos
             </Button>
           </div>
@@ -297,16 +374,25 @@ export function MasterDocumentsResult({
                 {previewState && (
                   <Button
                     className="ml-1 h-7 gap-1 px-2 text-xs"
-                    onClick={() =>
-                      downloadMasterDocx(
-                        previewState.ids[previewState.index],
-                        "assistjur-master"
-                      )
+                    disabled={
+                      downloadingId ===
+                      previewState.ids[previewState.index]
                     }
+                    onClick={async () => {
+                      const id = previewState.ids[previewState.index];
+                      setDownloadingId(id);
+                      await downloadMasterDocx(id, "assistjur-master");
+                      setDownloadingId(null);
+                    }}
                     size="sm"
                     variant="outline"
                   >
-                    <Download className="size-3" />
+                    {downloadingId ===
+                    previewState.ids[previewState.index] ? (
+                      <Loader2 className="size-3 animate-spin" />
+                    ) : (
+                      <Download className="size-3" />
+                    )}
                     DOCX
                   </Button>
                 )}
@@ -314,12 +400,27 @@ export function MasterDocumentsResult({
             </div>
           </DialogHeader>
           <div
-            className="min-h-0 flex-1 overflow-auto px-6 py-4"
+            className="min-h-0 flex-1 overflow-hidden"
             id="master-preview-desc"
           >
-            <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed">
-              {previewContent}
-            </pre>
+            {previewLoading ? (
+              <div className="flex h-full items-center justify-center py-12">
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : previewHtml ? (
+              <iframe
+                className="size-full border-0"
+                sandbox="allow-popups"
+                srcDoc={previewHtml}
+                title="Pré-visualização do documento"
+              />
+            ) : (
+              <div className="overflow-auto px-6 py-4">
+                <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed">
+                  {previewContent}
+                </pre>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

@@ -10,6 +10,7 @@ import { storeMasterDoc } from "@/lib/master-content-store";
 import {
   resetMasterProgress,
   setMasterCompletedCount,
+  setMasterDocTitle,
 } from "@/lib/master-progress-store";
 import { setPipelineDashboardData } from "@/lib/pipeline-dashboard-store";
 import { storeRevisorDoc } from "@/lib/revisor-content-store";
@@ -112,8 +113,20 @@ export function DataStreamHandler() {
       if (delta.type === "data-mdocStart" || delta.type === "data-mdocDone") {
         continue; // Apenas sinalização — tratamento no UI component
       }
-      if (delta.type === "data-mdocProgress") {
-        continue; // Progresso visual tratado via masterProgress
+      if (delta.type === "data-rdocStart" || delta.type === "data-rdocDone") {
+        continue; // Apenas sinalização — tratamento no UI component
+      }
+      if (delta.type === "data-masterTitle") {
+        try {
+          const { index, title } = JSON.parse(delta.data as string) as {
+            index: number;
+            title: string;
+          };
+          setMasterDocTitle(index, title);
+        } catch {
+          // ignorar JSON inválido
+        }
+        continue;
       }
       if (delta.type === "data-masterProgress") {
         const completedCount = delta.data as number;

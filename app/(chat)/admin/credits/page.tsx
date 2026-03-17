@@ -38,6 +38,8 @@ export default function AdminCreditsPage() {
   const [adminKey, setAdminKey] = useState("");
   const [keyInput, setKeyInput] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  /** Confirmação antes de submeter — mostra utilizador e delta para revisão final. */
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [addUserId, setAddUserId] = useState("");
   const [addDelta, setAddDelta] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -72,13 +74,22 @@ export default function AdminCreditsPage() {
     [keyInput]
   );
 
-  const submitAddCredits = useCallback(async () => {
+  /** Valida o formulário e abre o diálogo de confirmação. */
+  const requestConfirm = useCallback(() => {
     const userId = addUserId.trim();
     const delta = Number.parseInt(addDelta, 10);
     if (!userId || Number.isNaN(delta) || delta <= 0 || !adminKey) {
       toast.error("Preencha userId e um delta positivo.");
       return;
     }
+    setConfirmOpen(true);
+  }, [adminKey, addDelta, addUserId]);
+
+  /** Executa o pedido após confirmação explícita. */
+  const submitAddCredits = useCallback(async () => {
+    const userId = addUserId.trim();
+    const delta = Number.parseInt(addDelta, 10);
+    setConfirmOpen(false);
     setSubmitting(true);
     try {
       const res = await fetch("/api/admin/credits", {
@@ -268,10 +279,48 @@ export default function AdminCreditsPage() {
             </Button>
             <Button
               disabled={submitting}
-              onClick={submitAddCredits}
+              onClick={requestConfirm}
               type="button"
             >
               {submitting ? "A adicionar…" : "Adicionar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo de confirmação — previne erros de digitação sem undo */}
+      <Dialog onOpenChange={setConfirmOpen} open={confirmOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Confirmar adição de créditos</DialogTitle>
+            <DialogDescription>
+              Esta ação não pode ser desfeita. Confirme os detalhes antes de
+              prosseguir.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border bg-muted/50 p-4 text-sm">
+            <p>
+              <span className="text-muted-foreground">Utilizador:</span>{" "}
+              <span className="font-mono text-xs">
+                {users.find((u) => u.userId === addUserId.trim())?.email ??
+                  addUserId.trim()}
+              </span>
+            </p>
+            <p className="mt-1">
+              <span className="text-muted-foreground">Créditos a adicionar:</span>{" "}
+              <span className="font-semibold">+{addDelta}</span>
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => setConfirmOpen(false)}
+              type="button"
+              variant="outline"
+            >
+              Cancelar
+            </Button>
+            <Button onClick={submitAddCredits} type="button">
+              Confirmar
             </Button>
           </DialogFooter>
         </DialogContent>

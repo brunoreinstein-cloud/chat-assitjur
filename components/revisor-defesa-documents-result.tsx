@@ -1,10 +1,12 @@
 "use client";
 
 import { Archive, Download, Eye, FileText, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   type DocxLayout,
+  downloadDocxFromGet,
   downloadDocxFromPost,
+  downloadZipFromGet,
   downloadZipFromPost,
 } from "@/lib/document-download-utils";
 import { getRevisorDoc, getRevisorDocs } from "@/lib/revisor-content-store";
@@ -31,20 +33,29 @@ const DOC_LABELS = [
   "Roteiro Preposto",
 ] as const;
 
-function downloadRevisorDocx(id: string, layout?: DocxLayout): void {
+async function downloadRevisorDocx(id: string, layout?: DocxLayout): Promise<void> {
   const doc = getRevisorDoc(id);
-  if (!doc) {
-    return;
+  if (doc) {
+    // Conteúdo disponível em memória (sessão atual)
+    await downloadDocxFromPost(doc.title, doc.content, layout);
+  } else {
+    // Fallback: buscar da BD via GET (sessão nova / reload de página)
+    await downloadDocxFromGet(id, layout);
   }
-  downloadDocxFromPost(doc.title, doc.content, layout);
 }
 
-function downloadRevisorZip(ids: string[], layout?: DocxLayout): void {
+async function downloadRevisorZip(ids: string[], layout?: DocxLayout): Promise<void> {
   const docs = getRevisorDocs(ids);
-  downloadZipFromPost(
-    docs.map(({ title, content }) => ({ title, content })),
-    layout
-  );
+  if (docs.length > 0) {
+    // Conteúdo disponível em memória (sessão atual)
+    await downloadZipFromPost(
+      docs.map(({ title, content }) => ({ title, content })),
+      layout
+    );
+  } else {
+    // Fallback: buscar da BD via GET (sessão nova / reload de página)
+    await downloadZipFromGet(ids, layout);
+  }
 }
 
 /**
@@ -57,12 +68,48 @@ export function RevisorDefesaDocumentsResult({
   isReadonly,
 }: Readonly<RevisorDefesaDocumentsResultProps>) {
   const completedCount = useRevisorCompletedCount();
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadingZip, setDownloadingZip] = useState(false);
   const [previewState, setPreviewState] = useState<{
     ids: string[];
     titles: string[];
     index: number;
   } | null>(null);
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("0");
+
+  // Fetch rendered HTML from the preview API whenever the active preview doc changes
+  const currentPreviewId = previewState?.ids[previewState.index] ?? null;
+  useEffect(() => {
+    if (!currentPreviewId) {
+      setPreviewHtml(null);
+      setPreviewLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setPreviewLoading(true);
+    setPreviewHtml(null);
+    fetch(
+      `/api/document/preview?id=${encodeURIComponent(currentPreviewId)}&layout=assistjur-master`
+    )
+      .then(async (res) => {
+        if (!res.ok) throw new Error("not_ok");
+        return res.text();
+      })
+      .then((html) => {
+        if (!cancelled) setPreviewHtml(html);
+      })
+      .catch(() => {
+        if (!cancelled) setPreviewHtml(null); // fallback para <pre>
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentPreviewId]);
 
   if (output && typeof output === "object" && "error" in output) {
     return (
@@ -159,8 +206,8 @@ export function RevisorDefesaDocumentsResult({
                   {tabLabels[i] ?? `Documento ${i + 1}`}
                 </span>
               </div>
-              {!isReadonly && (
-                <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-2 flex flex-wrap gap-2">
+                {!isReadonly && (
                   <Button
                     className="h-7 gap-1 px-2 text-xs"
                     onClick={() => openPreviewAt(i)}
@@ -170,48 +217,84 @@ export function RevisorDefesaDocumentsResult({
                     <Eye className="size-3" />
                     Ver conteúdo
                   </Button>
-                  <Button
-                    className="h-7 gap-1 px-2 text-xs"
-                    onClick={() => downloadRevisorDocx(id)}
-                    size="sm"
-                    variant="outline"
-                  >
+                )}
+                <Button
+                  className="h-7 gap-1 px-2 text-xs"
+                  disabled={downloadingId === `${id}:default`}
+                  onClick={async () => {
+                    setDownloadingId(`${id}:default`);
+                    await downloadRevisorDocx(id);
+                    setDownloadingId(null);
+                  }}
+                  size="sm"
+                  variant="outline"
+                >
+                  {downloadingId === `${id}:default` ? (
+                    <Loader2 className="size-3 animate-spin" />
+                  ) : (
                     <Download className="size-3" />
-                    DOCX
-                  </Button>
-                  <Button
-                    className="h-7 gap-1 px-2 text-xs"
-                    onClick={() => downloadRevisorDocx(id, "assistjur-master")}
-                    size="sm"
-                    variant="outline"
-                  >
+                  )}
+                  DOCX
+                </Button>
+                <Button
+                  className="h-7 gap-1 px-2 text-xs"
+                  disabled={downloadingId === `${id}:master`}
+                  onClick={async () => {
+                    setDownloadingId(`${id}:master`);
+                    await downloadRevisorDocx(id, "assistjur-master");
+                    setDownloadingId(null);
+                  }}
+                  size="sm"
+                  variant="outline"
+                >
+                  {downloadingId === `${id}:master` ? (
+                    <Loader2 className="size-3 animate-spin" />
+                  ) : (
                     <Download className="size-3" />
-                    Master
-                  </Button>
-                </div>
-              )}
+                  )}
+                  Master
+                </Button>
+              </div>
             </TabsContent>
           ))}
         </Tabs>
 
-        {!isReadonly && ids.length > 0 && (
+        {ids.length > 0 && (
           <div className="flex gap-2 pt-1">
             <Button
               className="h-7 gap-1 px-2 text-xs"
-              onClick={() => downloadRevisorZip(ids)}
+              disabled={downloadingZip}
+              onClick={async () => {
+                setDownloadingZip(true);
+                await downloadRevisorZip(ids);
+                setDownloadingZip(false);
+              }}
               size="sm"
               variant="outline"
             >
-              <Archive className="size-3" />
+              {downloadingZip ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <Archive className="size-3" />
+              )}
               ZIP todos
             </Button>
             <Button
               className="h-7 gap-1 px-2 text-xs"
-              onClick={() => downloadRevisorZip(ids, "assistjur-master")}
+              disabled={downloadingZip}
+              onClick={async () => {
+                setDownloadingZip(true);
+                await downloadRevisorZip(ids, "assistjur-master");
+                setDownloadingZip(false);
+              }}
               size="sm"
               variant="outline"
             >
-              <Archive className="size-3" />
+              {downloadingZip ? (
+                <Loader2 className="size-3 animate-spin" />
+              ) : (
+                <Archive className="size-3" />
+              )}
               ZIP Master
             </Button>
           </div>
@@ -276,13 +359,25 @@ export function RevisorDefesaDocumentsResult({
                 {previewState && (
                   <Button
                     className="ml-1 h-7 gap-1 px-2 text-xs"
-                    onClick={() =>
-                      downloadRevisorDocx(previewState.ids[previewState.index])
+                    disabled={
+                      downloadingId ===
+                      `${previewState.ids[previewState.index]}:default`
                     }
+                    onClick={async () => {
+                      const id = previewState.ids[previewState.index];
+                      setDownloadingId(`${id}:default`);
+                      await downloadRevisorDocx(id);
+                      setDownloadingId(null);
+                    }}
                     size="sm"
                     variant="outline"
                   >
-                    <Download className="size-3" />
+                    {downloadingId ===
+                    `${previewState.ids[previewState.index]}:default` ? (
+                      <Loader2 className="size-3 animate-spin" />
+                    ) : (
+                      <Download className="size-3" />
+                    )}
                     DOCX
                   </Button>
                 )}
@@ -290,12 +385,27 @@ export function RevisorDefesaDocumentsResult({
             </div>
           </DialogHeader>
           <div
-            className="min-h-0 flex-1 overflow-auto px-6 py-4"
+            className="min-h-0 flex-1 overflow-hidden"
             id="revisor-preview-desc"
           >
-            <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed">
-              {previewContent}
-            </pre>
+            {previewLoading ? (
+              <div className="flex h-full items-center justify-center py-12">
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : previewHtml ? (
+              <iframe
+                className="size-full border-0"
+                sandbox="allow-popups"
+                srcDoc={previewHtml}
+                title="Pré-visualização do documento"
+              />
+            ) : (
+              <div className="overflow-auto px-6 py-4">
+                <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed">
+                  {previewContent}
+                </pre>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

@@ -61,7 +61,9 @@ async function saveWithRetry(params: {
       if (!isRetryableDbError(err) || attempt === SAVE_MAX_RETRIES) {
         break;
       }
-      await new Promise((resolve) => setTimeout(resolve, SAVE_RETRY_BASE_MS));
+      // Exponential backoff: 2s, 4s, 8s, ...
+      const delay = SAVE_RETRY_BASE_MS * 2 ** (attempt - 1);
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
   throw lastError;
@@ -119,10 +121,10 @@ export const createMasterDocuments = ({
         ids.push(id);
         titles.push(title);
 
-        // Progresso
+        // Progresso: anuncia título real para o skeleton
         dataStream.write({
-          type: "data-mdocProgress",
-          data: JSON.stringify({ current: i + 1, total, title }),
+          type: "data-masterTitle",
+          data: JSON.stringify({ index: i, title }),
           transient: true,
         });
 
@@ -159,7 +161,7 @@ export const createMasterDocuments = ({
           transient: true,
         });
 
-        // Salvar na BD com retry
+        // Salvar na BD com retry (só conta se realmente guardou)
         if (userId) {
           try {
             await saveWithRetry({ id, title, content, kind: "text", userId });
@@ -170,8 +172,6 @@ export const createMasterDocuments = ({
               saveError
             );
           }
-        } else {
-          savedCount++;
         }
 
         // Progresso completado

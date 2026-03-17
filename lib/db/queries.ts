@@ -1721,6 +1721,19 @@ export async function getOrCreateCreditBalance(
   }
 }
 
+/**
+ * Regista o consumo de LLM e debita créditos numa transação atómica.
+ *
+ * Correções face à versão anterior:
+ * 1. Transação: INSERT + UPDATE fazem commit juntos — se o UPDATE falhar, o
+ *    registo de uso também não fica gravado (sem créditos "gratuitos").
+ * 2. UPDATE atómico: usa SQL `GREATEST(0, balance - creditsConsumed)` em vez de
+ *    SELECT + Math.max(), eliminando a race condition TOCTOU em pedidos concorrentes.
+ *
+ * NOTA: postgres.js envia BEGIN/COMMIT sobre a mesma conexão mesmo com o pooler
+ * Supabase porta 6543 (Transaction mode) — o driver reserva a conexão para a
+ * duração da transação.
+ */
 export async function deductCreditsAndRecordUsage({
   userId,
   chatId,
@@ -1737,33 +1750,39 @@ export async function deductCreditsAndRecordUsage({
   creditsConsumed: number;
 }) {
   try {
-    await getDb().insert(llmUsageRecord).values({
-      userId,
-      chatId,
-      promptTokens,
-      completionTokens,
-      model,
-      creditsConsumed,
-    });
-    const [row] = await getDb()
-      .select({ balance: userCreditBalance.balance })
-      .from(userCreditBalance)
-      .where(eq(userCreditBalance.userId, userId))
-      .limit(1);
-    if (row) {
-      await getDb()
+    await getDb().transaction(async (tx) => {
+      await tx.insert(llmUsageRecord).values({
+        userId,
+        chatId,
+        promptTokens,
+        completionTokens,
+        model,
+        creditsConsumed,
+      });
+      // UPDATE atómico — elimina race condition TOCTOU de pedidos concorrentes.
+      // Não precisa de SELECT prévio: GREATEST garante balance ≥ 0 em linha única.
+      await tx
         .update(userCreditBalance)
         .set({
-          balance: Math.max(0, row.balance - creditsConsumed),
+          balance: sql`GREATEST(0, ${userCreditBalance.balance} - ${creditsConsumed})`,
           updatedAt: new Date(),
         })
         .where(eq(userCreditBalance.userId, userId));
-    }
+    });
   } catch (err) {
     toDatabaseError(err, "Failed to deduct credits or record usage");
   }
 }
 
+/**
+ * Adiciona créditos a um utilizador de forma atómica (upsert).
+ *
+ * Correções face à versão anterior:
+ * 1. Usa INSERT … ON CONFLICT DO UPDATE em vez de SELECT + INSERT/UPDATE.
+ *    Elimina a race condition onde dois pedidos simultâneos fazem SELECT → NULL
+ *    e ambos tentam INSERT, falhando o segundo com 23505.
+ * 2. O incremento é atómico no servidor de BD — sem TOCTOU.
+ */
 export async function addCreditsToUser({
   userId,
   delta,
@@ -1775,26 +1794,20 @@ export async function addCreditsToUser({
     return;
   }
   try {
-    const [row] = await getDb()
-      .select()
-      .from(userCreditBalance)
-      .where(eq(userCreditBalance.userId, userId))
-      .limit(1);
-    if (row) {
-      await getDb()
-        .update(userCreditBalance)
-        .set({
-          balance: sql`${userCreditBalance.balance} + ${delta}`,
-          updatedAt: new Date(),
-        })
-        .where(eq(userCreditBalance.userId, userId));
-    } else {
-      await getDb().insert(userCreditBalance).values({
+    await getDb()
+      .insert(userCreditBalance)
+      .values({
         userId,
         balance: delta,
         updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: userCreditBalance.userId,
+        set: {
+          balance: sql`${userCreditBalance.balance} + ${delta}`,
+          updatedAt: new Date(),
+        },
       });
-    }
   } catch (err) {
     toDatabaseError(err, "Failed to add credits");
   }

@@ -93,27 +93,38 @@ const PAGE_MARGIN_PROPS = {
 } as const;
 
 const TABLE_SEP_TAB = "\t";
-const TABLE_SEP_PIPE = " | "; // instruções do agente: "campo|valor"
 
 /**
- * Detecta se a linha é uma linha de tabela de 2 colunas (tab ou " | ").
+ * Detecta se a linha é uma linha de tabela markdown (pipe "|" com ou sem espaços,
+ * ou separador de tab) com 2+ colunas.
  */
 function isTableRow(line: string): boolean {
   if (line.includes(TABLE_SEP_TAB)) {
     const parts = line.split(TABLE_SEP_TAB);
-    return parts.length === 2 && parts[0].trim().length > 0;
+    return parts.length >= 2 && parts[0].trim().length > 0;
   }
-  if (line.includes(TABLE_SEP_PIPE)) {
-    const parts = line.split(TABLE_SEP_PIPE);
-    return parts.length === 2 && parts[0].trim().length > 0;
+  // Suporta tanto "|" como " | " e variantes com espaço
+  if (line.includes("|")) {
+    const stripped = line.replace(/^\||\|$/g, "").trim();
+    const parts = stripped.split("|");
+    return parts.length >= 2 && parts[0].trim().length > 0;
   }
   return false;
 }
 
-function parseTableRow(line: string): [string, string] {
-  const sep = line.includes(TABLE_SEP_TAB) ? TABLE_SEP_TAB : TABLE_SEP_PIPE;
-  const idx = line.indexOf(sep);
-  return [line.slice(0, idx).trim(), line.slice(idx + sep.length).trim()];
+function parseTableRow(line: string): string[] {
+  if (line.includes(TABLE_SEP_TAB)) {
+    return line.split(TABLE_SEP_TAB).map((c) => c.trim());
+  }
+  const stripped = line.replace(/^\||\|$/g, "").trim();
+  return stripped.split("|").map((c) => c.trim());
+}
+
+/**
+ * Detecta se uma linha é apenas um separador de cabeçalho de tabela markdown (ex: |---|---|).
+ */
+function isTableSeparatorRow(cells: string[]): boolean {
+  return cells.every((c) => /^[-:]+$/.test(c.trim()));
 }
 
 /**
@@ -274,7 +285,7 @@ function contentToChildren(
 ): FileChild[] {
   const result: FileChild[] = [];
   const lines = content.split(/\r?\n/);
-  let tableRows: [string, string][] = [];
+  let tableRows: string[][] = [];
   const isAssistjur = layout === "assistjur-master";
   const borders = isAssistjur ? TABLE_BORDERS_MASTER : TABLE_BORDERS_DEFAULT;
 
@@ -282,7 +293,10 @@ function contentToChildren(
     if (tableRows.length === 0) {
       return;
     }
-    const rows = tableRows.map(([cell1, cell2], i) => {
+    const colCount = Math.max(...tableRows.map((r) => r.length));
+    const colWidthPct = Math.floor(5000 / colCount); // divide 100% igualmente
+
+    const rows = tableRows.map((cells, i) => {
       const isHeaderRow = isAssistjur && i === 0;
       const run = isHeaderRow
         ? { ...runBase, color: ASSISTJUR.branco, bold: true as const }
@@ -290,31 +304,20 @@ function contentToChildren(
       const cellShading = isHeaderRow
         ? { fill: ASSISTJUR.charcoal, type: ShadingType.CLEAR }
         : undefined;
-      return new TableRow({
-        tableHeader: isHeaderRow,
-        children: [
-          new TableCell({
-            shading: cellShading,
-            width: { size: 2000, type: WidthType.PERCENTAGE }, // 40%
-            children: [
-              new Paragraph({
-                children: [new TextRun({ text: cell1, ...run })],
-                spacing: { after: 60 },
-              }),
-            ],
-          }),
-          new TableCell({
-            shading: cellShading,
-            width: { size: 3000, type: WidthType.PERCENTAGE }, // 60%
-            children: [
-              new Paragraph({
-                children: [new TextRun({ text: cell2, ...run })],
-                spacing: { after: 60 },
-              }),
-            ],
-          }),
-        ],
+      const tableCells = Array.from({ length: colCount }, (_, ci) => {
+        const text = cells[ci] ?? "";
+        return new TableCell({
+          shading: cellShading,
+          width: { size: colWidthPct, type: WidthType.PERCENTAGE },
+          children: [
+            new Paragraph({
+              children: [new TextRun({ text, ...run })],
+              spacing: { after: 60 },
+            }),
+          ],
+        });
       });
+      return new TableRow({ tableHeader: isHeaderRow, children: tableCells });
     });
     result.push(
       new Table({
@@ -336,7 +339,11 @@ function contentToChildren(
     }
 
     if (isTableRow(trimmed)) {
-      tableRows.push(parseTableRow(trimmed));
+      const cells = parseTableRow(trimmed);
+      // Ignorar linhas separadoras de cabeçalho markdown (|---|---|)
+      if (!isTableSeparatorRow(cells)) {
+        tableRows.push(cells);
+      }
       continue;
     }
 
@@ -439,8 +446,8 @@ function contentToChildren(
  *
  * Inclui:
  * - Título no topo
- * - Suporte a ##/###/####, **negrito**, *itálico*, listas (- / *), tabelas (\t ou " | ")
- * - Fonte Arial 12pt (títulos 14pt), espaçamento 6pt entre parágrafos
+ * - Suporte a ##/###/####, **negrito**, *itálico*, listas (- / *), tabelas (\t ou "|")
+ * - Fonte Calibri 12pt (títulos 14pt), espaçamento 6pt entre parágrafos
  * - Margens 25mm, bordas visíveis em tabelas
  *
  * @param layout "assistjur-master" — cabeçalho/rodapé BR Consultoria, paleta charcoal/dourado,
@@ -577,17 +584,12 @@ export function toByteStringSafe(value: string): string {
 }
 
 /**
- * Nome de ficheiro seguro para download DOCX (máx. 120 caracteres, extensão .docx).
- * Usa apenas caracteres compatíveis com ByteString (0–255) para o header Content-Disposition.
+ * Nome de ficheiro seguro para download DOCX (máx. 115 caracteres base, extensão .docx).
+ * Delega a normalização Unicode em toByteStringSafe para evitar duplicação.
  */
 export function sanitizeDocxFilename(title: string): string {
-  let s = title;
-  for (const [u, a] of Object.entries(UNICODE_TO_ASCII)) {
-    s = s.replaceAll(u, a);
-  }
-  // Remover qualquer carácter com código > 255 (ex.: emojis, CJK) para ByteString
-  s = [...s].filter((c) => (c.codePointAt(0) ?? 0) <= 255).join("");
-  const sanitized = s
+  const safe = toByteStringSafe(title);
+  const sanitized = safe
     .replaceAll(/[<>:"/\\|?*]/g, "_")
     .replaceAll(/\s+/g, "_")
     .trim()

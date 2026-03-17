@@ -54,6 +54,7 @@ export function CreditsBalance() {
   }
 
   const isLow = data.balance < data.lowBalanceThreshold;
+  const isPartial = data._partial === true;
   const lastUse = data.recentUsage.length > 0 ? data.recentUsage[0] : null;
 
   return (
@@ -61,7 +62,7 @@ export function CreditsBalance() {
       <Tooltip>
         <TooltipTrigger asChild>
           <Link
-            aria-label={`Saldo: ${data.balance} créditos. Ver histórico de uso`}
+            aria-label={`Saldo${isPartial ? " estimado" : ""}: ${data.balance} créditos. Ver histórico de uso`}
             className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-2 text-sm transition-colors hover:opacity-90 ${
               isLow
                 ? "border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400"
@@ -74,7 +75,8 @@ export function CreditsBalance() {
               className="size-4 shrink-0"
               strokeWidth={1.5}
             />
-            <span>{data.balance} créditos</span>
+            {/* ~ indica saldo estimado (BD indisponível momentaneamente) */}
+            <span>{isPartial ? "~" : ""}{data.balance} créditos</span>
           </Link>
         </TooltipTrigger>
         <TooltipContent className="max-w-xs" side="bottom">
@@ -83,13 +85,19 @@ export function CreditsBalance() {
             1 crédito ≈ 1000 tokens (entrada + saída). Sem créditos não pode
             enviar mensagens. Clique para ver histórico.
           </p>
-          {lastUse && (
+          {isPartial && (
+            <p className="mt-1 text-amber-600 text-xs dark:text-amber-400">
+              Saldo estimado — base de dados temporariamente lenta. Valor real
+              pode diferir.
+            </p>
+          )}
+          {lastUse && !isPartial && (
             <p className="mt-1 text-xs">
               Último uso: −{lastUse.creditsConsumed} créditos (
               {lastUse.promptTokens + lastUse.completionTokens} tokens)
             </p>
           )}
-          {isLow && (
+          {isLow && !isPartial && (
             <p className="mt-1 text-amber-600 text-xs dark:text-amber-400">
               Saldo baixo. Contacte o administrador para recarregar.
             </p>

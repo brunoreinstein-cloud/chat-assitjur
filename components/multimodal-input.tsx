@@ -161,6 +161,72 @@ const ACCEPTED_FILE_ACCEPT =
 
 const ACCEPTED_DROP_EXTENSIONS = /\.(docx?|pdf|jpe?g|png|xlsx?|csv|txt|odt)$/i;
 
+/** Quick prompts surfaced in the composer after a document is uploaded (first message only). */
+const POST_UPLOAD_PROMPTS: {
+  docType: "pi" | "contestacao" | "any";
+  agentId: string | "any";
+  label: string;
+  text: string;
+}[] = [
+  // AssistJur.IA Master
+  {
+    docType: "any",
+    agentId: "assistjur-master",
+    label: "🧠 Análise completa",
+    text: "Faça uma análise completa do documento anexado, identificando pontos críticos.",
+  },
+  {
+    docType: "contestacao",
+    agentId: "assistjur-master",
+    label: "📊 Mapear pedidos",
+    text: "Mapeie todos os pedidos da contestação e avalie o risco de cada um.",
+  },
+  {
+    docType: "pi",
+    agentId: "assistjur-master",
+    label: "⚖️ Estratégia defensiva",
+    text: "Elabore uma estratégia defensiva completa para o caso anexado.",
+  },
+  // Redator de Contestações
+  {
+    docType: "pi",
+    agentId: "redator-contestacao",
+    label: "✍️ Redigir contestação",
+    text: "Redija uma contestação trabalhista para a PI anexada.",
+  },
+  {
+    docType: "any",
+    agentId: "redator-contestacao",
+    label: "📋 Extrair pedidos",
+    text: "Extraia todos os pedidos do documento anexado para eu contestar.",
+  },
+  // Generic (shown for any agent)
+  {
+    docType: "contestacao",
+    agentId: "any",
+    label: "🔍 Analisar contestação",
+    text: "Analise a contestação anexada e identifique os principais argumentos defensivos.",
+  },
+  {
+    docType: "pi",
+    agentId: "any",
+    label: "📋 Mapear pedidos",
+    text: "Mapeie todos os pedidos da petição inicial anexada.",
+  },
+  {
+    docType: "any",
+    agentId: "any",
+    label: "📄 Resumir",
+    text: "Resuma o documento anexado destacando os pontos principais.",
+  },
+  {
+    docType: "any",
+    agentId: "any",
+    label: "❓ Tirar dúvidas",
+    text: "Tenho dúvidas sobre este documento:",
+  },
+];
+
 function isAcceptedAttachmentType(type: string, filename?: string): boolean {
   if (
     type.startsWith("image/") ||
@@ -1364,10 +1430,37 @@ function PureMultimodalInput({
     fetcher
   );
   const revisorFirstMessage = isRevisorAgent && messages.length === 0;
+  // Items still processing (not yet "done") block the send button.
+  // Items in "done" phase are visually complete but may not yet be in `attachments`
+  // due to React batching — treat them as ready so the button enables immediately.
+  const isUploading = uploadQueue.some((q) => q.phase !== "done");
+  const hasDoneUploads = uploadQueue.some((q) => q.phase === "done");
+  const hasAttachmentsOrReady = attachments.length > 0 || hasDoneUploads;
+
   const isInputEmpty = revisorFirstMessage
     ? !hasPiAndContestacao && input.trim() === ""
-    : attachments.length === 0 && input.trim() === "";
-  const isUploading = uploadQueue.length > 0;
+    : !hasAttachmentsOrReady && input.trim() === "";
+
+  // Contextual prompt chips shown after upload, before the first message.
+  const postUploadPrompts = (() => {
+    if (isRevisorAgent || !hasAttachmentsOrReady || messages.length > 0 || input.trim() !== "") {
+      return [];
+    }
+    const docType = attachments.some((a) => a.documentType === "pi")
+      ? "pi"
+      : attachments.some((a) => a.documentType === "contestacao")
+        ? "contestacao"
+        : "any";
+    const effectiveAgentId = agentId ?? "any";
+    const agentSpecific = POST_UPLOAD_PROMPTS.filter(
+      (p) => p.agentId === effectiveAgentId && (p.docType === docType || p.docType === "any")
+    );
+    const generic = POST_UPLOAD_PROMPTS.filter(
+      (p) => p.agentId === "any" && (p.docType === docType || p.docType === "any")
+    );
+    return [...agentSpecific, ...generic].slice(0, 3);
+  })();
+
   const hasInsufficientCredits =
     creditsData !== undefined &&
     creditsData.balance < MIN_CREDITS_TO_START_CHAT;
@@ -1692,6 +1785,26 @@ function PureMultimodalInput({
               )}
             </div>
           ))}
+        {postUploadPrompts.length > 0 && (
+          <div
+            aria-label="Sugestões de ação para o documento anexado"
+            className="mb-2 flex flex-wrap gap-1.5"
+          >
+            {postUploadPrompts.map((p) => (
+              <button
+                className="whitespace-nowrap rounded-full border border-border bg-muted/70 px-3 py-1 text-[12px] text-muted-foreground transition-all hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
+                key={p.label}
+                onClick={() => {
+                  setInput(p.text);
+                  textareaRef.current?.focus();
+                }}
+                type="button"
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        )}
         <ContextUsageIndicator
           attachments={attachments}
           knowledgeDocCount={knowledgeDocumentIds.length}
@@ -1773,9 +1886,11 @@ function PureMultimodalInput({
               }
             }}
             placeholder={
-              activeAgentMeta
-                ? `Perguntar ao ${activeAgentMeta.label}…`
-                : "Enviar mensagem…"
+              attachments.length > 0
+                ? "O que deseja fazer com este documento?"
+                : activeAgentMeta
+                  ? `Perguntar ao ${activeAgentMeta.label}…`
+                  : "Enviar mensagem…"
             }
             ref={(el) => {
               textareaRef.current = el;

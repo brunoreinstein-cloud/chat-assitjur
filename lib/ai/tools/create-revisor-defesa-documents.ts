@@ -10,7 +10,7 @@ import { generateUUID } from "@/lib/utils";
 const CHUNK_SIZE = 400;
 /** Tentativas máximas de guardar na BD (apenas erros de ligação transitórios). */
 const SAVE_MAX_RETRIES = 3;
-/** Atraso base entre tentativas (ms). Cada tentativa usa SAVE_RETRY_BASE_MS * attempt. */
+/** Atraso base entre tentativas (ms). Backoff exponencial: base * 2^(attempt-1). */
 const SAVE_RETRY_BASE_MS = 2000;
 /**
  * Timeout por tentativa de save (ms). Dá mais margem para cold start do Supabase
@@ -66,7 +66,9 @@ async function saveWithRetry(params: {
       if (!isRetryableDbError(err) || attempt === SAVE_MAX_RETRIES) {
         break;
       }
-      await new Promise((resolve) => setTimeout(resolve, SAVE_RETRY_BASE_MS));
+      // Exponential backoff: 2s, 4s, 8s, …
+      const delay = SAVE_RETRY_BASE_MS * 2 ** (attempt - 1);
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
   throw lastError;
@@ -129,6 +131,13 @@ export const createRevisorDefesaDocuments = ({
       const contentPromises = titles.map((title) =>
         generateRevisorDocumentContent(title, contextoResumo)
       );
+
+      // Sinaliza ao cliente: 3 documentos do Revisor a chegar
+      dataStream.write({
+        type: "data-rdocStart",
+        data: 3,
+        transient: true,
+      });
 
       let savedCount = 0;
 
@@ -195,10 +204,7 @@ export const createRevisorDefesaDocuments = ({
               saveError
             );
           }
-        } else {
-          savedCount++;
         }
-
         // Notifica quantos docs estão concluídos (para skeletons no chat)
         dataStream.write({
           type: "data-revisorProgress",
@@ -206,6 +212,13 @@ export const createRevisorDefesaDocuments = ({
           transient: true,
         });
       }
+
+      // Sinaliza ao cliente: todos os 3 documentos do Revisor foram enviados
+      dataStream.write({
+        type: "data-rdocDone",
+        data: JSON.stringify({ ids, titles }),
+        transient: true,
+      });
 
       // Sempre retorna todos os IDs — o conteúdo está no revisor-content-store
       // no cliente, pelo que downloads funcionam mesmo quando o save na BD falhou.

@@ -111,6 +111,19 @@ export const docxCache = {
   delete(userId: string, documentId: string): void {
     docxStore.delete(docxCacheKey(userId, documentId));
   },
+
+  /**
+   * Apaga todas as entradas DOCX para um documento (todas as variantes de layout).
+   * Usar em POST/DELETE de documentos onde o cacheKey inclui o sufixo ":layout".
+   */
+  deleteById(userId: string, documentId: string): void {
+    const prefix = docxCacheKey(userId, documentId);
+    for (const key of docxStore.keys()) {
+      if (key === prefix || key.startsWith(`${prefix}:`)) {
+        docxStore.delete(key);
+      }
+    }
+  },
 };
 
 /**

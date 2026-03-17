@@ -66,6 +66,7 @@ describe("createMasterDocuments — stream de eventos", () => {
 
     const types = events.map((e) => e.type);
     expect(types).toContain("data-mdocStart");
+    expect(types).toContain("data-masterTitle"); // anuncia título antes de gerar
     expect(types).toContain("data-mdocId");
     expect(types).toContain("data-mdocTitle");
     expect(types).toContain("data-mdocClear");
@@ -73,6 +74,33 @@ describe("createMasterDocuments — stream de eventos", () => {
     expect(types).toContain("data-mdocFinish");
     expect(types).toContain("data-masterProgress");
     expect(types).toContain("data-mdocDone");
+  });
+
+  it("data-masterTitle emite index e título corretos antes de iniciar o stream do doc", async () => {
+    const { stream, events } = createMockStream();
+    const tool = createMasterDocuments({
+      session: mockSession,
+      dataStream: stream,
+    });
+
+    await tool.execute({
+      documents: [
+        { title: "Doc Alpha", content: "Conteúdo A" },
+        { title: "Doc Beta", content: "Conteúdo B" },
+      ],
+    });
+
+    const titleEvents = events.filter((e) => e.type === "data-masterTitle");
+    expect(titleEvents).toHaveLength(2);
+    const first = JSON.parse(titleEvents[0].data as string);
+    const second = JSON.parse(titleEvents[1].data as string);
+    expect(first).toEqual({ index: 0, title: "Doc Alpha" });
+    expect(second).toEqual({ index: 1, title: "Doc Beta" });
+
+    // masterTitle deve preceder mdocId (anuncia antes de fazer stream)
+    const masterTitleIdx = events.indexOf(titleEvents[0]);
+    const mdocIdIdx = events.findIndex((e) => e.type === "data-mdocId");
+    expect(masterTitleIdx).toBeLessThan(mdocIdIdx);
   });
 
   it("o mdocTitle emite o título correto", async () => {
@@ -288,12 +316,15 @@ describe("createMasterDocuments — limites e edge cases", () => {
       dataStream: stream,
     });
 
-    await tool.execute({
+    const result = await tool.execute({
       documents: [{ title: "Guest Doc", content: "Conteúdo visitante" }],
     });
 
     expect(mockSave).not.toHaveBeenCalled();
-    // Mas os eventos de stream foram emitidos normalmente
+    // Eventos de stream emitidos normalmente
     expect(events.some((e) => e.type === "data-mdocFinish")).toBe(true);
+    // Sem userId, savedCount=0: mensagem deve indicar disponível para download (não "criado com sucesso")
+    expect(result.content).toContain("disponível");
+    expect(result.content).not.toContain("com sucesso");
   });
 });

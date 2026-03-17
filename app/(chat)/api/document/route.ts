@@ -104,7 +104,7 @@ export async function POST(request: Request) {
   });
 
   documentCache.delete(userId, id);
-  docxCache.delete(userId, id);
+  docxCache.deleteById(userId, id);
 
   return Response.json(document, { status: 200 });
 }
@@ -138,6 +138,10 @@ export async function DELETE(request: Request) {
 
   const [document] = documents;
 
+  if (!document) {
+    return new ChatbotError("not_found:document").toResponse();
+  }
+
   if (document.userId !== session.user.id) {
     return new ChatbotError("forbidden:document").toResponse();
   }
@@ -148,7 +152,7 @@ export async function DELETE(request: Request) {
   });
 
   documentCache.delete(session.user.id, id);
-  docxCache.delete(session.user.id, id);
+  docxCache.deleteById(session.user.id, id);
 
   return Response.json(documentsDeleted, { status: 200 });
 }

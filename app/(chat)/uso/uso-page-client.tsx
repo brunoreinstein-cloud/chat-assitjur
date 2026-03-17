@@ -20,13 +20,21 @@ import type { CreditsResponse, CreditsUsageItem } from "@/lib/types";
 
 const USAGE_LIMIT = 50;
 
+/** Extrai o nome curto do modelo (ex: "anthropic/claude-sonnet-4-5" → "claude-sonnet-4-5"). */
+function shortModelName(model: string | null): string | null {
+  if (!model) return null;
+  const parts = model.split("/");
+  return parts[parts.length - 1] ?? model;
+}
+
 function UsageRow({ item }: Readonly<{ item: CreditsUsageItem }>) {
   const totalTokens = item.promptTokens + item.completionTokens;
   const date = new Date(item.createdAt);
+  const modelShort = shortModelName(item.model);
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 border-border border-b py-3 last:border-0">
-      <div className="flex min-w-0 flex-1 items-center gap-3">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
         <span className="text-muted-foreground text-sm tabular-nums">
           {format(date, "dd/MM/yyyy HH:mm", { locale: pt })}
         </span>
@@ -40,6 +48,11 @@ function UsageRow({ item }: Readonly<{ item: CreditsUsageItem }>) {
           </Link>
         ) : (
           <span className="text-muted-foreground text-sm">Chat</span>
+        )}
+        {modelShort && (
+          <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-muted-foreground text-xs">
+            {modelShort}
+          </span>
         )}
       </div>
       <div className="flex shrink-0 items-center gap-4 text-sm">
@@ -73,20 +86,29 @@ function renderBalanceContent(
     return null;
   }
   const isLow = data.balance < data.lowBalanceThreshold;
+  const isPartial = data._partial === true;
   return (
-    <div className="flex flex-wrap items-baseline gap-2">
-      <span
-        className={
-          isLow
-            ? "font-semibold text-3xl text-amber-600 tabular-nums dark:text-amber-400"
-            : "font-semibold text-3xl tabular-nums"
-        }
-      >
-        {data.balance}
-      </span>
-      <span className="text-muted-foreground text-sm">
-        créditos disponíveis
-      </span>
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <span
+          className={
+            isLow
+              ? "font-semibold text-3xl text-amber-600 tabular-nums dark:text-amber-400"
+              : "font-semibold text-3xl tabular-nums"
+          }
+        >
+          {isPartial ? "~" : ""}{data.balance}
+        </span>
+        <span className="text-muted-foreground text-sm">
+          créditos disponíveis
+        </span>
+      </div>
+      {isPartial && (
+        <p className="text-amber-600 text-xs dark:text-amber-400">
+          Saldo estimado — base de dados momentaneamente lenta. Recarregue para
+          ver o valor real.
+        </p>
+      )}
     </div>
   );
 }
