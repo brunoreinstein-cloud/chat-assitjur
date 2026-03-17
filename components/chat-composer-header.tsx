@@ -115,7 +115,9 @@ function PureChatComposerHeader({
                 data-testid="model-selector-trigger"
                 variant="ghost"
               >
-                <span className="text-sm">Configurações rápidas</span>
+                <span className="max-w-[160px] truncate text-sm">
+                  {selectedModel.name}
+                </span>
                 <ChevronDownIcon className="size-4 opacity-70" />
               </Button>
             </ModelSelectorTrigger>

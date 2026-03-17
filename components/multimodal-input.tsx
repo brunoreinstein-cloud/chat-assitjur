@@ -25,6 +25,7 @@ import {
   type SetStateAction,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -72,6 +73,10 @@ interface UploadQueueItem {
   fileSize?: number;
 }
 
+import {
+  getAgentConfig,
+  NO_AGENT_SELECTED,
+} from "@/lib/ai/agents-registry-metadata";
 import { MIN_CREDITS_TO_START_CHAT } from "@/lib/ai/credits";
 import type {
   Attachment,
@@ -138,6 +143,14 @@ import { Textarea } from "./ui/textarea";
 import type { VisibilityType } from "./visibility-selector";
 
 const AGENT_INSTRUCTIONS_MAX_LENGTH = 4000;
+
+/** Dot colorido por agente (mantido em sincronia com chat-topbar.tsx). */
+const AGENT_DOT_CLASS: Record<string, string> = {
+  "assistente-geral": "bg-muted-foreground/60",
+  "revisor-defesas": "bg-assistjur-gold",
+  "redator-contestacao": "bg-assistjur-purple",
+  "assistjur-master": "bg-assistjur-purple",
+};
 
 /** Máximo de documentos da base de conhecimento selecionáveis no popover @ e no formulário de agente. */
 const MAX_KNOWLEDGE_SELECT = 50;
@@ -697,6 +710,18 @@ function PureMultimodalInput({
   const [chipsExpanded, setChipsExpanded] = useState(false);
 
   const { improveText, isImproving } = usePromptImprovement();
+
+  // Metadados do agente activo para placeholder e badge no toolbar.
+  const activeAgentMeta = useMemo(() => {
+    if (!agentId || agentId === NO_AGENT_SELECTED) {
+      return null;
+    }
+    const config = getAgentConfig(agentId);
+    return {
+      label: config.label,
+      dotClass: AGENT_DOT_CLASS[agentId] ?? "bg-assistjur-gold",
+    };
+  }, [agentId]);
 
   const { data: customAgents = [], mutate: mutateCustomAgents } = useSWR<
     CustomAgentRow[]
@@ -1747,7 +1772,11 @@ function PureMultimodalInput({
                 }
               }
             }}
-            placeholder="Enviar mensagem…"
+            placeholder={
+              activeAgentMeta
+                ? `Perguntar ao ${activeAgentMeta.label}…`
+                : "Enviar mensagem…"
+            }
             ref={(el) => {
               textareaRef.current = el;
               if (inputRefProp) {
@@ -2258,6 +2287,19 @@ function PureMultimodalInput({
               </>
             )}
           </PromptInputTools>
+
+          {activeAgentMeta && (
+            <span
+              className="hidden shrink-0 items-center gap-1.5 rounded-full border border-border/60 bg-muted/60 px-2.5 py-0.5 text-muted-foreground text-xs sm:flex"
+              title={`Agente activo: ${activeAgentMeta.label}`}
+            >
+              <span
+                aria-hidden
+                className={`size-1.5 rounded-full ${activeAgentMeta.dotClass}`}
+              />
+              {activeAgentMeta.label}
+            </span>
+          )}
 
           {status === "submitted" || status === "streaming" ? (
             <StopButton setMessages={setMessages} stop={stop} />
