@@ -353,3 +353,32 @@
     transition: none;
   }
 }
+
+/* Copy button for code blocks (injected by Response component) */
+.copy-code-btn {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  font-size: 0.7rem;
+  line-height: 1;
+  padding: 0.2rem 0.45rem;
+  border-radius: 0.25rem;
+  background: var(--background);
+  color: var(--muted-foreground);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.1s ease;
+  font-family: inherit;
+}
+
+pre:hover .copy-code-btn,
+.copy-code-btn:focus-visible {
+  opacity: 1;
+}
+
+.copy-code-btn:hover {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+

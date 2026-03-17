@@ -225,6 +225,11 @@ function PureMessages({
                 hasSentMessage && index === messages.length - 1
               }
               setMessages={setMessages}
+              isLastAssistantMessage={
+                !isReadonly &&
+                message.role === "assistant" &&
+                index === lastAssistantIndex
+              }
               showLastUsage={
                 !isReadonly &&
                 message.role === "assistant" &&

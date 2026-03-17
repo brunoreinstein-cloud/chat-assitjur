@@ -25,7 +25,7 @@ function loadFixture(caso: string, file: string): string {
 }
 
 describe("Cenário A — Gate-1 feliz (parâmetros da API)", () => {
-  it("route usa temperature=0.2 e maxTokens=8192 para o modelo", () => {
+  it("route usa temperature=0.2 e maxOutputTokens configurável por agente", () => {
     const routePath = path.join(
       __dirname,
       "..",
@@ -38,7 +38,8 @@ describe("Cenário A — Gate-1 feliz (parâmetros da API)", () => {
     );
     const routeCode = readFileSync(routePath, "utf-8");
     expect(routeCode).toContain("temperature: 0.2");
-    expect(routeCode).toContain("maxOutputTokens: 8192");
+    // maxOutputTokens é agora configurable por agente (default 8192, Master usa 16000)
+    expect(routeCode).toContain("maxOutputTokens: ctx.agentConfig.maxOutputTokens ?? 8192");
   });
 
   it("system prompt completo inclui instruções do revisor quando usadas", () => {

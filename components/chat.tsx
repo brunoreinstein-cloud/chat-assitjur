@@ -612,6 +612,28 @@ export function Chat({
 
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
+  // Atalho de teclado: '/' foca o input (como no Discord/Slack)
+  // Ignora quando já está focado num campo de texto ou modal aberto
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "/") {
+        return;
+      }
+      const tag = (e.target as HTMLElement).tagName;
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        (e.target as HTMLElement).isContentEditable
+      ) {
+        return;
+      }
+      e.preventDefault();
+      inputRef.current?.focus();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   useAutoResume({
     autoResume,
     initialMessages,
@@ -715,7 +737,16 @@ export function Chat({
                   }
             }
             onOpenKnowledge={isReadonly ? undefined : openKnowledgeSidebar}
-            onQuickPrompt={isReadonly ? undefined : setInput}
+            onQuickPrompt={
+              isReadonly
+                ? undefined
+                : (text) => {
+                    sendMessage({
+                      role: "user",
+                      parts: [{ type: "text", text }],
+                    });
+                  }
+            }
             onStop={isReadonly ? undefined : stop}
             regenerate={regenerate}
             sendMessage={sendMessage}

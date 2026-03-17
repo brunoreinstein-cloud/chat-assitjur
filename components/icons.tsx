@@ -1391,3 +1391,28 @@ export const WarningIcon = ({ size = 16 }: { size?: number }) => {
     </svg>
   );
 };
+
+export const RegenerateIcon = ({
+  size = 16,
+  ...props
+}: { size?: number } & React.SVGProps<SVGSVGElement>) => {
+  return (
+    <svg
+      aria-label="Regenerar"
+      height={size}
+      role="img"
+      style={{ color: "currentcolor", ...props.style }}
+      viewBox="0 0 16 16"
+      width={size}
+      {...props}
+    >
+      <title>Regenerar</title>
+      <path
+        clipRule="evenodd"
+        d="M1.5 8a6.5 6.5 0 0 1 11.14-4.55L11 5.12V1h4.12l-1.63 1.63A8 8 0 1 0 16 8h-1.5A6.5 6.5 0 0 1 1.5 8z"
+        fill="currentColor"
+        fillRule="evenodd"
+      />
+    </svg>
+  );
+};

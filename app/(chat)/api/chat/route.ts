@@ -1460,7 +1460,7 @@ function createStreamExecuteHandler(
     const result = streamText({
       model: getLanguageModel(ctx.effectiveModel),
       temperature: 0.2,
-      maxOutputTokens: 8192,
+      maxOutputTokens: ctx.agentConfig.maxOutputTokens ?? 8192,
       system: systemPrompt({
         selectedChatModel: ctx.effectiveModel,
         requestHints: ctx.requestHints,

@@ -67,6 +67,12 @@ export interface AgentConfig {
    * Se omitido ou vazio, todos os modelos do catálogo são permitidos.
    */
   allowedModelIds?: string[];
+  /**
+   * Limite de tokens de output para o modelo (maxOutputTokens).
+   * Se omitido, usa o default global do route.ts (8192).
+   * O Master agent usa 16000 para suportar relatórios longos (M13: 250 campos, 30-50 pgs).
+   */
+  maxOutputTokens?: number;
 }
 
 /** Modelos Claude Sonnet/Opus (recomendados para redação jurídica longa). */
@@ -118,6 +124,13 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
     useApprovalTool: true, // Master agent pode executar acções — requer aprovação
     usePipelineTool: true, // Pipeline multi-chamadas para PDFs grandes (>500 pgs)
     useMasterDocumentsTool: true, // Geração DOCX direta + ZIP download
+    // 16000 tokens para relatórios longos (M13: 250 campos, 30-50 pgs ≈ 15K-30K tokens).
+    // O default global (8192) trunca o tool call JSON, impedindo a geração do documento.
+    maxOutputTokens: 16_000,
+    /** Apenas modelos sem extended thinking: ferramentas ativas.
+     *  Reasoning models (sufixo -thinking/-reasoning) desactivam tools no route.ts
+     *  → createMasterDocuments nunca é chamado → sem documento gerado. */
+    allowedModelIds: nonReasoningChatModelIds,
   },
 };
 

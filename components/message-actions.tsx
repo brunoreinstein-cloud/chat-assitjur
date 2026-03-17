@@ -6,19 +6,29 @@ import { useCopyToClipboard } from "usehooks-ts";
 import type { Vote } from "@/lib/db/schema";
 import type { ChatMessage } from "@/lib/types";
 import { Action, Actions } from "./elements/actions";
-import { CopyIcon, PencilEditIcon, ThumbDownIcon, ThumbUpIcon } from "./icons";
+import {
+  CopyIcon,
+  PencilEditIcon,
+  RegenerateIcon,
+  ThumbDownIcon,
+  ThumbUpIcon,
+} from "./icons";
 
 export function PureMessageActions({
   chatId,
   message,
   vote,
   isLoading,
+  isLastAssistantMessage,
+  regenerate,
   setMode,
 }: {
   chatId: string;
   message: ChatMessage;
   vote: Vote | undefined;
   isLoading: boolean;
+  isLastAssistantMessage?: boolean;
+  regenerate?: () => void;
   setMode?: (mode: "view" | "edit") => void;
 }) {
   const { mutate } = useSWRConfig();
@@ -72,6 +82,16 @@ export function PureMessageActions({
       <Action onClick={handleCopy} tooltip="Copiar">
         <CopyIcon />
       </Action>
+
+      {isLastAssistantMessage && regenerate && (
+        <Action
+          data-testid="message-regenerate"
+          onClick={() => regenerate()}
+          tooltip="Regenerar resposta"
+        >
+          <RegenerateIcon />
+        </Action>
+      )}
 
       <Action
         data-testid="message-upvote"

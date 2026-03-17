@@ -1736,8 +1736,15 @@ function PureMultimodalInput({
             minHeight={44}
             onChange={handleInput}
             onKeyDown={(e) => {
-              if (atPopoverOpen && e.key === "Escape") {
-                setAtPopoverOpen(false);
+              if (e.key === "Escape") {
+                if (atPopoverOpen) {
+                  setAtPopoverOpen(false);
+                  e.preventDefault();
+                } else if (input.trim().length > 0) {
+                  // Escape limpa o input quando não há modal aberto
+                  setInput("");
+                  e.preventDefault();
+                }
               }
             }}
             placeholder="Enviar mensagem…"
@@ -2252,7 +2259,7 @@ function PureMultimodalInput({
             )}
           </PromptInputTools>
 
-          {status === "submitted" ? (
+          {status === "submitted" || status === "streaming" ? (
             <StopButton setMessages={setMessages} stop={stop} />
           ) : (
             <PromptInputSubmit

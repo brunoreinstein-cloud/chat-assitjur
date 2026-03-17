@@ -134,6 +134,7 @@ const PurePreviewMessage = ({
   setMessages,
   regenerate,
   isReadonly,
+  isLastAssistantMessage = false,
   requiresScrollPadding: _requiresScrollPadding,
   gate05ConfirmInline = false,
   showLastUsage = false,
@@ -148,6 +149,7 @@ const PurePreviewMessage = ({
   setMessages: UseChatHelpers<ChatMessage>["setMessages"];
   regenerate: UseChatHelpers<ChatMessage>["regenerate"];
   isReadonly: boolean;
+  isLastAssistantMessage?: boolean;
   requiresScrollPadding: boolean;
   gate05ConfirmInline?: boolean;
   showLastUsage?: boolean;
@@ -300,15 +302,32 @@ const PurePreviewMessage = ({
           {!isReadonly && (
             <MessageActions
               chatId={chatId}
+              isLastAssistantMessage={isLastAssistantMessage}
               isLoading={isLoading}
               key={`action-${message.id}`}
               message={message}
+              regenerate={regenerate}
               setMode={setMode}
               vote={vote}
             />
           )}
         </div>
       </div>
+      {message.metadata?.createdAt && (
+        <p
+          className={cn(
+            "mt-0.5 px-1 text-[0.65rem] text-muted-foreground opacity-0 transition-opacity group-hover/message:opacity-100",
+            message.role === "user" ? "text-right" : "ml-11"
+          )}
+        >
+          <time dateTime={message.metadata.createdAt}>
+            {new Date(message.metadata.createdAt).toLocaleTimeString("pt-PT", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </time>
+        </p>
+      )}
     </div>
   );
 };
