@@ -6,8 +6,8 @@
  * Aqui testamos a lógica de stream usando um mock simples de dataStream.
  */
 import { describe, expect, it, vi } from "vitest";
-import { getMasterDoc } from "@/lib/master-content-store";
 import { createMasterDocuments } from "@/lib/ai/tools/create-master-documents";
+import { getMasterDoc } from "@/lib/master-content-store";
 
 // Mock mínimo do UIMessageStreamWriter
 function createMockStream() {
@@ -37,7 +37,10 @@ vi.mock("@/lib/db/queries", () => ({
 describe("createMasterDocuments — stream de eventos", () => {
   it("emite evento data-mdocStart com total de documentos", async () => {
     const { stream, events } = createMockStream();
-    const tool = createMasterDocuments({ session: mockSession, dataStream: stream });
+    const tool = createMasterDocuments({
+      session: mockSession,
+      dataStream: stream,
+    });
 
     await tool.execute({
       documents: [
@@ -52,7 +55,10 @@ describe("createMasterDocuments — stream de eventos", () => {
 
   it("emite eventos mdocId, mdocTitle, mdocClear, mdocDelta, mdocFinish para 1 doc", async () => {
     const { stream, events } = createMockStream();
-    const tool = createMasterDocuments({ session: mockSession, dataStream: stream });
+    const tool = createMasterDocuments({
+      session: mockSession,
+      dataStream: stream,
+    });
 
     await tool.execute({
       documents: [{ title: "Relatório A", content: "Conteúdo A" }],
@@ -71,7 +77,10 @@ describe("createMasterDocuments — stream de eventos", () => {
 
   it("o mdocTitle emite o título correto", async () => {
     const { stream, events } = createMockStream();
-    const tool = createMasterDocuments({ session: mockSession, dataStream: stream });
+    const tool = createMasterDocuments({
+      session: mockSession,
+      dataStream: stream,
+    });
 
     await tool.execute({
       documents: [{ title: "Carta de Prognóstico", content: "Texto" }],
@@ -83,7 +92,10 @@ describe("createMasterDocuments — stream de eventos", () => {
 
   it("reconstrói conteúdo completo a partir dos chunks mdocDelta", async () => {
     const { stream, events } = createMockStream();
-    const tool = createMasterDocuments({ session: mockSession, dataStream: stream });
+    const tool = createMasterDocuments({
+      session: mockSession,
+      dataStream: stream,
+    });
     const originalContent = "A".repeat(1200); // >3 chunks de 400 chars
 
     await tool.execute({
@@ -97,7 +109,10 @@ describe("createMasterDocuments — stream de eventos", () => {
 
   it("para 2 documentos emite 2 ciclos mdocId…mdocFinish", async () => {
     const { stream, events } = createMockStream();
-    const tool = createMasterDocuments({ session: mockSession, dataStream: stream });
+    const tool = createMasterDocuments({
+      session: mockSession,
+      dataStream: stream,
+    });
 
     await tool.execute({
       documents: [
@@ -112,7 +127,9 @@ describe("createMasterDocuments — stream de eventos", () => {
     const finishEvents = events.filter((e) => e.type === "data-mdocFinish");
     expect(finishEvents).toHaveLength(2);
 
-    const progressEvents = events.filter((e) => e.type === "data-masterProgress");
+    const progressEvents = events.filter(
+      (e) => e.type === "data-masterProgress"
+    );
     expect(progressEvents).toHaveLength(2);
     expect(progressEvents[0].data).toBe(1);
     expect(progressEvents[1].data).toBe(2);
@@ -120,7 +137,10 @@ describe("createMasterDocuments — stream de eventos", () => {
 
   it("data-mdocDone inclui ids e titles em JSON", async () => {
     const { stream, events } = createMockStream();
-    const tool = createMasterDocuments({ session: mockSession, dataStream: stream });
+    const tool = createMasterDocuments({
+      session: mockSession,
+      dataStream: stream,
+    });
 
     await tool.execute({
       documents: [{ title: "Título Final", content: "Conteúdo" }],
@@ -137,7 +157,10 @@ describe("createMasterDocuments — stream de eventos", () => {
 
   it("retorna ids e titles no resultado da tool", async () => {
     const { stream } = createMockStream();
-    const tool = createMasterDocuments({ session: mockSession, dataStream: stream });
+    const tool = createMasterDocuments({
+      session: mockSession,
+      dataStream: stream,
+    });
 
     const result = await tool.execute({
       documents: [{ title: "Meu Relatório", content: "Conteúdo do relatório" }],
@@ -154,7 +177,10 @@ describe("createMasterDocuments — stream de eventos", () => {
 describe("createMasterDocuments — integração com master-content-store", () => {
   it("após execução, o conteúdo está disponível no store pelo ID retornado", async () => {
     const { stream } = createMockStream();
-    const tool = createMasterDocuments({ session: mockSession, dataStream: stream });
+    const tool = createMasterDocuments({
+      session: mockSession,
+      dataStream: stream,
+    });
     const content = "## Relatório\n\nDados do processo.";
 
     // NOTA: O store é populado pelo data-stream-handler no cliente.
@@ -176,8 +202,12 @@ describe("createMasterDocuments — integração com master-content-store", () =
 
   it("simula o pipeline do DataStreamHandler: processa eventos mdoc* e popula store", async () => {
     const { stream, events } = createMockStream();
-    const tool = createMasterDocuments({ session: mockSession, dataStream: stream });
-    const expectedContent = "## Secção 1\n\nDados processuais.\n## Secção 2\nMais dados.";
+    const tool = createMasterDocuments({
+      session: mockSession,
+      dataStream: stream,
+    });
+    const expectedContent =
+      "## Secção 1\n\nDados processuais.\n## Secção 2\nMais dados.";
 
     const result = await tool.execute({
       documents: [{ title: "Relatório Pipeline", content: expectedContent }],
@@ -190,12 +220,26 @@ describe("createMasterDocuments — integração com master-content-store", () =
     let _content = "";
 
     for (const event of events) {
-      if (event.type === "data-mdocId") { _id = event.data as string; continue; }
-      if (event.type === "data-mdocTitle") { _title = event.data as string; continue; }
-      if (event.type === "data-mdocClear") { _content = ""; continue; }
-      if (event.type === "data-mdocDelta") { _content += event.data as string; continue; }
+      if (event.type === "data-mdocId") {
+        _id = event.data as string;
+        continue;
+      }
+      if (event.type === "data-mdocTitle") {
+        _title = event.data as string;
+        continue;
+      }
+      if (event.type === "data-mdocClear") {
+        _content = "";
+        continue;
+      }
+      if (event.type === "data-mdocDelta") {
+        _content += event.data as string;
+        continue;
+      }
       if (event.type === "data-mdocFinish") {
-        if (_id) storeMasterDoc(_id, _title, _content);
+        if (_id) {
+          storeMasterDoc(_id, _title, _content);
+        }
         _id = "";
         _content = "";
       }
@@ -212,7 +256,10 @@ describe("createMasterDocuments — integração com master-content-store", () =
 describe("createMasterDocuments — limites e edge cases", () => {
   it("conteúdo de 8000+ chars é dividido em múltiplos chunks de 400", async () => {
     const { stream, events } = createMockStream();
-    const tool = createMasterDocuments({ session: mockSession, dataStream: stream });
+    const tool = createMasterDocuments({
+      session: mockSession,
+      dataStream: stream,
+    });
     const largeContent = "X".repeat(8000);
 
     await tool.execute({
