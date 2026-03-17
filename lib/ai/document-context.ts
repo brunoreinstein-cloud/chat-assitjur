@@ -168,21 +168,36 @@ export function buildSmartDocumentContext(
     Math.floor(sectionsBudget / KEY_SECTION_KEYWORDS.length)
   );
 
+  /**
+   * B2 fix — title-area check: only match keywords in the first 500 chars of a
+   * page so we don't false-positive on prose that merely mentions "SENTENÇA" or
+   * "CONTESTAÇÃO" mid-paragraph (common in petição inicial arguments).
+   *
+   * B3 fix — page deduplication: track page numbers already extracted so that
+   * two section patterns that happen to overlap (e.g. ACÓRDÃO and RECURSO
+   * ORDINÁRIO landing on the same page) don't waste budget on identical content.
+   */
+  const TITLE_AREA_CHARS = 500;
+  const extractedPageNums = new Set<number>();
+
   for (const { keywords, label } of KEY_SECTION_KEYWORDS) {
     if (sectionCharsUsed >= sectionsBudget) break;
 
-    // Find first middle page matching any keyword
+    // Find first middle page where any keyword appears in the title area
+    // AND that hasn't already been extracted for another section (B3).
     let foundIdx = -1;
     for (let i = 0; i < middlePages.length; i++) {
-      const upper = middlePages[i].text.toUpperCase();
-      if (keywords.some((kw) => upper.includes(kw))) {
+      if (extractedPageNums.has(middlePages[i].pageNum)) continue; // B3: skip already-included page
+      const titleArea = middlePages[i].text.slice(0, TITLE_AREA_CHARS).toUpperCase();
+      if (keywords.some((kw) => titleArea.includes(kw))) {
         foundIdx = i;
         break;
       }
     }
     if (foundIdx === -1) continue;
 
-    // Extract pages from the match point until budget exhausted
+    // Extract pages from the match point until budget exhausted,
+    // skipping pages already included in a previous section (B3).
     const budget = Math.min(
       perSectionBudget,
       sectionsBudget - sectionCharsUsed
@@ -194,10 +209,12 @@ export function buildSmartDocumentContext(
       i < Math.min(middlePages.length, foundIdx + 15);
       i++
     ) {
-      const pageText = middlePages[i].text;
-      if (extractedChars + pageText.length > budget) break;
-      extracted.push(pageText);
-      extractedChars += pageText.length;
+      const page = middlePages[i];
+      if (extractedPageNums.has(page.pageNum)) continue; // B3: skip duplicates mid-section
+      if (extractedChars + page.text.length > budget) break;
+      extracted.push(page.text);
+      extractedPageNums.add(page.pageNum); // B3: mark as extracted
+      extractedChars += page.text.length;
     }
 
     if (extracted.length > 0) {
@@ -305,6 +322,36 @@ export function extractDocumentTextsFromParts(
       part.text.length > 0
     ) {
       map.set(part.name, part.text);
+    }
+  }
+  return map;
+}
+
+/**
+ * Extract document texts from ALL messages in the conversation.
+ *
+ * Unlike extractDocumentTextsFromParts (which only reads the current message),
+ * this scans every message so that buscarNoProcesso stays available in follow-up
+ * turns where the user doesn't re-attach the document.
+ *
+ * Messages are processed oldest-first; the latest occurrence of a given
+ * document name wins (most recent attachment takes precedence).
+ */
+export function extractDocumentTextsFromAllMessages(
+  messages: Array<{ parts?: Array<{ type?: string; name?: string; text?: string }> }>
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const msg of messages) {
+    if (!msg.parts) continue;
+    for (const part of msg.parts) {
+      if (
+        part.type === "document" &&
+        typeof part.name === "string" &&
+        typeof part.text === "string" &&
+        part.text.length > 0
+      ) {
+        map.set(part.name, part.text);
+      }
     }
   }
   return map;

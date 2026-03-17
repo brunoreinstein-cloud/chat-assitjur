@@ -841,15 +841,46 @@ export async function persistAndRespond(
   filename: string,
   fileBuffer: ArrayBuffer,
   contentType: string,
-  extraction?: PersistExtractionOptions
+  extraction?: PersistExtractionOptions,
+  /**
+   * URL existente no Vercel Blob (ficheiro já lá está, ex.: processo route).
+   * Se fornecido e o upload para Supabase falhar, usa este URL como fallback
+   * em vez de fazer re-upload para Blob (evita cópias duplicadas de ficheiros grandes).
+   */
+  existingBlobUrl?: string
 ): Promise<NextResponse> {
   try {
-    const uploadResult = await uploadToStorage(
-      userId,
-      filename,
-      fileBuffer,
-      contentType
-    );
+    let uploadResult: { url: string; pathname: string };
+    if (existingBlobUrl) {
+      // Ficheiro já está no Blob: tentar Supabase para armazenamento permanente;
+      // se falhar, reutilizar o URL existente sem re-upload (evita 89MB duplicado).
+      const bufferForSupabase = fileBuffer.slice(0);
+      const supabaseResult = await uploadFile(
+        userId,
+        filename,
+        bufferForSupabase,
+        contentType
+      );
+      if (supabaseResult.ok) {
+        uploadResult = { url: supabaseResult.url, pathname: supabaseResult.pathname };
+      } else {
+        if (isDev) {
+          console.warn(
+            "[upload] Supabase falhou para ficheiro já em Blob; a reutilizar URL existente:",
+            supabaseResult.message
+          );
+        }
+        // Reutiliza o URL original sem criar duplicado no Blob
+        uploadResult = { url: existingBlobUrl, pathname: filename };
+      }
+    } else {
+      uploadResult = await uploadToStorage(
+        userId,
+        filename,
+        fileBuffer,
+        contentType
+      );
+    }
     return respondUploadSuccess(
       uploadResult,
       contentType,

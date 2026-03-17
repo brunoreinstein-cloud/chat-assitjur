@@ -230,7 +230,10 @@ export async function POST(request: Request): Promise<NextResponse> {
         ...(extraction.pageCount != null
           ? { pageCount: extraction.pageCount }
           : {}),
-      }
+      },
+      // Ficheiro já está no Vercel Blob (upload direto do cliente).
+      // Se Supabase falhar (ex.: >50MB), reutiliza este URL em vez de criar duplicado.
+      body.url
     );
   } catch (err) {
     const message =

@@ -58,7 +58,7 @@ import {
 } from "@/lib/ai/resolve-knowledge-ids";
 import {
   buildSmartDocumentContext,
-  extractDocumentTextsFromParts,
+  extractDocumentTextsFromAllMessages,
 } from "@/lib/ai/document-context";
 import { analyzeProcessoPipeline } from "@/lib/ai/tools/analyze-processo-pipeline";
 import { createDocument } from "@/lib/ai/tools/create-document";
@@ -2255,10 +2255,12 @@ async function handleChatPostAuthenticated(
       .join("\n");
   }
 
-  // Extrai textos completos dos documentos anexados para o tool buscarNoProcesso.
-  // Usa as parts do message (texto até 2M chars) — disponíveis antes da truncagem de contexto.
-  const documentTexts = extractDocumentTextsFromParts(
-    message?.parts as Array<{ type?: string; name?: string; text?: string }> | undefined
+  // Extrai textos completos dos documentos de TODAS as mensagens da conversa.
+  // Necessário para que buscarNoProcesso continue disponível em follow-ups: na 2ª+ mensagem
+  // o utilizador não re-anexa o documento, então message.parts não tem document parts.
+  // Processa oldest-first → latest attachment com o mesmo nome vence (more recent wins).
+  const documentTexts = extractDocumentTextsFromAllMessages(
+    uiMessages as Array<{ parts?: Array<{ type?: string; name?: string; text?: string }> }>
   );
 
   return buildChatStreamResponse({
