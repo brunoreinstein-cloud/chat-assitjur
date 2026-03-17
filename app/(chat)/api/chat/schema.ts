@@ -15,6 +15,14 @@ const filePartSchema = z.object({
 /** Limite de caracteres do texto de uma parte do tipo "document" (PDF/DOCX). Texto acima é truncado no servidor antes da validação. ~2M ≈ 1500 páginas. */
 export const MAX_DOCUMENT_PART_TEXT_LENGTH = 2_000_000;
 
+/**
+ * Limite de caracteres guardados na BD para partes "document".
+ * O texto completo (até MAX_DOCUMENT_PART_TEXT_LENGTH) é enviado ao LLM para análise;
+ * na BD guardamos apenas um excerto curto (para histórico/UI) — reduz INSERT de ~2M para ~100K chars.
+ * ~100K ≈ 75 páginas, suficiente para exibir contexto no histórico.
+ */
+export const MAX_DOCUMENT_PART_TEXT_DB_LENGTH = 100_000;
+
 /** Parte com texto extraído de PDF/DOCX (PI, Contestação, etc.). Texto vazio é aceite (ex.: ficheiro sem extração). */
 const documentPartSchema = z.object({
   type: z.enum(["document"]),

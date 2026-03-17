@@ -107,6 +107,7 @@ import type { ChatMessage } from "@/lib/types";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
 import { generateTitleFromUserMessage } from "../../actions";
 import {
+  MAX_DOCUMENT_PART_TEXT_DB_LENGTH,
   MAX_DOCUMENT_PART_TEXT_LENGTH,
   type PostRequestBody,
   postRequestBodySchema,
@@ -507,6 +508,29 @@ function truncateDocumentParts(parts: UserMessagePart[]): UserMessagePart[] {
       part.text.length > MAX_DOCUMENT_PART_TEXT_LENGTH
     ) {
       return { ...part, text: part.text.slice(0, maxLen) + TRUNCATE_SUFFIX };
+    }
+    return part;
+  });
+}
+
+/**
+ * Trunca partes "document" para armazenamento na BD (limite muito menor que o do LLM).
+ * O LLM recebe o texto completo (até MAX_DOCUMENT_PART_TEXT_LENGTH); a BD guarda apenas
+ * o excerto inicial (MAX_DOCUMENT_PART_TEXT_DB_LENGTH) para histórico/UI.
+ * Reduz INSERT de ~2M chars para ~100K → ~20× mais rápido.
+ */
+function truncateDocumentPartsForDb(parts: UserMessagePart[]): UserMessagePart[] {
+  const dbSuffix = "\n\n[Texto completo disponível apenas durante a sessão.]";
+  const maxLen = MAX_DOCUMENT_PART_TEXT_DB_LENGTH - dbSuffix.length;
+  return parts.map((part) => {
+    if (
+      part &&
+      typeof part === "object" &&
+      part.type === "document" &&
+      typeof part.text === "string" &&
+      part.text.length > MAX_DOCUMENT_PART_TEXT_DB_LENGTH
+    ) {
+      return { ...part, text: part.text.slice(0, maxLen) + dbSuffix };
     }
     return part;
   });
@@ -1137,13 +1161,19 @@ async function saveUserMessageToDb(
     return null;
   }
   try {
+    // Trunca partes "document" para o limite da BD (100K) antes do INSERT.
+    // O LLM já recebeu o texto completo (até 2M); aqui guardamos apenas o excerto inicial
+    // para histórico/UI. Reduz INSERT de ~2M chars para ~100K → INSERT ~20× mais rápido.
+    const partsForDb = truncateDocumentPartsForDb(
+      message.parts as UserMessagePart[]
+    );
     await saveMessages({
       messages: [
         {
           chatId: id,
           id: message.id,
           role: "user",
-          parts: message.parts,
+          parts: partsForDb,
           attachments: [],
           createdAt: new Date(),
         },
