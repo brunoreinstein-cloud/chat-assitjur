@@ -6,9 +6,9 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { AGENTE_ASSISTJUR_MASTER_INSTRUCTIONS } from "@/lib/ai/agent-assistjur-master";
 import { getAgentConfig } from "@/lib/ai/agents-registry";
 import { AGENT_ID_ASSISTJUR_MASTER } from "@/lib/ai/agents-registry-metadata";
-import { AGENTE_ASSISTJUR_MASTER_INSTRUCTIONS } from "@/lib/ai/agent-assistjur-master";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -45,9 +45,9 @@ describe("AssistJur.IA Master — configuração do agente", () => {
     // nunca chamado → sem documento gerado.
     const config = getAgentConfig(AGENT_ID_ASSISTJUR_MASTER);
     expect(config.allowedModelIds).toBeDefined();
-    expect(config.allowedModelIds!.length).toBeGreaterThan(0);
+    expect(config.allowedModelIds?.length).toBeGreaterThan(0);
     // Nenhum ID permitido deve ter sufixo -thinking ou -reasoning
-    const hasReasoningModel = config.allowedModelIds!.some(
+    const hasReasoningModel = config.allowedModelIds?.some(
       (id) => id.includes("thinking") || id.includes("reasoning")
     );
     expect(hasReasoningModel).toBe(false);
@@ -60,7 +60,9 @@ describe("AssistJur.IA Master — instruções e regras críticas", () => {
   });
 
   it("contém regra OBRIGATÓRIA de usar createMasterDocuments", () => {
-    expect(AGENTE_ASSISTJUR_MASTER_INSTRUCTIONS).toContain("createMasterDocuments");
+    expect(AGENTE_ASSISTJUR_MASTER_INSTRUCTIONS).toContain(
+      "createMasterDocuments"
+    );
     expect(AGENTE_ASSISTJUR_MASTER_INSTRUCTIONS).toMatch(
       /REGRA OBRIGATÓRIA|MUST|DEVE SEMPRE|obrigatório/i
     );
@@ -90,9 +92,15 @@ describe("AssistJur.IA Master — instruções e regras críticas", () => {
 
   it("contém definição dos 14 módulos (M01–M14)", () => {
     // Verificar que existem os módulos principais
-    expect(AGENTE_ASSISTJUR_MASTER_INSTRUCTIONS).toMatch(/M01|relatorio-processual/i);
-    expect(AGENTE_ASSISTJUR_MASTER_INSTRUCTIONS).toMatch(/M13|completo.*A-P|250 campos/i);
-    expect(AGENTE_ASSISTJUR_MASTER_INSTRUCTIONS).toMatch(/M02|carta-prognostico/i);
+    expect(AGENTE_ASSISTJUR_MASTER_INSTRUCTIONS).toMatch(
+      /M01|relatorio-processual/i
+    );
+    expect(AGENTE_ASSISTJUR_MASTER_INSTRUCTIONS).toMatch(
+      /M13|completo.*A-P|250 campos/i
+    );
+    expect(AGENTE_ASSISTJUR_MASTER_INSTRUCTIONS).toMatch(
+      /M02|carta-prognostico/i
+    );
   });
 
   it("menciona layout assistjur-master para DOCX", () => {
@@ -119,13 +127,20 @@ describe("AssistJur.IA Master — diagnóstico: maxOutputTokens", () => {
     // impedindo a geração do documento.
     // Solução: maxOutputTokens configurable por agente; Master usa 16000.
     const config = getAgentConfig(AGENT_ID_ASSISTJUR_MASTER);
-    expect(config.maxOutputTokens).toBe(16000);
-    expect(config.maxOutputTokens).toBeGreaterThanOrEqual(16000);
+    expect(config.maxOutputTokens).toBe(16_000);
+    expect(config.maxOutputTokens).toBeGreaterThanOrEqual(16_000);
   });
 
   it("route.ts usa maxOutputTokens do agentConfig com fallback para 8192", () => {
     const routePath = path.join(
-      __dirname, "..", "..", "app", "(chat)", "api", "chat", "route.ts"
+      __dirname,
+      "..",
+      "..",
+      "app",
+      "(chat)",
+      "api",
+      "chat",
+      "route.ts"
     );
     const routeCode = readFileSync(routePath, "utf-8");
     expect(routeCode).toContain(
@@ -146,7 +161,9 @@ describe("AssistJur.IA Master — diagnóstico: maxOutputTokens", () => {
     );
     const routeCode = readFileSync(routePath, "utf-8");
     // Master agent tem usePipelineTool=true → usa 7 steps
-    expect(routeCode).toContain("stepCountIs(ctx.agentConfig.usePipelineTool ? 7 : 5)");
+    expect(routeCode).toContain(
+      "stepCountIs(ctx.agentConfig.usePipelineTool ? 7 : 5)"
+    );
   });
 
   it("DIAGNÓSTICO: isReasoningModel bloqueia tools — modelos de raciocínio não podem gerar docs", () => {
@@ -182,7 +199,13 @@ describe("AssistJur.IA Master — ferramenta createMasterDocuments", () => {
   it("DIAGNÓSTICO: tool é server-only (não pode ser importada em Client Components)", () => {
     // Confirmar que a tool está no directório correcto
     const toolPath = path.join(
-      __dirname, "..", "..", "lib", "ai", "tools", "create-master-documents.ts"
+      __dirname,
+      "..",
+      "..",
+      "lib",
+      "ai",
+      "tools",
+      "create-master-documents.ts"
     );
     expect(existsSync(toolPath)).toBe(true);
   });

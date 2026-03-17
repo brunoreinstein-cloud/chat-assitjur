@@ -130,7 +130,7 @@ export const chatModels: ChatModel[] = [
  * Usado pelo Revisor de Defesas para garantir ferramentas activas e primeira resposta rápida.
  */
 export const nonReasoningChatModelIds = chatModels
-  .filter((m) => !m.id.includes("reasoning") && !m.id.includes("thinking"))
+  .filter((m) => !(m.id.includes("reasoning") || m.id.includes("thinking")))
   .map((m) => m.id);
 
 /**
@@ -143,9 +143,13 @@ export function modelReasoningType(
   modelId: string
 ): "adaptive" | "extended" | null {
   const model = chatModels.find((m) => m.id === modelId);
-  if (model?.reasoningType) return model.reasoningType;
+  if (model?.reasoningType) {
+    return model.reasoningType;
+  }
   // Fallback para modelos não listados com sufixo -thinking
-  if (modelId.includes("thinking")) return "extended";
+  if (modelId.includes("thinking")) {
+    return "extended";
+  }
   return null;
 }
 

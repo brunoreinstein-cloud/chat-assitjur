@@ -359,17 +359,19 @@
   position: absolute;
   top: 0.4rem;
   right: 0.4rem;
+  padding: 0.2rem 0.45rem;
+  font-family: inherit;
   font-size: 0.7rem;
   line-height: 1;
-  padding: 0.2rem 0.45rem;
-  border-radius: 0.25rem;
-  background: var(--background);
   color: var(--muted-foreground);
-  border: 1px solid var(--border);
   cursor: pointer;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
   opacity: 0;
-  transition: opacity 0.15s ease, background 0.1s ease;
-  font-family: inherit;
+  transition:
+    opacity 0.15s ease,
+    background 0.1s ease;
 }
 
 pre:hover .copy-code-btn,
@@ -378,7 +380,6 @@ pre:hover .copy-code-btn,
 }
 
 .copy-code-btn:hover {
-  background: var(--accent);
   color: var(--accent-foreground);
+  background: var(--accent);
 }
-
