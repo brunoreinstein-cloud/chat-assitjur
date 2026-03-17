@@ -1751,6 +1751,12 @@ export async function deductCreditsAndRecordUsage({
 }) {
   try {
     await getDb().transaction(async (tx) => {
+      // SET LOCAL garante que o statement_timeout está definido nesta transação,
+      // independentemente da ligação do pool (funciona em transaction mode, porta 6543).
+      // Essencial para onFinish após streams longos (>2 min): a nova ligação do pool
+      // herda o default Supabase (~8s) sem o SET que foi feito no início do request.
+      await tx.execute(sql`SET LOCAL statement_timeout = '30s'`);
+
       await tx.insert(llmUsageRecord).values({
         userId,
         chatId,
