@@ -13,8 +13,22 @@ export const CONTEXT_WINDOW_CAPACITY_TOKENS = 200_000;
  * Exportados aqui para que o indicador de contexto no cliente
  * possa espelhar a mesma lógica sem duplicar constantes.
  */
-export const MAX_CHARS_PER_DOCUMENT = 80_000;
-export const MAX_TOTAL_DOC_CHARS = 180_000;
+/**
+ * Limite de caracteres de um único documento no contexto do LLM.
+ * Aumentado de 80K → 92K após introdução da extração inteligente de secções:
+ * o budget agora cobre head + Sentença + Contestação + Laudo + Índice PJe
+ * sem desperdiçar chars em páginas de assinatura ou conteúdo irrelevante.
+ * @see lib/ai/document-context.ts buildSmartDocumentContext
+ */
+export const MAX_CHARS_PER_DOCUMENT = 92_000;
+
+/**
+ * Limite total de caracteres de todos os documentos combinados.
+ * Aumentado de 180K → 200K para acomodar o novo limite por documento
+ * e casos com múltiplos documentos (ex: PI + Contestação separados).
+ * Claude suporta 200K tokens de input; 200K chars ≈ 50K tokens (4 chars/token).
+ */
+export const MAX_TOTAL_DOC_CHARS = 200_000;
 
 /**
  * Margem reservada para a resposta do modelo (maxOutputTokens ~8k) e overhead.

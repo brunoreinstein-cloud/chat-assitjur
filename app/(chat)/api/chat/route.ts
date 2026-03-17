@@ -1310,6 +1310,7 @@ async function prepareModelMessagesForStream(
     agentInstructions: effectiveAgentInstructionsForContext,
     knowledgeContext,
     processoContext,
+    hasDocuments: params.documentTexts.size > 0,
   });
   const messagesToSend = applyContextEditing(normalizedMessages);
   const estimatedInputTokens = estimateInputTokens(
@@ -1536,6 +1537,7 @@ function createStreamExecuteHandler(
         agentInstructions: effectiveAgentInstructions,
         knowledgeContext: ctx.knowledgeContext,
         processoContext: ctx.processoContext,
+        hasDocuments: ctx.documentTexts.size > 0,
       }),
       messages: ctx.messagesForModel as Awaited<
         ReturnType<typeof convertToModelMessages>
