@@ -22,9 +22,11 @@ const USAGE_LIMIT = 50;
 
 /** Extrai o nome curto do modelo (ex: "anthropic/claude-sonnet-4-5" → "claude-sonnet-4-5"). */
 function shortModelName(model: string | null): string | null {
-  if (!model) return null;
+  if (!model) {
+    return null;
+  }
   const parts = model.split("/");
-  return parts[parts.length - 1] ?? model;
+  return parts.at(-1) ?? model;
 }
 
 function UsageRow({ item }: Readonly<{ item: CreditsUsageItem }>) {
@@ -97,7 +99,8 @@ function renderBalanceContent(
               : "font-semibold text-3xl tabular-nums"
           }
         >
-          {isPartial ? "~" : ""}{data.balance}
+          {isPartial ? "~" : ""}
+          {data.balance}
         </span>
         <span className="text-muted-foreground text-sm">
           créditos disponíveis

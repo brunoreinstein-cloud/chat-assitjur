@@ -30,7 +30,10 @@ interface MasterDocumentsResultProps {
   isReadonly: boolean;
 }
 
-async function downloadMasterDocx(id: string, layout?: DocxLayout): Promise<void> {
+async function downloadMasterDocx(
+  id: string,
+  layout?: DocxLayout
+): Promise<void> {
   const doc = getMasterDoc(id);
   if (doc) {
     // Conteúdo disponível em memória (sessão atual)
@@ -41,7 +44,10 @@ async function downloadMasterDocx(id: string, layout?: DocxLayout): Promise<void
   }
 }
 
-async function downloadMasterZip(ids: string[], layout?: DocxLayout): Promise<void> {
+async function downloadMasterZip(
+  ids: string[],
+  layout?: DocxLayout
+): Promise<void> {
   const docs = getMasterDocs(ids);
   if (docs.length > 0) {
     // Conteúdo disponível em memória (sessão atual)
@@ -92,18 +98,26 @@ export function MasterDocumentsResult({
     fetch(
       `/api/document/preview?id=${encodeURIComponent(currentPreviewId)}&layout=assistjur-master`
     )
-      .then(async (res) => {
-        if (!res.ok) throw new Error("not_ok");
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error("not_ok");
+        }
         return res.text();
       })
       .then((html) => {
-        if (!cancelled) setPreviewHtml(html);
+        if (!cancelled) {
+          setPreviewHtml(html);
+        }
       })
       .catch(() => {
-        if (!cancelled) setPreviewHtml(null); // fallback para <pre>
+        if (!cancelled) {
+          setPreviewHtml(null); // fallback para <pre>
+        }
       })
       .finally(() => {
-        if (!cancelled) setPreviewLoading(false);
+        if (!cancelled) {
+          setPreviewLoading(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -133,12 +147,12 @@ export function MasterDocumentsResult({
         {Array.from({ length: slotCount }, (_, i) => {
           const isDone = i < completedCount;
           const isActive = i === completedCount;
-          // Usa título real recebido via stream, com fallback genérico
+          // Usa título real recebido via stream, com fallback genérico (key estável por slot)
           const label = streamTitles[i] ?? `Documento ${i + 1}`;
           return (
             <div
               className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2"
-              key={i}
+              key={label}
             >
               {isActive ? (
                 <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
@@ -375,8 +389,7 @@ export function MasterDocumentsResult({
                   <Button
                     className="ml-1 h-7 gap-1 px-2 text-xs"
                     disabled={
-                      downloadingId ===
-                      previewState.ids[previewState.index]
+                      downloadingId === previewState.ids[previewState.index]
                     }
                     onClick={async () => {
                       const id = previewState.ids[previewState.index];
@@ -387,8 +400,7 @@ export function MasterDocumentsResult({
                     size="sm"
                     variant="outline"
                   >
-                    {downloadingId ===
-                    previewState.ids[previewState.index] ? (
+                    {downloadingId === previewState.ids[previewState.index] ? (
                       <Loader2 className="size-3 animate-spin" />
                     ) : (
                       <Download className="size-3" />

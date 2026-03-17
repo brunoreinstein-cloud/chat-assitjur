@@ -33,7 +33,10 @@ const DOC_LABELS = [
   "Roteiro Preposto",
 ] as const;
 
-async function downloadRevisorDocx(id: string, layout?: DocxLayout): Promise<void> {
+async function downloadRevisorDocx(
+  id: string,
+  layout?: DocxLayout
+): Promise<void> {
   const doc = getRevisorDoc(id);
   if (doc) {
     // Conteúdo disponível em memória (sessão atual)
@@ -44,7 +47,10 @@ async function downloadRevisorDocx(id: string, layout?: DocxLayout): Promise<voi
   }
 }
 
-async function downloadRevisorZip(ids: string[], layout?: DocxLayout): Promise<void> {
+async function downloadRevisorZip(
+  ids: string[],
+  layout?: DocxLayout
+): Promise<void> {
   const docs = getRevisorDocs(ids);
   if (docs.length > 0) {
     // Conteúdo disponível em memória (sessão atual)
@@ -93,18 +99,26 @@ export function RevisorDefesaDocumentsResult({
     fetch(
       `/api/document/preview?id=${encodeURIComponent(currentPreviewId)}&layout=assistjur-master`
     )
-      .then(async (res) => {
-        if (!res.ok) throw new Error("not_ok");
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error("not_ok");
+        }
         return res.text();
       })
       .then((html) => {
-        if (!cancelled) setPreviewHtml(html);
+        if (!cancelled) {
+          setPreviewHtml(html);
+        }
       })
       .catch(() => {
-        if (!cancelled) setPreviewHtml(null); // fallback para <pre>
+        if (!cancelled) {
+          setPreviewHtml(null); // fallback para <pre>
+        }
       })
       .finally(() => {
-        if (!cancelled) setPreviewLoading(false);
+        if (!cancelled) {
+          setPreviewLoading(false);
+        }
       });
     return () => {
       cancelled = true;

@@ -1443,7 +1443,12 @@ function PureMultimodalInput({
 
   // Contextual prompt chips shown after upload, before the first message.
   const postUploadPrompts = (() => {
-    if (isRevisorAgent || !hasAttachmentsOrReady || messages.length > 0 || input.trim() !== "") {
+    if (
+      isRevisorAgent ||
+      !hasAttachmentsOrReady ||
+      messages.length > 0 ||
+      input.trim() !== ""
+    ) {
       return [];
     }
     const docType = attachments.some((a) => a.documentType === "pi")
@@ -1453,10 +1458,13 @@ function PureMultimodalInput({
         : "any";
     const effectiveAgentId = agentId ?? "any";
     const agentSpecific = POST_UPLOAD_PROMPTS.filter(
-      (p) => p.agentId === effectiveAgentId && (p.docType === docType || p.docType === "any")
+      (p) =>
+        p.agentId === effectiveAgentId &&
+        (p.docType === docType || p.docType === "any")
     );
     const generic = POST_UPLOAD_PROMPTS.filter(
-      (p) => p.agentId === "any" && (p.docType === docType || p.docType === "any")
+      (p) =>
+        p.agentId === "any" && (p.docType === docType || p.docType === "any")
     );
     return [...agentSpecific, ...generic].slice(0, 3);
   })();
@@ -1786,9 +1794,9 @@ function PureMultimodalInput({
             </div>
           ))}
         {postUploadPrompts.length > 0 && (
-          <div
+          <fieldset
             aria-label="Sugestões de ação para o documento anexado"
-            className="mb-2 flex flex-wrap gap-1.5"
+            className="mb-2 flex min-w-0 flex-wrap gap-1.5 border-0 p-0"
           >
             {postUploadPrompts.map((p) => (
               <button
@@ -1803,7 +1811,7 @@ function PureMultimodalInput({
                 {p.label}
               </button>
             ))}
-          </div>
+          </fieldset>
         )}
         <ContextUsageIndicator
           attachments={attachments}

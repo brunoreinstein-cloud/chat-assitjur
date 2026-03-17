@@ -307,7 +307,9 @@ export default function AdminCreditsPage() {
               </span>
             </p>
             <p className="mt-1">
-              <span className="text-muted-foreground">Créditos a adicionar:</span>{" "}
+              <span className="text-muted-foreground">
+                Créditos a adicionar:
+              </span>{" "}
               <span className="font-semibold">+{addDelta}</span>
             </p>
           </div>

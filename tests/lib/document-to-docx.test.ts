@@ -113,13 +113,19 @@ describe("sanitizeDocxFilename", () => {
 
 describe("createDocxBuffer", () => {
   it("retorna um Buffer não vazio para conteúdo simples", async () => {
-    const buf = await createDocxBuffer("Título de Teste", "## Secção\nTexto simples.");
+    const buf = await createDocxBuffer(
+      "Título de Teste",
+      "## Secção\nTexto simples."
+    );
     expect(Buffer.isBuffer(buf)).toBe(true);
     expect(buf.length).toBeGreaterThan(0);
   });
 
   it("produz um ficheiro DOCX válido (começa com magic bytes ZIP: PK)", async () => {
-    const buf = await createDocxBuffer("Documento DOCX", "Conteúdo para testar.");
+    const buf = await createDocxBuffer(
+      "Documento DOCX",
+      "Conteúdo para testar."
+    );
     // DOCX é um ZIP — os primeiros 2 bytes são PK (0x50, 0x4B)
     expect(buf[0]).toBe(0x50); // 'P'
     expect(buf[1]).toBe(0x4b); // 'K'
@@ -148,7 +154,10 @@ describe("createDocxBuffer", () => {
       "Com Tabela",
       "## Dados\n\n| Campo | Valor |\n|---|---|\n| Nome | João |\n| Cargo | Técnico |"
     );
-    const withoutTable = await createDocxBuffer("Sem Tabela", "## Dados\n\nNome: João");
+    const withoutTable = await createDocxBuffer(
+      "Sem Tabela",
+      "## Dados\n\nNome: João"
+    );
     // Tabela gera mais conteúdo DOCX
     expect(withTable.length).toBeGreaterThan(0);
     expect(withoutTable.length).toBeGreaterThan(0);
@@ -179,9 +188,14 @@ describe("createDocxBuffer", () => {
   });
 
   it("documento master é maior do que default (tem header/footer extra)", async () => {
-    const content = "## Relatório\n\nConteúdo de teste para comparação de layouts.";
+    const content =
+      "## Relatório\n\nConteúdo de teste para comparação de layouts.";
     const bufDefault = await createDocxBuffer("Doc", content, "default");
-    const bufMaster = await createDocxBuffer("Doc", content, "assistjur-master");
+    const bufMaster = await createDocxBuffer(
+      "Doc",
+      content,
+      "assistjur-master"
+    );
     // O layout master tem header e footer adicionais — deve ser maior
     expect(bufMaster.length).toBeGreaterThan(bufDefault.length);
   });

@@ -13,9 +13,11 @@ import { getRevisorDoc } from "@/lib/revisor-content-store";
 
 // Mock da geração de conteúdo IA — retorna imediatamente sem chamar a API real
 vi.mock("@/artifacts/text/server", () => ({
-  generateRevisorDocumentContent: vi.fn().mockImplementation((title: string) =>
-    Promise.resolve(`## ${title}\n\nConteúdo gerado para ${title}.`)
-  ),
+  generateRevisorDocumentContent: vi
+    .fn()
+    .mockImplementation((title: string) =>
+      Promise.resolve(`## ${title}\n\nConteúdo gerado para ${title}.`)
+    ),
 }));
 
 // Mock da BD — saveDocument e pingDatabase não devem bloquear
@@ -33,7 +35,9 @@ function createMockStream() {
       write: (event: { type: string; data: unknown }) => {
         events.push(event);
       },
-    } as unknown as Parameters<typeof createRevisorDefesaDocuments>[0]["dataStream"],
+    } as unknown as Parameters<
+      typeof createRevisorDefesaDocuments
+    >[0]["dataStream"],
     events,
   };
 }
@@ -55,7 +59,10 @@ const DEFAULT_INPUT = {
 describe("createRevisorDefesaDocuments — stream de eventos", () => {
   it("emite evento data-rdocStart com total de 3 documentos", async () => {
     const { stream, events } = createMockStream();
-    const tool = createRevisorDefesaDocuments({ session: mockSession, dataStream: stream });
+    const tool = createRevisorDefesaDocuments({
+      session: mockSession,
+      dataStream: stream,
+    });
     await tool.execute(DEFAULT_INPUT);
 
     // O evento rdocStart indica o total de docs que vêm a seguir
@@ -66,7 +73,10 @@ describe("createRevisorDefesaDocuments — stream de eventos", () => {
 
   it("emite os tipos de eventos obrigatórios para 3 docs", async () => {
     const { stream, events } = createMockStream();
-    const tool = createRevisorDefesaDocuments({ session: mockSession, dataStream: stream });
+    const tool = createRevisorDefesaDocuments({
+      session: mockSession,
+      dataStream: stream,
+    });
     await tool.execute(DEFAULT_INPUT);
 
     const types = events.map((e) => e.type);
@@ -82,7 +92,10 @@ describe("createRevisorDefesaDocuments — stream de eventos", () => {
 
   it("emite exatamente 3 ciclos rdocId…rdocFinish", async () => {
     const { stream, events } = createMockStream();
-    const tool = createRevisorDefesaDocuments({ session: mockSession, dataStream: stream });
+    const tool = createRevisorDefesaDocuments({
+      session: mockSession,
+      dataStream: stream,
+    });
     await tool.execute(DEFAULT_INPUT);
 
     expect(events.filter((e) => e.type === "data-rdocId")).toHaveLength(3);
@@ -93,7 +106,10 @@ describe("createRevisorDefesaDocuments — stream de eventos", () => {
 
   it("rdocTitle emite os 3 títulos na ordem correta", async () => {
     const { stream, events } = createMockStream();
-    const tool = createRevisorDefesaDocuments({ session: mockSession, dataStream: stream });
+    const tool = createRevisorDefesaDocuments({
+      session: mockSession,
+      dataStream: stream,
+    });
     await tool.execute(DEFAULT_INPUT);
 
     const titleEvents = events.filter((e) => e.type === "data-rdocTitle");
@@ -104,7 +120,10 @@ describe("createRevisorDefesaDocuments — stream de eventos", () => {
 
   it("rdocKind é sempre 'text' para os 3 documentos", async () => {
     const { stream, events } = createMockStream();
-    const tool = createRevisorDefesaDocuments({ session: mockSession, dataStream: stream });
+    const tool = createRevisorDefesaDocuments({
+      session: mockSession,
+      dataStream: stream,
+    });
     await tool.execute(DEFAULT_INPUT);
 
     const kindEvents = events.filter((e) => e.type === "data-rdocKind");
@@ -116,10 +135,15 @@ describe("createRevisorDefesaDocuments — stream de eventos", () => {
 
   it("revisorProgress incrementa de 1 a 3 na ordem", async () => {
     const { stream, events } = createMockStream();
-    const tool = createRevisorDefesaDocuments({ session: mockSession, dataStream: stream });
+    const tool = createRevisorDefesaDocuments({
+      session: mockSession,
+      dataStream: stream,
+    });
     await tool.execute(DEFAULT_INPUT);
 
-    const progressEvents = events.filter((e) => e.type === "data-revisorProgress");
+    const progressEvents = events.filter(
+      (e) => e.type === "data-revisorProgress"
+    );
     expect(progressEvents).toHaveLength(3);
     expect(progressEvents[0]?.data).toBe(1);
     expect(progressEvents[1]?.data).toBe(2);
@@ -131,36 +155,53 @@ describe("createRevisorDefesaDocuments — stream de eventos", () => {
     const sessionWithoutUser = {
       user: { id: undefined },
       expires: "2099-01-01",
-    } as unknown as Parameters<typeof createRevisorDefesaDocuments>[0]["session"];
+    } as unknown as Parameters<
+      typeof createRevisorDefesaDocuments
+    >[0]["session"];
 
-    const tool = createRevisorDefesaDocuments({ session: sessionWithoutUser, dataStream: stream });
+    const tool = createRevisorDefesaDocuments({
+      session: sessionWithoutUser,
+      dataStream: stream,
+    });
     await tool.execute(DEFAULT_INPUT);
 
     // Sem userId, os 3 eventos de progresso DEVEM ser emitidos na mesma
-    const progressEvents = events.filter((e) => e.type === "data-revisorProgress");
+    const progressEvents = events.filter(
+      (e) => e.type === "data-revisorProgress"
+    );
     expect(progressEvents).toHaveLength(3);
   });
 
   it("reconstrói conteúdo a partir dos chunks rdocDelta", async () => {
-    const { generateRevisorDocumentContent } = await import("@/artifacts/text/server");
-    vi.mocked(generateRevisorDocumentContent).mockResolvedValueOnce("A".repeat(1000));
+    const { generateRevisorDocumentContent } = await import(
+      "@/artifacts/text/server"
+    );
+    vi.mocked(generateRevisorDocumentContent).mockResolvedValueOnce(
+      "A".repeat(1000)
+    );
 
     const { stream, events } = createMockStream();
-    const tool = createRevisorDefesaDocuments({ session: mockSession, dataStream: stream });
+    const tool = createRevisorDefesaDocuments({
+      session: mockSession,
+      dataStream: stream,
+    });
     await tool.execute(DEFAULT_INPUT);
 
     // Apenas os deltas do 1º documento (rdocId muda a cada ciclo)
-    const rdocIds = events.filter((e) => e.type === "data-rdocId").map((e) => e.data as string);
+    const rdocIds = events
+      .filter((e) => e.type === "data-rdocId")
+      .map((e) => e.data as string);
     const firstId = rdocIds[0];
 
     // Recolhe deltas entre o 1º rdocClear e o 1º rdocFinish
-    let capturing = false;
     const firstDocDeltas: string[] = [];
     let docCount = 0;
     for (const ev of events) {
       if (ev.type === "data-rdocId") {
         docCount++;
-        if (docCount > 1) break;
+        if (docCount > 1) {
+          break;
+        }
       }
       if (docCount === 1 && ev.type === "data-rdocDelta") {
         firstDocDeltas.push(ev.data as string);
@@ -173,7 +214,10 @@ describe("createRevisorDefesaDocuments — stream de eventos", () => {
 
   it("rdocDone inclui ids e titles de todos os 3 documentos", async () => {
     const { stream, events } = createMockStream();
-    const tool = createRevisorDefesaDocuments({ session: mockSession, dataStream: stream });
+    const tool = createRevisorDefesaDocuments({
+      session: mockSession,
+      dataStream: stream,
+    });
     await tool.execute(DEFAULT_INPUT);
 
     const doneEvent = events.find((e) => e.type === "data-rdocDone");
@@ -193,7 +237,10 @@ describe("createRevisorDefesaDocuments — stream de eventos", () => {
 describe("createRevisorDefesaDocuments — resultado", () => {
   it("retorna 3 ids únicos e os 3 títulos corretos", async () => {
     const { stream } = createMockStream();
-    const tool = createRevisorDefesaDocuments({ session: mockSession, dataStream: stream });
+    const tool = createRevisorDefesaDocuments({
+      session: mockSession,
+      dataStream: stream,
+    });
     const result = await tool.execute(DEFAULT_INPUT);
 
     expect(result.ids).toHaveLength(3);
@@ -208,7 +255,10 @@ describe("createRevisorDefesaDocuments — resultado", () => {
     vi.mocked(saveDocument).mockResolvedValue(undefined);
 
     const { stream } = createMockStream();
-    const tool = createRevisorDefesaDocuments({ session: mockSession, dataStream: stream });
+    const tool = createRevisorDefesaDocuments({
+      session: mockSession,
+      dataStream: stream,
+    });
     const result = await tool.execute(DEFAULT_INPUT);
 
     expect(result.content).toContain("criados");
@@ -223,10 +273,15 @@ describe("createRevisorDefesaDocuments — resultado", () => {
     const sessionWithoutUser = {
       user: { id: undefined },
       expires: "2099-01-01",
-    } as unknown as Parameters<typeof createRevisorDefesaDocuments>[0]["session"];
+    } as unknown as Parameters<
+      typeof createRevisorDefesaDocuments
+    >[0]["session"];
 
     const { stream } = createMockStream();
-    const tool = createRevisorDefesaDocuments({ session: sessionWithoutUser, dataStream: stream });
+    const tool = createRevisorDefesaDocuments({
+      session: sessionWithoutUser,
+      dataStream: stream,
+    });
     const result = await tool.execute(DEFAULT_INPUT);
 
     expect(mockSave).not.toHaveBeenCalled();
@@ -240,7 +295,10 @@ describe("createRevisorDefesaDocuments — resultado", () => {
 describe("createRevisorDefesaDocuments — integração com revisor-content-store", () => {
   it("simula pipeline DataStreamHandler: popula store com os 3 docs", async () => {
     const { stream, events } = createMockStream();
-    const tool = createRevisorDefesaDocuments({ session: mockSession, dataStream: stream });
+    const tool = createRevisorDefesaDocuments({
+      session: mockSession,
+      dataStream: stream,
+    });
     const result = await tool.execute(DEFAULT_INPUT);
 
     // Simular o que DataStreamHandler faz no browser
@@ -267,7 +325,9 @@ describe("createRevisorDefesaDocuments — integração com revisor-content-stor
         continue;
       }
       if (event.type === "data-rdocFinish") {
-        if (_id) storeRevisorDoc(_id, _title, _content);
+        if (_id) {
+          storeRevisorDoc(_id, _title, _content);
+        }
         _id = "";
         _content = "";
       }

@@ -76,7 +76,10 @@ export function CreditsBalance() {
               strokeWidth={1.5}
             />
             {/* ~ indica saldo estimado (BD indisponível momentaneamente) */}
-            <span>{isPartial ? "~" : ""}{data.balance} créditos</span>
+            <span>
+              {isPartial ? "~" : ""}
+              {data.balance} créditos
+            </span>
           </Link>
         </TooltipTrigger>
         <TooltipContent className="max-w-xs" side="bottom">
