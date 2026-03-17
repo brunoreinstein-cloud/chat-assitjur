@@ -56,11 +56,16 @@ import {
   buildKnowledgeContext,
   resolveEffectiveKnowledgeIds,
 } from "@/lib/ai/resolve-knowledge-ids";
+import {
+  buildSmartDocumentContext,
+  extractDocumentTextsFromParts,
+} from "@/lib/ai/document-context";
 import { analyzeProcessoPipeline } from "@/lib/ai/tools/analyze-processo-pipeline";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { createMasterDocuments } from "@/lib/ai/tools/create-master-documents";
 import { createRedatorContestacaoDocument } from "@/lib/ai/tools/create-redator-contestacao-document";
 import { createRevisorDefesaDocuments } from "@/lib/ai/tools/create-revisor-defesa-documents";
+import { createSearchDocumentTool } from "@/lib/ai/tools/search-document";
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import { requestApproval } from "@/lib/ai/tools/human-in-the-loop";
 import { improvePromptTool } from "@/lib/ai/tools/improve-prompt";
@@ -282,9 +287,15 @@ function getDocumentPartLabel(documentType: string | undefined): string {
 }
 
 /**
- * Trunca texto de documento: para PI preserva início + fim (OAB); caso contrário só início.
- * Tenta cortar na fronteira do último marcador [Pag. N] que cabe no limite,
- * para não enviar páginas parciais ao modelo.
+ * Trunca texto de documento para o contexto do LLM.
+ *
+ * Para documentos paginados (com marcadores [Pag. N]) com mais de 200K chars
+ * (tipicamente exports PJe com 500+ páginas), usa extração inteligente de secções:
+ * filtra páginas de assinatura, inclui sempre o início, as secções juridicamente
+ * relevantes (Sentença, Contestação, Laudo, etc.) e o índice final do PJe.
+ *
+ * Para documentos mais curtos ou sem paginação, usa truncagem simples (comportamento
+ * anterior: início + cauda OAB para PI).
  */
 function truncateDocumentText(
   text: string,
@@ -294,6 +305,16 @@ function truncateDocumentText(
   if (text.length <= maxChars) {
     return text;
   }
+
+  // Documentos grandes paginados (exports PJe, processos completos) → extração inteligente.
+  // Threshold: 200K chars ≈ 120 páginas → processo completo, não apenas PI/contestação isolada.
+  const isPaginatedLargeDoc =
+    text.length > 200_000 && text.includes("[Pag.");
+  if (isPaginatedLargeDoc) {
+    return buildSmartDocumentContext(text, maxChars, documentType);
+  }
+
+  // Documentos pequenos/médios → comportamento original (início + cauda OAB para PI)
   const notice = "\n\n[... texto truncado para caber no limite do modelo ...]";
   const needPiTail =
     documentType === "pi" && maxChars > PI_TAIL_CHARS * 2 + notice.length;
@@ -1248,6 +1269,8 @@ interface ChatStreamParams {
   processoContext: string | undefined;
   /** true se o dbBatch usou fallback (timeout); o stream envia chunk para o cliente mostrar aviso. */
   dbUsedFallback?: boolean;
+  /** Textos completos dos documentos anexados, para o tool buscarNoProcesso. */
+  documentTexts: Map<string, string>;
 }
 
 /** Resultado da preparação de mensagens para o modelo. */
@@ -1358,6 +1381,8 @@ interface StreamExecuteContext {
   requestStart: number;
   preStreamEnd: number;
   dbUsedFallback?: boolean;
+  /** Textos completos dos documentos anexados, para o tool buscarNoProcesso. */
+  documentTexts: Map<string, string>;
 }
 
 /** Cria o callback execute para createUIMessageStream; escreve streamTextResult em ref. */
@@ -1405,6 +1430,7 @@ function createStreamExecuteHandler(
     ] as const;
     type ActiveToolName =
       | (typeof baseToolNames)[number]
+      | "buscarNoProcesso"
       | "createRevisorDefesaDocuments"
       | "createRedatorContestacaoDocument"
       | "analyzeProcessoPipeline"
@@ -1413,6 +1439,10 @@ function createStreamExecuteHandler(
       ? []
       : [
           ...baseToolNames,
+          // buscarNoProcesso: disponível sempre que há documentos com texto anexados
+          ...(ctx.documentTexts.size > 0
+            ? (["buscarNoProcesso"] as const)
+            : []),
           ...(ctx.agentConfig.useRevisorDefesaTools
             ? (["createRevisorDefesaDocuments"] as const)
             : []),
@@ -1441,6 +1471,14 @@ function createStreamExecuteHandler(
       recallMemories: memoryTools.recallMemories,
       forgetMemory: memoryTools.forgetMemory,
       requestApproval,
+      // buscarNoProcesso criado com os textos completos em closure
+      ...(ctx.documentTexts.size > 0
+        ? {
+            buscarNoProcesso: createSearchDocumentTool({
+              documentTexts: ctx.documentTexts,
+            }),
+          }
+        : {}),
     } as {
       getWeather: typeof getWeather;
       createDocument: ReturnType<typeof createDocument>;
@@ -1451,6 +1489,7 @@ function createStreamExecuteHandler(
       recallMemories: ReturnType<typeof createMemoryTools>["recallMemories"];
       forgetMemory: ReturnType<typeof createMemoryTools>["forgetMemory"];
       requestApproval: typeof requestApproval;
+      buscarNoProcesso?: ReturnType<typeof createSearchDocumentTool>;
       createRevisorDefesaDocuments?: ReturnType<
         typeof createRevisorDefesaDocuments
       >;
@@ -1767,6 +1806,7 @@ function buildStreamAndResponse(
     requestHints,
     knowledgeContext,
     processoContext,
+    documentTexts,
   } = params;
   const { messagesForModel, preStreamEnd } = prepared;
 
@@ -1797,6 +1837,7 @@ function buildStreamAndResponse(
     requestStart,
     preStreamEnd,
     dbUsedFallback: params.dbUsedFallback,
+    documentTexts,
   };
 
   const onFinishContext: StreamOnFinishContext = {
@@ -2212,6 +2253,12 @@ async function handleChatPostAuthenticated(
       .join("\n");
   }
 
+  // Extrai textos completos dos documentos anexados para o tool buscarNoProcesso.
+  // Usa as parts do message (texto até 2M chars) — disponíveis antes da truncagem de contexto.
+  const documentTexts = extractDocumentTextsFromParts(
+    message?.parts as Array<{ type?: string; name?: string; text?: string }> | undefined
+  );
+
   return buildChatStreamResponse({
     requestStart,
     debugTracker,
@@ -2228,6 +2275,7 @@ async function handleChatPostAuthenticated(
     knowledgeContext,
     processoContext,
     dbUsedFallback: batchResult.usedFallback ?? false,
+    documentTexts,
   });
 }
 
