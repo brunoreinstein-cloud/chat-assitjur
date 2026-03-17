@@ -9,10 +9,17 @@ import { generateUUID } from "@/lib/utils";
 const CHUNK_SIZE = 400;
 /** Tentativas máximas de guardar na BD (apenas erros de ligação transitórios). */
 const SAVE_MAX_RETRIES = 3;
-/** Atraso base entre tentativas (ms). */
-const SAVE_RETRY_BASE_MS = 2000;
-/** Timeout por tentativa de save (ms). */
-const SAVE_ATTEMPT_TIMEOUT_MS = 8000;
+/**
+ * Atraso base entre tentativas (ms). Backoff exponencial: base * 2^(attempt-1).
+ * 500ms é suficiente para recuperar de falhas transitórias sem atrasar demasiado.
+ */
+const SAVE_RETRY_BASE_MS = 500;
+/**
+ * Timeout por tentativa de save (ms).
+ * 5s por tentativa × 3 tentativas = 15s máx por doc (vs 24s anterior).
+ * Saves correm em paralelo e não bloqueiam o stream, pelo que o impacto para o utilizador é nulo.
+ */
+const SAVE_ATTEMPT_TIMEOUT_MS = 5000;
 
 interface CreateMasterDocumentsProps {
   session: Session;
@@ -99,7 +106,7 @@ export const createMasterDocuments = ({
       const titles: string[] = [];
       const userId = session?.user?.id;
 
-      // Aquece a ligação à BD em background
+      // Aquece a ligação à BD em background enquanto o LLM gera conteúdo.
       if (userId) {
         pingDatabase().catch(() => {
           /* ignorar — apenas warm-up */
@@ -114,6 +121,8 @@ export const createMasterDocuments = ({
       });
 
       let savedCount = 0;
+      // Saves disparados em paralelo — não bloqueiam o loop de streaming.
+      const savePromises: Promise<void>[] = [];
 
       for (let i = 0; i < total; i++) {
         const id = generateUUID();
@@ -161,20 +170,30 @@ export const createMasterDocuments = ({
           transient: true,
         });
 
-        // Salvar na BD com retry (só conta se realmente guardou)
+        // Dispara o save em background — NÃO bloqueia o próximo documento.
+        // O utilizador já recebeu o conteúdo via stream; o save é apenas persistência.
         if (userId) {
-          try {
-            await saveWithRetry({ id, title, content, kind: "text", userId });
-            savedCount++;
-          } catch (saveError) {
-            console.error(
-              `[createMasterDocuments] falha ao guardar doc ${i + 1}:`,
-              saveError
-            );
-          }
+          const docIndex = i + 1;
+          const savePromise = saveWithRetry({
+            id,
+            title,
+            content,
+            kind: "text",
+            userId,
+          })
+            .then(() => {
+              savedCount++;
+            })
+            .catch((saveError) => {
+              console.error(
+                `[createMasterDocuments] falha ao guardar doc ${docIndex}:`,
+                saveError
+              );
+            });
+          savePromises.push(savePromise);
         }
 
-        // Progresso completado
+        // Progresso imediato — não espera pelo save
         dataStream.write({
           type: "data-masterProgress",
           data: i + 1,
@@ -182,12 +201,17 @@ export const createMasterDocuments = ({
         });
       }
 
-      // Sinaliza fim da geração
+      // Sinaliza fim do streaming ANTES de aguardar os saves.
+      // O cliente recebe data-mdocDone imediatamente após o último chunk.
       dataStream.write({
         type: "data-mdocDone",
         data: JSON.stringify({ ids, titles }),
         transient: true,
       });
+
+      // Aguarda todos os saves em paralelo (para reportar savedCount preciso na mensagem).
+      // Usa allSettled — qualquer falha já foi tratada no .catch() acima.
+      await Promise.allSettled(savePromises);
 
       return {
         ids,

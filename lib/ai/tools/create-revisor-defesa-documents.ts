@@ -4,19 +4,28 @@ import { z } from "zod";
 import { generateRevisorDocumentContent } from "@/artifacts/text/server";
 import { pingDatabase, saveDocument } from "@/lib/db/queries";
 import { isDatabaseConnectionError, isLikelyDatabaseError } from "@/lib/errors";
+import {
+  getModeloRevisorFromTitle,
+  loadModeloRevisor,
+  type ModeloRevisor,
+} from "@/lib/ai/modelos";
 import type { ChatMessage } from "@/lib/types";
 import { generateUUID } from "@/lib/utils";
 
 const CHUNK_SIZE = 400;
 /** Tentativas máximas de guardar na BD (apenas erros de ligação transitórios). */
 const SAVE_MAX_RETRIES = 3;
-/** Atraso base entre tentativas (ms). Backoff exponencial: base * 2^(attempt-1). */
-const SAVE_RETRY_BASE_MS = 2000;
 /**
- * Timeout por tentativa de save (ms). Dá mais margem para cold start do Supabase
- * sem bloquear demasiado tempo por tentativa (3 tentativas × 8s = 24s máx por doc).
+ * Atraso base entre tentativas (ms). Backoff exponencial: base * 2^(attempt-1).
+ * 500ms é suficiente para recuperar de falhas transitórias sem atrasar demasiado.
  */
-const SAVE_ATTEMPT_TIMEOUT_MS = 8000;
+const SAVE_RETRY_BASE_MS = 500;
+/**
+ * Timeout por tentativa de save (ms).
+ * 5s por tentativa × 3 tentativas = 15s máx por doc (vs 24s anterior).
+ * Saves correm em paralelo e não bloqueiam o stream, pelo que o impacto para o utilizador é nulo.
+ */
+const SAVE_ATTEMPT_TIMEOUT_MS = 5000;
 
 interface CreateRevisorDefesaDocumentsProps {
   session: Session;
@@ -126,8 +135,20 @@ export const createRevisorDefesaDocuments = ({
         });
       }
 
+      // Pré-aquece a cache de templates ANTES de iniciar as 3 gerações em paralelo.
+      // Sem isto, as 3 chamadas paralelas a generateRevisorDocumentContent podem todas
+      // iniciar um readFile concorrente antes de qualquer uma popular a cache em memória.
+      const uniqueModeloTypes = [
+        ...new Set(
+          titles
+            .map(getModeloRevisorFromTitle)
+            .filter((t): t is Exclude<ModeloRevisor, null> => t !== null)
+        ),
+      ];
+      await Promise.all(uniqueModeloTypes.map(loadModeloRevisor));
+
       // Inicia as 3 gerações em paralelo; cada doc é enviado ao cliente assim que fica pronto (na ordem),
-      // reduzindo o tempo até o primeiro documento aparecer em produção.
+      // reduzindo o tempo total de ~(T1+T2+T3) para ~max(T1,T2,T3).
       const contentPromises = titles.map((title) =>
         generateRevisorDocumentContent(title, contextoResumo)
       );
@@ -140,6 +161,8 @@ export const createRevisorDefesaDocuments = ({
       });
 
       let savedCount = 0;
+      // Saves disparados em paralelo — não bloqueiam o loop de streaming.
+      const savePromises: Promise<void>[] = [];
 
       for (let i = 0; i < 3; i++) {
         // Indicador de progresso: mostra qual documento está a ser gerado
@@ -192,20 +215,32 @@ export const createRevisorDefesaDocuments = ({
           transient: true,
         });
 
+        // Dispara o save em background — NÃO bloqueia o próximo documento.
+        // O utilizador já recebeu o conteúdo via stream; o save é apenas persistência.
         if (userId) {
-          try {
-            await saveWithRetry({ id, title, content, kind: "text", userId });
-            savedCount++;
-          } catch (saveError) {
-            // Regista o erro mas não interrompe — o utilizador já viu o conteúdo no stream
-            // e pode fazer download via store em memória.
-            console.error(
-              `[createRevisorDefesaDocuments] falha ao guardar doc ${i + 1}:`,
-              saveError
-            );
-          }
+          const docIndex = i + 1;
+          const savePromise = saveWithRetry({
+            id,
+            title,
+            content,
+            kind: "text",
+            userId,
+          })
+            .then(() => {
+              savedCount++;
+            })
+            .catch((saveError) => {
+              // Regista o erro mas não interrompe — o utilizador já viu o conteúdo no stream
+              // e pode fazer download via store em memória.
+              console.error(
+                `[createRevisorDefesaDocuments] falha ao guardar doc ${docIndex}:`,
+                saveError
+              );
+            });
+          savePromises.push(savePromise);
         }
-        // Notifica quantos docs estão concluídos (para skeletons no chat)
+
+        // Notifica quantos docs estão concluídos (para skeletons no chat) — imediato, sem aguardar save
         dataStream.write({
           type: "data-revisorProgress",
           data: i + 1,
@@ -213,12 +248,17 @@ export const createRevisorDefesaDocuments = ({
         });
       }
 
-      // Sinaliza ao cliente: todos os 3 documentos do Revisor foram enviados
+      // Sinaliza ao cliente: todos os 3 documentos do Revisor foram enviados.
+      // Emitido ANTES de aguardar os saves — o cliente recebe o sinal imediatamente.
       dataStream.write({
         type: "data-rdocDone",
         data: JSON.stringify({ ids, titles }),
         transient: true,
       });
+
+      // Aguarda todos os saves em paralelo (para reportar savedCount preciso na mensagem).
+      // Usa allSettled — qualquer falha já foi tratada no .catch() acima.
+      await Promise.allSettled(savePromises);
 
       // Sempre retorna todos os IDs — o conteúdo está no revisor-content-store
       // no cliente, pelo que downloads funcionam mesmo quando o save na BD falhou.
