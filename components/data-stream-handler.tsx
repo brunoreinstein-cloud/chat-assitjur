@@ -11,6 +11,7 @@ import {
   resetMasterProgress,
   setMasterCompletedCount,
   setMasterDocTitle,
+  setMasterTotalCount,
 } from "@/lib/master-progress-store";
 import { setPipelineDashboardData } from "@/lib/pipeline-dashboard-store";
 import { storeRevisorDoc } from "@/lib/revisor-content-store";
@@ -110,7 +111,12 @@ export function DataStreamHandler() {
         _mdocContent = "";
         continue;
       }
-      if (delta.type === "data-mdocStart" || delta.type === "data-mdocDone") {
+      if (delta.type === "data-mdocStart") {
+        // Captura total de documentos e regista timestamp de início para ETA.
+        setMasterTotalCount(delta.data as number);
+        continue;
+      }
+      if (delta.type === "data-mdocDone") {
         continue; // Apenas sinalização — tratamento no UI component
       }
       if (delta.type === "data-rdocStart" || delta.type === "data-rdocDone") {

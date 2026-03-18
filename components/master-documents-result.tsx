@@ -1,7 +1,7 @@
 "use client";
 
 import { Archive, Download, Eye, FileText, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   type DocxLayout,
   downloadDocxFromGet,
@@ -11,9 +11,19 @@ import {
 } from "@/lib/document-download-utils";
 import { getMasterDoc, getMasterDocs } from "@/lib/master-content-store";
 import {
+  getMasterStartedAt,
   useMasterCompletedCount,
   useMasterDocTitles,
+  useMasterTotalCount,
 } from "@/lib/master-progress-store";
+
+/** Formata segundos em "Xs" ou "Xm Ys". */
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return s > 0 ? `${m}m ${s}s` : `${m}m`;
+}
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Skeleton } from "./ui/skeleton";
@@ -72,7 +82,33 @@ export function MasterDocumentsResult({
   isReadonly,
 }: Readonly<MasterDocumentsResultProps>) {
   const completedCount = useMasterCompletedCount();
+  const totalCount = useMasterTotalCount();
   const streamTitles = useMasterDocTitles();
+
+  // Timer: segundos decorridos desde data-mdocStart
+  const [elapsed, setElapsed] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const ids = output?.ids ?? [];
+  const isLoading = ids.length === 0;
+
+  useEffect(() => {
+    if (!isLoading) {
+      // Geração concluída — parar timer
+      if (timerRef.current) clearInterval(timerRef.current);
+      return;
+    }
+    const startedAt = getMasterStartedAt();
+    if (startedAt === 0) return; // ainda não começou
+    // Calcular elapsed actual ao montar (evita salto inicial de 0→1s)
+    setElapsed(Math.floor((Date.now() - startedAt) / 1000));
+    timerRef.current = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [isLoading, totalCount]); // re-run quando totalCount chega (startedAt actualizado)
+
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadingZip, setDownloadingZip] = useState(false);
   const [previewState, setPreviewState] = useState<{
@@ -132,52 +168,89 @@ export function MasterDocumentsResult({
     );
   }
 
-  const ids = output?.ids ?? [];
   const titles = output?.titles ?? [];
-  const isLoading = ids.length === 0;
 
   // Estado de carregamento com skeleton por doc
   if (isLoading) {
-    const slotCount = Math.max(1, completedCount + 1);
+    // Usa totalCount (de data-mdocStart) para mostrar todos os slots imediatamente.
+    // Fallback para completedCount+1 enquanto o evento ainda não chegou.
+    const slotCount = totalCount > 0 ? totalCount : Math.max(1, completedCount + 1);
+
+    // ETA: só disponível após pelo menos 1 doc concluído
+    let etaText: string | null = null;
+    if (completedCount > 0 && totalCount > 0 && elapsed > 0) {
+      const secsPerDoc = elapsed / completedCount;
+      const remaining = Math.round(secsPerDoc * (totalCount - completedCount));
+      etaText = remaining > 0 ? `~${formatDuration(remaining)} restante` : null;
+    }
+
     return (
       <div className="flex flex-col gap-2 rounded-xl border bg-muted/50 p-3">
-        <p className="font-medium text-muted-foreground text-xs">
-          A criar documentos…
-        </p>
+        {/* Cabeçalho com progresso e timer */}
+        <div className="flex items-center justify-between">
+          <p className="font-medium text-muted-foreground text-xs">
+            {totalCount > 0
+              ? `A criar documentos… ${completedCount}/${totalCount}`
+              : "A criar documentos…"}
+          </p>
+          <div className="flex items-center gap-2 text-muted-foreground/70 text-xs">
+            {etaText && (
+              <span className="text-amber-600 dark:text-amber-400">{etaText}</span>
+            )}
+            {elapsed > 0 && (
+              <span>{formatDuration(elapsed)}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Barra de progresso */}
+        {totalCount > 1 && (
+          <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-primary/50 transition-all duration-500"
+              style={{ width: `${(completedCount / totalCount) * 100}%` }}
+            />
+          </div>
+        )}
+
+        {/* Slots por documento */}
         {Array.from({ length: slotCount }, (_, i) => {
           const isDone = i < completedCount;
           const isActive = i === completedCount;
-          // Usa título real recebido via stream, com fallback genérico (key estável por slot)
           const label = streamTitles[i] ?? `Documento ${i + 1}`;
           return (
             <div
               className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2"
-              key={label}
+              key={`slot-${i}`}
             >
               {isActive ? (
-                <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+                <Loader2 className="size-4 shrink-0 animate-spin text-primary/70" />
               ) : isDone ? (
-                <span className="size-4 shrink-0 text-green-500 text-sm">
-                  ✓
-                </span>
+                <span className="size-4 shrink-0 text-green-500 text-sm leading-none">✓</span>
               ) : (
                 <Skeleton className="size-4 shrink-0 rounded-md" />
               )}
               <span
                 className={
                   isDone
-                    ? "text-sm"
+                    ? "flex-1 truncate text-sm"
                     : isActive
-                      ? "text-muted-foreground text-sm"
-                      : "text-muted-foreground/50 text-sm"
+                      ? "flex-1 truncate text-muted-foreground text-sm"
+                      : "flex-1 truncate text-muted-foreground/40 text-sm"
                 }
               >
                 {label}
-                {isActive && <span className="ml-1 text-xs"> a gerar…</span>}
-                {!(isDone || isActive) && (
-                  <span className="ml-1 text-xs"> a aguardar…</span>
-                )}
               </span>
+              {isActive && (
+                <span className="shrink-0 text-muted-foreground/60 text-xs">
+                  a gerar…
+                </span>
+              )}
+              {!isDone && !isActive && (
+                <span className="shrink-0 text-muted-foreground/30 text-xs">
+                  a aguardar
+                </span>
+              )}
             </div>
           );
         })}
