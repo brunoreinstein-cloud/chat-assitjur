@@ -38,6 +38,10 @@ import {
   MAX_TOTAL_DOC_CHARS,
 } from "@/lib/ai/context-window";
 import { MIN_CREDITS_TO_START_CHAT, tokensToCredits } from "@/lib/ai/credits";
+import {
+  buildSmartDocumentContext,
+  extractDocumentTextsFromAllMessages,
+} from "@/lib/ai/document-context";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import {
   extractStructuredFields,
@@ -56,21 +60,17 @@ import {
   buildKnowledgeContext,
   resolveEffectiveKnowledgeIds,
 } from "@/lib/ai/resolve-knowledge-ids";
-import {
-  buildSmartDocumentContext,
-  extractDocumentTextsFromAllMessages,
-} from "@/lib/ai/document-context";
 import { analyzeProcessoPipeline } from "@/lib/ai/tools/analyze-processo-pipeline";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { createMasterDocuments } from "@/lib/ai/tools/create-master-documents";
 import { createRedatorContestacaoDocument } from "@/lib/ai/tools/create-redator-contestacao-document";
 import { createRevisorDefesaDocuments } from "@/lib/ai/tools/create-revisor-defesa-documents";
-import { createSearchDocumentTool } from "@/lib/ai/tools/search-document";
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import { requestApproval } from "@/lib/ai/tools/human-in-the-loop";
 import { improvePromptTool } from "@/lib/ai/tools/improve-prompt";
 import { createMemoryTools } from "@/lib/ai/tools/memory";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
+import { createSearchDocumentTool } from "@/lib/ai/tools/search-document";
 import { updateDocument } from "@/lib/ai/tools/update-document";
 import { validationToolsForValidate } from "@/lib/ai/tools/validation-tools";
 import { getCachedBuiltInAgentOverrides } from "@/lib/cache/agent-overrides-cache";
@@ -92,6 +92,7 @@ import {
   getOrCreateCreditBalance,
   getProcessoById,
   getUserFilesByIds,
+  pingDatabase,
   saveChat,
   saveMessages,
   updateChatActiveStreamId,
@@ -308,8 +309,7 @@ function truncateDocumentText(
 
   // Documentos grandes paginados (exports PJe, processos completos) → extração inteligente.
   // Threshold: 200K chars ≈ 120 páginas → processo completo, não apenas PI/contestação isolada.
-  const isPaginatedLargeDoc =
-    text.length > 200_000 && text.includes("[Pag.");
+  const isPaginatedLargeDoc = text.length > 200_000 && text.includes("[Pag.");
   if (isPaginatedLargeDoc) {
     return buildSmartDocumentContext(text, maxChars, documentType);
   }
@@ -540,7 +540,9 @@ function truncateDocumentParts(parts: UserMessagePart[]): UserMessagePart[] {
  * o excerto inicial (MAX_DOCUMENT_PART_TEXT_DB_LENGTH) para histórico/UI.
  * Reduz INSERT de ~2M chars para ~100K → ~20× mais rápido.
  */
-function truncateDocumentPartsForDb(parts: UserMessagePart[]): UserMessagePart[] {
+function truncateDocumentPartsForDb(
+  parts: UserMessagePart[]
+): UserMessagePart[] {
   const dbSuffix = "\n\n[Texto completo disponível apenas durante a sessão.]";
   const maxLen = MAX_DOCUMENT_PART_TEXT_DB_LENGTH - dbSuffix.length;
   return parts.map((part) => {
@@ -1703,16 +1705,43 @@ function createStreamOnFinishHandler(
                   model: ctx.effectiveModel,
                   creditsConsumed,
                 };
-                // Retry uma vez após streams longos (>2min): o pool PgBouncer
-                // pode ter a ligação expirada — 2s de espera permite reconnect.
-                try {
-                  await deductCreditsAndRecordUsage(deductArgs);
-                } catch (firstError) {
-                  if (isDev) {
-                    console.warn("[chat] créditos: 1ª tentativa falhou, a aguardar 2s antes de retry:", firstError instanceof Error ? firstError.message : firstError);
+                // Após streams longos (>2min) o pool PgBouncer pode estar
+                // esgotado. Usa o mesmo padrão dos tools de documento:
+                // pingDatabase (warm-up) + 3 tentativas com backoff exponencial.
+                const CREDITS_MAX_RETRIES = 3;
+                const CREDITS_RETRY_BASE_MS = 500;
+                pingDatabase().catch(() => {
+                  /* warm-up silencioso */
+                });
+                let lastCreditsError: unknown;
+                let saved = false;
+                for (
+                  let attempt = 0;
+                  attempt < CREDITS_MAX_RETRIES;
+                  attempt++
+                ) {
+                  try {
+                    await deductCreditsAndRecordUsage(deductArgs);
+                    saved = true;
+                    break;
+                  } catch (err) {
+                    lastCreditsError = err;
+                    if (attempt < CREDITS_MAX_RETRIES - 1) {
+                      const delay = CREDITS_RETRY_BASE_MS * 2 ** attempt; // 500ms, 1s, 2s
+                      if (isDev) {
+                        console.warn(
+                          `[chat] créditos: tentativa ${attempt + 1} falhou, retry em ${delay}ms:`,
+                          err instanceof Error ? err.message : err
+                        );
+                      }
+                      await new Promise((resolve) =>
+                        setTimeout(resolve, delay)
+                      );
+                    }
                   }
-                  await new Promise((resolve) => setTimeout(resolve, 2000));
-                  await deductCreditsAndRecordUsage(deductArgs);
+                }
+                if (!saved) {
+                  throw lastCreditsError;
                 }
                 creditsCache.delete(ctx.session.user.id);
               } catch (error_) {
@@ -2275,7 +2304,9 @@ async function handleChatPostAuthenticated(
   // o utilizador não re-anexa o documento, então message.parts não tem document parts.
   // Processa oldest-first → latest attachment com o mesmo nome vence (more recent wins).
   const documentTexts = extractDocumentTextsFromAllMessages(
-    uiMessages as Array<{ parts?: Array<{ type?: string; name?: string; text?: string }> }>
+    uiMessages as Array<{
+      parts?: Array<{ type?: string; name?: string; text?: string }>;
+    }>
   );
 
   return buildChatStreamResponse({
