@@ -95,7 +95,9 @@ function getMessagePartKey(
     part.type === "reasoning" &&
     (part as ReasoningAggregatePart).steps?.length
   ) {
-    return `${messageId}-reasoning-aggregate`;
+    // Inclui o index para evitar chaves duplicadas quando uma mensagem tem
+    // múltiplos blocos de reasoning separados (ex: reasoning → texto → reasoning).
+    return `${messageId}-reasoning-aggregate-${index}`;
   }
   return `${messageId}-part-${part.type}-${index}`;
 }
