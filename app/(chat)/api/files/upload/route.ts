@@ -262,7 +262,18 @@ const FileSchema = z.object({
 
 type UploadResult =
   | { ok: true; url: string; pathname: string }
-  | { ok: false; reason: "no_client" | "storage_error"; message?: string };
+  | {
+      ok: false;
+      reason: "no_client" | "storage_error" | "too_large";
+      message?: string;
+    };
+
+/**
+ * Limite máximo para upload no Supabase Storage (plano Free = 50 MB por ficheiro).
+ * Usamos 49 MB como margem de segurança para evitar o erro "exceeded maximum allowed size".
+ * Ficheiros maiores são armazenados exclusivamente no Vercel Blob.
+ */
+const SUPABASE_MAX_FILE_SIZE_BYTES = 49 * 1024 * 1024; // 49 MiB
 
 async function uploadFile(
   userId: string,
@@ -270,6 +281,16 @@ async function uploadFile(
   fileBuffer: ArrayBuffer,
   contentType: string
 ): Promise<UploadResult> {
+  // Verificação de tamanho antes de tentar o upload (evita round-trip ao Supabase
+  // para ficheiros > 49 MB que iriam sempre falhar com "exceeded maximum allowed size").
+  if (fileBuffer.byteLength > SUPABASE_MAX_FILE_SIZE_BYTES) {
+    return {
+      ok: false,
+      reason: "too_large",
+      message: `Ficheiro ${(fileBuffer.byteLength / 1024 / 1024).toFixed(1)} MB excede o limite Supabase (49 MB)`,
+    };
+  }
+
   const supabase = getSupabaseServerClient();
   if (!supabase) {
     return { ok: false, reason: "no_client" };
@@ -804,13 +825,20 @@ async function uploadToStorage(
   if (uploadResult.ok) {
     return { url: uploadResult.url, pathname: uploadResult.pathname };
   }
-  // Supabase falhou (ex.: ficheiro > 50 MiB ou tipo não aceite no bucket chat-files); tentar Blob como fallback
-  if (uploadResult.reason === "storage_error" && isDev) {
-    console.warn(
-      "[upload] Supabase storage_error, a tentar Blob:",
-      uploadResult.message,
-      storageErrorHint(uploadResult.message)
-    );
+  // Supabase não disponível ou ficheiro demasiado grande → fallback para Vercel Blob.
+  if (isDev) {
+    if (uploadResult.reason === "too_large") {
+      console.info(
+        "[upload] Ficheiro excede limite Supabase (49 MB); a usar Vercel Blob directamente:",
+        uploadResult.message
+      );
+    } else if (uploadResult.reason === "storage_error") {
+      console.warn(
+        "[upload] Supabase storage_error, a tentar Blob:",
+        uploadResult.message,
+        storageErrorHint(uploadResult.message)
+      );
+    }
   }
   try {
     // Use original fileBuffer (not the detached clone sent to Supabase)
@@ -852,19 +880,28 @@ export async function persistAndRespond(
   try {
     let uploadResult: { url: string; pathname: string };
     if (existingBlobUrl) {
-      // Ficheiro já está no Blob: tentar Supabase para armazenamento permanente;
-      // se falhar, reutilizar o URL existente sem re-upload (evita 89MB duplicado).
-      const bufferForSupabase = fileBuffer.slice(0);
-      const supabaseResult = await uploadFile(
-        userId,
-        filename,
-        bufferForSupabase,
-        contentType
-      );
+      // Ficheiro já está no Blob. Tentar Supabase apenas se couber no limite (49 MB);
+      // ficheiros maiores vão directamente para Blob sem tentar Supabase (evita round-trip
+      // desnecessário de 10-15s que termina sempre em "exceeded maximum allowed size").
+      const fileSizeMB = fileBuffer.byteLength / 1024 / 1024;
+      const tooLargeForSupabase =
+        fileBuffer.byteLength > SUPABASE_MAX_FILE_SIZE_BYTES;
+      if (isDev && tooLargeForSupabase) {
+        console.info(
+          `[upload] Ficheiro ${fileSizeMB.toFixed(1)} MB > 49 MB; a usar URL Blob directamente (sem tentar Supabase).`
+        );
+      }
+      const supabaseResult = tooLargeForSupabase
+        ? { ok: false as const, reason: "too_large" as const }
+        : await uploadFile(userId, filename, fileBuffer.slice(0), contentType);
+
       if (supabaseResult.ok) {
-        uploadResult = { url: supabaseResult.url, pathname: supabaseResult.pathname };
+        uploadResult = {
+          url: supabaseResult.url,
+          pathname: supabaseResult.pathname,
+        };
       } else {
-        if (isDev) {
+        if (isDev && supabaseResult.reason === "storage_error") {
           console.warn(
             "[upload] Supabase falhou para ficheiro já em Blob; a reutilizar URL existente:",
             supabaseResult.message
