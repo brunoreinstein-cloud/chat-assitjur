@@ -103,6 +103,57 @@ const MAX_BLOCK_CHARS = 120_000;
 /** Regex para detectar blocos críticos (retry obrigatório em caso de falha) */
 const CRITICAL_BLOCK_LABELS =
   /Senten[çc]a|Ac[óo]rd[ãa]o|C[áa]lculos|Liquida[çc][ãa]o|Embargos/i;
+/**
+ * Nº máximo de blocos a extrair em paralelo.
+ * 3 permite reduzir o tempo de extracção para ~1/3 sem pressionar o rate limit
+ * da API Anthropic (cada bloco usa ≤ 120 K chars de input + ≤ 4096 tokens output).
+ */
+const BLOCK_EXTRACTION_CONCURRENCY = 3;
+/**
+ * Budget de tokens de saída por bloco.
+ * Blocos não-críticos raramente precisam de mais de 2048 tokens;
+ * reservar 4096 apenas para Sentença, Acórdão, Cálculos, etc.
+ */
+const BLOCK_MAX_OUTPUT_TOKENS_DEFAULT = 2048;
+const BLOCK_MAX_OUTPUT_TOKENS_CRITICAL = 4096;
+
+// ---------------------------------------------------------------------------
+// Semáforo de concorrência (sem dependência externa)
+// ---------------------------------------------------------------------------
+
+/**
+ * Cria um semáforo que limita o número de Promises em execução simultânea.
+ * Uso:
+ *   const sem = createSemaphore(3);
+ *   await Promise.all(items.map(item => sem(() => processItem(item))));
+ */
+function createSemaphore(concurrency: number) {
+  let active = 0;
+  const queue: Array<() => void> = [];
+
+  function release() {
+    active--;
+    const next = queue.shift();
+    if (next) {
+      active++;
+      next();
+    }
+  }
+
+  return function run<T>(fn: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      function attempt() {
+        fn().then(resolve, reject).finally(release);
+      }
+      if (active < concurrency) {
+        active++;
+        attempt();
+      } else {
+        queue.push(attempt);
+      }
+    });
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Regras base de extração (compartilhadas com RAGs especializados)
@@ -322,86 +373,95 @@ export async function runMultiCallPipeline(
   );
 
   // 3. Chamadas 1–N: Extração por bloco (Sonnet — rápido/barato)
-  //    Blocos > MAX_BLOCK_CHARS são divididos em sub-blocos.
+  //    Blocos > MAX_BLOCK_CHARS são divididos em sub-blocos (sub-loop sequencial).
   //    Blocos críticos (Sentença, Acórdão, etc.) têm retry em caso de falha.
-  const blockResults: BlockResult[] = [];
+  //
+  //    PARALELISMO: os N blocos de topo correm em simultâneo com concorrência
+  //    máxima BLOCK_EXTRACTION_CONCURRENCY (3). Cada bloco mantém o sub-loop
+  //    sequencial para garantir a fusão correcta de campos entre sub-blocos.
+  //    Resultados são recolhidos por índice para preservar a ordem original.
   let totalTokens = 0;
 
-  for (let i = 0; i < blocks.length; i++) {
-    const block = blocks[i];
+  const sem = createSemaphore(BLOCK_EXTRACTION_CONCURRENCY);
+  const blockResultsOrdered = await Promise.all(
+    blocks.map((block, i) =>
+      sem(async () => {
+        // Sub-blocos: dividir se excede MAX_BLOCK_CHARS
+        const subBlocks =
+          block.text.length > MAX_BLOCK_CHARS
+            ? splitBlockIntoSubBlocks(block, MAX_BLOCK_CHARS)
+            : [block];
 
-    // Sub-blocos: dividir se excede MAX_BLOCK_CHARS
-    const subBlocks =
-      block.text.length > MAX_BLOCK_CHARS
-        ? splitBlockIntoSubBlocks(block, MAX_BLOCK_CHARS)
-        : [block];
+        if (subBlocks.length > 1) {
+          onProgress?.(
+            `📦 Bloco ${i + 1}/${blocks.length}: ${block.label} dividido em ${subBlocks.length} sub-blocos.`
+          );
+        }
 
-    if (subBlocks.length > 1) {
-      onProgress?.(
-        `📦 Bloco ${i + 1}/${blocks.length}: ${block.label} dividido em ${subBlocks.length} sub-blocos.`
-      );
-    }
+        const mergedFields: Record<string, string> = {};
+        const mergedAnalysisParts: string[] = [];
+        let mergedTokens = 0;
+        let anySuccess = false;
 
-    const mergedFields: Record<string, string> = {};
-    const mergedAnalysisParts: string[] = [];
-    let mergedTokens = 0;
-    let anySuccess = false;
+        for (let j = 0; j < subBlocks.length; j++) {
+          const sub = subBlocks[j];
+          const subLabel =
+            subBlocks.length > 1
+              ? `${block.label} (sub-bloco ${j + 1}/${subBlocks.length})`
+              : block.label;
 
-    for (let j = 0; j < subBlocks.length; j++) {
-      const sub = subBlocks[j];
-      const subLabel =
-        subBlocks.length > 1
-          ? `${block.label} (sub-bloco ${j + 1}/${subBlocks.length})`
-          : block.label;
+          onProgress?.(
+            `⏳ [Sonnet] Extraindo bloco ${i + 1}/${blocks.length}: ${subLabel} (pp. ${sub.pageRange[0]}–${sub.pageRange[1]})...`
+          );
 
-      onProgress?.(
-        `⏳ [Sonnet] Extraindo bloco ${i + 1}/${blocks.length}: ${subLabel} (pp. ${sub.pageRange[0]}–${sub.pageRange[1]})...`
-      );
-
-      try {
-        const result = await processBlockWithRetry(
-          sub,
-          extractionModelId,
-          BLOCK_CALL_TIMEOUT_MS,
-          CRITICAL_BLOCK_LABELS.test(sub.label) ? 1 : 0,
-          onProgress
-        );
-        // Merge fields: valores posteriores sobrescrevem, salvo divergência
-        for (const [key, value] of Object.entries(result.extractedFields)) {
-          if (mergedFields[key] && mergedFields[key] !== value) {
-            mergedFields[key] = `DIVERGÊNCIA: ${mergedFields[key]} | ${value}`;
-          } else {
-            mergedFields[key] = value;
+          try {
+            const result = await processBlockWithRetry(
+              sub,
+              extractionModelId,
+              BLOCK_CALL_TIMEOUT_MS,
+              CRITICAL_BLOCK_LABELS.test(sub.label) ? 1 : 0,
+              onProgress
+            );
+            // Merge fields: valores posteriores sobrescrevem, salvo divergência
+            for (const [key, value] of Object.entries(result.extractedFields)) {
+              if (mergedFields[key] && mergedFields[key] !== value) {
+                mergedFields[key] = `DIVERGÊNCIA: ${mergedFields[key]} | ${value}`;
+              } else {
+                mergedFields[key] = value;
+              }
+            }
+            mergedAnalysisParts.push(result.rawAnalysis);
+            mergedTokens += result.tokensUsed;
+            anySuccess = true;
+            onProgress?.(
+              `✅ ${subLabel} concluído: ${Object.keys(result.extractedFields).length} campos extraídos.`
+            );
+          } catch (error) {
+            mergedAnalysisParts.push(
+              `⚠️ Erro ao processar ${subLabel}: ${error instanceof Error ? error.message : "timeout"}`
+            );
+            onProgress?.(`⚠️ ${subLabel} falhou — continuando com os restantes.`);
           }
         }
-        mergedAnalysisParts.push(result.rawAnalysis);
-        mergedTokens += result.tokensUsed;
-        anySuccess = true;
-        onProgress?.(
-          `✅ ${subLabel} concluído: ${Object.keys(result.extractedFields).length} campos extraídos.`
-        );
-      } catch (error) {
-        mergedAnalysisParts.push(
-          `⚠️ Erro ao processar ${subLabel}: ${error instanceof Error ? error.message : "timeout"}`
-        );
-        onProgress?.(`⚠️ ${subLabel} falhou — continuando com os restantes.`);
-      }
-    }
 
-    blockResults.push({
-      blockLabel: block.label,
-      pageRange: block.pageRange,
-      extractedFields: mergedFields,
-      rawAnalysis: mergedAnalysisParts.join("\n\n"),
-      tokensUsed: mergedTokens,
-    });
+        if (!anySuccess) {
+          onProgress?.(
+            `⚠️ Bloco ${i + 1} (${block.label}) falhou completamente — continuando.`
+          );
+        }
 
-    if (!anySuccess) {
-      onProgress?.(
-        `⚠️ Bloco ${i + 1} (${block.label}) falhou completamente — continuando.`
-      );
-    }
-  }
+        return {
+          blockLabel: block.label,
+          pageRange: block.pageRange,
+          extractedFields: mergedFields,
+          rawAnalysis: mergedAnalysisParts.join("\n\n"),
+          tokensUsed: mergedTokens,
+        } satisfies BlockResult;
+      })
+    )
+  );
+
+  const blockResults: BlockResult[] = blockResultsOrdered;
 
   // 4. Chamada de compilação/síntese (Opus — mais inteligente)
   //    maxOutputTokens e timeout dinâmicos por módulo.
@@ -462,7 +522,8 @@ export async function runMultiCallPipeline(
 async function processBlock(
   block: ProcessoBlock,
   modelId: string,
-  timeoutMs: number
+  timeoutMs: number,
+  maxOutputTokens?: number
 ): Promise<BlockResult> {
   // Sub-blocos já garantem que o texto está dentro do limite.
   // Segurança extra: truncar com aviso se ainda exceder (não deveria acontecer).
@@ -471,10 +532,18 @@ async function processBlock(
       ? `${block.text.slice(0, MAX_BLOCK_CHARS)}\n\n[... bloco truncado por segurança ...]`
       : block.text;
 
+  // Budget adaptativo: blocos críticos (Sentença, Acórdão, Cálculos…) ficam com
+  // 4096 tokens; restantes usam 2048 — reduz o tempo de geração por bloco ~30%.
+  const effectiveMaxTokens =
+    maxOutputTokens ??
+    (CRITICAL_BLOCK_LABELS.test(block.label)
+      ? BLOCK_MAX_OUTPUT_TOKENS_CRITICAL
+      : BLOCK_MAX_OUTPUT_TOKENS_DEFAULT);
+
   const { text, usage } = await generateText({
     model: getLanguageModel(modelId),
     temperature: 0.1,
-    maxOutputTokens: 4096,
+    maxOutputTokens: effectiveMaxTokens,
     abortSignal: AbortSignal.timeout(timeoutMs),
     system: getBlockExtractionPrompt(block.label, block.primaryPhase),
     prompt: `Analise o seguinte trecho do processo (páginas ${block.pageRange[0]} a ${block.pageRange[1]}):\n\n${blockText}`,
