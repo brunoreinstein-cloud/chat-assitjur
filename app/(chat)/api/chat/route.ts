@@ -1706,12 +1706,13 @@ function createStreamOnFinishHandler(
                   creditsConsumed,
                 };
                 // Após streams longos (>2min) o pool PgBouncer pode estar
-                // esgotado. Usa o mesmo padrão dos tools de documento:
-                // pingDatabase (warm-up) + 3 tentativas com backoff exponencial.
-                const CREDITS_MAX_RETRIES = 3;
-                const CREDITS_RETRY_BASE_MS = 500;
-                pingDatabase().catch(() => {
-                  /* warm-up silencioso */
+                // esgotado. Aguarda o warm-up (await) para que a ligação esteja
+                // activa antes do primeiro retry — sem await o SELECT 1 ainda não
+                // tinha terminado quando a transacção era tentada.
+                const CREDITS_MAX_RETRIES = 5;
+                const CREDITS_RETRY_BASE_MS = 1000;
+                await pingDatabase().catch(() => {
+                  /* warm-up silencioso; ignora erro de ping */
                 });
                 let lastCreditsError: unknown;
                 let saved = false;
@@ -1727,7 +1728,7 @@ function createStreamOnFinishHandler(
                   } catch (err) {
                     lastCreditsError = err;
                     if (attempt < CREDITS_MAX_RETRIES - 1) {
-                      const delay = CREDITS_RETRY_BASE_MS * 2 ** attempt; // 500ms, 1s, 2s
+                      const delay = CREDITS_RETRY_BASE_MS * 2 ** attempt; // 1s, 2s, 4s, 8s
                       if (isDev) {
                         console.warn(
                           `[chat] créditos: tentativa ${attempt + 1} falhou, retry em ${delay}ms:`,
