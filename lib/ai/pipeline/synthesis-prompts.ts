@@ -269,15 +269,39 @@ export function getModuleSynthesisConfig(
   return MODULE_CONFIGS[moduleId] ?? MODULE_CONFIGS.DEFAULT;
 }
 
-/** Gera o prompt de sintese dinamico baseado no modulo. */
-export function getSynthesisPrompt(moduleId: string): string {
+/**
+ * Gera o prompt de sintese dinamico baseado no modulo.
+ *
+ * @param moduleId  - ID do modulo (ex: "M03")
+ * @param validationContext - Contexto de pre-validacao (Padrao C).
+ *   Quando fornecido, o Opus recebe os alertas T001/F001/C001/A001/E001
+ *   ANTES de redigir o relatorio, podendo resolver conflitos inline.
+ */
+export function getSynthesisPrompt(
+  moduleId: string,
+  validationContext?: string
+): string {
   const config = getModuleSynthesisConfig(moduleId);
   const sectionsBlock = config.sections
     .map((s) => `## ${s.number}. ${s.title}\n${s.description}`)
     .join("\n\n");
 
-  return `Voce e um especialista juridico trabalhista. Recebeu extracoes parciais de diferentes secoes de um processo.
+  // Bloco de pre-validacao — incluido apenas quando ha alertas do Sonnet Validator
+  const preValidationBlock = validationContext
+    ? `\nALERTAS PRE-VALIDACAO (resolva inline ao redigir o relatorio):
+${validationContext}
 
+INSTRUCOES PARA CADA ALERTA:
+- T001 (temporal): Verifique as datas citadas e corrija. Se inconsistente, marque: ⚠️ [T001] DATA INCONSISTENTE
+- F001 (financeiro): Reconcilie os valores entre secoes. Se divergente, marque: ⚠️ [F001] VALOR DIVERGENTE — indicar ambas as fontes com fl.
+- C001 (classificacao): Use a classificacao mais suportada pelo texto. Marque: ⚠️ [C001] CLASSIFICACAO INCERTA
+- A001 (audiencia): Verifique presencas e confissoes. Marque: ⚠️ [A001] DADO DE AUDIENCIA INCERTO
+- E001 (execucao): Reconcilie valores de execucao. Marque: ⚠️ [E001] VALOR DE EXECUCAO DIVERGENTE
+- Inclua nota no final da secao afetada descrevendo o problema e a resolucao adotada.\n`
+    : "";
+
+  return `Voce e um especialista juridico trabalhista. Recebeu extracoes parciais de diferentes secoes de um processo.
+${preValidationBlock}
 TAREFA: Sintetize todas as extracoes num relatorio Markdown unificado e estruturado.
 
 REGRAS:

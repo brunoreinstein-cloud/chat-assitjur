@@ -463,54 +463,86 @@ export async function runMultiCallPipeline(
 
   const blockResults: BlockResult[] = blockResultsOrdered;
 
-  // 4. Chamada de compilação/síntese (Opus — mais inteligente)
-  //    maxOutputTokens e timeout dinâmicos por módulo.
-  const synthesisConfig = getModuleSynthesisConfig(moduleId);
-  onProgress?.(
-    `🔄 [Opus] Compilando relatório unificado (${synthesisConfig.sections.length} seções, max ${synthesisConfig.maxOutputTokens} tokens)...`
-  );
-  const synthesized = await synthesizeResults(
-    blockResults,
-    moduleId,
-    synthesisModelId,
-    synthesisConfig.synthesisTimeoutMs,
-    synthesisConfig.maxOutputTokens
-  );
-  totalTokens += synthesized.tokensUsed;
+  // ─────────────────────────────────────────────────────────────────────────
+  // PADRÃO C — Validar ANTES de sintetizar
+  //
+  //  4. [Sonnet Validator] Pré-validação cruzada T001/F001/C001/A001/E001
+  //     Usa o contexto compacto dos blocos (campos extraídos), não o relatório
+  //     final (que ainda não existe). O Opus Redactor receberá estes alertas.
+  //
+  //  5. [Opus Redactor]   Síntese/redação com contexto validado
+  //     O Opus conhece os problemas antes de escrever — pode resolver conflitos
+  //     inline e produzir um relatório mais preciso.
+  //
+  //  6. Validação de referências de página (local, sem LLM) — pós-síntese
+  // ─────────────────────────────────────────────────────────────────────────
 
-  // 5. Validação de referências de página (local, sem LLM)
-  const pageRefErrors = validatePageReferences(synthesized.report);
-
-  // 6. Chamada de validação cruzada T001/F001/C001/A001/E001 (Sonnet — custo controlado)
-  //    Prompt dinâmico por módulo (campos obrigatórios variam).
+  // 4. Pré-validação cruzada (Sonnet Validator) — ANTES do Opus
   onProgress?.(
-    "🔍 [Sonnet] Validação cruzada T001/F001/C001/A001/E001 + score de completude..."
+    "🔍 [Sonnet] Pré-validação T001/F001/C001/A001/E001 (antes da síntese)..."
   );
-  const validationScore = await runCrossValidation(
-    synthesized.report,
+  const compactContext = buildCompactValidationContext(blockResults);
+  const preValidation = await runCrossValidation(
+    compactContext,
     blockResults,
     validationModelId,
     VALIDATION_CALL_TIMEOUT_MS,
     blocks.map((b) => ({ label: b.label, primaryPhase: b.primaryPhase })),
     moduleId
   );
-  totalTokens += validationScore.tokensUsed;
+  totalTokens += preValidation.tokensUsed;
 
-  const allErrors = [...pageRefErrors, ...validationScore.errors];
+  // Construir o resumo de alertas a passar ao Opus (só quando há erros)
+  const validationAlertsForOpus =
+    preValidation.errors.length > 0
+      ? preValidation.errors.join("\n")
+      : undefined;
 
-  if (allErrors.length > 0) {
-    onProgress?.(`⚠️ ${allErrors.length} problema(s) detectados na validação.`);
+  if (preValidation.errors.length > 0) {
+    onProgress?.(
+      `⚠️ ${preValidation.errors.length} alerta(s) detectados — Opus receberá contexto para resolução inline.`
+    );
+  } else {
+    onProgress?.(
+      `✅ Pré-validação: score ${preValidation.score.completude}% — nenhum alerta crítico.`
+    );
+  }
+
+  // 5. Compilação/síntese (Opus Redactor) — recebe alertas do Validator
+  const synthesisConfig = getModuleSynthesisConfig(moduleId);
+  onProgress?.(
+    `🔄 [Opus] Redigindo relatório unificado (${synthesisConfig.sections.length} seções, max ${synthesisConfig.maxOutputTokens} tokens)...`
+  );
+  const synthesized = await synthesizeResults(
+    blockResults,
+    moduleId,
+    synthesisModelId,
+    synthesisConfig.synthesisTimeoutMs,
+    synthesisConfig.maxOutputTokens,
+    validationAlertsForOpus
+  );
+  totalTokens += synthesized.tokensUsed;
+
+  // 6. Validação de referências de página (local, sem LLM) — pós-síntese
+  const pageRefErrors = validatePageReferences(synthesized.report);
+
+  const allErrors = [...pageRefErrors, ...preValidation.errors];
+
+  if (pageRefErrors.length > 0) {
+    onProgress?.(
+      `⚠️ ${pageRefErrors.length} campo(s) sem referência de página no relatório final.`
+    );
   }
 
   onProgress?.(
-    `✅ Pipeline concluído: ${blockResults.length} blocos | Score: ${validationScore.score.completude}% | ${totalTokens} tokens totais.`
+    `✅ Pipeline concluído: ${blockResults.length} blocos | Score: ${preValidation.score.completude}% | ${totalTokens} tokens totais.`
   );
 
   return {
     blocks: blockResults,
     synthesizedReport: synthesized.report,
     validationErrors: allErrors,
-    validationScore: validationScore.score,
+    validationScore: preValidation.score,
     totalTokens,
   };
 }
@@ -694,15 +726,43 @@ function splitBlockIntoSubBlocks(
 }
 
 // ---------------------------------------------------------------------------
+// Contexto compacto para pré-validação (Padrão C)
+// ---------------------------------------------------------------------------
+
+/**
+ * Constrói um resumo compacto dos campos extraídos de todos os blocos.
+ * Usado como input do Sonnet Validator ANTES da síntese pelo Opus,
+ * permitindo detectar T001/F001/C001/A001/E001 sobre os dados brutos.
+ */
+function buildCompactValidationContext(blockResults: BlockResult[]): string {
+  return blockResults
+    .map((br) => {
+      const fieldsStr = Object.entries(br.extractedFields)
+        .map(([k, v]) => `  ${k}: ${v}`)
+        .join("\n");
+      return `### ${br.blockLabel} (pp. ${br.pageRange[0]}–${br.pageRange[1]})\n${fieldsStr || "  (sem campos extraídos)"}`;
+    })
+    .join("\n\n");
+}
+
+// ---------------------------------------------------------------------------
 // Síntese dos resultados
 // ---------------------------------------------------------------------------
 
+/**
+ * Sintetiza os resultados dos blocos num relatório unificado (Opus Redactor).
+ *
+ * Padrão C: aceita `validationAlerts` do Sonnet Validator para que o Opus
+ * possa resolver conflitos inline antes de redigir cada secção.
+ */
 async function synthesizeResults(
   blockResults: BlockResult[],
   moduleId: string,
   modelId: string,
   timeoutMs: number,
-  maxTokens?: number
+  maxTokens?: number,
+  /** Alertas T001/F001/C001/A001/E001 gerados pelo Sonnet Validator (pré-síntese). */
+  validationAlerts?: string
 ): Promise<{ report: string; tokensUsed: number }> {
   // Montar contexto com todos os resultados parciais
   const blocksContext = blockResults
@@ -719,7 +779,8 @@ async function synthesizeResults(
     temperature: 0.15,
     maxOutputTokens: maxTokens ?? 16_384,
     abortSignal: AbortSignal.timeout(timeoutMs),
-    system: getSynthesisPrompt(moduleId),
+    // getSynthesisPrompt recebe validationAlerts → Opus conhece os problemas antes de redigir
+    system: getSynthesisPrompt(moduleId, validationAlerts),
     prompt: `Extrações parciais dos blocos do processo:\n\n${blocksContext}\n\nGere o relatório unificado em Markdown.`,
   });
 
