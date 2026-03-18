@@ -345,6 +345,37 @@ CAMPOS A EXTRAIR DESTA SECÇÃO (${blockLabel}):
 // Pipeline principal
 // ---------------------------------------------------------------------------
 
+/**
+ * Converte um label técnico de bloco em linguagem natural para o advogado.
+ * Ex: "Sentença" → "a sentença", "Cálculos/Liquidação" → "os cálculos"
+ */
+function humanizeBlockLabel(label: string): string {
+  const l = label.toLowerCase();
+  if (l.includes("petição inicial") || l.includes("reclamat"))
+    return "a petição inicial";
+  if (l.includes("contestação") || l.includes("defesa"))
+    return "a contestação";
+  if (l.includes("sentença") || l.includes("vistos"))
+    return "a sentença";
+  if (l.includes("acórdão") || l.includes("ementa"))
+    return "o acórdão";
+  if (l.includes("audiência") || l.includes("ata de"))
+    return "as audiências e depoimentos";
+  if (l.includes("cálculo") || l.includes("liquidação") || l.includes("planilha"))
+    return "os cálculos e liquidação";
+  if (l.includes("laudo") || l.includes("perícia"))
+    return "o laudo pericial";
+  if (l.includes("embargos à execução") || l.includes("agravo de petição"))
+    return "os embargos à execução";
+  if (l.includes("embargos"))
+    return "os embargos de declaração";
+  if (l.includes("execução") || l.includes("penhora"))
+    return "a fase de execução";
+  if (l.includes("recurso ordinário") || l.includes("recurso de revista"))
+    return "os recursos";
+  return `a seção "${label}"`;
+}
+
 export async function runMultiCallPipeline(
   config: PipelineConfig
 ): Promise<PipelineResult> {
@@ -358,18 +389,21 @@ export async function runMultiCallPipeline(
     onProgress,
   } = config;
 
+  // Estimativa de tempo baseada no nº de páginas (referência para o advogado)
+  const estimatedMinutes =
+    pageCount <= 100 ? "1–2" : pageCount <= 300 ? "2–3" : "3–5";
   onProgress?.(
-    `📄 Documento com ${pageCount} páginas detectado. Iniciando pipeline multi-passagem...`
+    `📋 Processo de **${pageCount} páginas** recebido. Estimativa: **${estimatedMinutes} minutos**. Pode continuar navegando — avisaremos quando estiver pronto.`
   );
 
   // 1. Dividir em secções temáticas
   const sections = splitIntoSections(fullText);
-  onProgress?.(`🔍 ${sections.length} secções processuais identificadas.`);
 
   // 2. Agrupar em blocos (target 5-7)
   const blocks = mergeSectionsIntoBlocks(sections, 6);
+  const blockNames = blocks.map((b) => humanizeBlockLabel(b.label)).join(", ");
   onProgress?.(
-    `📦 ${blocks.length} blocos para análise: ${blocks.map((b) => b.label).join(", ")}`
+    `📖 Estrutura identificada. Seções a analisar: ${blockNames}.`
   );
 
   // 3. Chamadas 1–N: Extração por bloco (Sonnet — rápido/barato)
@@ -392,11 +426,8 @@ export async function runMultiCallPipeline(
             ? splitBlockIntoSubBlocks(block, MAX_BLOCK_CHARS)
             : [block];
 
-        if (subBlocks.length > 1) {
-          onProgress?.(
-            `📦 Bloco ${i + 1}/${blocks.length}: ${block.label} dividido em ${subBlocks.length} sub-blocos.`
-          );
-        }
+        // Sub-blocos de documentos muito extensos — mensagem omitida ao utilizador
+        // (detalhe interno irrelevante para o advogado)
 
         const mergedFields: Record<string, string> = {};
         const mergedAnalysisParts: string[] = [];
@@ -411,7 +442,7 @@ export async function runMultiCallPipeline(
               : block.label;
 
           onProgress?.(
-            `⏳ [Sonnet] Extraindo bloco ${i + 1}/${blocks.length}: ${subLabel} (pp. ${sub.pageRange[0]}–${sub.pageRange[1]})...`
+            `📄 Lendo ${humanizeBlockLabel(subLabel)} (páginas ${sub.pageRange[0]}–${sub.pageRange[1]})...`
           );
 
           try {
@@ -434,19 +465,22 @@ export async function runMultiCallPipeline(
             mergedTokens += result.tokensUsed;
             anySuccess = true;
             onProgress?.(
-              `✅ ${subLabel} concluído: ${Object.keys(result.extractedFields).length} campos extraídos.`
+              `✓ ${humanizeBlockLabel(subLabel)} analisado — ${Object.keys(result.extractedFields).length} informações extraídas.`
             );
-          } catch (error) {
+          } catch {
+            // Falha interna — não expor detalhes técnicos ao advogado
             mergedAnalysisParts.push(
-              `⚠️ Erro ao processar ${subLabel}: ${error instanceof Error ? error.message : "timeout"}`
+              `⚠️ Seção com leitura incompleta: ${subLabel}`
             );
-            onProgress?.(`⚠️ ${subLabel} falhou — continuando com os restantes.`);
+            onProgress?.(
+              `⚠️ ${humanizeBlockLabel(subLabel)}: leitura parcial — continuando com as demais seções.`
+            );
           }
         }
 
         if (!anySuccess) {
           onProgress?.(
-            `⚠️ Bloco ${i + 1} (${block.label}) falhou completamente — continuando.`
+            `⚠️ ${humanizeBlockLabel(block.label)}: não foi possível ler esta seção — o restante do processo será analisado normalmente.`
           );
         }
 
@@ -478,9 +512,7 @@ export async function runMultiCallPipeline(
   // ─────────────────────────────────────────────────────────────────────────
 
   // 4. Pré-validação cruzada (Sonnet Validator) — ANTES do Opus
-  onProgress?.(
-    "🔍 [Sonnet] Pré-validação T001/F001/C001/A001/E001 (antes da síntese)..."
-  );
+  onProgress?.("🔎 Verificando consistência dos dados extraídos...");
   const compactContext = buildCompactValidationContext(blockResults);
   const preValidation = await runCrossValidation(
     compactContext,
@@ -500,47 +532,55 @@ export async function runMultiCallPipeline(
 
   if (preValidation.errors.length > 0) {
     onProgress?.(
-      `⚠️ ${preValidation.errors.length} alerta(s) detectados — Opus receberá contexto para resolução inline.`
+      `⚠️ ${preValidation.errors.length} inconsistência(s) detectada(s) nos dados — serão sinalizadas no relatório.`
     );
   } else {
-    onProgress?.(
-      `✅ Pré-validação: score ${preValidation.score.completude}% — nenhum alerta crítico.`
-    );
+    onProgress?.("✓ Dados verificados e consistentes.");
   }
 
   // 5. Compilação/síntese (Opus Redactor) — recebe alertas do Validator
   const synthesisConfig = getModuleSynthesisConfig(moduleId);
   onProgress?.(
-    `🔄 [Opus] Redigindo relatório unificado (${synthesisConfig.sections.length} seções, max ${synthesisConfig.maxOutputTokens} tokens)...`
+    `✍️ Redigindo o relatório completo (${synthesisConfig.sections.length} seções). Esta é a etapa mais longa — mais 1–2 minutos...`
   );
-  const synthesized = await synthesizeResults(
-    blockResults,
-    moduleId,
-    synthesisModelId,
-    synthesisConfig.synthesisTimeoutMs,
-    synthesisConfig.maxOutputTokens,
-    validationAlertsForOpus
-  );
-  totalTokens += synthesized.tokensUsed;
+  // Síntese com fallback garantido: se o Opus falhar (timeout, erro de API),
+  // o advogado recebe um relatório parcial estruturado em vez de erro em branco.
+  let synthesizedReport: string;
+  let synthesisTokens = 0;
 
-  // 6. Validação de referências de página (local, sem LLM) — pós-síntese
-  const pageRefErrors = validatePageReferences(synthesized.report);
-
-  const allErrors = [...pageRefErrors, ...preValidation.errors];
-
-  if (pageRefErrors.length > 0) {
-    onProgress?.(
-      `⚠️ ${pageRefErrors.length} campo(s) sem referência de página no relatório final.`
+  try {
+    const synthesized = await synthesizeResults(
+      blockResults,
+      moduleId,
+      synthesisModelId,
+      synthesisConfig.synthesisTimeoutMs,
+      synthesisConfig.maxOutputTokens,
+      validationAlertsForOpus
     );
+    synthesizedReport = synthesized.report;
+    synthesisTokens = synthesized.tokensUsed;
+  } catch {
+    // Fallback: síntese falhou → entregar campos extraídos formatados.
+    // O advogado recebe dados reais, sinalizados como relatório parcial.
+    onProgress?.(
+      "⚠️ A redação do relatório completo encontrou uma instabilidade. Entregando relatório parcial com os dados extraídos..."
+    );
+    synthesizedReport = buildFallbackReport(blockResults, moduleId);
   }
 
+  totalTokens += synthesisTokens;
+
+  // 6. Validação de referências de página (local, sem LLM) — pós-síntese
+  const pageRefErrors = validatePageReferences(synthesizedReport);
+  const allErrors = [...pageRefErrors, ...preValidation.errors];
+
   onProgress?.(
-    `✅ Pipeline concluído: ${blockResults.length} blocos | Score: ${preValidation.score.completude}% | ${totalTokens} tokens totais.`
+    `✅ Análise concluída com **${preValidation.score.completude}% de completude**. Gerando documento...`
   );
 
   return {
     blocks: blockResults,
-    synthesizedReport: synthesized.report,
+    synthesizedReport,
     validationErrors: allErrors,
     validationScore: preValidation.score,
     totalTokens,
@@ -637,8 +677,9 @@ async function processBlockWithRetry(
       lastError = error;
       if (attempt < maxRetries) {
         const waitMs = 2000 * (attempt + 1);
+        // Retry transparente — o advogado não precisa saber dos detalhes internos
         onProgress?.(
-          `🔄 Retentando bloco crítico: ${block.label} (tentativa ${attempt + 2}/${maxRetries + 1}, aguardando ${waitMs / 1000}s)...`
+          `🔄 Relendo ${humanizeBlockLabel(block.label)} (aguardando ${waitMs / 1000}s)...`
         );
         await new Promise((resolve) => setTimeout(resolve, waitMs));
       }
@@ -760,6 +801,46 @@ function buildCompactValidationContext(blockResults: BlockResult[]): string {
       return `### ${br.blockLabel} (pp. ${br.pageRange[0]}–${br.pageRange[1]})\n${fieldsStr || "  (sem campos extraídos)"}${analysis}`;
     })
     .join("\n\n");
+}
+
+// ---------------------------------------------------------------------------
+// Relatório de fallback (quando a síntese Opus falha)
+// ---------------------------------------------------------------------------
+
+/**
+ * Gera um relatório parcial estruturado a partir dos campos extraídos pelos blocos.
+ * Usado como fallback quando a chamada de síntese do Opus falha ou excede o timeout.
+ * O advogado recebe dados reais em vez de uma mensagem de erro em branco.
+ */
+function buildFallbackReport(
+  blockResults: BlockResult[],
+  moduleId: string
+): string {
+  const header = `# ⚠️ RELATÓRIO PARCIAL — ANÁLISE INCOMPLETA
+
+> **Atenção:** A redação automática completa não foi concluída devido a uma instabilidade técnica.
+> As informações abaixo foram extraídas diretamente do processo e são precisas,
+> mas estão apresentadas de forma simplificada, sem a formatação completa do relatório ${moduleId}.
+> Recomenda-se re-executar a análise para obter o relatório completo.
+
+---
+`;
+
+  const sections = blockResults
+    .map((br) => {
+      if (Object.keys(br.extractedFields).length === 0) return null;
+      const fields = Object.entries(br.extractedFields)
+        .filter(([, v]) => v && !v.includes("Não localizado"))
+        .map(([k, v]) => `**${k}:** ${v}`)
+        .join("\n\n");
+      return fields
+        ? `## ${br.blockLabel} (fl. ${br.pageRange[0]}–${br.pageRange[1]})\n\n${fields}`
+        : null;
+    })
+    .filter(Boolean)
+    .join("\n\n---\n\n");
+
+  return `${header}${sections || "Nenhum campo extraído com sucesso."}`;
 }
 
 // ---------------------------------------------------------------------------
