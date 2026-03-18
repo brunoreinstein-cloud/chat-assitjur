@@ -1695,14 +1695,25 @@ function createStreamOnFinishHandler(
                   promptTokens,
                   completionTokens
                 );
-                await deductCreditsAndRecordUsage({
+                const deductArgs = {
                   userId: ctx.session.user.id,
                   chatId: ctx.id,
                   promptTokens,
                   completionTokens,
                   model: ctx.effectiveModel,
                   creditsConsumed,
-                });
+                };
+                // Retry uma vez após streams longos (>2min): o pool PgBouncer
+                // pode ter a ligação expirada — 2s de espera permite reconnect.
+                try {
+                  await deductCreditsAndRecordUsage(deductArgs);
+                } catch (firstError) {
+                  if (isDev) {
+                    console.warn("[chat] créditos: 1ª tentativa falhou, a aguardar 2s antes de retry:", firstError instanceof Error ? firstError.message : firstError);
+                  }
+                  await new Promise((resolve) => setTimeout(resolve, 2000));
+                  await deductCreditsAndRecordUsage(deductArgs);
+                }
                 creditsCache.delete(ctx.session.user.id);
               } catch (error_) {
                 logOnFinishDbError(
