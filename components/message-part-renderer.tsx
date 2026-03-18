@@ -1,7 +1,9 @@
 "use client";
 
 import type { UseChatHelpers } from "@ai-sdk/react";
+import { Loader2 } from "lucide-react";
 import type { Dispatch, ReactNode, SetStateAction } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
 import { DocumentToolResult } from "./document";
@@ -20,6 +22,45 @@ import {
   type RevisorDefesaDocumentsOutput,
   RevisorDefesaDocumentsResult,
 } from "./revisor-defesa-documents-result";
+
+/** Formata segundos em "Xs" ou "Xm Ys". */
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return s > 0 ? `${m}m ${s}s` : `${m}m`;
+}
+
+/**
+ * Pill de loading para createRedatorContestacaoDocument.
+ * Usa useRef(Date.now()) para registar o próprio tempo de montagem — não precisa de store
+ * externo. O componente é montado quando o tool call começa e desmontado quando id chega.
+ */
+function RedatorLoadingPill() {
+  const startedAt = useRef(Date.now());
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startedAt.current) / 1000));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="flex items-center gap-2 rounded-xl border bg-muted/50 px-3 py-2">
+      <Loader2 className="size-4 shrink-0 animate-spin text-primary/70" />
+      <span className="flex-1 text-muted-foreground text-sm">
+        A criar minuta de contestação…
+      </span>
+      {elapsed > 0 && (
+        <span className="shrink-0 text-muted-foreground/60 text-xs">
+          {formatDuration(elapsed)}
+        </span>
+      )}
+    </div>
+  );
+}
 
 export interface MessagePartRendererProps {
   part: ChatMessage["parts"][number];
@@ -200,14 +241,7 @@ function renderToolPart(
     const id = output?.id;
     const title = output?.title ?? "Minuta de contestação";
     if (!id) {
-      return (
-        <div
-          className="rounded-xl border bg-muted/50 px-3 py-2 text-muted-foreground text-sm"
-          key={part.toolCallId}
-        >
-          A criar minuta de contestação…
-        </div>
-      );
+      return <RedatorLoadingPill key={part.toolCallId} />;
     }
     return (
       <DocumentToolResult
