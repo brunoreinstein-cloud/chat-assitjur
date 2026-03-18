@@ -740,7 +740,13 @@ function buildCompactValidationContext(blockResults: BlockResult[]): string {
       const fieldsStr = Object.entries(br.extractedFields)
         .map(([k, v]) => `  ${k}: ${v}`)
         .join("\n");
-      return `### ${br.blockLabel} (pp. ${br.pageRange[0]}–${br.pageRange[1]})\n${fieldsStr || "  (sem campos extraídos)"}`;
+      // Inclui rawAnalysis (texto livre do Sonnet Extractor) para que o Validator
+      // tenha contexto suficiente para detectar T001/F001 — e.g., datas fora de
+      // sequência que só são visíveis na narrativa, não nos campos isolados.
+      const analysis = br.rawAnalysis?.trim()
+        ? `\nAnálise:\n${br.rawAnalysis.slice(0, 2_000)}` // cap 2K chars por bloco
+        : "";
+      return `### ${br.blockLabel} (pp. ${br.pageRange[0]}–${br.pageRange[1]})\n${fieldsStr || "  (sem campos extraídos)"}${analysis}`;
     })
     .join("\n\n");
 }
