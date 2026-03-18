@@ -1529,7 +1529,11 @@ function createStreamExecuteHandler(
 
     const result = streamText({
       model: getLanguageModel(ctx.effectiveModel),
-      temperature: 0.2,
+      // temperature não é suportado quando thinking está activo (adaptive ou extended).
+      // Omitir evita o warning da AI SDK e o parâmetro a ser silenciosamente ignorado.
+      ...(ctx.isReasoningModel || ctx.isAdaptiveThinking
+        ? {}
+        : { temperature: 0.2 }),
       maxOutputTokens: ctx.agentConfig.maxOutputTokens ?? 8192,
       system: systemPrompt({
         selectedChatModel: ctx.effectiveModel,
