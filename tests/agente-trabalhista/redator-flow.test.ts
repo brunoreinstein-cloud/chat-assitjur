@@ -9,9 +9,9 @@ import { describe, expect, it } from "vitest";
 import { AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS } from "@/lib/ai/agent-redator-contestacao";
 import { getAgentConfig } from "@/lib/ai/agents-registry";
 import {
+  AGENT_ID_ASSISTJUR_MASTER,
   AGENT_ID_REDATOR_CONTESTACAO,
   AGENT_ID_REVISOR_DEFESAS,
-  AGENT_ID_ASSISTJUR_MASTER,
 } from "@/lib/ai/agents-registry-metadata";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -59,12 +59,16 @@ describe("Redator de Contestações — configuração do agente", () => {
   it("allowedModelIds inclui apenas modelos Sonnet/Opus (recomendados para redação longa)", () => {
     const config = getAgentConfig(AGENT_ID_REDATOR_CONTESTACAO);
     const ids = config.allowedModelIds ?? [];
-    expect(ids.every((id) => id.includes("sonnet") || id.includes("opus"))).toBe(true);
+    expect(
+      ids.every((id) => id.includes("sonnet") || id.includes("opus"))
+    ).toBe(true);
   });
 
   it("Redator e Revisor têm allowedModelIds diferentes (Redator: Sonnet/Opus; Revisor: nonReasoning)", () => {
-    const redator = getAgentConfig(AGENT_ID_REDATOR_CONTESTACAO).allowedModelIds ?? [];
-    const revisor = getAgentConfig(AGENT_ID_REVISOR_DEFESAS).allowedModelIds ?? [];
+    const redator =
+      getAgentConfig(AGENT_ID_REDATOR_CONTESTACAO).allowedModelIds ?? [];
+    const revisor =
+      getAgentConfig(AGENT_ID_REVISOR_DEFESAS).allowedModelIds ?? [];
     // Revisores incluem haiku/flash (mais rápidos); Redator só Sonnet/Opus
     expect(redator).not.toEqual(revisor);
     // Redator tem menos modelos (só Sonnet/Opus)
@@ -74,7 +78,9 @@ describe("Redator de Contestações — configuração do agente", () => {
 
 describe("Redator de Contestações — instruções e gates", () => {
   it("instruções não estão vazias e têm dimensão adequada (>5000 chars)", () => {
-    expect(AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS.length).toBeGreaterThan(5000);
+    expect(AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS.length).toBeGreaterThan(
+      5000
+    );
   });
 
   it("contém tag <role> obrigatória", () => {
@@ -93,21 +99,31 @@ describe("Redator de Contestações — instruções e gates", () => {
   });
 
   it("Gate -1 exige (A) Petição Inicial e (B) Modelo ou @bancodetese", () => {
-    expect(AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS).toMatch(/GATE -1|gate_minus_1/i);
-    expect(AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS).toContain("Petição Inicial");
+    expect(AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS).toMatch(
+      /GATE -1|gate_minus_1/i
+    );
+    expect(AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS).toContain(
+      "Petição Inicial"
+    );
     expect(AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS).toMatch(/PARAR/i);
   });
 
   it("Gate -1 bloqueia se faltar (A) ou (B)", () => {
-    expect(AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS).toMatch(/\(A\).*Petição|Petição.*\(A\)/);
-    expect(AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS).toMatch(/\(B\).*Modelo|\(B\).*teses|@bancodetese/i);
+    expect(AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS).toMatch(
+      /\(A\).*Petição|Petição.*\(A\)/
+    );
+    expect(AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS).toMatch(
+      /\(B\).*Modelo|\(B\).*teses|@bancodetese/i
+    );
     expect(AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS).toContain("⛔");
   });
 
   it("Gate 0.5 aguarda CONFIRMAR ou CORRIGIR antes de redigir", () => {
     expect(AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS).toContain("CONFIRMAR");
     expect(AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS).toContain("CORRIGIR");
-    expect(AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS).toMatch(/gate_05|GATE 0.5|Gate 0.5/i);
+    expect(AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS).toMatch(
+      /gate_05|GATE 0.5|Gate 0.5/i
+    );
   });
 
   it("Fase B chama createRedatorContestacaoDocument", () => {
@@ -273,9 +289,11 @@ describe("Redator de Contestações — consistência com agents-registry-metada
     );
     const meta = getMetaConfig(AGENT_ID_REDATOR_CONTESTACAO);
     expect(meta.description).toBeTruthy();
-    expect(meta.description!.length).toBeGreaterThan(20);
+    expect(meta.description?.length).toBeGreaterThan(20);
     // Não deve ser placeholder do Assistente Geral
-    expect(meta.description).not.toMatch(/Assistente jurídico geral|dúvidas sobre o uso/i);
+    expect(meta.description).not.toMatch(
+      /Assistente jurídico geral|dúvidas sobre o uso/i
+    );
   });
 
   it("agents-registry-metadata tem allowedModelIds para Redator (prevenção de reasoning models)", async () => {

@@ -19,11 +19,14 @@ import {
 
 /** Formata segundos em "Xs" ou "Xm Ys". */
 function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return s > 0 ? `${m}m ${s}s` : `${m}m`;
 }
+
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Skeleton } from "./ui/skeleton";
@@ -94,20 +97,26 @@ export function MasterDocumentsResult({
   useEffect(() => {
     if (!isLoading) {
       // Geração concluída — parar timer
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
       return;
     }
     const startedAt = getMasterStartedAt();
-    if (startedAt === 0) return; // ainda não começou
+    if (startedAt === 0) {
+      return; // ainda não começou
+    }
     // Calcular elapsed actual ao montar (evita salto inicial de 0→1s)
     setElapsed(Math.floor((Date.now() - startedAt) / 1000));
     timerRef.current = setInterval(() => {
       setElapsed(Math.floor((Date.now() - startedAt) / 1000));
     }, 1000);
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
     };
-  }, [isLoading, totalCount]); // re-run quando totalCount chega (startedAt actualizado)
+  }, [isLoading]); // re-run quando totalCount chega (startedAt actualizado)
 
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadingZip, setDownloadingZip] = useState(false);
@@ -174,7 +183,8 @@ export function MasterDocumentsResult({
   if (isLoading) {
     // Usa totalCount (de data-mdocStart) para mostrar todos os slots imediatamente.
     // Fallback para completedCount+1 enquanto o evento ainda não chegou.
-    const slotCount = totalCount > 0 ? totalCount : Math.max(1, completedCount + 1);
+    const slotCount =
+      totalCount > 0 ? totalCount : Math.max(1, completedCount + 1);
 
     // ETA: só disponível após pelo menos 1 doc concluído
     let etaText: string | null = null;
@@ -195,11 +205,11 @@ export function MasterDocumentsResult({
           </p>
           <div className="flex items-center gap-2 text-muted-foreground/70 text-xs">
             {etaText && (
-              <span className="text-amber-600 dark:text-amber-400">{etaText}</span>
+              <span className="text-amber-600 dark:text-amber-400">
+                {etaText}
+              </span>
             )}
-            {elapsed > 0 && (
-              <span>{formatDuration(elapsed)}</span>
-            )}
+            {elapsed > 0 && <span>{formatDuration(elapsed)}</span>}
           </div>
         </div>
 
@@ -221,12 +231,15 @@ export function MasterDocumentsResult({
           return (
             <div
               className="flex items-center gap-2 rounded-lg border bg-background px-3 py-2"
+              // biome-ignore lint/suspicious/noArrayIndexKey: slot positions are stable
               key={`slot-${i}`}
             >
               {isActive ? (
                 <Loader2 className="size-4 shrink-0 animate-spin text-primary/70" />
               ) : isDone ? (
-                <span className="size-4 shrink-0 text-green-500 text-sm leading-none">✓</span>
+                <span className="size-4 shrink-0 text-green-500 text-sm leading-none">
+                  ✓
+                </span>
               ) : (
                 <Skeleton className="size-4 shrink-0 rounded-md" />
               )}
@@ -246,7 +259,7 @@ export function MasterDocumentsResult({
                   a gerar…
                 </span>
               )}
-              {!isDone && !isActive && (
+              {!(isDone || isActive) && (
                 <span className="shrink-0 text-muted-foreground/30 text-xs">
                   a aguardar
                 </span>

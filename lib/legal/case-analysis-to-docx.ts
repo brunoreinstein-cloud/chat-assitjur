@@ -8,7 +8,6 @@ import {
   type FileChild,
   Footer,
   Header,
-  HeadingLevel,
   Packer,
   PageNumber,
   Paragraph,
@@ -21,9 +20,7 @@ import {
 } from "docx";
 
 import type {
-  Alerta,
   DocumentoStatus,
-  Pedido,
   ProximoPasso,
   RelatorioAnalise,
 } from "@/lib/legal/case-analysis.types";
@@ -244,14 +241,20 @@ function tdCell(
 }
 
 function formatCurrency(value: number | null): string {
-  if (value === null) return "—";
+  if (value === null) {
+    return "—";
+  }
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 function formatDate(iso: string | null): string {
-  if (!iso) return "—";
+  if (!iso) {
+    return "—";
+  }
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+  if (m) {
+    return `${m[3]}/${m[2]}/${m[1]}`;
+  }
   return iso;
 }
 
@@ -373,7 +376,9 @@ const RISCO_LABEL: Record<string, string> = {
 
 function buildPedidos(data: RelatorioAnalise): FileChild[] {
   const { pedidos, valorTotalPleiteado } = data;
-  if (pedidos.length === 0) return [];
+  if (pedidos.length === 0) {
+    return [];
+  }
 
   const rows: TableRow[] = [
     new TableRow({
@@ -409,7 +414,9 @@ function buildPedidos(data: RelatorioAnalise): FileChild[] {
           columnSpan: 2,
           children: [
             new Paragraph({
-              children: [run("TOTAL PLEITEADO", { bold: true, size: FONT_SIZE_SMALL })],
+              children: [
+                run("TOTAL PLEITEADO", { bold: true, size: FONT_SIZE_SMALL }),
+              ],
               spacing: { after: 0 },
             }),
           ],
@@ -458,7 +465,9 @@ const ALERTA_LABEL: Record<string, string> = {
 
 function buildAlertas(data: RelatorioAnalise): FileChild[] {
   const { alertas } = data;
-  if (alertas.length === 0) return [];
+  if (alertas.length === 0) {
+    return [];
+  }
 
   const rows: TableRow[] = [
     new TableRow({
@@ -539,7 +548,9 @@ const DOC_STATUS_COLOR: Record<DocumentoStatus["status"], string> = {
 
 function buildDocumentos(data: RelatorioAnalise): FileChild[] {
   const { documentos } = data;
-  if (documentos.length === 0) return [];
+  if (documentos.length === 0) {
+    return [];
+  }
 
   const rows: TableRow[] = [
     new TableRow({
@@ -600,7 +611,9 @@ const RESPONSAVEL_LABEL: Record<ProximoPasso["responsavel"], string> = {
 
 function buildProximosPassos(data: RelatorioAnalise): FileChild[] {
   const { proximosPassos } = data;
-  if (proximosPassos.length === 0) return [];
+  if (proximosPassos.length === 0) {
+    return [];
+  }
 
   const rows: TableRow[] = [
     new TableRow({
@@ -622,11 +635,14 @@ function buildProximosPassos(data: RelatorioAnalise): FileChild[] {
               color: p.concluido ? COLORS.textoSecundario : COLORS.texto,
             }),
             tdCell(RESPONSAVEL_LABEL[p.responsavel], { widthPct: 20 }),
-            tdCell(p.prioridade.charAt(0).toUpperCase() + p.prioridade.slice(1), {
-              color: PRIORIDADE_COLOR[p.prioridade],
-              bold: p.prioridade === "alta",
-              widthPct: 15,
-            }),
+            tdCell(
+              p.prioridade.charAt(0).toUpperCase() + p.prioridade.slice(1),
+              {
+                color: PRIORIDADE_COLOR[p.prioridade],
+                bold: p.prioridade === "alta",
+                widthPct: 15,
+              }
+            ),
             tdCell(p.concluido ? "✔ Feito" : "Pendente", {
               color: p.concluido ? COLORS.verde : COLORS.ambar,
               widthPct: 10,
@@ -705,11 +721,14 @@ function buildFooter(): Footer {
             size: FONT_SIZE_SMALL,
             color: COLORS.textoSecundario,
           }),
-          run("    —    Gerado automaticamente. Não substitui análise jurídica.", {
-            size: FONT_SIZE_SMALL,
-            color: COLORS.textoSecundario,
-            italic: true,
-          }),
+          run(
+            "    —    Gerado automaticamente. Não substitui análise jurídica.",
+            {
+              size: FONT_SIZE_SMALL,
+              color: COLORS.textoSecundario,
+              italic: true,
+            }
+          ),
         ],
         alignment: AlignmentType.CENTER,
         border: {
@@ -795,6 +814,7 @@ export function relatorioFilename(data: RelatorioAnalise): string {
 
   // Remove caracteres inválidos em nomes de ficheiro
   const safe = base
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: needed to strip control chars from filenames
     .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
     .replace(/\s+/g, "_")
     .slice(0, 100);

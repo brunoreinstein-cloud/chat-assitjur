@@ -49,7 +49,7 @@ Devolve as páginas onde o termo foi encontrado, com contexto ao redor.`,
         .default(3)
         .describe("Número máximo de ocorrências a devolver (padrão: 3)"),
     }),
-    execute: async ({ query, documentName, maxResults }) => {
+    execute: ({ query, documentName, maxResults }) => {
       if (documentTexts.size === 0) {
         return {
           found: false,
@@ -68,9 +68,7 @@ Devolve as páginas onde o termo foi encontrado, com contexto ao redor.`,
           docsToSearch.push({ name: documentName, text: exact });
         } else {
           for (const [name, text] of documentTexts) {
-            if (
-              name.toLowerCase().includes(documentName.toLowerCase())
-            ) {
+            if (name.toLowerCase().includes(documentName.toLowerCase())) {
               docsToSearch.push({ name, text });
             }
           }
@@ -103,9 +101,13 @@ Devolve as páginas onde o termo foi encontrado, com contexto ao redor.`,
             pageNum: hit.pageNum,
             snippet: hit.snippet,
           });
-          if (allResults.length >= maxResults) break;
+          if (allResults.length >= maxResults) {
+            break;
+          }
         }
-        if (allResults.length >= maxResults) break;
+        if (allResults.length >= maxResults) {
+          break;
+        }
       }
 
       if (allResults.length === 0) {
