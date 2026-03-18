@@ -579,6 +579,17 @@ async function processBlock(
     abortSignal: AbortSignal.timeout(timeoutMs),
     system: getBlockExtractionPrompt(block.label, block.primaryPhase),
     prompt: `Analise o seguinte trecho do processo (páginas ${block.pageRange[0]} a ${block.pageRange[1]}):\n\n${blockText}`,
+    providerOptions: {
+      gateway: {
+        // Prompt caching automático: Anthropic cacheia o system-prompt estático
+        // (mesmo prompt por tipo de bloco) → desconto ~90% nos input tokens.
+        caching: "auto",
+        // Provider routing: se Anthropic direct atingir rate limit (429),
+        // o Gateway faz fallback automático para Bedrock → Vertex.
+        // Requer BYOK configurado no dashboard Vercel para cada provider.
+        order: ["anthropic", "bedrock", "vertex"],
+      },
+    },
   });
 
   // Parse JSON da resposta (parser robusto com fallback em camadas)
@@ -788,6 +799,16 @@ async function synthesizeResults(
     // getSynthesisPrompt recebe validationAlerts → Opus conhece os problemas antes de redigir
     system: getSynthesisPrompt(moduleId, validationAlerts),
     prompt: `Extrações parciais dos blocos do processo:\n\n${blocksContext}\n\nGere o relatório unificado em Markdown.`,
+    providerOptions: {
+      gateway: {
+        // System-prompt das 20 seções M03 (~3K tokens, estático por módulo):
+        // caching 'auto' → desconto ~90% nos input tokens após 1ª chamada.
+        caching: "auto",
+        // Opus: Bedrock e Vertex também disponibilizam claude-opus.
+        // Se Anthropic direct estiver sobrecarregado, fallback transparente.
+        order: ["anthropic", "bedrock", "vertex"],
+      },
+    },
   });
 
   return {
@@ -826,6 +847,12 @@ async function runCrossValidation(
       abortSignal: AbortSignal.timeout(timeoutMs),
       system: getValidationPrompt(moduleId ?? "DEFAULT"),
       prompt: `Relatório para validação:\n\n${report.slice(0, 80_000)}${metaSection}`,
+      providerOptions: {
+        gateway: {
+          caching: "auto",
+          order: ["anthropic", "bedrock", "vertex"],
+        },
+      },
     });
 
     // Parse JSON (parser robusto)
