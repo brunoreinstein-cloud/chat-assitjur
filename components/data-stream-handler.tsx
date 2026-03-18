@@ -18,6 +18,7 @@ import { storeRevisorDoc } from "@/lib/revisor-content-store";
 import {
   resetRevisorProgress,
   setRevisorCompletedCount,
+  setRevisorStarted,
 } from "@/lib/revisor-progress-store";
 import {
   type ArtifactKind,
@@ -119,7 +120,12 @@ export function DataStreamHandler() {
       if (delta.type === "data-mdocDone") {
         continue; // Apenas sinalização — tratamento no UI component
       }
-      if (delta.type === "data-rdocStart" || delta.type === "data-rdocDone") {
+      if (delta.type === "data-rdocStart") {
+        // Regista timestamp de início para o timer e ETA do loading state.
+        setRevisorStarted();
+        continue;
+      }
+      if (delta.type === "data-rdocDone") {
         continue; // Apenas sinalização — tratamento no UI component
       }
       if (delta.type === "data-masterTitle") {

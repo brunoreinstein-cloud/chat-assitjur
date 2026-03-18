@@ -1,7 +1,7 @@
 "use client";
 
 import { Archive, Download, Eye, FileText, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   type DocxLayout,
   downloadDocxFromGet,
@@ -10,11 +10,25 @@ import {
   downloadZipFromPost,
 } from "@/lib/document-download-utils";
 import { getRevisorDoc, getRevisorDocs } from "@/lib/revisor-content-store";
-import { useRevisorCompletedCount } from "@/lib/revisor-progress-store";
+import {
+  getRevisorStartedAt,
+  useRevisorCompletedCount,
+} from "@/lib/revisor-progress-store";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Skeleton } from "./ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
+
+/** Formata segundos em "Xs" ou "Xm Ys". */
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return s > 0 ? `${m}m ${s}s` : `${m}m`;
+}
+
+/** Total de documentos do Revisor — sempre 3 (fixo). */
+const REVISOR_TOTAL = 3;
 
 export interface RevisorDefesaDocumentsOutput {
   ids?: string[];
@@ -74,6 +88,29 @@ export function RevisorDefesaDocumentsResult({
   isReadonly,
 }: Readonly<RevisorDefesaDocumentsResultProps>) {
   const completedCount = useRevisorCompletedCount();
+
+  // Timer: segundos decorridos desde data-rdocStart
+  const [elapsed, setElapsed] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const ids_check = output?.ids ?? [];
+  const isLoading_check = ids_check.length === 0;
+
+  useEffect(() => {
+    if (!isLoading_check) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      return;
+    }
+    const startedAt = getRevisorStartedAt();
+    if (startedAt === 0) return;
+    setElapsed(Math.floor((Date.now() - startedAt) / 1000));
+    timerRef.current = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [isLoading_check]);
+
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadingZip, setDownloadingZip] = useState(false);
   const [previewState, setPreviewState] = useState<{
@@ -137,13 +174,40 @@ export function RevisorDefesaDocumentsResult({
   const titles = output?.titles ?? [];
   const isLoading = ids.length === 0;
 
-  // Estado de carregamento com skeleton por doc
+  // Estado de carregamento com skeleton por doc, timer e ETA
   if (isLoading) {
+    // ETA: só disponível após pelo menos 1 doc concluído
+    let etaText: string | null = null;
+    if (completedCount > 0 && elapsed > 0) {
+      const secsPerDoc = elapsed / completedCount;
+      const remaining = Math.round(secsPerDoc * (REVISOR_TOTAL - completedCount));
+      etaText = remaining > 0 ? `~${formatDuration(remaining)} restante` : null;
+    }
+
     return (
       <div className="flex flex-col gap-2 rounded-xl border bg-muted/50 p-3">
-        <p className="font-medium text-muted-foreground text-xs">
-          A criar documentos…
-        </p>
+        {/* Cabeçalho com progresso e timer */}
+        <div className="flex items-center justify-between">
+          <p className="font-medium text-muted-foreground text-xs">
+            A criar documentos… {completedCount}/{REVISOR_TOTAL}
+          </p>
+          <div className="flex items-center gap-2 text-muted-foreground/70 text-xs">
+            {etaText && (
+              <span className="text-amber-600 dark:text-amber-400">{etaText}</span>
+            )}
+            {elapsed > 0 && <span>{formatDuration(elapsed)}</span>}
+          </div>
+        </div>
+
+        {/* Barra de progresso */}
+        <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-primary/50 transition-all duration-500"
+            style={{ width: `${(completedCount / REVISOR_TOTAL) * 100}%` }}
+          />
+        </div>
+
+        {/* Slots por documento */}
         {DOC_LABELS.map((label, i) => {
           const isDone = i < completedCount;
           const isActive = i === completedCount;
@@ -153,29 +217,29 @@ export function RevisorDefesaDocumentsResult({
               key={label}
             >
               {isActive ? (
-                <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+                <Loader2 className="size-4 shrink-0 animate-spin text-primary/70" />
               ) : isDone ? (
-                <span className="size-4 shrink-0 text-green-500 text-sm">
-                  ✓
-                </span>
+                <span className="size-4 shrink-0 text-green-500 text-sm leading-none">✓</span>
               ) : (
                 <Skeleton className="size-4 shrink-0 rounded-md" />
               )}
               <span
                 className={
                   isDone
-                    ? "text-sm"
+                    ? "flex-1 truncate text-sm"
                     : isActive
-                      ? "text-muted-foreground text-sm"
-                      : "text-muted-foreground/50 text-sm"
+                      ? "flex-1 truncate text-muted-foreground text-sm"
+                      : "flex-1 truncate text-muted-foreground/40 text-sm"
                 }
               >
                 {label}
-                {isActive && <span className="ml-1 text-xs"> a gerar…</span>}
-                {!(isDone || isActive) && (
-                  <span className="ml-1 text-xs"> a aguardar…</span>
-                )}
               </span>
+              {isActive && (
+                <span className="shrink-0 text-muted-foreground/60 text-xs">a gerar…</span>
+              )}
+              {!isDone && !isActive && (
+                <span className="shrink-0 text-muted-foreground/30 text-xs">a aguardar</span>
+              )}
             </div>
           );
         })}
