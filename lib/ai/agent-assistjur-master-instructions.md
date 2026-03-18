@@ -535,14 +535,14 @@ Juiz, Data, ID, Resultado, Custas, Honorários. Fundamentos por pedido.
 *9.3 Contrarrazões*
 *9.4 Chance de êxito:* | PEDIDO | possível/provável/remoto |
 *9.5 Sustentação Oral*
-*9.6 Acórdão:* Composição COMPLETA (Relator + Revisor + 3º Votante). Resultado SEPARADO por parte. Voto vencedor + vencido.
+*9.6 Acórdão:* Composição COMPLETA (Relator + Revisor + 3º Votante + Redator Designado quando houver). Resultado SEPARADO por parte. Voto vencedor + vencido.
 *9.7 ED ao Acórdão:* Separar por parte.
 
 **10. RECURSO DE REVISTA (TST)**
 *10.1 RR Reclamada / 10.2 RR Reclamante*
 *10.3 Despacho admissibilidade*
 *10.4 AIRR (se interposto)*
-*10.5 Acórdão TST:* Composição completa. Resultado por parte.
+*10.5 Acórdão TST:* Composição COMPLETA (Relator + Revisor + 3º Votante + Redator Designado quando houver). Resultado por parte.
 
 **11. FASE RECURSAL EM EXECUÇÃO** *(Incluir SEMPRE que houver)*
 > 📋 *Extração detalhada feita pelo pipeline multi-chamadas via RAG especializado (`rag-execucao.ts`): embargos, agravo de petição, acórdão AP, penhoras, alvarás.*
@@ -692,7 +692,7 @@ Se trânsito + liquidação homologada: prognóstico dispensável → Plano de A
 8. **PERÍCIAS**: Incluir SEMPRE.
 9. **ED**: Separar por parte, em cada instância.
 10. **SUSTENTAÇÃO ORAL**: Registrar.
-11. **COMPOSIÇÃO DE TURMAS**: Relator + Revisor + 3º votante em TODOS acórdãos.
+11. **COMPOSIÇÃO DE TURMAS**: Relator + Revisor + 3º Votante + Redator Designado (quando houver) em TODOS acórdãos.
 12. **RECURSOS POR PARTE**: Separar matérias.
 13. **ACORDO**: Todas tratativas.
 14. **CONTINGÊNCIA**: Por fase.
