@@ -55,13 +55,19 @@ const DESCRIPTIONS: Record<AgentId, string> = {
   [AGENT_ID_REDATOR_CONTESTACAO]:
     "Assistente para redação de contestações trabalhistas. Elaboro minutas com base em modelos e na base de teses.",
   [AGENT_ID_ASSISTJUR_MASTER]:
-    "Assistente jurídico geral. Respondo dúvidas e auxilio em várias tarefas do contencioso.",
+    "14 módulos de análise processual: relatórios, carta de prognóstico, planilha eLaw, auditoria 360º e documentos especializados.",
 };
 
 const ALLOWED_MODEL_IDS: Partial<Record<AgentId, string[]>> = {
   [AGENT_ID_REDATOR_CONTESTACAO]: REDATOR_ALLOWED_MODEL_IDS,
   /** Revisor usa apenas modelos sem extended thinking para ter ferramentas ativas e resposta rápida. */
   [AGENT_ID_REVISOR_DEFESAS]: nonReasoningChatModelIds,
+  /**
+   * Master usa apenas modelos sem extended thinking: ferramentas (createMasterDocuments,
+   * analyzeProcessoPipeline) ficam ativas. Reasoning models desactivam tools no route.ts
+   * → nenhum documento é gerado.
+   */
+  [AGENT_ID_ASSISTJUR_MASTER]: nonReasoningChatModelIds,
 };
 
 export function getAgentConfig(agentId: string): AgentConfigMetadata {
