@@ -112,6 +112,7 @@ import {
   isStatementTimeoutError,
 } from "@/lib/errors";
 import { retrieveKnowledgeContext } from "@/lib/rag";
+import { getAllMcpTools } from "@/lib/ai/mcp-config";
 import { buildAiSdkTelemetry } from "@/lib/telemetry";
 import type { ChatMessage } from "@/lib/types";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
@@ -1278,6 +1279,8 @@ interface ChatStreamParams {
   dbUsedFallback?: boolean;
   /** Textos completos dos documentos anexados, para o tool buscarNoProcesso. */
   documentTexts: Map<string, string>;
+  /** Tools MCP externas (Gmail, Drive, Notion, etc.) já carregadas. */
+  mcpTools: Record<string, unknown>;
 }
 
 /** Resultado da preparação de mensagens para o modelo. */
@@ -1391,6 +1394,8 @@ interface StreamExecuteContext {
   dbUsedFallback?: boolean;
   /** Textos completos dos documentos anexados, para o tool buscarNoProcesso. */
   documentTexts: Map<string, string>;
+  /** Tools MCP externas (Gmail, Drive, Notion, etc.) já carregadas. */
+  mcpTools: Record<string, unknown>;
 }
 
 /** Cria o callback execute para createUIMessageStream; escreve streamTextResult em ref. */
@@ -1532,6 +1537,11 @@ function createStreamExecuteHandler(
         session: ctx.session,
         dataStream,
       });
+    }
+
+    // Injetar MCP tools (Gmail, Drive, Notion, etc.) — já carregadas antes do stream.
+    if (Object.keys(ctx.mcpTools).length > 0) {
+      Object.assign(tools, ctx.mcpTools);
     }
 
     const result = streamText({
@@ -1890,6 +1900,7 @@ function buildStreamAndResponse(
     preStreamEnd,
     dbUsedFallback: params.dbUsedFallback,
     documentTexts,
+    mcpTools: params.mcpTools,
   };
 
   const onFinishContext: StreamOnFinishContext = {
@@ -2321,6 +2332,10 @@ async function handleChatPostAuthenticated(
     }>
   );
 
+  // Carregar MCP tools em paralelo (Gmail, Drive, Notion, etc.)
+  // Falhas são silenciadas — tools MCP são opcionais.
+  const mcpTools = await getAllMcpTools();
+
   return buildChatStreamResponse({
     requestStart,
     debugTracker,
@@ -2338,6 +2353,7 @@ async function handleChatPostAuthenticated(
     processoContext,
     dbUsedFallback: batchResult.usedFallback ?? false,
     documentTexts,
+    mcpTools,
   });
 }
 
