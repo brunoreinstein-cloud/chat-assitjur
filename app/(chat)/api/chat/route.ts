@@ -47,7 +47,11 @@ import {
   extractStructuredFields,
   formatStructuredFieldsAsHeader,
 } from "@/lib/ai/extract-structured-fields";
-import { modelReasoningType, modelSupportsVision } from "@/lib/ai/models";
+import {
+  DEFAULT_CHAT_MODEL,
+  modelReasoningType,
+  modelSupportsVision,
+} from "@/lib/ai/models";
 import { stripImageParts } from "@/lib/ai/multimodal";
 import { getPromptCachingCacheControl } from "@/lib/ai/prompt-caching-config";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
@@ -120,10 +124,11 @@ import {
 } from "./schema";
 
 /** Limite de execução da rota (segundos).
- * No Vercel, respostas em streaming podem durar até ao máximo da plataforma (300s Pro)
- * independentemente deste valor; o valor aqui controla a fase de computação inicial.
+ * Vercel Pro suporta até 800s para rotas com streaming.
+ * O pipeline multi-chamadas (analyzeProcessoPipeline) pode levar 8-12 min em PDFs grandes;
+ * 800s (~13 min) dá margem suficiente sem atingir o hard limit da plataforma.
  * O AbortSignal no streamText garante que o stream fecha antes do corte da plataforma. */
-export const maxDuration = 300;
+export const maxDuration = 800;
 
 const isDev = process.env.NODE_ENV === "development";
 /** Quando true, não consulta nem deduz créditos (para diagnóstico de latência). */
@@ -1984,8 +1989,14 @@ function getAgentConfigAndEffectiveModel(
     batchResult.builtInOverrides,
     batchResult.customAgentFromBatch
   );
-  const effectiveModel = isModelAllowedForAgent(agentId, selectedChatModel)
-    ? selectedChatModel
+  // Se o utilizador não escolheu explicitamente um modelo (usa o global default)
+  // e o agente tem um defaultModelId configurado (admin override), aplicar esse.
+  const candidateModel =
+    selectedChatModel === DEFAULT_CHAT_MODEL && agentConfig.defaultModelId
+      ? agentConfig.defaultModelId
+      : selectedChatModel;
+  const effectiveModel = isModelAllowedForAgent(agentId, candidateModel)
+    ? candidateModel
     : getDefaultModelForAgent(agentId);
   const revisorError = validateRevisorDocumentParts(message, agentConfig);
   if (revisorError) {

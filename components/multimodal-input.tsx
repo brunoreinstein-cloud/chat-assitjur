@@ -7,7 +7,9 @@ import equal from "fast-deep-equal";
 import {
   BookOpenIcon,
   CheckIcon,
+  FileSpreadsheetIcon,
   FileTextIcon,
+  ImageIcon,
   Loader2Icon,
   LoaderIcon,
   MoreHorizontalIcon,
@@ -16,6 +18,7 @@ import {
   Settings2Icon,
   SparklesIcon,
   Trash2Icon,
+  UploadCloudIcon,
   WandIcon,
 } from "lucide-react";
 import {
@@ -362,6 +365,42 @@ function inferDocumentTypeFromFilename(
     return "pi";
   }
   return undefined;
+}
+
+/**
+ * Devolve ícone e cor Tailwind para o chip de anexo de acordo com o tipo MIME.
+ * Mantido em sync com preview-attachment.tsx (getFileTypeAppearance).
+ */
+function getChipIcon(contentType: string | undefined): {
+  Icon: typeof FileTextIcon;
+  color: string;
+} {
+  const ct = contentType ?? "";
+  if (ct === "application/pdf") {
+    return { Icon: FileTextIcon, color: "text-red-500" };
+  }
+  if (
+    ct ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    ct === "application/msword"
+  ) {
+    return { Icon: FileTextIcon, color: "text-blue-500" };
+  }
+  if (
+    ct ===
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    ct === "application/vnd.ms-excel" ||
+    ct === "text/csv"
+  ) {
+    return { Icon: FileSpreadsheetIcon, color: "text-green-600" };
+  }
+  if (ct.startsWith("image/")) {
+    return { Icon: ImageIcon, color: "text-purple-400" };
+  }
+  if (ct === "application/vnd.oasis.opendocument.text") {
+    return { Icon: FileTextIcon, color: "text-purple-500" };
+  }
+  return { Icon: FileTextIcon, color: "text-muted-foreground" };
 }
 
 /**
@@ -1172,11 +1211,30 @@ function PureMultimodalInput({
       if (files.length === 0) {
         return;
       }
+
+      // Detectar duplicados pelo nome antes de fazer upload (evita chamadas desnecessárias à API)
+      const duplicates = files.filter((f) =>
+        attachments.some((a) => a.name === f.name)
+      );
+      if (duplicates.length > 0) {
+        const names = duplicates.map((f) => `"${f.name}"`).join(", ");
+        toast.warning(
+          `${names} ${duplicates.length === 1 ? "já está adicionado" : "já estão adicionados"}.`,
+          { id: "attachment-duplicate" }
+        );
+      }
+      const uniqueFiles = files.filter(
+        (f) => !attachments.some((a) => a.name === f.name)
+      );
+      if (uniqueFiles.length === 0) {
+        return;
+      }
+
       const now = Date.now();
-      const queueIds = files.map((_, i) => `uq-${now}-${i}`);
+      const queueIds = uniqueFiles.map((_, i) => `uq-${now}-${i}`);
       setUploadQueue((prev) => [
         ...prev,
-        ...files.map((f, i) => ({
+        ...uniqueFiles.map((f, i) => ({
           id: queueIds[i],
           label: f.name,
           phase: "uploading" as UploadPhase,
@@ -1185,8 +1243,8 @@ function PureMultimodalInput({
         })),
       ]);
       try {
-        for (let i = 0; i < files.length; i++) {
-          const file = files[i];
+        for (let i = 0; i < uniqueFiles.length; i++) {
+          const file = uniqueFiles[i];
           const attachment = await uploadFile(file, queueIds[i]);
           if (attachment !== undefined && typeof attachment.url === "string") {
             // Preferir tipo pelo nome do ficheiro quando explícito (ex.: "Contestação - RO.pdf") para evitar classificação errada pelo conteúdo
@@ -1225,7 +1283,7 @@ function PureMultimodalInput({
         setUploadQueue([]);
       }
     },
-    [setAttachments, uploadFile]
+    [attachments, setAttachments, uploadFile]
   );
 
   const handleFileChange = useCallback(
@@ -1547,41 +1605,71 @@ function PureMultimodalInput({
           <section
             aria-label="Zona de largar ficheiros para anexar"
             aria-live="polite"
-            className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background/90 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 bg-background/90 backdrop-blur-sm"
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDropWithOverlay(e)}
           >
-            <p className="font-semibold text-base text-foreground">
-              Solte os ficheiros aqui
-            </p>
-            {isRevisorAgent && (
-              <div className="flex gap-2">
-                <Button
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.stopPropagation();
-                    handleDropWithOverlay(e, "pi");
-                  }}
-                  size="sm"
-                  type="button"
-                  variant="secondary"
-                >
-                  Marcar como PI
-                </Button>
-                <Button
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.stopPropagation();
-                    handleDropWithOverlay(e, "contestacao");
-                  }}
-                  size="sm"
-                  type="button"
-                  variant="secondary"
-                >
-                  Marcar como Contestação
-                </Button>
+            <div className="flex flex-col items-center gap-4 rounded-2xl border-2 border-primary/50 border-dashed bg-background/90 px-14 py-10 shadow-xl">
+              <UploadCloudIcon
+                aria-hidden
+                className="size-10 text-primary/60"
+              />
+              <p className="font-semibold text-foreground text-lg">
+                Solte os ficheiros aqui
+              </p>
+              {/* Tipos de ficheiro aceites com ícones coloridos */}
+              <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                <FileTextIcon aria-hidden className="size-3.5 text-red-500" />
+                <span>PDF</span>
+                <span aria-hidden className="opacity-40">
+                  ·
+                </span>
+                <FileTextIcon aria-hidden className="size-3.5 text-blue-500" />
+                <span>Word</span>
+                <span aria-hidden className="opacity-40">
+                  ·
+                </span>
+                <FileSpreadsheetIcon
+                  aria-hidden
+                  className="size-3.5 text-green-600"
+                />
+                <span>Excel / CSV</span>
+                <span aria-hidden className="opacity-40">
+                  ·
+                </span>
+                <ImageIcon aria-hidden className="size-3.5 text-purple-400" />
+                <span>Imagem</span>
               </div>
-            )}
+              {/* Botões de tipo para agente Revisor de Defesas */}
+              {isRevisorAgent && (
+                <div className="mt-1 flex gap-3">
+                  <Button
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.stopPropagation();
+                      handleDropWithOverlay(e, "pi");
+                    }}
+                    size="sm"
+                    type="button"
+                    variant="secondary"
+                  >
+                    Marcar como Petição Inicial
+                  </Button>
+                  <Button
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => {
+                      e.stopPropagation();
+                      handleDropWithOverlay(e, "contestacao");
+                    }}
+                    size="sm"
+                    type="button"
+                    variant="secondary"
+                  >
+                    Marcar como Contestação
+                  </Button>
+                </div>
+              )}
+            </div>
           </section>
         )}
         {messages.length === 0 && agentId === "revisor-defesas" && (
@@ -1636,66 +1724,71 @@ function PureMultimodalInput({
                 : uploadQueue;
               return (
                 <>
-                  {visibleAttachments.map((attachment) => (
-                    <div
-                      className="flex max-w-[200px] items-center gap-1.5 rounded-full border border-border/60 bg-muted/50 px-2.5 py-1 text-xs"
-                      key={attachment.url}
-                    >
-                      <FileTextIcon
-                        aria-hidden
-                        className="size-3.5 shrink-0 text-muted-foreground"
-                      />
-                      <span
-                        className="min-w-0 truncate text-foreground"
-                        title={attachment.name}
+                  {visibleAttachments.map((attachment) => {
+                    const { Icon: ChipIcon, color: chipColor } = getChipIcon(
+                      attachment.contentType
+                    );
+                    return (
+                      <div
+                        className="flex max-w-[200px] items-center gap-1.5 rounded-full border border-border/60 bg-muted/50 px-2.5 py-1 text-xs"
+                        key={attachment.url}
                       >
-                        {attachment.name}
-                      </span>
-                      {attachment.documentType != null && (
+                        <ChipIcon
+                          aria-hidden
+                          className={cn("size-3.5 shrink-0", chipColor)}
+                        />
                         <span
-                          className={cn(
-                            "shrink-0 rounded px-1.5 py-0.5 font-medium text-[10px]",
-                            attachment.documentType === "pi"
-                              ? "bg-primary/15 text-primary"
-                              : "bg-amber-500/15 text-amber-700 dark:text-amber-400"
-                          )}
+                          className="min-w-0 truncate text-foreground"
+                          title={attachment.name}
                         >
-                          {attachment.documentType === "pi" ? "PI" : "Cont."}
+                          {attachment.name}
                         </span>
-                      )}
-                      {attachment.extractionFailed === true && (
-                        <span className="shrink-0 text-[10px] text-amber-600 dark:text-amber-400">
-                          sem texto
-                        </span>
-                      )}
-                      {(() => {
-                        const quality = getExtractionQuality(attachment);
-                        if (!quality) {
-                          return null;
-                        }
-                        return (
+                        {attachment.documentType != null && (
                           <span
                             className={cn(
-                              "shrink-0 rounded px-1 py-0.5 font-medium text-[9px]",
-                              quality.color
+                              "shrink-0 rounded px-1.5 py-0.5 font-medium text-[10px]",
+                              attachment.documentType === "pi"
+                                ? "bg-primary/15 text-primary"
+                                : "bg-amber-500/15 text-amber-700 dark:text-amber-400"
                             )}
-                            title={quality.title}
                           >
-                            {quality.label}
+                            {attachment.documentType === "pi" ? "PI" : "Cont."}
                           </span>
-                        );
-                      })()}
-                      <Button
-                        aria-label="Remover anexo"
-                        className="size-5 shrink-0 rounded-full p-0"
-                        onClick={handleRemoveAttachment(attachment.url)}
-                        type="button"
-                        variant="ghost"
-                      >
-                        <Trash2Icon size={10} />
-                      </Button>
-                    </div>
-                  ))}
+                        )}
+                        {attachment.extractionFailed === true && (
+                          <span className="shrink-0 text-[10px] text-amber-600 dark:text-amber-400">
+                            sem texto
+                          </span>
+                        )}
+                        {(() => {
+                          const quality = getExtractionQuality(attachment);
+                          if (!quality) {
+                            return null;
+                          }
+                          return (
+                            <span
+                              className={cn(
+                                "shrink-0 rounded px-1 py-0.5 font-medium text-[9px]",
+                                quality.color
+                              )}
+                              title={quality.title}
+                            >
+                              {quality.label}
+                            </span>
+                          );
+                        })()}
+                        <Button
+                          aria-label="Remover anexo"
+                          className="size-5 shrink-0 rounded-full p-0"
+                          onClick={handleRemoveAttachment(attachment.url)}
+                          type="button"
+                          variant="ghost"
+                        >
+                          <Trash2Icon size={10} />
+                        </Button>
+                      </div>
+                    );
+                  })}
                   {visibleQueue.map((item) => (
                     <div
                       className="relative flex max-w-[240px] items-center gap-1.5 overflow-hidden rounded-full border border-border/60 bg-muted/50 px-2.5 py-1 text-xs"

@@ -118,6 +118,23 @@ const BLOCK_MAX_OUTPUT_TOKENS_DEFAULT = 2048;
 const BLOCK_MAX_OUTPUT_TOKENS_CRITICAL = 4096;
 
 // ---------------------------------------------------------------------------
+// Helpers de cancelamento
+// ---------------------------------------------------------------------------
+
+/**
+ * Combina um AbortSignal de timeout com um sinal externo opcional.
+ * Quando o stream principal é cancelado (utilizador fecha o browser ou maxDuration
+ * é atingido), o pipeline para imediatamente em vez de esperar cada timeout
+ * individual (até 45s por bloco).
+ *
+ * AbortSignal.any() disponível desde Node.js 20 / Chrome 116 (Vercel ≥ Node 20 ✓).
+ */
+function makeAbortSignal(timeoutMs: number, outer?: AbortSignal): AbortSignal {
+  const ts = AbortSignal.timeout(timeoutMs);
+  return outer ? AbortSignal.any([ts, outer]) : ts;
+}
+
+// ---------------------------------------------------------------------------
 // Semáforo de concorrência (sem dependência externa)
 // ---------------------------------------------------------------------------
 
@@ -351,28 +368,43 @@ CAMPOS A EXTRAIR DESTA SECÇÃO (${blockLabel}):
  */
 function humanizeBlockLabel(label: string): string {
   const l = label.toLowerCase();
-  if (l.includes("petição inicial") || l.includes("reclamat"))
+  if (l.includes("petição inicial") || l.includes("reclamat")) {
     return "a petição inicial";
-  if (l.includes("contestação") || l.includes("defesa"))
+  }
+  if (l.includes("contestação") || l.includes("defesa")) {
     return "a contestação";
-  if (l.includes("sentença") || l.includes("vistos"))
+  }
+  if (l.includes("sentença") || l.includes("vistos")) {
     return "a sentença";
-  if (l.includes("acórdão") || l.includes("ementa"))
+  }
+  if (l.includes("acórdão") || l.includes("ementa")) {
     return "o acórdão";
-  if (l.includes("audiência") || l.includes("ata de"))
+  }
+  if (l.includes("audiência") || l.includes("ata de")) {
     return "as audiências e depoimentos";
-  if (l.includes("cálculo") || l.includes("liquidação") || l.includes("planilha"))
+  }
+  if (
+    l.includes("cálculo") ||
+    l.includes("liquidação") ||
+    l.includes("planilha")
+  ) {
     return "os cálculos e liquidação";
-  if (l.includes("laudo") || l.includes("perícia"))
+  }
+  if (l.includes("laudo") || l.includes("perícia")) {
     return "o laudo pericial";
-  if (l.includes("embargos à execução") || l.includes("agravo de petição"))
+  }
+  if (l.includes("embargos à execução") || l.includes("agravo de petição")) {
     return "os embargos à execução";
-  if (l.includes("embargos"))
+  }
+  if (l.includes("embargos")) {
     return "os embargos de declaração";
-  if (l.includes("execução") || l.includes("penhora"))
+  }
+  if (l.includes("execução") || l.includes("penhora")) {
     return "a fase de execução";
-  if (l.includes("recurso ordinário") || l.includes("recurso de revista"))
+  }
+  if (l.includes("recurso ordinário") || l.includes("recurso de revista")) {
     return "os recursos";
+  }
   return `a seção "${label}"`;
 }
 
@@ -387,6 +419,7 @@ export async function runMultiCallPipeline(
     validationModelId,
     moduleId,
     onProgress,
+    abortSignal,
   } = config;
 
   // Estimativa de tempo baseada no nº de páginas (referência para o advogado)
@@ -402,9 +435,7 @@ export async function runMultiCallPipeline(
   // 2. Agrupar em blocos (target 5-7)
   const blocks = mergeSectionsIntoBlocks(sections, 6);
   const blockNames = blocks.map((b) => humanizeBlockLabel(b.label)).join(", ");
-  onProgress?.(
-    `📖 Estrutura identificada. Seções a analisar: ${blockNames}.`
-  );
+  onProgress?.(`📖 Estrutura identificada. Seções a analisar: ${blockNames}.`);
 
   // 3. Chamadas 1–N: Extração por bloco (Sonnet — rápido/barato)
   //    Blocos > MAX_BLOCK_CHARS são divididos em sub-blocos (sub-loop sequencial).
@@ -418,7 +449,7 @@ export async function runMultiCallPipeline(
 
   const sem = createSemaphore(BLOCK_EXTRACTION_CONCURRENCY);
   const blockResultsOrdered = await Promise.all(
-    blocks.map((block, i) =>
+    blocks.map((block, _i) =>
       sem(async () => {
         // Sub-blocos: dividir se excede MAX_BLOCK_CHARS
         const subBlocks =
@@ -451,12 +482,14 @@ export async function runMultiCallPipeline(
               extractionModelId,
               BLOCK_CALL_TIMEOUT_MS,
               CRITICAL_BLOCK_LABELS.test(sub.label) ? 1 : 0,
-              onProgress
+              onProgress,
+              abortSignal
             );
             // Merge fields: valores posteriores sobrescrevem, salvo divergência
             for (const [key, value] of Object.entries(result.extractedFields)) {
               if (mergedFields[key] && mergedFields[key] !== value) {
-                mergedFields[key] = `DIVERGÊNCIA: ${mergedFields[key]} | ${value}`;
+                mergedFields[key] =
+                  `DIVERGÊNCIA: ${mergedFields[key]} | ${value}`;
               } else {
                 mergedFields[key] = value;
               }
@@ -516,11 +549,11 @@ export async function runMultiCallPipeline(
   const compactContext = buildCompactValidationContext(blockResults);
   const preValidation = await runCrossValidation(
     compactContext,
-    blockResults,
     validationModelId,
     VALIDATION_CALL_TIMEOUT_MS,
     blocks.map((b) => ({ label: b.label, primaryPhase: b.primaryPhase })),
-    moduleId
+    moduleId,
+    abortSignal
   );
   totalTokens += preValidation.tokensUsed;
 
@@ -555,7 +588,8 @@ export async function runMultiCallPipeline(
       synthesisModelId,
       synthesisConfig.synthesisTimeoutMs,
       synthesisConfig.maxOutputTokens,
-      validationAlertsForOpus
+      validationAlertsForOpus,
+      abortSignal
     );
     synthesizedReport = synthesized.report;
     synthesisTokens = synthesized.tokensUsed;
@@ -595,7 +629,8 @@ async function processBlock(
   block: ProcessoBlock,
   modelId: string,
   timeoutMs: number,
-  maxOutputTokens?: number
+  maxOutputTokens?: number,
+  signal?: AbortSignal
 ): Promise<BlockResult> {
   // Sub-blocos já garantem que o texto está dentro do limite.
   // Segurança extra: truncar com aviso se ainda exceder (não deveria acontecer).
@@ -616,7 +651,7 @@ async function processBlock(
     model: getLanguageModel(modelId),
     temperature: 0.1,
     maxOutputTokens: effectiveMaxTokens,
-    abortSignal: AbortSignal.timeout(timeoutMs),
+    abortSignal: makeAbortSignal(timeoutMs, signal),
     system: getBlockExtractionPrompt(block.label, block.primaryPhase),
     prompt: `Analise o seguinte trecho do processo (páginas ${block.pageRange[0]} a ${block.pageRange[1]}):\n\n${blockText}`,
     providerOptions: {
@@ -664,7 +699,8 @@ async function processBlockWithRetry(
   modelId: string,
   timeoutMs: number,
   maxRetries: number,
-  onProgress?: (message: string) => void
+  onProgress?: (message: string) => void,
+  signal?: AbortSignal
 ): Promise<BlockResult> {
   let lastError: unknown;
 
@@ -672,9 +708,20 @@ async function processBlockWithRetry(
     try {
       const effectiveTimeout =
         attempt === 0 ? timeoutMs : Math.round(timeoutMs * 1.5);
-      return await processBlock(block, modelId, effectiveTimeout);
+      return await processBlock(
+        block,
+        modelId,
+        effectiveTimeout,
+        undefined,
+        signal
+      );
     } catch (error) {
       lastError = error;
+      // Se o sinal externo foi abortado (utilizador cancelou / maxDuration atingido),
+      // não tentar novamente — propagar o cancelamento imediatamente.
+      if (signal?.aborted) {
+        break;
+      }
       if (attempt < maxRetries) {
         const waitMs = 2000 * (attempt + 1);
         // Retry transparente — o advogado não precisa saber dos detalhes internos
@@ -686,7 +733,7 @@ async function processBlockWithRetry(
     }
   }
 
-  // Todas as tentativas falharam
+  // Todas as tentativas falharam (ou operação cancelada)
   throw lastError;
 }
 
@@ -796,7 +843,7 @@ function buildCompactValidationContext(blockResults: BlockResult[]): string {
       // tenha contexto suficiente para detectar T001/F001 — e.g., datas fora de
       // sequência que só são visíveis na narrativa, não nos campos isolados.
       const analysis = br.rawAnalysis?.trim()
-        ? `\nAnálise:\n${br.rawAnalysis.slice(0, 2_000)}` // cap 2K chars por bloco
+        ? `\nAnálise:\n${br.rawAnalysis.slice(0, 2000)}` // cap 2K chars por bloco
         : "";
       return `### ${br.blockLabel} (pp. ${br.pageRange[0]}–${br.pageRange[1]})\n${fieldsStr || "  (sem campos extraídos)"}${analysis}`;
     })
@@ -828,7 +875,9 @@ function buildFallbackReport(
 
   const sections = blockResults
     .map((br) => {
-      if (Object.keys(br.extractedFields).length === 0) return null;
+      if (Object.keys(br.extractedFields).length === 0) {
+        return null;
+      }
       const fields = Object.entries(br.extractedFields)
         .filter(([, v]) => v && !v.includes("Não localizado"))
         .map(([k, v]) => `**${k}:** ${v}`)
@@ -860,7 +909,8 @@ async function synthesizeResults(
   timeoutMs: number,
   maxTokens?: number,
   /** Alertas T001/F001/C001/A001/E001 gerados pelo Sonnet Validator (pré-síntese). */
-  validationAlerts?: string
+  validationAlerts?: string,
+  signal?: AbortSignal
 ): Promise<{ report: string; tokensUsed: number }> {
   // Montar contexto com todos os resultados parciais
   const blocksContext = blockResults
@@ -876,7 +926,7 @@ async function synthesizeResults(
     model: getLanguageModel(modelId),
     temperature: 0.15,
     maxOutputTokens: maxTokens ?? 16_384,
-    abortSignal: AbortSignal.timeout(timeoutMs),
+    abortSignal: makeAbortSignal(timeoutMs, signal),
     // getSynthesisPrompt recebe validationAlerts → Opus conhece os problemas antes de redigir
     system: getSynthesisPrompt(moduleId, validationAlerts),
     prompt: `Extrações parciais dos blocos do processo:\n\n${blocksContext}\n\nGere o relatório unificado em Markdown.`,
@@ -904,12 +954,13 @@ async function synthesizeResults(
 // ---------------------------------------------------------------------------
 
 async function runCrossValidation(
-  report: string,
-  _blockResults: BlockResult[],
+  /** Contexto compacto dos blocos: campos extraídos + rawAnalysis (Padrão C — pré-síntese). */
+  context: string,
   modelId: string,
   timeoutMs: number,
   blockMeta?: Array<{ label: string; primaryPhase?: PhaseType }>,
-  moduleId?: string
+  moduleId?: string,
+  signal?: AbortSignal
 ): Promise<{
   score: ValidationScore;
   errors: string[];
@@ -925,9 +976,9 @@ async function runCrossValidation(
       model: getLanguageModel(modelId),
       temperature: 0.05,
       maxOutputTokens: 2048,
-      abortSignal: AbortSignal.timeout(timeoutMs),
+      abortSignal: makeAbortSignal(timeoutMs, signal),
       system: getValidationPrompt(moduleId ?? "DEFAULT"),
-      prompt: `Relatório para validação:\n\n${report.slice(0, 80_000)}${metaSection}`,
+      prompt: `Campos extraídos dos blocos (dados brutos, pré-síntese):\n\n${context.slice(0, 80_000)}${metaSection}`,
       providerOptions: {
         gateway: {
           caching: "auto",

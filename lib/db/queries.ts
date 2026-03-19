@@ -1619,7 +1619,15 @@ export async function deleteCustomAgentById({
 
 /** Devolve todos os overrides de agentes built-in (por agentId). */
 export async function getBuiltInAgentOverrides(): Promise<
-  Record<string, { instructions: string | null; label: string | null }>
+  Record<
+    string,
+    {
+      instructions: string | null;
+      label: string | null;
+      defaultModelId?: string | null;
+      toolFlags?: Record<string, boolean> | null;
+    }
+  >
 > {
   try {
     const rows = await getDb()
@@ -1627,16 +1635,25 @@ export async function getBuiltInAgentOverrides(): Promise<
         agentId: builtInAgentOverride.agentId,
         instructions: builtInAgentOverride.instructions,
         label: builtInAgentOverride.label,
+        defaultModelId: builtInAgentOverride.defaultModelId,
+        toolFlags: builtInAgentOverride.toolFlags,
       })
       .from(builtInAgentOverride);
     const map: Record<
       string,
-      { instructions: string | null; label: string | null }
+      {
+        instructions: string | null;
+        label: string | null;
+        defaultModelId?: string | null;
+        toolFlags?: Record<string, boolean> | null;
+      }
     > = {};
     for (const row of rows) {
       map[row.agentId] = {
         instructions: row.instructions,
         label: row.label,
+        defaultModelId: row.defaultModelId,
+        toolFlags: row.toolFlags as Record<string, boolean> | null,
       };
     }
     return map;
@@ -1645,32 +1662,56 @@ export async function getBuiltInAgentOverrides(): Promise<
   }
 }
 
-/** Cria ou atualiza override de um agente built-in (admin). */
+/** Cria ou atualiza override de um agente built-in (admin).
+ *
+ * Apenas os campos explicitamente fornecidos são actualizados na BD;
+ * campos `undefined` não sobrescrevem valores existentes (update parcial seguro).
+ */
 export async function upsertBuiltInAgentOverride({
   agentId,
   instructions,
   label,
+  defaultModelId,
+  toolFlags,
 }: {
   agentId: string;
   instructions?: string | null;
   label?: string | null;
+  defaultModelId?: string | null;
+  toolFlags?: Record<string, boolean> | null;
 }) {
   try {
+    // Construir o SET parcial: só actualiza os campos fornecidos.
+    // Campos undefined ficam intocados na BD (sem risco de clobber).
+    const partialSet: Partial<typeof builtInAgentOverride.$inferInsert> = {
+      updatedAt: new Date(),
+    };
+    if (instructions !== undefined) {
+      partialSet.instructions = instructions;
+    }
+    if (label !== undefined) {
+      partialSet.label = label;
+    }
+    if (defaultModelId !== undefined) {
+      partialSet.defaultModelId = defaultModelId;
+    }
+    if (toolFlags !== undefined) {
+      partialSet.toolFlags = toolFlags as Record<string, boolean>;
+    }
+
     await getDb()
       .insert(builtInAgentOverride)
       .values({
         agentId,
         instructions: instructions ?? null,
         label: label ?? null,
+        defaultModelId: defaultModelId ?? null,
+        toolFlags: (toolFlags ?? null) as Record<string, boolean> | null,
         updatedAt: new Date(),
       })
       .onConflictDoUpdate({
         target: builtInAgentOverride.agentId,
-        set: {
-          instructions: instructions ?? null,
-          label: label ?? null,
-          updatedAt: new Date(),
-        },
+        set: partialSet,
       });
   } catch (err) {
     toDatabaseError(err, "Failed to upsert built-in agent override");

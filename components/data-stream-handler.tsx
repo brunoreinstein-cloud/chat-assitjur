@@ -155,6 +155,10 @@ export function DataStreamHandler() {
       }
       if (delta.type === "data-db-fallback") {
         setDbFallbackUsed(true);
+        toast.warning(
+          "Alguns dados do historial podem estar incompletos — a base de dados demorou a responder.",
+          { id: "db-fallback", duration: 8000 }
+        );
         continue;
       }
       if (delta.type === "data-generationStatus") {
@@ -175,7 +179,14 @@ export function DataStreamHandler() {
       }
       if (delta.type === "data-pipeline-progress") {
         const msg = delta.data as string;
-        toast.info(msg, { duration: 5000, id: "pipeline-progress" });
+        // Mensagem de conclusão (✅) → toast de sucesso com duração normal.
+        // Restantes → toast loading persistente que actualiza em cada bloco.
+        const isComplete = msg.startsWith("✅");
+        if (isComplete) {
+          toast.success(msg, { id: "pipeline-progress", duration: 6000 });
+        } else {
+          toast.loading(msg, { id: "pipeline-progress" });
+        }
         continue;
       }
       if (delta.type === "data-revisorProgress") {

@@ -95,7 +95,7 @@ ${extraFieldsList}
     EXECUCAO_FIELDS.length +
     extraCount;
 
-  return `Você é um auditor jurídico. Analise o relatório abaixo e execute 5 validações:
+  return `Você é um auditor jurídico. Recebeu os campos extraídos automaticamente dos blocos do processo (dados brutos, pré-síntese — formato: ### Bloco / campo: valor / Análise: ...). Execute 5 validações de consistência nos dados brutos:
 
 ## T001 — VALIDAÇÃO TEMPORAL
 Verifique se as datas extraídas estão em ordem cronológica:
