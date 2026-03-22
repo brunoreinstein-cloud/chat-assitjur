@@ -47,6 +47,7 @@ import {
   extractStructuredFields,
   formatStructuredFieldsAsHeader,
 } from "@/lib/ai/extract-structured-fields";
+import { getAllMcpTools } from "@/lib/ai/mcp-config";
 import {
   DEFAULT_CHAT_MODEL,
   modelReasoningType,
@@ -112,7 +113,6 @@ import {
   isStatementTimeoutError,
 } from "@/lib/errors";
 import { retrieveKnowledgeContext } from "@/lib/rag";
-import { getAllMcpTools } from "@/lib/ai/mcp-config";
 import { buildAiSdkTelemetry } from "@/lib/telemetry";
 import type { ChatMessage } from "@/lib/types";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
@@ -1350,7 +1350,10 @@ async function prepareModelMessagesForStream(
     }
   }
 
-  const normalizedMessages = normalizeMessageParts(uiMessagesWithCache, visionEnabled);
+  const normalizedMessages = normalizeMessageParts(
+    uiMessagesWithCache,
+    visionEnabled
+  );
   const effectiveAgentInstructionsForContext =
     agentInstructions?.trim() || agentConfig.instructions;
   const systemStrForEstimate = systemPrompt({
@@ -2377,7 +2380,11 @@ async function handleChatPostAuthenticated(
   let cachedProcessoDocument:
     | { name: string; text: string; documentType?: "pi" | "contestacao" }
     | undefined;
-  if (proc?.parsedText && proc.intakeStatus === "ready" && documentTexts.size === 0) {
+  if (
+    proc?.parsedText &&
+    proc.intakeStatus === "ready" &&
+    documentTexts.size === 0
+  ) {
     const docName = proc.titulo ?? `Processo ${proc.numeroAutos}`;
     const docType =
       proc.tipo === "contestacao"
@@ -2385,7 +2392,11 @@ async function handleChatPostAuthenticated(
         : proc.tipo === "pi"
           ? "pi"
           : undefined;
-    cachedProcessoDocument = { name: docName, text: proc.parsedText, documentType: docType };
+    cachedProcessoDocument = {
+      name: docName,
+      text: proc.parsedText,
+      documentType: docType,
+    };
     // Também disponibiliza para o tool buscarNoProcesso
     documentTexts.set(docName, proc.parsedText);
   }

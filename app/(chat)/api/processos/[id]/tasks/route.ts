@@ -29,9 +29,15 @@ export async function GET(
     await ensureStatementTimeout();
 
     // Verifica que o processo pertence ao utilizador
-    const proc = await getProcessoById({ id: processoId, userId: session.user.id });
+    const proc = await getProcessoById({
+      id: processoId,
+      userId: session.user.id,
+    });
     if (!proc) {
-      return Response.json({ error: "Processo não encontrado" }, { status: 404 });
+      return Response.json(
+        { error: "Processo não encontrado" },
+        { status: 404 }
+      );
     }
 
     const tasks = await getTaskExecutionsByProcessoId({ processoId });
@@ -58,16 +64,25 @@ export async function POST(
     await ensureStatementTimeout();
 
     // Verifica que o processo pertence ao utilizador
-    const proc = await getProcessoById({ id: processoId, userId: session.user.id });
+    const proc = await getProcessoById({
+      id: processoId,
+      userId: session.user.id,
+    });
     if (!proc) {
-      return Response.json({ error: "Processo não encontrado" }, { status: 404 });
+      return Response.json(
+        { error: "Processo não encontrado" },
+        { status: 404 }
+      );
     }
 
     const body = await request.json().catch(() => ({}));
     const { taskId, chatId } = body as { taskId?: string; chatId?: string };
 
     if (!taskId?.trim()) {
-      return Response.json({ error: "taskId é obrigatório" }, { status: 400 });
+      return Response.json(
+        { error: "taskId é obrigatório" },
+        { status: 400 }
+      );
     }
 
     const created = await createTaskExecution({
@@ -97,7 +112,14 @@ export async function PATCH(
 
     const { id: processoId } = await params;
     const body = await request.json().catch(() => ({}));
-    const { taskExecutionId, status, result, documentsUrl, creditsUsed, chatId } = body as {
+    const {
+      taskExecutionId,
+      status,
+      result,
+      documentsUrl,
+      creditsUsed,
+      chatId,
+    } = body as {
       taskExecutionId?: string;
       status?: string;
       result?: Record<string, unknown>;
@@ -107,13 +129,22 @@ export async function PATCH(
     };
 
     if (!taskExecutionId) {
-      return Response.json({ error: "taskExecutionId é obrigatório" }, { status: 400 });
+      return Response.json(
+        { error: "taskExecutionId é obrigatório" },
+        { status: 400 }
+      );
     }
 
     // Verify ownership via processo
-    const proc = await getProcessoById({ id: processoId, userId: session.user.id });
+    const proc = await getProcessoById({
+      id: processoId,
+      userId: session.user.id,
+    });
     if (!proc) {
-      return Response.json({ error: "Processo não encontrado" }, { status: 404 });
+      return Response.json(
+        { error: "Processo não encontrado" },
+        { status: 404 }
+      );
     }
 
     const updated = await updateTaskExecution({
@@ -131,7 +162,10 @@ export async function PATCH(
     });
 
     if (!updated) {
-      return Response.json({ error: "Execução não encontrada" }, { status: 404 });
+      return Response.json(
+        { error: "Execução não encontrada" },
+        { status: 404 }
+      );
     }
 
     return Response.json(updated);

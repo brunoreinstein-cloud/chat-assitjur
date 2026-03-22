@@ -2,14 +2,14 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { auth } from "@/app/(auth)/auth";
+import { FASE_LABEL, RISCO_LABEL } from "@/lib/constants/processo";
 import {
   ensureStatementTimeout,
   getProcessoById,
   getTaskExecutionsByProcessoId,
 } from "@/lib/db/queries";
-import { isUUID } from "@/lib/utils";
-import { FASE_LABEL, RISCO_LABEL } from "@/lib/constants/processo";
 import type { TaskExecution } from "@/lib/db/schema";
+import { isUUID } from "@/lib/utils";
 
 export default function ProcessoPage({
   params,
@@ -75,7 +75,7 @@ function TaskRow({ task }: { task: TaskExecution }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-card px-3 py-2.5 dark:border-white/8 dark:bg-white/3">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-foreground dark:text-white/90">
+        <p className="truncate font-medium text-foreground text-sm dark:text-white/90">
           {label}
         </p>
         <p className="text-[11px] text-muted-foreground">
@@ -85,7 +85,7 @@ function TaskRow({ task }: { task: TaskExecution }) {
       </div>
       <div className="flex shrink-0 items-center gap-2">
         <span
-          className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${cfg.className}`}
+          className={`rounded-full px-2 py-0.5 font-medium text-[10px] ${cfg.className}`}
         >
           {cfg.label}
         </span>
@@ -189,7 +189,7 @@ async function ProcessoPageContent({
       <div className="mb-6 rounded-lg border border-border/60 bg-card p-5 dark:border-white/8 dark:bg-white/3">
         <div className="mb-1 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-semibold text-foreground dark:text-white/95">
+            <h1 className="truncate font-semibold text-foreground text-lg dark:text-white/95">
               {proc.titulo ?? `${proc.reclamante} × ${proc.reclamada}`}
             </h1>
             <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
@@ -220,7 +220,7 @@ async function ProcessoPageContent({
           {proc.reclamante && (
             <>
               <dt className="text-muted-foreground">Reclamante</dt>
-              <dd className="truncate text-foreground dark:text-white/80 sm:col-span-2">
+              <dd className="truncate text-foreground sm:col-span-2 dark:text-white/80">
                 {proc.reclamante}
               </dd>
             </>
@@ -228,7 +228,7 @@ async function ProcessoPageContent({
           {proc.reclamada && (
             <>
               <dt className="text-muted-foreground">Reclamada</dt>
-              <dd className="truncate text-foreground dark:text-white/80 sm:col-span-2">
+              <dd className="truncate text-foreground sm:col-span-2 dark:text-white/80">
                 {proc.reclamada}
               </dd>
             </>
@@ -236,7 +236,7 @@ async function ProcessoPageContent({
           {proc.vara && (
             <>
               <dt className="text-muted-foreground">Vara</dt>
-              <dd className="truncate text-foreground dark:text-white/80 sm:col-span-2">
+              <dd className="truncate text-foreground sm:col-span-2 dark:text-white/80">
                 {proc.vara}
               </dd>
             </>
@@ -265,9 +265,9 @@ async function ProcessoPageContent({
       </div>
 
       {/* Aviso: falta intake */}
-      {!hasIntake && !isProcessing && (
+      {!(hasIntake || isProcessing) && (
         <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
-          <p className="text-sm text-amber-700 dark:text-amber-400">
+          <p className="text-amber-700 text-sm dark:text-amber-400">
             <strong>PDF não indexado.</strong> Para usar o fluxo sem re-upload,
             faça o intake do documento em{" "}
             <Link
@@ -283,7 +283,7 @@ async function ProcessoPageContent({
 
       {/* Ações rápidas */}
       <section className="mb-8">
-        <h2 className="mb-3 text-[13px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <h2 className="mb-3 font-semibold text-[13px] text-muted-foreground uppercase tracking-wide">
           Iniciar Tarefa
         </h2>
         <div className="grid grid-cols-2 gap-3">
@@ -294,10 +294,10 @@ async function ProcessoPageContent({
               key={t.id}
             >
               <span className="text-base">{t.icon}</span>
-              <span className="text-[13px] font-semibold text-foreground dark:text-white/90">
+              <span className="font-semibold text-[13px] text-foreground dark:text-white/90">
                 {t.label}
               </span>
-              <span className="text-[11px] leading-tight text-muted-foreground">
+              <span className="text-[11px] text-muted-foreground leading-tight">
                 {t.desc}
               </span>
             </Link>
@@ -307,11 +307,11 @@ async function ProcessoPageContent({
 
       {/* Histórico de tarefas */}
       <section>
-        <h2 className="mb-3 text-[13px] font-semibold uppercase tracking-wide text-muted-foreground">
+        <h2 className="mb-3 font-semibold text-[13px] text-muted-foreground uppercase tracking-wide">
           Histórico de Tarefas
         </h2>
         {tasks.length === 0 ? (
-          <p className="rounded-lg border border-border/40 bg-muted/20 p-6 text-center text-sm text-muted-foreground dark:border-white/6">
+          <p className="rounded-lg border border-border/40 bg-muted/20 p-6 text-center text-muted-foreground text-sm dark:border-white/6">
             Nenhuma tarefa executada ainda. Use os atalhos acima para começar.
           </p>
         ) : (

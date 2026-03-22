@@ -14,17 +14,17 @@
  * Se o mesmo hash já existe em outro processo do utilizador, vincula e devolve.
  */
 
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { createHash } from "node:crypto";
 import { generateText, Output } from "ai";
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
 import { getTitleModel } from "@/lib/ai/providers";
 import {
   ensureStatementTimeout,
-  getProcessoById,
   getProcessoByFileHash,
+  getProcessoById,
   updateProcessoIntake,
 } from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
@@ -51,7 +51,9 @@ const INTAKE_SCHEMA = z.object({
     ),
   numeroPedidos: z
     .number()
-    .describe("Número de pedidos identificados na peça. 0 se não identificado."),
+    .describe(
+      "Número de pedidos identificados na peça. 0 se não identificado."
+    ),
   reclamante: z
     .string()
     .describe("Nome do reclamante/trabalhador. Vazio se não identificado."),
@@ -66,7 +68,9 @@ Para 'titulo': combine reclamante x reclamada de forma breve. Se não identifica
 Responda apenas com o JSON estruturado.`;
 
 /** Extrai texto completo de um PDF (sem limite de páginas). */
-async function extractFullPdfText(buffer: ArrayBuffer): Promise<{ text: string; totalPages: number }> {
+async function extractFullPdfText(
+  buffer: ArrayBuffer
+): Promise<{ text: string; totalPages: number }> {
   const data = new Uint8Array(buffer);
   try {
     const unpdf = await import("unpdf");
@@ -115,9 +119,10 @@ async function extractIntakeMetadata(
   text: string,
   filename: string
 ): Promise<z.infer<typeof INTAKE_SCHEMA>> {
-  const sample = text.length > 12_000
-    ? `${text.slice(0, 10_000)}\n...\n${text.slice(-2000)}`
-    : text;
+  const sample =
+    text.length > 12_000
+      ? `${text.slice(0, 10_000)}\n...\n${text.slice(-2000)}`
+      : text;
 
   try {
     const { output } = await generateText({
@@ -204,12 +209,14 @@ export async function POST(request: Request) {
     // Busca o blob
     let pdfBuffer: ArrayBuffer;
     try {
-      const resp = await fetch(blobUrl, { signal: AbortSignal.timeout(60_000) });
+      const resp = await fetch(blobUrl, {
+        signal: AbortSignal.timeout(60_000),
+      });
       if (!resp.ok) {
         throw new Error(`Blob fetch failed: ${resp.status}`);
       }
       pdfBuffer = await resp.arrayBuffer();
-    } catch (err) {
+    } catch (_err) {
       await updateProcessoIntake({
         id: processoId,
         userId,
@@ -228,7 +235,12 @@ export async function POST(request: Request) {
 
     // Verifica se outro processo já tem esse hash (evita re-processamento)
     const existing = await getProcessoByFileHash({ userId, fileHash });
-    if (existing && existing.id !== processoId && existing.intakeStatus === "ready" && existing.parsedText) {
+    if (
+      existing &&
+      existing.id !== processoId &&
+      existing.intakeStatus === "ready" &&
+      existing.parsedText
+    ) {
       // Copia os dados do processo existente para o atual
       await updateProcessoIntake({
         id: processoId,
@@ -256,7 +268,8 @@ export async function POST(request: Request) {
     }
 
     // Extrai texto completo do PDF
-    const { text: parsedText, totalPages } = await extractFullPdfText(pdfBuffer);
+    const { text: parsedText, totalPages } =
+      await extractFullPdfText(pdfBuffer);
 
     if (!parsedText.trim()) {
       await updateProcessoIntake({
