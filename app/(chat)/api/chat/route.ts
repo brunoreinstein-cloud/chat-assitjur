@@ -47,6 +47,7 @@ import {
   extractStructuredFields,
   formatStructuredFieldsAsHeader,
 } from "@/lib/ai/extract-structured-fields";
+import { getAllMcpTools } from "@/lib/ai/mcp-config";
 import {
   DEFAULT_CHAT_MODEL,
   modelReasoningType,
@@ -112,7 +113,6 @@ import {
   isStatementTimeoutError,
 } from "@/lib/errors";
 import { retrieveKnowledgeContext } from "@/lib/rag";
-import { getAllMcpTools } from "@/lib/ai/mcp-config";
 import { buildAiSdkTelemetry } from "@/lib/telemetry";
 import type { ChatMessage } from "@/lib/types";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";

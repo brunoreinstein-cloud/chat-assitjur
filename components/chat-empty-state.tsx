@@ -27,28 +27,76 @@ interface QuickPrompt {
 
 const QUICK_PROMPTS_BY_AGENT: Record<AgentId, QuickPrompt[]> = {
   [AGENT_ID_ASSISTENTE_GERAL]: [
-    { label: "💬 Tirar dúvida jurídica", text: "Tenho uma dúvida sobre direito trabalhista:" },
-    { label: "📄 Resumir documento", text: "Resuma o documento anexado destacando os pontos principais." },
-    { label: "📋 Calcular prazos", text: "Me ajude a calcular os prazos processuais para:" },
-    { label: "🔍 Explicar conceito", text: "Explique de forma clara o conceito jurídico de:" },
+    {
+      label: "💬 Tirar dúvida jurídica",
+      text: "Tenho uma dúvida sobre direito trabalhista:",
+    },
+    {
+      label: "📄 Resumir documento",
+      text: "Resuma o documento anexado destacando os pontos principais.",
+    },
+    {
+      label: "📋 Calcular prazos",
+      text: "Me ajude a calcular os prazos processuais para:",
+    },
+    {
+      label: "🔍 Explicar conceito",
+      text: "Explique de forma clara o conceito jurídico de:",
+    },
   ],
   [AGENT_ID_REVISOR_DEFESAS]: [
-    { label: "📎 Revisar defesa anexada", text: "Quero revisar a defesa que vou anexar agora." },
-    { label: "🔍 Auditar contestação", text: "Auditar minha contestação: segue em anexo a Petição Inicial e a Contestação." },
-    { label: "📋 Estruturar tese defensiva", text: "Ajude-me a estruturar uma tese defensiva para:" },
-    { label: "⚡ Horas extras — principais teses", text: "Quais as principais teses defensivas para horas extras?" },
+    {
+      label: "📎 Revisar defesa anexada",
+      text: "Quero revisar a defesa que vou anexar agora.",
+    },
+    {
+      label: "🔍 Auditar contestação",
+      text: "Auditar minha contestação: segue em anexo a Petição Inicial e a Contestação.",
+    },
+    {
+      label: "📋 Estruturar tese defensiva",
+      text: "Ajude-me a estruturar uma tese defensiva para:",
+    },
+    {
+      label: "⚡ Horas extras — principais teses",
+      text: "Quais as principais teses defensivas para horas extras?",
+    },
   ],
   [AGENT_ID_REDATOR_CONTESTACAO]: [
-    { label: "✍️ Redigir contestação", text: "Preciso redigir uma contestação trabalhista. Segue a PI em anexo." },
-    { label: "📝 Contestar pedido específico", text: "Preciso contestar o seguinte pedido da inicial:" },
-    { label: "🏛️ Incluir jurisprudência", text: "Inclua jurisprudência favorável à defesa sobre:" },
-    { label: "📋 Preliminares e prejudiciais", text: "Elabore as preliminares e prejudiciais de mérito para:" },
+    {
+      label: "✍️ Redigir contestação",
+      text: "Preciso redigir uma contestação trabalhista. Segue a PI em anexo.",
+    },
+    {
+      label: "📝 Contestar pedido específico",
+      text: "Preciso contestar o seguinte pedido da inicial:",
+    },
+    {
+      label: "🏛️ Incluir jurisprudência",
+      text: "Inclua jurisprudência favorável à defesa sobre:",
+    },
+    {
+      label: "📋 Preliminares e prejudiciais",
+      text: "Elabore as preliminares e prejudiciais de mérito para:",
+    },
   ],
   [AGENT_ID_ASSISTJUR_MASTER]: [
-    { label: "🧠 Análise completa", text: "Faça uma análise completa do processo anexado, identificando pontos críticos e gerando relatório." },
-    { label: "📊 Mapear pedidos e riscos", text: "Mapeie todos os pedidos da inicial anexada e avalie o risco de cada um." },
-    { label: "⚖️ Estratégia defensiva", text: "Elabore uma estratégia defensiva completa para o caso anexado." },
-    { label: "📑 Gerar relatório DOCX", text: "Analise o documento anexado e gere um relatório completo em DOCX." },
+    {
+      label: "🧠 Análise completa",
+      text: "Faça uma análise completa do processo anexado, identificando pontos críticos e gerando relatório.",
+    },
+    {
+      label: "📊 Mapear pedidos e riscos",
+      text: "Mapeie todos os pedidos da inicial anexada e avalie o risco de cada um.",
+    },
+    {
+      label: "⚖️ Estratégia defensiva",
+      text: "Elabore uma estratégia defensiva completa para o caso anexado.",
+    },
+    {
+      label: "📑 Gerar relatório DOCX",
+      text: "Analise o documento anexado e gere um relatório completo em DOCX.",
+    },
   ],
 };
 
@@ -189,7 +237,8 @@ const MASTER_MODULES: MasterModule[] = [
 const OUTPUT_BADGE_STYLE: Record<string, string> = {
   DOCX: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
   XLSX: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
-  "DOCX+XLSX": "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
+  "DOCX+XLSX":
+    "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
   JSON: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
   Form: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300",
 };
@@ -220,10 +269,12 @@ function MasterModulesGrid({ onSelect }: MasterModulesGridProps) {
             <div className="flex items-center justify-between gap-1">
               <div className="flex items-center gap-1.5">
                 <span className="text-[14px] leading-none">{mod.icon}</span>
-                <span className="font-semibold text-[11px] text-muted-foreground/60">{mod.id}</span>
+                <span className="font-semibold text-[11px] text-muted-foreground/60">
+                  {mod.id}
+                </span>
               </div>
               <span
-                className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${OUTPUT_BADGE_STYLE[mod.output] ?? "bg-muted text-muted-foreground"}`}
+                className={`shrink-0 rounded px-1.5 py-0.5 font-medium text-[10px] ${OUTPUT_BADGE_STYLE[mod.output] ?? "bg-muted text-muted-foreground"}`}
               >
                 {mod.output}
               </span>
@@ -243,7 +294,7 @@ function MasterModulesGrid({ onSelect }: MasterModulesGridProps) {
 
       {/* Toggle "Ver mais / Ver menos" */}
       <button
-        className="mt-2 w-full rounded-lg border border-dashed border-border py-2 text-[12px] text-muted-foreground transition-colors hover:border-assistjur-purple/40 hover:text-assistjur-purple"
+        className="mt-2 w-full rounded-lg border border-border border-dashed py-2 text-[12px] text-muted-foreground transition-colors hover:border-assistjur-purple/40 hover:text-assistjur-purple"
         onClick={() => setExpanded((v) => !v)}
         type="button"
       >
@@ -301,13 +352,15 @@ export function ChatEmptyState({
           {isMaster ? "AssistJur Master" : "Como posso ajudar hoje?"}
         </h1>
         <p className="mb-8 text-center text-[14px] text-muted-foreground leading-relaxed">
-          {isMaster
-            ? "Geração de documentos jurídicos com IA. Selecione um módulo abaixo ou descreva o que precisa."
-            : <>
-                Selecione um agente abaixo ou escreva diretamente.
-                <br />
-                Cada agente é especializado em uma tarefa jurídica específica.
-              </>}
+          {isMaster ? (
+            "Geração de documentos jurídicos com IA. Selecione um módulo abaixo ou descreva o que precisa."
+          ) : (
+            <>
+              Selecione um agente abaixo ou escreva diretamente.
+              <br />
+              Cada agente é especializado em uma tarefa jurídica específica.
+            </>
+          )}
         </p>
 
         {/* Master: grelha de módulos em vez de agent cards */}
