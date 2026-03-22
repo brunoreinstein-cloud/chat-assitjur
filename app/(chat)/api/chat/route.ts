@@ -1281,6 +1281,16 @@ interface ChatStreamParams {
   documentTexts: Map<string, string>;
   /** Tools MCP externas (Gmail, Drive, Notion, etc.) já carregadas. */
   mcpTools: Record<string, unknown>;
+  /**
+   * Documento em cache do intake do processo — injetado como contexto sintético
+   * quando o utilizador não fez upload do PDF nesta sessão mas o processo já tem parsedText.
+   * Evita re-upload do mesmo PDF a cada tarefa (fluxo "document-first").
+   */
+  cachedProcessoDocument?: {
+    name: string;
+    text: string;
+    documentType?: "pi" | "contestacao";
+  };
 }
 
 /** Resultado da preparação de mensagens para o modelo. */
@@ -1311,7 +1321,36 @@ async function prepareModelMessagesForStream(
   } = params;
   const t5 = Date.now();
   const visionEnabled = modelSupportsVision(effectiveModel);
-  const normalizedMessages = normalizeMessageParts(uiMessages, visionEnabled);
+
+  // Injetar documento em cache do processo quando não há documento nos messages.
+  // Permite ao agente operar sem re-upload do PDF a cada tarefa (fluxo "document-first").
+  let uiMessagesWithCache = uiMessages;
+  if (params.cachedProcessoDocument) {
+    const hasDocInMessages = uiMessages.some((m) =>
+      (m.parts ?? []).some(
+        (p) => (p as { type?: string }).type === "document"
+      )
+    );
+    if (!hasDocInMessages) {
+      const { name, text, documentType } = params.cachedProcessoDocument;
+      const syntheticMsg: ChatMessage = {
+        id: "processo-cache-doc",
+        role: "user",
+        parts: [
+          {
+            type: "document",
+            name,
+            text,
+            ...(documentType ? { documentType } : {}),
+          } as unknown as ChatMessage["parts"][number],
+        ],
+        createdAt: new Date(0),
+      };
+      uiMessagesWithCache = [syntheticMsg, ...uiMessages];
+    }
+  }
+
+  const normalizedMessages = normalizeMessageParts(uiMessagesWithCache, visionEnabled);
   const effectiveAgentInstructionsForContext =
     agentInstructions?.trim() || agentConfig.instructions;
   const systemStrForEstimate = systemPrompt({
@@ -2332,6 +2371,25 @@ async function handleChatPostAuthenticated(
     }>
   );
 
+  // Fluxo "document-first": se o processo tem parsedText em cache e o utilizador não
+  // fez upload de nenhum documento nesta sessão, injetar o texto cacheado como contexto.
+  // Evita re-upload do mesmo PDF a cada tarefa — economiza ~8 créditos por operação.
+  let cachedProcessoDocument:
+    | { name: string; text: string; documentType?: "pi" | "contestacao" }
+    | undefined;
+  if (proc?.parsedText && proc.intakeStatus === "ready" && documentTexts.size === 0) {
+    const docName = proc.titulo ?? `Processo ${proc.numeroAutos}`;
+    const docType =
+      proc.tipo === "contestacao"
+        ? "contestacao"
+        : proc.tipo === "pi"
+          ? "pi"
+          : undefined;
+    cachedProcessoDocument = { name: docName, text: proc.parsedText, documentType: docType };
+    // Também disponibiliza para o tool buscarNoProcesso
+    documentTexts.set(docName, proc.parsedText);
+  }
+
   // Carregar MCP tools em paralelo (Gmail, Drive, Notion, etc.)
   // Falhas são silenciadas — tools MCP são opcionais.
   const mcpTools = await getAllMcpTools();
@@ -2354,6 +2412,7 @@ async function handleChatPostAuthenticated(
     dbUsedFallback: batchResult.usedFallback ?? false,
     documentTexts,
     mcpTools,
+    cachedProcessoDocument,
   });
 }
 

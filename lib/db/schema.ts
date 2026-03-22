@@ -27,6 +27,8 @@ export type User = InferSelectModel<typeof user>;
 /**
  * Processos trabalhistas: registo de cada processo associado ao utilizador.
  * Permite gerir risco, verbas e fase do pipeline (Recebimento → Protocolo).
+ * Também serve como cache do documento: parsedText e blobUrl evitam re-upload
+ * a cada tarefa (fluxo "document-first").
  */
 export const processo = pgTable(
   "Processo",
@@ -37,6 +39,8 @@ export const processo = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     /** Número do processo no formato CNJ: 0000000-00.0000.5.00.0000 */
     numeroAutos: varchar("numeroAutos", { length: 64 }).notNull(),
+    /** Título amigável: "Ygor Silva x CBD S.A." */
+    titulo: varchar("titulo", { length: 512 }),
     reclamante: varchar("reclamante", { length: 256 }).notNull(),
     reclamada: varchar("reclamada", { length: 256 }).notNull(),
     vara: varchar("vara", { length: 256 }),
@@ -55,6 +59,21 @@ export const processo = pgTable(
     knowledgeDocumentIds: json("knowledgeDocumentIds")
       .$type<string[]>()
       .default([]),
+    // ── Campos de intake (cache do documento) ─────────────────────────────────
+    /** Tipo do documento principal: pi | contestacao | processo_completo */
+    tipo: varchar("tipo", { length: 32 }),
+    /** URL do PDF original no Vercel Blob / Supabase Storage. */
+    blobUrl: varchar("blobUrl", { length: 2048 }),
+    /** Texto completo extraído do PDF (cache para evitar re-parse por tarefa). */
+    parsedText: text("parsedText"),
+    /** Total de páginas do documento. */
+    totalPages: integer("totalPages"),
+    /** Hash SHA-256 do arquivo original — permite detectar re-upload do mesmo PDF. */
+    fileHash: varchar("fileHash", { length: 64 }),
+    /** Metadados estruturados extraídos pelo intake: { pedidos, teses, valores, ... } */
+    intakeMetadata: json("intakeMetadata").$type<Record<string, unknown>>(),
+    /** Estado do intake: processing | ready | error. Null = processo criado sem intake. */
+    intakeStatus: varchar("intakeStatus", { length: 16 }),
     createdAt: timestamp("createdAt").notNull().defaultNow(),
   },
   (table) => ({
@@ -62,10 +81,53 @@ export const processo = pgTable(
       table.userId,
       table.createdAt
     ),
+    /** Detecção de re-upload: lookup por (userId, fileHash). */
+    userIdFileHashIdx: index("Processo_userId_fileHash_idx").on(
+      table.userId,
+      table.fileHash
+    ),
   })
 );
 
 export type Processo = InferSelectModel<typeof processo>;
+
+/**
+ * Execuções de tarefas por processo.
+ * Cada vez que o advogado roda "Revisar Defesa", "Carta Prognóstico", etc.
+ * num processo, cria-se um registo aqui para auditoria e reutilização.
+ */
+export const taskExecution = pgTable(
+  "TaskExecution",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    processoId: uuid("processoId")
+      .notNull()
+      .references(() => processo.id, { onDelete: "cascade" }),
+    /** ID da tarefa executada: ex. 'revisar-defesas', 'redator-contestacao', 'assistjur-master' */
+    taskId: varchar("taskId", { length: 64 }).notNull(),
+    /** ID do chat gerado para esta execução (para navegar de volta). */
+    chatId: uuid("chatId"),
+    /** running | complete | error */
+    status: varchar("status", { length: 16 }).notNull().default("running"),
+    /** Resultado estruturado da tarefa (score, highlights, etc.) */
+    result: json("result").$type<Record<string, unknown>>(),
+    /** URLs dos documentos gerados (DOCXs, PDFs, etc.) */
+    documentsUrl: json("documentsUrl").$type<string[]>(),
+    /** Créditos consumidos nesta execução */
+    creditsUsed: integer("creditsUsed"),
+    startedAt: timestamp("startedAt").notNull().defaultNow(),
+    completedAt: timestamp("completedAt"),
+  },
+  (table) => ({
+    /** Listar execuções por processo, ordenadas pela mais recente. */
+    processoIdStartedAtIdx: index("TaskExecution_processoId_startedAt_idx").on(
+      table.processoId,
+      table.startedAt
+    ),
+  })
+);
+
+export type TaskExecution = InferSelectModel<typeof taskExecution>;
 
 /** Verbas do processo com classificação de risco individual. */
 export const verbaProcesso = pgTable("VerbaProcesso", {
