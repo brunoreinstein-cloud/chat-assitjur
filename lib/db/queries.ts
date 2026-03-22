@@ -40,6 +40,8 @@ import {
   type Suggestion,
   stream,
   suggestion,
+  taskExecution,
+  type TaskExecution,
   type User,
   user,
   userCreditBalance,
@@ -2254,6 +2256,134 @@ export async function linkProcessoToChat({
     await getDb().update(chat).set({ processoId }).where(eq(chat.id, chatId));
   } catch {
     // Ignorar falha de vinculação processo↔chat
+  }
+}
+
+// ─── Intake do Processo ────────────────────────────────────────────────────────
+
+/**
+ * Atualiza os campos de intake de um processo (texto extraído, metadados, URL do blob).
+ * Chamado pelo endpoint /api/processos/intake após parse do PDF.
+ */
+export async function updateProcessoIntake({
+  id,
+  userId,
+  data,
+}: {
+  id: string;
+  userId: string;
+  data: {
+    titulo?: string;
+    tipo?: string;
+    blobUrl?: string;
+    parsedText?: string;
+    totalPages?: number;
+    fileHash?: string;
+    intakeMetadata?: Record<string, unknown>;
+    intakeStatus: string;
+  };
+}): Promise<Processo | null> {
+  try {
+    const [updated] = await getDb()
+      .update(processo)
+      .set(data)
+      .where(and(eq(processo.id, id), eq(processo.userId, userId)))
+      .returning();
+    return updated ?? null;
+  } catch (err) {
+    toDatabaseError(err, "Failed to update processo intake");
+  }
+}
+
+/**
+ * Procura um processo pelo hash do arquivo (para evitar re-upload do mesmo PDF).
+ * Devolve o primeiro processo encontrado com esse hash para o utilizador, ou null.
+ */
+export async function getProcessoByFileHash({
+  userId,
+  fileHash,
+}: {
+  userId: string;
+  fileHash: string;
+}): Promise<Processo | null> {
+  try {
+    const [p] = await getDb()
+      .select()
+      .from(processo)
+      .where(
+        and(
+          eq(processo.userId, userId),
+          eq(processo.fileHash, fileHash)
+        )
+      )
+      .limit(1);
+    return p ?? null;
+  } catch (err) {
+    toDatabaseError(err, "Failed to get processo by file hash");
+  }
+}
+
+// ─── TaskExecution ─────────────────────────────────────────────────────────────
+
+export async function createTaskExecution({
+  processoId,
+  taskId,
+  chatId,
+}: {
+  processoId: string;
+  taskId: string;
+  chatId?: string;
+}): Promise<TaskExecution> {
+  try {
+    const [created] = await getDb()
+      .insert(taskExecution)
+      .values({ processoId, taskId, chatId: chatId ?? null, status: "running" })
+      .returning();
+    return created;
+  } catch (err) {
+    toDatabaseError(err, "Failed to create task execution");
+  }
+}
+
+export async function updateTaskExecution({
+  id,
+  data,
+}: {
+  id: string;
+  data: Partial<{
+    status: string;
+    result: Record<string, unknown>;
+    documentsUrl: string[];
+    creditsUsed: number;
+    completedAt: Date;
+    chatId: string;
+  }>;
+}): Promise<TaskExecution | null> {
+  try {
+    const [updated] = await getDb()
+      .update(taskExecution)
+      .set(data)
+      .where(eq(taskExecution.id, id))
+      .returning();
+    return updated ?? null;
+  } catch (err) {
+    toDatabaseError(err, "Failed to update task execution");
+  }
+}
+
+export async function getTaskExecutionsByProcessoId({
+  processoId,
+}: {
+  processoId: string;
+}): Promise<TaskExecution[]> {
+  try {
+    return await getDb()
+      .select()
+      .from(taskExecution)
+      .where(eq(taskExecution.processoId, processoId))
+      .orderBy(desc(taskExecution.startedAt));
+  } catch (err) {
+    toDatabaseError(err, "Failed to get task executions by processo id");
   }
 }
 
