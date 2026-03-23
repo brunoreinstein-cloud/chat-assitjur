@@ -37,20 +37,26 @@ function splitIntoPagedChunks(
   // Find all marker positions
   const markers: Array<{ index: number; pageNum: number }> = [];
   for (const match of text.matchAll(PAGE_MARKER_RE_GLOBAL)) {
-    if (match.index === undefined) continue;
+    if (match.index === undefined) {
+      continue;
+    }
     const numMatch = match[0].match(PAGE_MARKER_RE_CAPTURE);
     if (numMatch) {
-      markers.push({ index: match.index, pageNum: parseInt(numMatch[1], 10) });
+      markers.push({
+        index: match.index,
+        pageNum: Number.parseInt(numMatch[1], 10),
+      });
     }
   }
 
-  if (markers.length === 0) return [];
+  if (markers.length === 0) {
+    return [];
+  }
 
   const pages: Array<{ pageNum: number; text: string }> = [];
   for (let i = 0; i < markers.length; i++) {
     const start = markers[i].index;
-    const end =
-      i + 1 < markers.length ? markers[i + 1].index : text.length;
+    const end = i + 1 < markers.length ? markers[i + 1].index : text.length;
     pages.push({ pageNum: markers[i].pageNum, text: text.slice(start, end) });
   }
   return pages;
@@ -110,10 +116,12 @@ const KEY_SECTION_KEYWORDS = [
 export function buildSmartDocumentContext(
   text: string,
   maxChars: number,
-  documentType?: string
+  _documentType?: string
 ): string {
   // Documents already within budget need no processing
-  if (text.length <= maxChars) return text;
+  if (text.length <= maxChars) {
+    return text;
+  }
 
   const pages = splitIntoPagedChunks(text);
 
@@ -129,7 +137,7 @@ export function buildSmartDocumentContext(
   const filteredCount = pages.length - contentPages.length;
 
   // --- Budget split ---
-  const indexBudget = Math.min(9_000, Math.floor(maxChars * 0.10));
+  const indexBudget = Math.min(9000, Math.floor(maxChars * 0.1));
   const headBudget = Math.floor(maxChars * 0.42);
   const sectionsBudget = maxChars - indexBudget - headBudget;
 
@@ -137,12 +145,14 @@ export function buildSmartDocumentContext(
   const headPages: typeof contentPages = [];
   let headChars = 0;
   for (const page of contentPages) {
-    if (headChars + page.text.length > headBudget) break;
+    if (headChars + page.text.length > headBudget) {
+      break;
+    }
     headPages.push(page);
     headChars += page.text.length;
   }
   const headMaxPageNum =
-    headPages.length > 0 ? headPages[headPages.length - 1].pageNum : 0;
+    headPages.length > 0 ? (headPages.at(-1)?.pageNum ?? 0) : 0;
 
   // --- 2. PJe index: last 3 content pages (usually the document index) ---
   const indexPages = contentPages.slice(-3);
@@ -150,14 +160,13 @@ export function buildSmartDocumentContext(
   if (indexText.length > indexBudget) {
     indexText = indexText.slice(0, indexBudget);
   }
-  const indexStartPageNum =
-    indexPages.length > 0 ? indexPages[0].pageNum : 0;
+  const indexStartPageNum = indexPages.length > 0 ? indexPages[0].pageNum : 0;
 
   // --- 3. Key sections: search pages between head and index ---
   const headPageNums = new Set(headPages.map((p) => p.pageNum));
   const indexPageNums = new Set(indexPages.map((p) => p.pageNum));
   const middlePages = contentPages.filter(
-    (p) => !headPageNums.has(p.pageNum) && !indexPageNums.has(p.pageNum)
+    (p) => !(headPageNums.has(p.pageNum) || indexPageNums.has(p.pageNum))
   );
 
   const sections: Array<{ label: string; pageNum: number; text: string }> = [];
@@ -181,20 +190,28 @@ export function buildSmartDocumentContext(
   const extractedPageNums = new Set<number>();
 
   for (const { keywords, label } of KEY_SECTION_KEYWORDS) {
-    if (sectionCharsUsed >= sectionsBudget) break;
+    if (sectionCharsUsed >= sectionsBudget) {
+      break;
+    }
 
     // Find first middle page where any keyword appears in the title area
     // AND that hasn't already been extracted for another section (B3).
     let foundIdx = -1;
     for (let i = 0; i < middlePages.length; i++) {
-      if (extractedPageNums.has(middlePages[i].pageNum)) continue; // B3: skip already-included page
-      const titleArea = middlePages[i].text.slice(0, TITLE_AREA_CHARS).toUpperCase();
+      if (extractedPageNums.has(middlePages[i].pageNum)) {
+        continue; // B3: skip already-included page
+      }
+      const titleArea = middlePages[i].text
+        .slice(0, TITLE_AREA_CHARS)
+        .toUpperCase();
       if (keywords.some((kw) => titleArea.includes(kw))) {
         foundIdx = i;
         break;
       }
     }
-    if (foundIdx === -1) continue;
+    if (foundIdx === -1) {
+      continue;
+    }
 
     // Extract pages from the match point until budget exhausted,
     // skipping pages already included in a previous section (B3).
@@ -210,8 +227,12 @@ export function buildSmartDocumentContext(
       i++
     ) {
       const page = middlePages[i];
-      if (extractedPageNums.has(page.pageNum)) continue; // B3: skip duplicates mid-section
-      if (extractedChars + page.text.length > budget) break;
+      if (extractedPageNums.has(page.pageNum)) {
+        continue; // B3: skip duplicates mid-section
+      }
+      if (extractedChars + page.text.length > budget) {
+        break;
+      }
       extracted.push(page.text);
       extractedPageNums.add(page.pageNum); // B3: mark as extracted
       extractedChars += page.text.length;
@@ -279,7 +300,9 @@ export function searchInDocumentText(
     let pos = 0;
     while (results.length < maxResults) {
       const idx = upperText.indexOf(upperQuery, pos);
-      if (idx === -1) break;
+      if (idx === -1) {
+        break;
+      }
       const start = Math.max(0, idx - 400);
       const end = Math.min(text.length, idx + 1200);
       results.push({ pageNum: 0, snippet: text.slice(start, end) });
@@ -294,13 +317,18 @@ export function searchInDocumentText(
     if (pages[i].text.toUpperCase().includes(upperQuery)) {
       matchingIndices.push(i);
     }
-    if (matchingIndices.length >= maxResults) break;
+    if (matchingIndices.length >= maxResults) {
+      break;
+    }
   }
 
   return matchingIndices.map((idx) => {
     const start = Math.max(0, idx - contextPagesEachSide);
     const end = Math.min(pages.length, idx + contextPagesEachSide + 1);
-    const snippet = pages.slice(start, end).map((p) => p.text).join("");
+    const snippet = pages
+      .slice(start, end)
+      .map((p) => p.text)
+      .join("");
     return { pageNum: pages[idx].pageNum, snippet };
   });
 }
@@ -313,7 +341,9 @@ export function extractDocumentTextsFromParts(
   parts: Array<{ type?: string; name?: string; text?: string }> | undefined
 ): Map<string, string> {
   const map = new Map<string, string>();
-  if (!parts) return map;
+  if (!parts) {
+    return map;
+  }
   for (const part of parts) {
     if (
       part.type === "document" &&
@@ -338,11 +368,15 @@ export function extractDocumentTextsFromParts(
  * document name wins (most recent attachment takes precedence).
  */
 export function extractDocumentTextsFromAllMessages(
-  messages: Array<{ parts?: Array<{ type?: string; name?: string; text?: string }> }>
+  messages: Array<{
+    parts?: Array<{ type?: string; name?: string; text?: string }>;
+  }>
 ): Map<string, string> {
   const map = new Map<string, string>();
   for (const msg of messages) {
-    if (!msg.parts) continue;
+    if (!msg.parts) {
+      continue;
+    }
     for (const part of msg.parts) {
       if (
         part.type === "document" &&

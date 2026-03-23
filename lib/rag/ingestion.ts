@@ -3,7 +3,7 @@
  * Usado por from-files e from-archivos. Ver docs/RAG-PIPELINE-SEPARATION.md.
  */
 
-import { runExtractionAndClassification } from "@/app/(chat)/api/files/upload/route";
+import { runExtractionAndClassification } from "@/lib/upload/extract";
 import { extractDocumentMetadata } from "@/lib/ai/extract-metadata";
 
 const TITLE_MAX_LENGTH = 512;

@@ -26,6 +26,25 @@ export const AGENT_IDS = [
 
 export type AgentId = (typeof AGENT_IDS)[number];
 
+/**
+ * Flags de ferramentas de um agente — subset editável pelo admin via override.
+ * Cada flag activa/desactiva uma ferramenta específica (e o output associado).
+ */
+export interface AgentToolFlags {
+  /** Auditoria PI+Contestação → gera DOCX */
+  useRevisorDefesaTools?: boolean;
+  /** Redação de contestação com aprovação → gera DOCX */
+  useRedatorContestacaoTool?: boolean;
+  /** Memória persistente entre sessões */
+  useMemoryTools?: boolean;
+  /** Human-in-the-Loop: pausa para aprovação antes de acções irreversíveis */
+  useApprovalTool?: boolean;
+  /** Pipeline multi-chamadas para PDFs grandes (>200 pgs) */
+  usePipelineTool?: boolean;
+  /** Geração de Relatórios Master (DOCX/XLSX/JSON) + ZIP download */
+  useMasterDocumentsTool?: boolean;
+}
+
 export interface AgentConfig {
   /** Id do agente: built-in (revisor-defesas, etc.) ou UUID do CustomAgent. */
   id: string;
@@ -73,6 +92,13 @@ export interface AgentConfig {
    * O Master agent usa 16000 para suportar relatórios longos (M13: 250 campos, 30-50 pgs).
    */
   maxOutputTokens?: number;
+  /**
+   * Modelo LLM padrão para este agente (override do default global).
+   * Aplicado quando o utilizador não seleccionou explicitamente um modelo.
+   * Deve estar em allowedModelIds (ou este ser vazio/undefined).
+   * Definido via admin override — não existe nas configs do código.
+   */
+  defaultModelId?: string;
 }
 
 /** Modelos Claude Sonnet/Opus (recomendados para redação jurídica longa). */
@@ -141,10 +167,18 @@ export function getAgentConfig(agentId: string): AgentConfig {
   return AGENT_CONFIGS[id];
 }
 
-/** Map opcional de overrides por agentId (instruções/label da BD, admin). */
+/**
+ * Map de overrides de agentes built-in da BD (admin panel).
+ * Cada campo nulo/undefined significa "usar valor do código".
+ */
 export type BuiltInAgentOverridesMap = Record<
   string,
-  { instructions: string | null; label: string | null }
+  {
+    instructions: string | null;
+    label: string | null;
+    defaultModelId?: string | null;
+    toolFlags?: Partial<AgentToolFlags> | null;
+  }
 >;
 
 /** Devolve a config do agente built-in, aplicando overrides da BD se existirem. */
@@ -157,13 +191,29 @@ export function getAgentConfigWithOverrides(
   if (!override) {
     return base;
   }
+
+  // Aplicar apenas os tool flags definidos (não sobrescrever flags ausentes do override)
+  const toolFlagOverrides: Partial<AgentToolFlags> = {};
+  const flags = override.toolFlags;
+  if (flags != null) {
+    for (const key of Object.keys(flags) as Array<keyof AgentToolFlags>) {
+      if (flags[key] !== undefined) {
+        toolFlagOverrides[key] = flags[key];
+      }
+    }
+  }
+
   return {
     ...base,
+    ...toolFlagOverrides,
     ...(override.instructions != null && override.instructions !== ""
       ? { instructions: override.instructions }
       : {}),
     ...(override.label != null && override.label !== ""
       ? { label: override.label }
+      : {}),
+    ...(override.defaultModelId != null && override.defaultModelId !== ""
+      ? { defaultModelId: override.defaultModelId }
       : {}),
   };
 }

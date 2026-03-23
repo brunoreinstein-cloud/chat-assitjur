@@ -1,5 +1,5 @@
 import { auth } from "@/app/(auth)/auth";
-import { contentTypeFromFilename } from "@/app/(chat)/api/files/upload/route";
+import { contentTypeFromFilename } from "@/lib/upload/mime-types";
 import { createKnowledgeDocument, getUserFilesByIds } from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
 import { vectorizeAndIndex } from "@/lib/rag";

@@ -403,12 +403,17 @@ export type CustomAgent = InferSelectModel<typeof customAgent>;
 
 /**
  * Overrides de agentes built-in editados pelo admin (painel administrativo).
- * Só instruções e label; useRevisorDefesaTools e allowedModelIds vêm do código.
+ * Permite sobrepor instruções, label, modelo padrão e flags de ferramentas
+ * sem alterar código — qualquer campo nulo reverte ao valor do código.
  */
 export const builtInAgentOverride = pgTable("BuiltInAgentOverride", {
   agentId: varchar("agentId", { length: 64 }).primaryKey(),
   instructions: text("instructions"),
   label: varchar("label", { length: 256 }),
+  /** Modelo LLM padrão para este agente (ex.: "anthropic/claude-opus-4.6"). Nulo = default global. */
+  defaultModelId: varchar("defaultModelId", { length: 128 }),
+  /** Overrides de flags de ferramentas (Partial<AgentToolFlags>). Nulo = tudo do código. */
+  toolFlags: json("toolFlags").$type<Record<string, boolean>>(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 });
 

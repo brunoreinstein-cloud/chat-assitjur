@@ -6,6 +6,7 @@ import {
   FileSpreadsheetIcon,
   FileTextIcon,
   FolderPlusIcon,
+  type LucideIcon,
 } from "lucide-react";
 import Image from "next/image";
 import { useCallback, useState } from "react";
@@ -101,6 +102,85 @@ const ODT_MIME = "application/vnd.oasis.opendocument.text";
 /** Texto mostrado no overlay durante upload/processamento. Se não for passado, usa o padrão. */
 const DEFAULT_UPLOADING_LABEL = "A processar documento…";
 
+/** Aparência visual (ícone + cor) por tipo de ficheiro. */
+interface FileTypeAppearance {
+  icon: LucideIcon;
+  /** Classe de cor para o ícone e label de tipo (Tailwind). */
+  iconColor: string;
+  /** Classe de background tênue para a área do ícone. */
+  bgColor: string;
+  /** Nome legível completo para tooltip. */
+  fullName: string;
+}
+
+function getFileTypeAppearance(contentType: string): FileTypeAppearance {
+  switch (contentType) {
+    case "application/pdf":
+      return {
+        icon: FileTextIcon,
+        iconColor: "text-red-500",
+        bgColor: "bg-red-50 dark:bg-red-950/30",
+        fullName: "PDF — Portable Document Format",
+      };
+    case DOCX_MIME:
+      return {
+        icon: FileTextIcon,
+        iconColor: "text-blue-500",
+        bgColor: "bg-blue-50 dark:bg-blue-950/30",
+        fullName: "Word — Open XML Document",
+      };
+    case DOC_MIME:
+      return {
+        icon: FileTextIcon,
+        iconColor: "text-blue-500",
+        bgColor: "bg-blue-50 dark:bg-blue-950/30",
+        fullName: "Word — Documento Legado (.doc)",
+      };
+    case XLSX_MIME:
+      return {
+        icon: FileSpreadsheetIcon,
+        iconColor: "text-green-600",
+        bgColor: "bg-green-50 dark:bg-green-950/30",
+        fullName: "Excel — Open XML Spreadsheet",
+      };
+    case XLS_MIME:
+      return {
+        icon: FileSpreadsheetIcon,
+        iconColor: "text-green-600",
+        bgColor: "bg-green-50 dark:bg-green-950/30",
+        fullName: "Excel — Spreadsheet Legado (.xls)",
+      };
+    case CSV_MIME:
+      return {
+        icon: FileSpreadsheetIcon,
+        iconColor: "text-teal-500",
+        bgColor: "bg-teal-50 dark:bg-teal-950/30",
+        fullName: "CSV — Comma-Separated Values",
+      };
+    case ODT_MIME:
+      return {
+        icon: FileTextIcon,
+        iconColor: "text-purple-500",
+        bgColor: "bg-purple-50 dark:bg-purple-950/30",
+        fullName: "ODT — OpenDocument Text",
+      };
+    case TXT_MIME:
+      return {
+        icon: FileTextIcon,
+        iconColor: "text-muted-foreground",
+        bgColor: "",
+        fullName: "Ficheiro de Texto (.txt)",
+      };
+    default:
+      return {
+        icon: FileTextIcon,
+        iconColor: "text-muted-foreground",
+        bgColor: "",
+        fullName: "Ficheiro",
+      };
+  }
+}
+
 /** Tipos de documento que suportam extração de texto e seletor PI/Contestação. */
 const EXTRACTABLE_DOCUMENT_TYPES = new Set([
   "application/pdf",
@@ -179,11 +259,9 @@ export const PreviewAttachment = ({
     documentLabel = "Arquivo";
   }
 
-  const isSpreadsheet =
-    contentType === XLSX_MIME ||
-    contentType === XLS_MIME ||
-    contentType === CSV_MIME;
-  const DocumentIcon = isSpreadsheet ? FileSpreadsheetIcon : FileTextIcon;
+  const fileAppearance = contentType?.startsWith("image/")
+    ? null
+    : getFileTypeAppearance(contentType ?? "");
 
   const hasExtractedText =
     typeof extractedText === "string" && extractedText.trim().length > 0;
@@ -205,18 +283,22 @@ export const PreviewAttachment = ({
             src={url}
             width={64}
           />
-        ) : (
+        ) : fileAppearance ? (
           <div
-            className="flex size-full flex-col items-center justify-center gap-0.5 text-muted-foreground text-xs"
-            title={name}
+            className={`flex size-full flex-col items-center justify-center gap-0.5 text-xs ${fileAppearance.bgColor}`}
+            title={fileAppearance.fullName}
           >
-            <DocumentIcon aria-hidden className="size-5 shrink-0" />
-            <span className="font-medium">{documentLabel}</span>
-            <span className="max-w-full truncate px-1" title={name}>
-              {name}
+            <fileAppearance.icon
+              aria-hidden
+              className={`size-5 shrink-0 ${fileAppearance.iconColor}`}
+            />
+            <span
+              className={`font-semibold leading-none ${fileAppearance.iconColor}`}
+            >
+              {documentLabel}
             </span>
           </div>
-        )}
+        ) : null}
 
         {isUploading && (
           <output
@@ -262,22 +344,33 @@ export const PreviewAttachment = ({
       {!isUploading &&
         (() => {
           const quality = getExtractionQuality(attachment);
-          if (!quality) {
+          const pageCount = attachment.pageCount;
+          if (!(quality || pageCount)) {
             return null;
           }
           return (
-            <div className="px-1 pb-0.5">
-              <span
-                className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 font-medium text-[10px] ${quality.color}`}
-                title={quality.title}
-              >
-                {quality.label}
-              </span>
-              {quality.chars > 0 && (
-                <span className="ml-1 text-[9px] text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 px-1 pb-0.5">
+              {quality && (
+                <span
+                  className={`inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 font-medium text-[10px] ${quality.color}`}
+                  title={quality.title}
+                >
+                  {quality.label}
+                </span>
+              )}
+              {quality?.chars != null && quality.chars > 0 && (
+                <span className="text-[9px] text-muted-foreground">
                   {quality.chars >= 1000
                     ? `${(quality.chars / 1000).toFixed(0)}k chars`
                     : `${quality.chars} chars`}
+                </span>
+              )}
+              {pageCount != null && (
+                <span
+                  className="text-[9px] text-muted-foreground"
+                  title="Número de páginas"
+                >
+                  {pageCount} {pageCount === 1 ? "pág." : "págs."}
                 </span>
               )}
             </div>

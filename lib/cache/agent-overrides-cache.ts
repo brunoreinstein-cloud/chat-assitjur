@@ -1,12 +1,13 @@
 /**
  * Cache em memória para overrides de agentes built-in (painel admin).
- * Reduz consultas à BD no /api/chat; TTL 60s — alterações no admin visíveis em até 1 min.
+ * Reduz consultas à BD no /api/chat; TTL 5 min — alterações no admin
+ * são imediatas (invalidateAgentOverridesCache é chamado no PATCH).
  * Em serverless (Vercel) o cache é por instância.
  */
 
 import { getBuiltInAgentOverrides } from "@/lib/db/queries";
 
-const TTL_MS = 60_000;
+const TTL_MS = 5 * 60_000; // 5 minutos
 
 type OverridesMap = Awaited<ReturnType<typeof getBuiltInAgentOverrides>>;
 

@@ -37,7 +37,7 @@ export const analyzeProcessoPipeline = ({
           "Module ID for the report format (e.g. M03 for relatorio-master, M12 for modelo-br)"
         ),
     }),
-    execute: async ({ documentText, pageCount, moduleId }) => {
+    execute: async ({ documentText, pageCount, moduleId }, { abortSignal }) => {
       const result = await runMultiCallPipeline({
         fullText: documentText,
         pageCount,
@@ -48,6 +48,10 @@ export const analyzeProcessoPipeline = ({
         // Sonnet para validação cruzada T001/F001/C001 — custo controlado
         validationModelId: "anthropic/claude-sonnet-4.6",
         moduleId,
+        // AbortSignal do AI SDK: se o stream principal for cancelado (utilizador
+        // fecha o browser, rede cai, maxDuration atingido), o pipeline para
+        // imediatamente em vez de continuar a fazer chamadas à API desnecessárias.
+        abortSignal,
         onProgress: (msg) => {
           dataStream.write({
             type: "data-pipeline-progress",

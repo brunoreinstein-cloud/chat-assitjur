@@ -1,5 +1,5 @@
 import { auth } from "@/app/(auth)/auth";
-import { contentTypeFromFilename } from "@/app/(chat)/api/files/upload/route";
+import { contentTypeFromFilename } from "@/lib/upload/mime-types";
 import { extractLegalSummary } from "@/lib/ai/extract-legal-summary";
 import {
   createKnowledgeDocument,

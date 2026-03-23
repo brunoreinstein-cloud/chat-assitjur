@@ -160,7 +160,7 @@ export default function AdminCreditsPage() {
         >
           <p className="text-sm">
             {isUnauthorized
-              ? "Chave de administrador inválida ou em falta no servidor (ADMIN_CREDITS_SECRET). Verifique .env.local e reinicie o servidor se acabou de adicionar."
+              ? "Chave de administrador inválida. Verifique as configurações do servidor."
               : creditsError.message}
           </p>
           <Button onClick={resetKey} type="button" variant="outline">
