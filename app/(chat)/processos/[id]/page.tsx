@@ -37,10 +37,7 @@ const TIPO_LABELS: Record<string, string> = {
   outro: "Documento",
 };
 
-const STATUS_CONFIG: Record<
-  string,
-  { label: string; className: string }
-> = {
+const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   running: {
     label: "Em andamento",
     className: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
@@ -175,10 +172,7 @@ async function ProcessoPageContent({
     <div className="mx-auto max-w-3xl px-4 py-8">
       {/* Breadcrumb */}
       <nav className="mb-6 flex items-center gap-1.5 text-[12px] text-muted-foreground">
-        <Link
-          className="hover:text-foreground"
-          href="/chat"
-        >
+        <Link className="hover:text-foreground" href="/chat">
           Chat
         </Link>
         <span>/</span>
@@ -244,13 +238,17 @@ async function ProcessoPageContent({
           {faseLabel && (
             <>
               <dt className="text-muted-foreground">Fase</dt>
-              <dd className="text-foreground dark:text-white/80">{faseLabel}</dd>
+              <dd className="text-foreground dark:text-white/80">
+                {faseLabel}
+              </dd>
             </>
           )}
           {riscoLabel && (
             <>
               <dt className="text-muted-foreground">Risco</dt>
-              <dd className="text-foreground dark:text-white/80">{riscoLabel}</dd>
+              <dd className="text-foreground dark:text-white/80">
+                {riscoLabel}
+              </dd>
             </>
           )}
           {proc.totalPages && (

@@ -178,7 +178,9 @@ export interface RelatorioAnalise {
 // ---------------------------------------------------------------------------
 
 export function isRelatorioAnalise(v: unknown): v is RelatorioAnalise {
-  if (!v || typeof v !== "object") return false;
+  if (!v || typeof v !== "object") {
+    return false;
+  }
   const r = v as Record<string, unknown>;
   return (
     typeof r.id === "string" &&

@@ -79,10 +79,7 @@ export async function POST(
     const { taskId, chatId } = body as { taskId?: string; chatId?: string };
 
     if (!taskId?.trim()) {
-      return Response.json(
-        { error: "taskId é obrigatório" },
-        { status: 400 }
-      );
+      return Response.json({ error: "taskId é obrigatório" }, { status: 400 });
     }
 
     const created = await createTaskExecution({

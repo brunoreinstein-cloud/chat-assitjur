@@ -184,7 +184,10 @@ export async function POST(request: Request) {
     // Verifica que o processo pertence ao utilizador
     const proc = await getProcessoById({ id: processoId, userId });
     if (!proc) {
-      return Response.json({ error: "Processo não encontrado" }, { status: 404 });
+      return Response.json(
+        { error: "Processo não encontrado" },
+        { status: 404 }
+      );
     }
 
     // Se já tem intake completo, devolve imediatamente (idempotente)

@@ -74,10 +74,7 @@ export function hasMcpServers(): boolean {
 }
 
 /** Cache de clientes MCP (reutiliza conexões SSE entre requests). */
-const mcpClientCache = new Map<
-  string,
-  ReturnType<typeof createMCPClient>
->();
+const mcpClientCache = new Map<string, ReturnType<typeof createMCPClient>>();
 
 /**
  * Cria ou reutiliza um cliente MCP para o servidor dado.
@@ -87,10 +84,14 @@ async function getOrCreateMcpClient(
   serverName: string
 ): Promise<Awaited<ReturnType<typeof createMCPClient>> | null> {
   const config = MCP_SERVERS[serverName];
-  if (!config) return null;
+  if (!config) {
+    return null;
+  }
 
   const token = process.env[config.authEnvVar];
-  if (!token || config.url.length === 0) return null;
+  if (!token || config.url.length === 0) {
+    return null;
+  }
 
   const cached = mcpClientCache.get(serverName);
   if (cached) {
@@ -133,7 +134,9 @@ export async function getMcpTools(
   serverName: string
 ): Promise<Record<string, unknown>> {
   const client = await getOrCreateMcpClient(serverName);
-  if (!client) return {};
+  if (!client) {
+    return {};
+  }
 
   try {
     return await client.tools();
@@ -157,12 +160,17 @@ export async function getMcpTools(
  */
 export async function getAllMcpTools(): Promise<Record<string, unknown>> {
   const servers = getConfiguredMcpServers();
-  if (servers.length === 0) return {};
+  if (servers.length === 0) {
+    return {};
+  }
 
   const entries = Object.entries(MCP_SERVERS);
   const results = await Promise.allSettled(
     entries
-      .filter(([, config]) => config.url.length > 0 && !!process.env[config.authEnvVar])
+      .filter(
+        ([, config]) =>
+          config.url.length > 0 && !!process.env[config.authEnvVar]
+      )
       .map(async ([key]) => {
         const tools = await getMcpTools(key);
         // Prefixar tools com o nome do servidor para evitar colisões
@@ -181,7 +189,10 @@ export async function getAllMcpTools(): Promise<Record<string, unknown>> {
     }
   }
 
-  if (process.env.NODE_ENV === "development" && Object.keys(allTools).length > 0) {
+  if (
+    process.env.NODE_ENV === "development" &&
+    Object.keys(allTools).length > 0
+  ) {
     console.info(
       `[mcp] ${Object.keys(allTools).length} MCP tool(s) carregadas:`,
       Object.keys(allTools).join(", ")

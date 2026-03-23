@@ -40,8 +40,8 @@ import {
   type Suggestion,
   stream,
   suggestion,
-  taskExecution,
   type TaskExecution,
+  taskExecution,
   type User,
   user,
   userCreditBalance,
@@ -2310,12 +2310,7 @@ export async function getProcessoByFileHash({
     const [p] = await getDb()
       .select()
       .from(processo)
-      .where(
-        and(
-          eq(processo.userId, userId),
-          eq(processo.fileHash, fileHash)
-        )
-      )
+      .where(and(eq(processo.userId, userId), eq(processo.fileHash, fileHash)))
       .limit(1);
     return p ?? null;
   } catch (err) {

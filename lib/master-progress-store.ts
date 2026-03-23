@@ -25,27 +25,37 @@ let currentTitles: string[] = [];
 
 export function setMasterCompletedCount(n: number): void {
   currentCount = n;
-  for (const fn of countListeners) fn(n);
+  for (const fn of countListeners) {
+    fn(n);
+  }
 }
 
 export function setMasterTotalCount(total: number): void {
   currentTotal = total;
   currentStartedAt = Date.now();
-  for (const fn of totalListeners) fn(total);
+  for (const fn of totalListeners) {
+    fn(total);
+  }
 }
 
 export function setMasterDocTitle(index: number, title: string): void {
   const next = [...currentTitles];
   next[index] = title;
   currentTitles = next;
-  for (const fn of titlesListeners) fn(currentTitles);
+  for (const fn of titlesListeners) {
+    fn(currentTitles);
+  }
 }
 
 export function resetMasterProgress(): void {
   currentTitles = [];
-  for (const fn of titlesListeners) fn([]);
+  for (const fn of titlesListeners) {
+    fn([]);
+  }
   currentTotal = 0;
-  for (const fn of totalListeners) fn(0);
+  for (const fn of totalListeners) {
+    fn(0);
+  }
   currentStartedAt = 0;
   setMasterCompletedCount(0);
 }
@@ -60,7 +70,9 @@ export function useMasterCompletedCount(): number {
   useEffect(() => {
     setCount(currentCount);
     countListeners.add(setCount);
-    return () => { countListeners.delete(setCount); };
+    return () => {
+      countListeners.delete(setCount);
+    };
   }, []);
   return count;
 }
@@ -70,7 +82,9 @@ export function useMasterTotalCount(): number {
   useEffect(() => {
     setTotal(currentTotal);
     totalListeners.add(setTotal);
-    return () => { totalListeners.delete(setTotal); };
+    return () => {
+      totalListeners.delete(setTotal);
+    };
   }, []);
   return total;
 }
@@ -80,7 +94,9 @@ export function useMasterDocTitles(): string[] {
   useEffect(() => {
     setTitles(currentTitles);
     titlesListeners.add(setTitles);
-    return () => { titlesListeners.delete(setTitles); };
+    return () => {
+      titlesListeners.delete(setTitles);
+    };
   }, []);
   return titles;
 }

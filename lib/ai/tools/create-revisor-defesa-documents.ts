@@ -2,13 +2,13 @@ import { tool, type UIMessageStreamWriter } from "ai";
 import type { Session } from "next-auth";
 import { z } from "zod";
 import { generateRevisorDocumentContent } from "@/artifacts/text/server";
-import { pingDatabase, saveDocument } from "@/lib/db/queries";
-import { isDatabaseConnectionError, isLikelyDatabaseError } from "@/lib/errors";
 import {
   getModeloRevisorFromTitle,
   loadModeloRevisor,
   type ModeloRevisor,
 } from "@/lib/ai/modelos";
+import { pingDatabase, saveDocument } from "@/lib/db/queries";
+import { isDatabaseConnectionError, isLikelyDatabaseError } from "@/lib/errors";
 import type { ChatMessage } from "@/lib/types";
 import { generateUUID } from "@/lib/utils";
 

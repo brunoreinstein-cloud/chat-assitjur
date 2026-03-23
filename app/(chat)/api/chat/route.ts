@@ -1327,9 +1327,7 @@ async function prepareModelMessagesForStream(
   let uiMessagesWithCache = uiMessages;
   if (params.cachedProcessoDocument) {
     const hasDocInMessages = uiMessages.some((m) =>
-      (m.parts ?? []).some(
-        (p) => (p as { type?: string }).type === "document"
-      )
+      (m.parts ?? []).some((p) => (p as { type?: string }).type === "document")
     );
     if (!hasDocInMessages) {
       const { name, text, documentType } = params.cachedProcessoDocument;
