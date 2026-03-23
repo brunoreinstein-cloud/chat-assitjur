@@ -2,24 +2,25 @@ import { geolocation } from "@vercel/functions";
 import type { Session } from "next-auth";
 import { auth, type UserType } from "@/app/(auth)/auth";
 import {
-  AGENT_IDS,
-  DEFAULT_AGENT_ID_WHEN_EMPTY,
-  getAgentConfigForCustomAgent,
-  getAgentConfigWithOverrides,
-  type AgentConfig,
-} from "@/lib/ai/agents-registry";
-import {
   getDefaultModelForAgent,
   isModelAllowedForAgent,
 } from "@/lib/ai/agent-models";
+import {
+  AGENT_IDS,
+  type AgentConfig,
+  DEFAULT_AGENT_ID_WHEN_EMPTY,
+  getAgentConfigForCustomAgent,
+  getAgentConfigWithOverrides,
+} from "@/lib/ai/agents-registry";
 import {
   createChatDebugTracker,
   isChatDebugEnabled,
   logChatDebug,
 } from "@/lib/ai/chat-debug";
-import { entitlementsByUserType } from "@/lib/ai/entitlements";
-import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { extractDocumentTextsFromAllMessages } from "@/lib/ai/document-context";
+import { entitlementsByUserType } from "@/lib/ai/entitlements";
+import { getAllMcpTools } from "@/lib/ai/mcp-config";
+import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import {
   REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID,
   REDATOR_BANCO_SYSTEM_USER_ID,
@@ -36,31 +37,32 @@ import { ChatbotError } from "@/lib/errors";
 import type { ChatMessage } from "@/lib/types";
 import { convertToUIMessages } from "@/lib/utils";
 import {
+  buildChatStreamResponse,
+  type ChatStreamParams,
+} from "./lib/chat-pipeline/execute";
+import {
   buildKnowledgeContextFromParts,
   handleChatPostError,
   runValidationRagUserFiles,
   saveUserMessageToDb,
 } from "./lib/chat-pipeline/prepare";
 import {
-  buildChatStreamResponse,
-  type ChatStreamParams,
-} from "./lib/chat-pipeline/execute";
-import {
-  checkRateLimitAndCredits,
-  ensureDbReady,
-  parsePostBody,
-  persistChatAndGetTitlePromise,
-  runChatDbBatch,
-  validateRevisorDocumentParts,
-  validateUserMessageContent,
-  type ChatDbBatchResult,
-} from "./lib/chat-pipeline/validate";
-import {
   isDev,
   logTiming,
   normalizeMessageParts,
   truncateDocumentPartsInBody,
 } from "./lib/chat-pipeline/utils";
+import {
+  type ChatDbBatchResult,
+  checkRateLimitAndCredits,
+  ensureDbReady,
+  parsePostBody,
+  persistChatAndGetTitlePromise,
+  runChatDbBatch,
+  validateAvaliadorDocumentParts,
+  validateRevisorDocumentParts,
+  validateUserMessageContent,
+} from "./lib/chat-pipeline/validate";
 import type { PostRequestBody } from "./schema";
 
 /** Limite de execução da rota (segundos).
@@ -141,6 +143,10 @@ function getAgentConfigAndEffectiveModel(
   const revisorError = validateRevisorDocumentParts(message, agentConfig);
   if (revisorError) {
     return revisorError;
+  }
+  const avaliadorError = validateAvaliadorDocumentParts(message, agentConfig);
+  if (avaliadorError) {
+    return avaliadorError;
   }
   return { agentConfig, effectiveModel };
 }
@@ -456,6 +462,31 @@ async function handleChatPostAuthenticated(
     }>
   );
 
+  let cachedProcessoDocument:
+    | { name: string; text: string; documentType?: "pi" | "contestacao" }
+    | undefined;
+  if (
+    proc?.parsedText &&
+    proc.intakeStatus === "ready" &&
+    documentTexts.size === 0
+  ) {
+    const docName = proc.titulo ?? `Processo ${proc.numeroAutos}`;
+    const docType =
+      proc.tipo === "contestacao"
+        ? "contestacao"
+        : proc.tipo === "pi"
+          ? "pi"
+          : undefined;
+    cachedProcessoDocument = {
+      name: docName,
+      text: proc.parsedText,
+      documentType: docType,
+    };
+    documentTexts.set(docName, proc.parsedText);
+  }
+
+  const mcpTools = await getAllMcpTools();
+
   const streamParams: ChatStreamParams = {
     requestStart,
     debugTracker,
@@ -473,6 +504,8 @@ async function handleChatPostAuthenticated(
     processoContext,
     dbUsedFallback: batchResult.usedFallback ?? false,
     documentTexts,
+    mcpTools,
+    cachedProcessoDocument,
   };
 
   return buildChatStreamResponse(streamParams);

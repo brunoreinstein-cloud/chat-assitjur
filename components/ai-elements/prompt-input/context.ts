@@ -13,8 +13,9 @@ export const PromptInputControllerContext =
 export const ProviderAttachmentsContext =
   createContext<AttachmentsContext | null>(null);
 
-export const LocalAttachmentsContext =
-  createContext<AttachmentsContext | null>(null);
+export const LocalAttachmentsContext = createContext<AttachmentsContext | null>(
+  null
+);
 
 // ============================================================================
 // Hooks

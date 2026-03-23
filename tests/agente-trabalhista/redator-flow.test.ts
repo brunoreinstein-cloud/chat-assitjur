@@ -261,8 +261,8 @@ describe("Redator de Contestações — ferramenta createRedatorContestacaoDocum
     expect(src).toContain("5000");
   });
 
-  it("route.ts inclui createRedatorContestacaoDocument quando useRedatorContestacaoTool=true", () => {
-    const routePath = path.join(
+  it("execute.ts inclui createRedatorContestacaoDocument quando useRedatorContestacaoTool=true", () => {
+    const executePath = path.join(
       __dirname,
       "..",
       "..",
@@ -270,11 +270,13 @@ describe("Redator de Contestações — ferramenta createRedatorContestacaoDocum
       "(chat)",
       "api",
       "chat",
-      "route.ts"
+      "lib",
+      "chat-pipeline",
+      "execute.ts"
     );
-    const routeCode = readFileSync(routePath, "utf-8");
-    expect(routeCode).toContain("createRedatorContestacaoDocument");
-    expect(routeCode).toContain("useRedatorContestacaoTool");
+    const executeCode = readFileSync(executePath, "utf-8");
+    expect(executeCode).toContain("createRedatorContestacaoDocument");
+    expect(executeCode).toContain("useRedatorContestacaoTool");
   });
 });
 

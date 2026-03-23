@@ -5,11 +5,11 @@
 import { generateText } from "ai";
 
 import { getLanguageModel } from "@/lib/ai/providers";
-import { extractJsonObject } from "./json-utils";
-import { type PhaseType } from "./split-processo-sections";
-import { getValidationPrompt } from "./validation-prompts";
 import { makeAbortSignal } from "./concurrency";
-import { type ValidationScore } from "./types";
+import { extractJsonObject } from "./json-utils";
+import type { PhaseType } from "./split-processo-sections";
+import type { ValidationScore } from "./types";
+import { getValidationPrompt } from "./validation-prompts";
 
 // ---------------------------------------------------------------------------
 // Chamada de validação cruzada T001/F001/C001 (LLM)

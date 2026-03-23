@@ -3,7 +3,6 @@
 import { put } from "@vercel/blob";
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { ACCEPTED_IMAGE_TYPES } from "./mime-types";
 import type { DocumentType } from "./classify";
 
 export const SUPABASE_BUCKET =
@@ -266,4 +265,4 @@ export async function persistAndRespond(
 }
 
 // Re-export for callers that previously imported from the route
-export { ACCEPTED_IMAGE_TYPES };
+export { ACCEPTED_IMAGE_TYPES } from "./mime-types";

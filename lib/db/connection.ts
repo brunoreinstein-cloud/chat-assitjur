@@ -6,7 +6,10 @@ import postgres from "postgres";
 import { ChatbotError, isStatementTimeoutError } from "../errors";
 
 /** Converte erro de BD em ChatbotError; reconhece statement timeout (57014) para mensagem clara. */
-export function toDatabaseError(error: unknown, fallbackMessage: string): never {
+export function toDatabaseError(
+  error: unknown,
+  fallbackMessage: string
+): never {
   if (isStatementTimeoutError(error)) {
     throw new ChatbotError(
       "bad_request:database",

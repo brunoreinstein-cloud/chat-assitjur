@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/app/(auth)/auth";
 import { classifyDocumentTypeFromFilename } from "@/lib/upload/classify";
+import { runExtractionAndClassification } from "@/lib/upload/extract";
 import { contentTypeFromFilename } from "@/lib/upload/mime-types";
 import { persistAndRespond } from "@/lib/upload/storage";
-import { runExtractionAndClassification } from "@/lib/upload/extract";
 
 /** Permite tempo suficiente para descarregar e processar PDFs muito grandes (até 100 MB). */
 export const maxDuration = 300;

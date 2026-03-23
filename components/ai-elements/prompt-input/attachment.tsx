@@ -4,13 +4,9 @@ import { ImageIcon, PaperclipIcon, XIcon } from "lucide-react";
 import { Fragment } from "react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
+import { HoverCardTrigger } from "@/components/ui/hover-card";
 import { cn } from "@/lib/utils";
 import { usePromptInputAttachments } from "./context";
-import type {
-  PromptInputActionAddAttachmentsProps,
-  PromptInputAttachmentProps,
-  PromptInputAttachmentsProps,
-} from "./types";
 
 // We need the hover card wrappers — import from the same file to avoid cycles
 // (they are pure wrappers with no context dependency)
@@ -18,7 +14,11 @@ import {
   PromptInputHoverCard,
   PromptInputHoverCardContent,
 } from "./primitives";
-import { HoverCardTrigger } from "@/components/ui/hover-card";
+import type {
+  PromptInputActionAddAttachmentsProps,
+  PromptInputAttachmentProps,
+  PromptInputAttachmentsProps,
+} from "./types";
 
 export function PromptInputAttachment({
   data,

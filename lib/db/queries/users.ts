@@ -1,10 +1,10 @@
 import "server-only";
 
 import { eq } from "drizzle-orm";
-import { ChatbotError } from "@/lib/errors";
-import { generateUUID } from "@/lib/utils";
 import { type User, user } from "@/lib/db/schema";
 import { generateHashedPassword } from "@/lib/db/utils";
+import { ChatbotError } from "@/lib/errors";
+import { generateUUID } from "@/lib/utils";
 import { getDb } from "../connection";
 
 export async function getUser(email: string): Promise<User[]> {

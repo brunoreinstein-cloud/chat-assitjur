@@ -1,9 +1,10 @@
 /** Orchestrator: runs text extraction and document-type classification together. Re-exports DocumentType. */
 
-import { classifyDocumentType, type DocumentType } from "./classify";
+import type { DocumentType } from "./classify";
+import { classifyDocumentType } from "./classify";
 import { extractTextByContentType } from "./extract-docs";
 
-export type { DocumentType };
+export type { DocumentType } from "./classify";
 
 /** Usado por upload (FormData) e por process (após fetch do Blob). */
 export async function runExtractionAndClassification(

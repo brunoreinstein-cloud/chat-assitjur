@@ -35,9 +35,10 @@ import {
   useSyncAgentToUrl,
 } from "@/hooks/use-chat-hooks";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
+import { AGENT_IDS } from "@/lib/ai/agents-registry-metadata";
 import {
-  type ChatRequestRefs,
   buildChatRequestBody,
+  type ChatRequestRefs,
 } from "@/lib/chat/chat-request-builder";
 import { saveReplyToKnowledge } from "@/lib/chat/knowledge-actions";
 import {
@@ -48,7 +49,6 @@ import {
   updateUrlForKnowledgeOpen,
   updateUrlRemoveKnowledge,
 } from "@/lib/chat/url-utils";
-import { AGENT_IDS } from "@/lib/ai/agents-registry-metadata";
 import type { Vote } from "@/lib/db/schema";
 import { ChatbotError } from "@/lib/errors";
 import type { Attachment, ChatMessage } from "@/lib/types";
@@ -187,7 +187,6 @@ type ChatProps = Readonly<{
   isReadonly: boolean;
   autoResume: boolean;
 }>;
-
 
 export function Chat({
   id,

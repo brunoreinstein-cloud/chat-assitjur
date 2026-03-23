@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "next-dev",
-      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
-      "runtimeArgs": ["C:\\Users\\bruno\\chatbot\\node_modules\\next\\dist\\bin\\next", "dev"],
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["run", "dev"],
       "port": 3300,
       "autoPort": true,
       "env": {

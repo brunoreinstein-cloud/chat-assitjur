@@ -1,5 +1,6 @@
 /** Text extraction for non-PDF document formats: DOC, DOCX, images, TXT, CSV, Excel, ODT. */
 
+import { extractTextFromPdf } from "./extract-pdf";
 import {
   ACCEPTED_CSV_TYPE,
   ACCEPTED_DOC_TYPE,
@@ -9,10 +10,9 @@ import {
   ACCEPTED_TXT_TYPE,
   ACCEPTED_XLS_TYPE,
   ACCEPTED_XLSX_TYPE,
-  MAX_EXTRACTED_TEXT_LENGTH,
   isImageContentType,
+  MAX_EXTRACTED_TEXT_LENGTH,
 } from "./mime-types";
-import { extractTextFromPdf } from "./extract-pdf";
 
 export async function extractTextFromDoc(buffer: ArrayBuffer): Promise<string> {
   const mod = await import("word-extractor");
@@ -77,9 +77,7 @@ export function extractTextFromTxt(buffer: ArrayBuffer): string {
 }
 
 /** CSV: usar papaparse e devolver texto legível (linhas com valores separados por tab). */
-export async function extractTextFromCsv(
-  buffer: ArrayBuffer
-): Promise<string> {
+export async function extractTextFromCsv(buffer: ArrayBuffer): Promise<string> {
   const Papa = (await import("papaparse")).default;
   const decoder = new TextDecoder("utf-8", { fatal: false });
   const csvString = decoder.decode(buffer);
@@ -125,9 +123,7 @@ export async function extractTextFromExcel(
 }
 
 /** ODT: ZIP com content.xml; extrair texto do XML (tags removidas). */
-export async function extractTextFromOdt(
-  buffer: ArrayBuffer
-): Promise<string> {
+export async function extractTextFromOdt(buffer: ArrayBuffer): Promise<string> {
   const JSZip = (await import("jszip")).default;
   const zip = await JSZip.loadAsync(buffer);
   const contentFile = zip.file("content.xml");

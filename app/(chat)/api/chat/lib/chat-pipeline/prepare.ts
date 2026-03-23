@@ -4,6 +4,11 @@ import { AGENT_ID_REDATOR_CONTESTACAO } from "@/lib/ai/agents-registry";
 import { buildKnowledgeContext } from "@/lib/ai/resolve-knowledge-ids";
 import { validationToolsForValidate } from "@/lib/ai/tools/validation-tools";
 import {
+  type getKnowledgeDocumentsByIds,
+  getUserFilesByIds,
+  saveMessages,
+} from "@/lib/db/queries";
+import {
   ChatbotError,
   databaseUnavailableResponse,
   isDatabaseConnectionError,
@@ -12,22 +17,15 @@ import {
 } from "@/lib/errors";
 import { retrieveKnowledgeContext } from "@/lib/rag";
 import type { ChatMessage } from "@/lib/types";
-import {
-  getUserFilesByIds,
-  getKnowledgeDocumentsByIds,
-  saveMessages,
-  updateMessage,
-} from "@/lib/db/queries";
 import type { PostRequestBody } from "../../schema";
 import {
+  fillKnowledgeFromFullDocsWhenEmpty,
   isDev,
   logTiming,
   truncateDocumentPartsForDb,
   withTimingLog,
   wrapKnowledgeDocument,
-  fillKnowledgeFromFullDocsWhenEmpty,
 } from "./utils";
-import type { ChatDbBatchResult } from "./validate";
 
 /** Resultado de validação + RAG + getUserFiles. */
 export interface ValidationRagResult {
@@ -203,7 +201,9 @@ export async function saveUserMessageToDb(
   if (message?.role !== "user") {
     return null;
   }
-  type UserMessagePart = NonNullable<PostRequestBody["message"]>["parts"][number];
+  type UserMessagePart = NonNullable<
+    PostRequestBody["message"]
+  >["parts"][number];
   try {
     // Trunca partes "document" para o limite da BD (100K) antes do INSERT.
     // O LLM já recebeu o texto completo (até 2M); aqui guardamos apenas o excerto inicial
@@ -277,5 +277,4 @@ export function handleChatPostError(
   return new ChatbotError("offline:chat").toResponse();
 }
 
-// Re-export ChatDbBatchResult so consumers only need to import from prepare if they use ValidationRag* types
-export type { ChatDbBatchResult };
+export type { ChatDbBatchResult } from "./validate";

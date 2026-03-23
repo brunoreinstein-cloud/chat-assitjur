@@ -83,7 +83,6 @@ import {
 } from "@/lib/knowledge/utils";
 import { cn, fetcher } from "@/lib/utils";
 
-
 export function KnowledgeSidebarContent({
   knowledgeDocumentIds,
   setKnowledgeDocumentIds,
@@ -112,7 +111,9 @@ export function KnowledgeSidebarContent({
     new Set()
   );
   const [isAddingFromFiles, setIsAddingFromFiles] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(
+    null
+  );
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [isAddingFolder, setIsAddingFolder] = useState(false);

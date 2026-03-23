@@ -2,9 +2,9 @@
 
 import type { UseChatHelpers } from "@ai-sdk/react";
 import { memo } from "react";
-import type { ChatMessage } from "@/lib/types";
-import { Button } from "@/components/ui/button";
 import { StopIcon } from "@/components/icons";
+import { Button } from "@/components/ui/button";
+import type { ChatMessage } from "@/lib/types";
 
 function PureStopButton({
   stop,

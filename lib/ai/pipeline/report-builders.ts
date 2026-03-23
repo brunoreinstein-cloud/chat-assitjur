@@ -2,7 +2,7 @@
  * Construtores de relatórios auxiliares do pipeline multi-chamadas.
  */
 
-import { type BlockResult } from "./types";
+import type { BlockResult } from "./types";
 
 // ---------------------------------------------------------------------------
 // Contexto compacto para pré-validação (Padrão C)

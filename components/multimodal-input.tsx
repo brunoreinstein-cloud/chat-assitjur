@@ -34,20 +34,11 @@ import {
 import { toast } from "sonner";
 import useSWR from "swr";
 import { useLocalStorage, useWindowSize } from "usehooks-ts";
-import { getExtractionQuality } from "@/lib/extraction-quality";
 import {
   getAgentConfig,
   NO_AGENT_SELECTED,
 } from "@/lib/ai/agents-registry-metadata";
 import { MIN_CREDITS_TO_START_CHAT } from "@/lib/ai/credits";
-import type {
-  Attachment,
-  ChatMessage,
-  ChatTools,
-  CreditsResponse,
-  CustomUIDataTypes,
-} from "@/lib/types";
-import { cn, fetcher } from "@/lib/utils";
 import {
   ACCEPTED_FILE_ACCEPT,
   autoAssignMissingDocumentType,
@@ -59,17 +50,24 @@ import {
   MAX_KNOWLEDGE_SELECT,
   POST_UPLOAD_PROMPTS,
   removeAttachmentByUrl,
+  type UploadPhase,
+  type UploadQueueItem,
   updateAttachmentByUrl,
   uploadLargeFile,
   uploadSmallFile,
   usePromptImprovement,
   validateAttachmentsForSubmit,
   validateRevisorPiContestacao,
-  type UploadPhase,
-  type UploadQueueItem,
 } from "@/lib/attachments";
-import { AttachmentsButton } from "./multimodal-input/attachments-button";
-import { StopButton } from "./multimodal-input/stop-button";
+import { getExtractionQuality } from "@/lib/extraction-quality";
+import type {
+  Attachment,
+  ChatMessage,
+  ChatTools,
+  CreditsResponse,
+  CustomUIDataTypes,
+} from "@/lib/types";
+import { cn, fetcher } from "@/lib/utils";
 import { ContextUsageIndicator } from "./context-usage-indicator";
 import {
   PromptInput,
@@ -79,6 +77,8 @@ import {
   PromptInputTools,
 } from "./elements/prompt-input";
 import { ArrowUpIcon } from "./icons";
+import { AttachmentsButton } from "./multimodal-input/attachments-button";
+import { StopButton } from "./multimodal-input/stop-button";
 import { REVISOR_PROMPTS } from "./prompt-selector";
 import {
   AlertDialog,

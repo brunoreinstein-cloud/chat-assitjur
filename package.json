@@ -60,6 +60,7 @@
   },
   "dependencies": {
     "@ai-sdk/gateway": "^3.0.63",
+    "@ai-sdk/mcp": "^1.0.25",
     "@ai-sdk/provider": "^3.0.8",
     "@ai-sdk/react": "3.0.113",
     "@codemirror/lang-javascript": "^6.2.5",

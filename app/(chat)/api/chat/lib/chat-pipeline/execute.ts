@@ -8,8 +8,8 @@ import {
 } from "ai";
 import { after } from "next/server";
 import type { Session } from "next-auth";
-import { isChatDebugEnabled, logChatDebug } from "@/lib/ai/chat-debug";
 import type { AgentConfig } from "@/lib/ai/agents-registry";
+import { isChatDebugEnabled } from "@/lib/ai/chat-debug";
 import {
   applyContextEditing,
   CONTEXT_WINDOW_INPUT_TARGET_TOKENS,
@@ -20,6 +20,7 @@ import { modelReasoningType, modelSupportsVision } from "@/lib/ai/models";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
 import { analyzeProcessoPipeline } from "@/lib/ai/tools/analyze-processo-pipeline";
+import { createAvaliadorContestacaoDocument } from "@/lib/ai/tools/create-avaliador-contestacao-document";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { createMasterDocuments } from "@/lib/ai/tools/create-master-documents";
 import { createRedatorContestacaoDocument } from "@/lib/ai/tools/create-redator-contestacao-document";
@@ -60,7 +61,10 @@ type StreamTextResult = Awaited<ReturnType<typeof streamText>>;
 /** Parâmetros para buildChatStreamResponse. */
 export interface ChatStreamParams {
   requestStart: number;
-  debugTracker: { phase: (name: string, t: number) => void; flush: (label: string) => void };
+  debugTracker: {
+    phase: (name: string, t: number) => void;
+    flush: (label: string) => void;
+  };
   id: string;
   message: PostRequestBody["message"];
   session: Session;
@@ -77,6 +81,17 @@ export interface ChatStreamParams {
   dbUsedFallback?: boolean;
   /** Textos completos dos documentos anexados, para o tool buscarNoProcesso. */
   documentTexts: Map<string, string>;
+  /** Tools MCP (Gmail, Drive, …) carregadas na rota; vazio se indisponíveis. */
+  mcpTools?: Record<string, unknown>;
+  /**
+   * Documento em cache do intake do processo — injetado como mensagem sintética
+   * quando não há document parts nas mensagens.
+   */
+  cachedProcessoDocument?: {
+    name: string;
+    text: string;
+    documentType?: "pi" | "contestacao";
+  };
 }
 
 /** Resultado da preparação de mensagens para o modelo. */
@@ -106,6 +121,7 @@ interface StreamExecuteContext {
   preStreamEnd: number;
   dbUsedFallback?: boolean;
   documentTexts: Map<string, string>;
+  mcpTools: Record<string, unknown>;
 }
 
 /** Contexto para o handler onFinish do stream. */
@@ -136,7 +152,34 @@ async function prepareModelMessagesForStream(
   } = params;
   const t5 = Date.now();
   const visionEnabled = modelSupportsVision(effectiveModel);
-  const normalizedMessages = normalizeMessageParts(uiMessages, visionEnabled);
+
+  let uiMessagesWithCache = uiMessages;
+  if (params.cachedProcessoDocument) {
+    const hasDocInMessages = uiMessages.some((m) =>
+      (m.parts ?? []).some((p) => (p as { type?: string }).type === "document")
+    );
+    if (!hasDocInMessages) {
+      const { name, text, documentType } = params.cachedProcessoDocument;
+      const syntheticMsg: ChatMessage = {
+        id: "processo-cache-doc",
+        role: "user",
+        parts: [
+          {
+            type: "document",
+            name,
+            text,
+            ...(documentType ? { documentType } : {}),
+          } as unknown as ChatMessage["parts"][number],
+        ],
+      };
+      uiMessagesWithCache = [syntheticMsg, ...uiMessages];
+    }
+  }
+
+  const normalizedMessages = normalizeMessageParts(
+    uiMessagesWithCache,
+    visionEnabled
+  );
   const effectiveAgentInstructionsForContext =
     agentInstructions?.trim() || agentConfig.instructions;
   const systemStrForEstimate = systemPrompt({
@@ -245,6 +288,7 @@ function createStreamExecuteHandler(
       | "buscarNoProcesso"
       | "createRevisorDefesaDocuments"
       | "createRedatorContestacaoDocument"
+      | "createAvaliadorContestacaoDocument"
       | "analyzeProcessoPipeline"
       | "createMasterDocuments";
     const activeToolNames: ActiveToolName[] = ctx.isReasoningModel
@@ -260,6 +304,9 @@ function createStreamExecuteHandler(
             : []),
           ...(ctx.agentConfig.useRedatorContestacaoTool
             ? (["createRedatorContestacaoDocument"] as const)
+            : []),
+          ...(ctx.agentConfig.useAvaliadorContestacaoTool
+            ? (["createAvaliadorContestacaoDocument"] as const)
             : []),
           ...(ctx.agentConfig.usePipelineTool
             ? (["analyzeProcessoPipeline"] as const)
@@ -308,6 +355,9 @@ function createStreamExecuteHandler(
       createRedatorContestacaoDocument?: ReturnType<
         typeof createRedatorContestacaoDocument
       >;
+      createAvaliadorContestacaoDocument?: ReturnType<
+        typeof createAvaliadorContestacaoDocument
+      >;
       analyzeProcessoPipeline?: ReturnType<typeof analyzeProcessoPipeline>;
       createMasterDocuments?: ReturnType<typeof createMasterDocuments>;
     };
@@ -331,11 +381,22 @@ function createStreamExecuteHandler(
         }
       );
     }
+    if (ctx.agentConfig.useAvaliadorContestacaoTool) {
+      tools.createAvaliadorContestacaoDocument =
+        createAvaliadorContestacaoDocument({
+          session: ctx.session,
+          dataStream,
+        });
+    }
     if (ctx.agentConfig.useMasterDocumentsTool) {
       tools.createMasterDocuments = createMasterDocuments({
         session: ctx.session,
         dataStream,
       });
+    }
+
+    if (Object.keys(ctx.mcpTools).length > 0) {
+      Object.assign(tools, ctx.mcpTools);
     }
 
     const result = streamText({
@@ -653,6 +714,7 @@ function buildStreamAndResponse(
     knowledgeContext,
     processoContext,
     documentTexts,
+    mcpTools = {},
   } = params;
   const { messagesForModel, preStreamEnd } = prepared;
 
@@ -684,6 +746,7 @@ function buildStreamAndResponse(
     preStreamEnd,
     dbUsedFallback: params.dbUsedFallback,
     documentTexts,
+    mcpTools,
   };
 
   const onFinishContext: StreamOnFinishContext = {

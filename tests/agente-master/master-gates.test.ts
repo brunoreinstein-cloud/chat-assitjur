@@ -9,10 +9,11 @@ import { describe, expect, it } from "vitest";
 import { AGENTE_ASSISTJUR_MASTER_INSTRUCTIONS } from "@/lib/ai/agent-assistjur-master";
 import { getAgentConfig } from "@/lib/ai/agents-registry";
 import {
-  AGENT_ID_ASSISTJUR_MASTER,
-  AGENT_ID_REVISOR_DEFESAS,
-  AGENT_ID_REDATOR_CONTESTACAO,
   AGENT_ID_ASSISTENTE_GERAL,
+  AGENT_ID_ASSISTJUR_MASTER,
+  AGENT_ID_AVALIADOR_CONTESTACAO,
+  AGENT_ID_REDATOR_CONTESTACAO,
+  AGENT_ID_REVISOR_DEFESAS,
   AGENT_IDS,
 } from "@/lib/ai/agents-registry-metadata";
 
@@ -20,20 +21,20 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /** Todos os comandos de módulo do Master (M01–M14). */
 const MASTER_MODULE_COMMANDS = [
-  "/relatorio-processual",   // M01
-  "/carta-prognostico",      // M02
-  "/relatorio-master",       // M03
-  "/relatorio-dpsp",         // M04
-  "/obf",                    // M05
-  "/ficha-apolice",          // M06
-  "/auditoria",              // M07
-  "/cadastro-elaw",          // M08
-  "/encerramento",           // M09
-  "/aquisicao-creditos",     // M10
-  "/analise-tst",            // M11
-  "/modelo-br",              // M12
-  "/completo",               // M13
-  "/extracao-calculos",      // M14
+  "/relatorio-processual", // M01
+  "/carta-prognostico", // M02
+  "/relatorio-master", // M03
+  "/relatorio-dpsp", // M04
+  "/obf", // M05
+  "/ficha-apolice", // M06
+  "/auditoria", // M07
+  "/cadastro-elaw", // M08
+  "/encerramento", // M09
+  "/aquisicao-creditos", // M10
+  "/analise-tst", // M11
+  "/modelo-br", // M12
+  "/completo", // M13
+  "/extracao-calculos", // M14
 ] as const;
 
 describe("AssistJur.IA Master — 14 módulos nas instruções", () => {
@@ -45,12 +46,12 @@ describe("AssistJur.IA Master — 14 módulos nas instruções", () => {
 
   it("módulos principais (featured) estão presentes: M03, M02, M08, M07, M12, M13", () => {
     const featured = [
-      "/relatorio-master",   // M03
-      "/carta-prognostico",  // M02
-      "/cadastro-elaw",      // M08
-      "/auditoria",          // M07
-      "/modelo-br",          // M12
-      "/completo",           // M13
+      "/relatorio-master", // M03
+      "/carta-prognostico", // M02
+      "/cadastro-elaw", // M08
+      "/auditoria", // M07
+      "/modelo-br", // M12
+      "/completo", // M13
     ] as const;
     for (const cmd of featured) {
       expect(AGENTE_ASSISTJUR_MASTER_INSTRUCTIONS).toContain(cmd);
@@ -90,7 +91,9 @@ describe("AssistJur.IA Master — regras críticas de entrega", () => {
   });
 
   it("instrução exige uso de createMasterDocuments", () => {
-    expect(AGENTE_ASSISTJUR_MASTER_INSTRUCTIONS).toContain("createMasterDocuments");
+    expect(AGENTE_ASSISTJUR_MASTER_INSTRUCTIONS).toContain(
+      "createMasterDocuments"
+    );
   });
 
   it("instrução contém regra OBRIGATÓRIA de gerar DOCX", () => {
@@ -158,19 +161,22 @@ describe("AssistJur.IA Master — ferramenta createMasterDocuments", () => {
 });
 
 describe("AssistJur.IA Master — consistência com agents-registry-metadata", () => {
-  it("AGENT_IDS exporta exatamente 4 agentes", () => {
-    expect(AGENT_IDS).toHaveLength(4);
+  it("AGENT_IDS exporta exatamente 5 agentes", () => {
+    expect(AGENT_IDS).toHaveLength(5);
     expect(AGENT_IDS).toContain(AGENT_ID_ASSISTENTE_GERAL);
     expect(AGENT_IDS).toContain(AGENT_ID_REVISOR_DEFESAS);
     expect(AGENT_IDS).toContain(AGENT_ID_REDATOR_CONTESTACAO);
+    expect(AGENT_IDS).toContain(AGENT_ID_AVALIADOR_CONTESTACAO);
     expect(AGENT_IDS).toContain(AGENT_ID_ASSISTJUR_MASTER);
   });
 
-  it("todos os 4 agentes têm descrição não-vazia e única no metadata", async () => {
+  it("todos os 5 agentes têm descrição não-vazia e única no metadata", async () => {
     const { getAgentConfig: getMetaConfig } = await import(
       "@/lib/ai/agents-registry-metadata"
     );
-    const descriptions = AGENT_IDS.map((id) => getMetaConfig(id).description ?? "");
+    const descriptions = AGENT_IDS.map(
+      (id) => getMetaConfig(id).description ?? ""
+    );
     // Todas as descrições devem ser não-vazias
     for (const desc of descriptions) {
       expect(desc.length).toBeGreaterThan(20);
@@ -222,9 +228,9 @@ describe("AssistJur.IA Master — consistência com agents-registry-metadata", (
   });
 });
 
-describe("AssistJur.IA Master — route.ts e pipeline", () => {
-  it("route.ts aplica stepCountIs=7 para usePipelineTool (Master)", () => {
-    const routePath = path.join(
+describe("AssistJur.IA Master — execute.ts (chat pipeline) e pipeline", () => {
+  it("execute.ts aplica stepCountIs=7 para usePipelineTool (Master)", () => {
+    const executePath = path.join(
       __dirname,
       "..",
       "..",
@@ -232,14 +238,18 @@ describe("AssistJur.IA Master — route.ts e pipeline", () => {
       "(chat)",
       "api",
       "chat",
-      "route.ts"
+      "lib",
+      "chat-pipeline",
+      "execute.ts"
     );
-    const routeCode = readFileSync(routePath, "utf-8");
-    expect(routeCode).toContain("stepCountIs(ctx.agentConfig.usePipelineTool ? 7 : 5)");
+    const executeCode = readFileSync(executePath, "utf-8");
+    expect(executeCode).toContain(
+      "stepCountIs(ctx.agentConfig.usePipelineTool ? 7 : 5)"
+    );
   });
 
-  it("route.ts usa maxOutputTokens do agentConfig com fallback para 8192", () => {
-    const routePath = path.join(
+  it("execute.ts usa maxOutputTokens do agentConfig com fallback para 8192", () => {
+    const executePath = path.join(
       __dirname,
       "..",
       "..",
@@ -247,14 +257,18 @@ describe("AssistJur.IA Master — route.ts e pipeline", () => {
       "(chat)",
       "api",
       "chat",
-      "route.ts"
+      "lib",
+      "chat-pipeline",
+      "execute.ts"
     );
-    const routeCode = readFileSync(routePath, "utf-8");
-    expect(routeCode).toContain("maxOutputTokens: ctx.agentConfig.maxOutputTokens ?? 8192");
+    const executeCode = readFileSync(executePath, "utf-8");
+    expect(executeCode).toContain(
+      "maxOutputTokens: ctx.agentConfig.maxOutputTokens ?? 8192"
+    );
   });
 
-  it("route.ts bloqueia tools para modelos reasoning (isReasoningModel → [])", () => {
-    const routePath = path.join(
+  it("execute.ts bloqueia tools para modelos reasoning (isReasoningModel → [])", () => {
+    const executePath = path.join(
       __dirname,
       "..",
       "..",
@@ -262,10 +276,12 @@ describe("AssistJur.IA Master — route.ts e pipeline", () => {
       "(chat)",
       "api",
       "chat",
-      "route.ts"
+      "lib",
+      "chat-pipeline",
+      "execute.ts"
     );
-    const routeCode = readFileSync(routePath, "utf-8");
-    expect(routeCode).toMatch(
+    const executeCode = readFileSync(executePath, "utf-8");
+    expect(executeCode).toMatch(
       /isReasoningModel[\s\S]*?\[\]|activeToolNames[\s\S]*?isReasoningModel.*\[\]/
     );
   });

@@ -1,6 +1,5 @@
 "use client";
 
-import type { ChatStatus } from "ai";
 import {
   CornerDownLeftIcon,
   Loader2Icon,
@@ -9,14 +8,8 @@ import {
   SquareIcon,
   XIcon,
 } from "lucide-react";
-import {
-  Children,
-  type RefObject,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import type { ChangeEvent } from "react";
+import { Children, useCallback, useEffect, useRef, useState } from "react";
 import {
   Command,
   CommandEmpty,
@@ -91,7 +84,6 @@ import type {
   SpeechRecognitionErrorEvent,
   SpeechRecognitionEvent,
 } from "./types";
-import type { ChangeEvent } from "react";
 
 // ============================================================================
 // Body
@@ -570,9 +562,7 @@ export const PromptInputTabItem = ({
 export const PromptInputCommand = ({
   className,
   ...props
-}: PromptInputCommandProps) => (
-  <Command className={cn(className)} {...props} />
-);
+}: PromptInputCommandProps) => <Command className={cn(className)} {...props} />;
 
 export const PromptInputCommandInput = ({
   className,

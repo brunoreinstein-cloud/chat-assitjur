@@ -1,7 +1,12 @@
 import "server-only";
 
 import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
-import { type IndexingStatus, knowledgeChunk, knowledgeDocument, knowledgeFolder } from "@/lib/db/schema";
+import {
+  type IndexingStatus,
+  knowledgeChunk,
+  knowledgeDocument,
+  knowledgeFolder,
+} from "@/lib/db/schema";
 import { getDb, toDatabaseError } from "../connection";
 
 export async function createKnowledgeDocument({

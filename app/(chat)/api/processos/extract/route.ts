@@ -169,9 +169,9 @@ export async function POST(request: Request) {
     );
   }
 
-  if (file.size > 50 * 1024 * 1024) {
+  if (file.size > 100 * 1024 * 1024) {
     return Response.json(
-      { error: "Arquivo muito grande. Máximo: 50 MB" },
+      { error: "Arquivo muito grande. Máximo: 100 MB" },
       { status: 400 }
     );
   }

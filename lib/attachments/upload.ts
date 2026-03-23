@@ -2,8 +2,8 @@
 
 import { upload as uploadToBlob } from "@vercel/blob/client";
 import { toast } from "sonner";
-import { buildAttachmentFromUploadResponse } from "./utils";
 import type { FileUploadResponse, UploadPhase } from "./types";
+import { buildAttachmentFromUploadResponse } from "./utils";
 
 export async function uploadLargeFile(
   file: File,

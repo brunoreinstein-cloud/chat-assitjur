@@ -21,10 +21,8 @@ import {
 import { ChatbotError } from "@/lib/errors";
 import type { ChatMessage } from "@/lib/types";
 import { generateTitleFromUserMessage } from "../../../../actions";
-import {
-  type PostRequestBody,
-  postRequestBodySchema,
-} from "../../schema";
+import { type PostRequestBody, postRequestBodySchema } from "../../schema";
+import type { DocumentPartLike } from "./utils";
 import {
   CHAT_MESSAGES_LIMIT,
   CREDITS_CACHE_USAGE_LIMIT,
@@ -36,9 +34,8 @@ import {
   withFallbackTimeout,
   withTimingLog,
 } from "./utils";
-import type { DocumentPartLike } from "./utils";
 
-export { DEFAULT_AGENT_ID_WHEN_EMPTY };
+export { DEFAULT_AGENT_ID_WHEN_EMPTY } from "@/lib/ai/agents-registry";
 
 /** Resultado do batch de queries da BD para o chat. */
 export interface ChatDbBatchResult {
@@ -370,6 +367,40 @@ export function validateRevisorDocumentParts(
         code: "bad_request:api",
         message:
           "Para auditar a contestação, anexe a Petição Inicial e a Contestação (arraste para os slots ou use o anexo). O tipo é identificado automaticamente quando possível; pode ajustar no menu de cada documento.",
+      },
+      { status: 400 }
+    );
+  }
+  return null;
+}
+
+/** Valida partes de documento do Avaliador (Contestação obrigatória); devolve Response se inválido. */
+export function validateAvaliadorDocumentParts(
+  message: PostRequestBody["message"],
+  agentConfig: AgentConfig
+): Response | null {
+  if (
+    message?.role !== "user" ||
+    !message.parts ||
+    !agentConfig.useAvaliadorContestacaoTool
+  ) {
+    return null;
+  }
+  const documentParts = message.parts.filter(
+    (p) => (p as { type?: string }).type === "document"
+  ) as DocumentPartLike[];
+  if (documentParts.length === 0) {
+    return null;
+  }
+  const hasContestacao = documentParts.some(
+    (p) => p.documentType === "contestacao"
+  );
+  if (!hasContestacao) {
+    return Response.json(
+      {
+        code: "bad_request:api",
+        message:
+          "Para avaliar a contestação, anexe pelo menos a Contestação. A Petição Inicial é opcional mas recomendada para uma avaliação mais completa.",
       },
       { status: 400 }
     );

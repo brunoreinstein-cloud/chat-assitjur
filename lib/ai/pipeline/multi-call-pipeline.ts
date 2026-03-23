@@ -5,41 +5,38 @@
  */
 
 import {
-  mergeSectionsIntoBlocks,
-  splitIntoSections,
-} from "./split-processo-sections";
-import { getModuleSynthesisConfig } from "./synthesis-prompts";
-import {
-  BLOCK_CALL_TIMEOUT_MS,
-  VALIDATION_CALL_TIMEOUT_MS,
-  MAX_BLOCK_CHARS,
-  CRITICAL_BLOCK_LABELS,
-  BLOCK_EXTRACTION_CONCURRENCY,
-} from "./constants";
-import { createSemaphore } from "./concurrency";
-import { humanizeBlockLabel } from "./extraction-prompts";
-import {
   processBlockWithRetry,
   splitBlockIntoSubBlocks,
 } from "./block-processor";
+import { createSemaphore } from "./concurrency";
+import {
+  BLOCK_CALL_TIMEOUT_MS,
+  BLOCK_EXTRACTION_CONCURRENCY,
+  CRITICAL_BLOCK_LABELS,
+  MAX_BLOCK_CHARS,
+  VALIDATION_CALL_TIMEOUT_MS,
+} from "./constants";
+import { runCrossValidation, validatePageReferences } from "./cross-validation";
+import { humanizeBlockLabel } from "./extraction-prompts";
 import {
   buildCompactValidationContext,
   buildFallbackReport,
 } from "./report-builders";
-import { synthesizeResults } from "./synthesize";
 import {
-  runCrossValidation,
-  validatePageReferences,
-} from "./cross-validation";
-import { type PipelineConfig, type PipelineResult, type BlockResult } from "./types";
+  mergeSectionsIntoBlocks,
+  splitIntoSections,
+} from "./split-processo-sections";
+import { getModuleSynthesisConfig } from "./synthesis-prompts";
+import { synthesizeResults } from "./synthesize";
+import type { BlockResult, PipelineConfig, PipelineResult } from "./types";
 
 // ---------------------------------------------------------------------------
 // Re-exports para compatibilidade retroativa
 // ---------------------------------------------------------------------------
 
-export * from "./types";
-export { BASE_EXTRACTION_RULES } from "./extraction-prompts";
 export { validatePageReferences } from "./cross-validation";
+export { BASE_EXTRACTION_RULES } from "./extraction-prompts";
+export * from "./types";
 
 // ---------------------------------------------------------------------------
 // Pipeline principal

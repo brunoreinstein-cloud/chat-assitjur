@@ -3,7 +3,6 @@
  * Ver docs/RAG-PIPELINE-SEPARATION.md.
  */
 export type { IndexChunksMeta, VectorIndexBackend } from "./indexing";
-// biome-ignore lint/performance/noBarrelFile: barrel intentional for RAG pipeline API
 export {
   getDefaultIndexBackend,
   pgVectorIndex,

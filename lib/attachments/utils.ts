@@ -7,7 +7,12 @@ import {
   LARGE_FILE_THRESHOLD,
   PHASE_LABELS,
 } from "./constants";
-import type { DocumentPart, FileUploadResponse, FilePart, UploadPhase } from "./types";
+import type {
+  DocumentPart,
+  FilePart,
+  FileUploadResponse,
+  UploadPhase,
+} from "./types";
 
 export function getPhaseLabel(phase: UploadPhase, fileSize?: number): string {
   if (phase === "extracting" && fileSize && fileSize > LARGE_FILE_THRESHOLD) {

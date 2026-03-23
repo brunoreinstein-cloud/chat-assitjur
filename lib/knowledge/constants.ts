@@ -10,7 +10,8 @@ export const MAX_KNOWLEDGE_SELECT = 50;
 
 export const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
 
-export const ACCEPTED_EXTENSIONS = /\.(docx?|pdf|jpe?g|png|xlsx?|csv|txt|odt)$/i;
+export const ACCEPTED_EXTENSIONS =
+  /\.(docx?|pdf|jpe?g|png|xlsx?|csv|txt|odt)$/i;
 
 export const RECENT_DOCS_LIMIT = 8;
 

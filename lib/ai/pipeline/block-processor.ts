@@ -5,20 +5,20 @@
 import { generateText } from "ai";
 
 import { getLanguageModel } from "@/lib/ai/providers";
-import { extractJsonObject } from "./json-utils";
-import { type ProcessoBlock } from "./split-processo-sections";
 import { makeAbortSignal } from "./concurrency";
 import {
-  MAX_BLOCK_CHARS,
-  CRITICAL_BLOCK_LABELS,
-  BLOCK_MAX_OUTPUT_TOKENS_DEFAULT,
   BLOCK_MAX_OUTPUT_TOKENS_CRITICAL,
+  BLOCK_MAX_OUTPUT_TOKENS_DEFAULT,
+  CRITICAL_BLOCK_LABELS,
+  MAX_BLOCK_CHARS,
 } from "./constants";
 import {
   getBlockExtractionPrompt,
   humanizeBlockLabel,
 } from "./extraction-prompts";
-import { type BlockResult } from "./types";
+import { extractJsonObject } from "./json-utils";
+import type { ProcessoBlock } from "./split-processo-sections";
+import type { BlockResult } from "./types";
 
 // ---------------------------------------------------------------------------
 // Processamento de bloco individual

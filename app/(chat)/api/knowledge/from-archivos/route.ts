@@ -1,9 +1,9 @@
 import { auth } from "@/app/(auth)/auth";
-import { contentTypeFromFilename } from "@/lib/upload/mime-types";
 import { createKnowledgeDocument, getUserFilesByIds } from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
 import { vectorizeAndIndex } from "@/lib/rag";
 import { ingestFromBuffer, ingestFromContent } from "@/lib/rag/ingestion";
+import { contentTypeFromFilename } from "@/lib/upload/mime-types";
 
 export const maxDuration = 300;
 

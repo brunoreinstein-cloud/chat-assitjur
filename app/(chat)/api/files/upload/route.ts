@@ -7,36 +7,35 @@ import {
   optimizePdfBuffer,
 } from "@/lib/pdf/pdf-optimizer";
 import {
-  ACCEPTED_PDF_TYPE,
-  OCTET_STREAM,
-  MAX_FILE_SIZE,
-  contentTypeFromFilename,
-  isAcceptedFileType,
-  needsExtraction,
-} from "@/lib/upload/mime-types";
-import {
   classifyDocumentTypeFromFilename,
-  mapMetadataDocumentType,
   type DocumentType,
+  mapMetadataDocumentType,
 } from "@/lib/upload/classify";
 import { runExtractionAndClassification } from "@/lib/upload/extract";
 import {
-  uploadToStorage,
+  ACCEPTED_PDF_TYPE,
+  contentTypeFromFilename,
+  isAcceptedFileType,
+  MAX_FILE_SIZE,
+  needsExtraction,
+  OCTET_STREAM,
+} from "@/lib/upload/mime-types";
+import {
   respondUploadSuccess,
   type UploadExtractedMetadata,
-  type PersistExtractionOptions,
-  persistAndRespond,
+  uploadToStorage,
 } from "@/lib/upload/storage";
 
 // Re-export symbols consumed by other modules (process/route.ts, rag/ingestion.ts, etc.)
-export type { DocumentType };
-export {
-  classifyDocumentTypeFromFilename,
-  contentTypeFromFilename,
-  persistAndRespond,
-  runExtractionAndClassification,
-};
-export type { PersistExtractionOptions, UploadExtractedMetadata };
+export type { DocumentType } from "@/lib/upload/classify";
+export { classifyDocumentTypeFromFilename } from "@/lib/upload/classify";
+export { runExtractionAndClassification } from "@/lib/upload/extract";
+export { contentTypeFromFilename } from "@/lib/upload/mime-types";
+export type {
+  PersistExtractionOptions,
+  UploadExtractedMetadata,
+} from "@/lib/upload/storage";
+export { persistAndRespond } from "@/lib/upload/storage";
 
 /** PDFs enormes (muitas páginas ou OCR) podem demorar; permite até 5 min na Vercel (Pro). */
 export const maxDuration = 300;

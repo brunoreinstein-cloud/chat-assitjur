@@ -4,7 +4,7 @@
 
 import { getAudienciasExtractionPrompt } from "./rag-audiencias";
 import { getExecucaoExtractionPrompt } from "./rag-execucao";
-import { type PhaseType } from "./split-processo-sections";
+import type { PhaseType } from "./split-processo-sections";
 
 // ---------------------------------------------------------------------------
 // Regras base de extração (compartilhadas com RAGs especializados)

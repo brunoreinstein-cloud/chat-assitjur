@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, asc, desc, eq, gt } from "drizzle-orm";
 import type { ArtifactKind } from "@/components/artifact";
-import { type Suggestion, document, suggestion } from "@/lib/db/schema";
+import { document, type Suggestion, suggestion } from "@/lib/db/schema";
 import { getDb, toDatabaseError } from "../connection";
 
 export async function saveDocument({

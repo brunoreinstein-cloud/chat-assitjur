@@ -1,4 +1,5 @@
 import { after } from "next/server";
+import { createResumableStreamContext } from "resumable-stream";
 import { isChatDebugEnabled, logChatDebug } from "@/lib/ai/chat-debug";
 import {
   MAX_CHARS_PER_DOCUMENT,
@@ -12,7 +13,6 @@ import {
 import { stripImageParts } from "@/lib/ai/multimodal";
 import { getPromptCachingCacheControl } from "@/lib/ai/prompt-caching-config";
 import type { ChatMessage } from "@/lib/types";
-import { createResumableStreamContext } from "resumable-stream";
 import {
   MAX_DOCUMENT_PART_TEXT_DB_LENGTH,
   MAX_DOCUMENT_PART_TEXT_LENGTH,

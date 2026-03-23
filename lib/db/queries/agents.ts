@@ -1,8 +1,8 @@
 import "server-only";
 
 import { and, asc, eq } from "drizzle-orm";
-import { ChatbotError } from "@/lib/errors";
 import { builtInAgentOverride, customAgent } from "@/lib/db/schema";
+import { ChatbotError } from "@/lib/errors";
 import { getDb, toDatabaseError } from "../connection";
 
 // --- CustomAgent (agentes personalizados do utilizador) ---

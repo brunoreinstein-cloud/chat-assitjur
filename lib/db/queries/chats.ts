@@ -1,10 +1,21 @@
 import "server-only";
 
-import { and, asc, count, desc, eq, gt, gte, inArray, lt, type SQL } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  lt,
+  type SQL,
+} from "drizzle-orm";
 import type { VisibilityType } from "@/components/visibility-selector";
+import { type Chat, chat, message, stream, vote } from "@/lib/db/schema";
 import { ChatbotError } from "@/lib/errors";
 import { isUUID } from "@/lib/utils";
-import { type Chat, chat, message, stream, vote } from "@/lib/db/schema";
 import { getDb, toDatabaseError } from "../connection";
 
 const DEFAULT_CHAT_AGENT_ID = "assistente-geral";

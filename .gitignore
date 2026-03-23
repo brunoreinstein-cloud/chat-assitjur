@@ -46,3 +46,9 @@ yarn-error.log*
 /playwright-report/
 /blob-report/
 /playwright/*
+
+# Claude Code — worktrees são efémeros (não versionar)
+**/.claude/worktrees/
+
+# Integração experimental em docs — não versionar .claude (launch, worktrees, etc.)
+docs/pdf-compressor/**/.claude/

@@ -124,7 +124,9 @@ export type PromptInputActionAddAttachmentsProps = ComponentProps<
 
 export type PromptInputBodyProps = HTMLAttributes<HTMLDivElement>;
 
-export type PromptInputTextareaProps = ComponentProps<typeof InputGroupTextarea>;
+export type PromptInputTextareaProps = ComponentProps<
+  typeof InputGroupTextarea
+>;
 
 export type PromptInputHeaderProps = Omit<
   ComponentProps<typeof InputGroupAddon>,
@@ -163,9 +165,13 @@ export type PromptInputSpeechButtonProps = PromptInputButtonProps & {
 
 export type PromptInputSelectProps = ComponentProps<typeof Select>;
 
-export type PromptInputSelectTriggerProps = ComponentProps<typeof SelectTrigger>;
+export type PromptInputSelectTriggerProps = ComponentProps<
+  typeof SelectTrigger
+>;
 
-export type PromptInputSelectContentProps = ComponentProps<typeof SelectContent>;
+export type PromptInputSelectContentProps = ComponentProps<
+  typeof SelectContent
+>;
 
 export type PromptInputSelectItemProps = ComponentProps<typeof SelectItem>;
 

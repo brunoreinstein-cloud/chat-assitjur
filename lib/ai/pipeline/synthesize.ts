@@ -5,9 +5,9 @@
 import { generateText } from "ai";
 
 import { getLanguageModel } from "@/lib/ai/providers";
-import { getSynthesisPrompt } from "./synthesis-prompts";
 import { makeAbortSignal } from "./concurrency";
-import { type BlockResult } from "./types";
+import { getSynthesisPrompt } from "./synthesis-prompts";
+import type { BlockResult } from "./types";
 
 // ---------------------------------------------------------------------------
 // Síntese dos resultados

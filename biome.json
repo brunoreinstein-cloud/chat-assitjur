@@ -33,7 +33,8 @@
     "rules": {
       "performance": {
         "useTopLevelRegex": "off",
-        "noNamespaceImport": "off"
+        "noNamespaceImport": "off",
+        "noBarrelFile": "off"
       },
       "style": { "noNestedTernary": "off" },
       "complexity": { "noExcessiveCognitiveComplexity": "off" },

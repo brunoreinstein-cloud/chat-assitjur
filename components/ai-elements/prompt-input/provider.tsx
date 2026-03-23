@@ -2,7 +2,14 @@
 
 import type { FileUIPart } from "ai";
 import { nanoid } from "nanoid";
-import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   PromptInputControllerContext,
   ProviderAttachmentsContext,
@@ -132,4 +139,3 @@ export function PromptInputProvider({
     </PromptInputControllerContext.Provider>
   );
 }
-
