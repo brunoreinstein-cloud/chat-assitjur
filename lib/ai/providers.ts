@@ -1,5 +1,5 @@
-import { gateway } from "@ai-sdk/gateway";
 import { devToolsMiddleware } from "@ai-sdk/devtools";
+import { gateway } from "@ai-sdk/gateway";
 import {
   customProvider,
   extractReasoningMiddleware,

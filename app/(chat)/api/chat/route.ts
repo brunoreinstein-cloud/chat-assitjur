@@ -23,6 +23,7 @@ import {
   getAgentConfigForCustomAgent,
   getAgentConfigWithOverrides,
 } from "@/lib/ai/agents-registry";
+import { type ChatCallOptions, createChatAgent } from "@/lib/ai/chat-agent";
 import {
   createChatDebugTracker,
   isChatDebugEnabled,
@@ -36,11 +37,6 @@ import {
   MAX_TOTAL_DOC_CHARS,
 } from "@/lib/ai/context-window";
 import { MIN_CREDITS_TO_START_CHAT } from "@/lib/ai/credits";
-import {
-  buildActiveToolNames,
-  createChatAgent,
-  type ChatCallOptions,
-} from "@/lib/ai/chat-agent";
 import {
   buildSmartDocumentContext,
   extractDocumentTextsFromAllMessages,
@@ -1408,7 +1404,6 @@ async function prepareModelMessagesForStream(
   logTiming("preStream (total antes do stream)", preStreamEnd - requestStart);
   return { messagesForModel, preStreamEnd };
 }
-
 
 /** Contexto para o handler execute do stream. */
 interface StreamExecuteContext {

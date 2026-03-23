@@ -10,21 +10,18 @@
  * - `agent.onFinish` recebe `totalUsage` diretamente (sem PromiseLike)
  * - Base para futura migração para singleton (quando tools removerem dependência de dataStream)
  */
-import { ToolLoopAgent, stepCountIs, type ToolSet } from "ai";
+import { stepCountIs, ToolLoopAgent, type ToolSet } from "ai";
 import { z } from "zod";
-import { pingDatabase, deductCreditsAndRecordUsage } from "@/lib/db/queries";
-import { buildAiSdkTelemetry } from "@/lib/telemetry";
+import type { AgentConfig } from "@/lib/ai/agents-registry";
+import { isChatDebugEnabled, logChatDebug } from "@/lib/ai/chat-debug";
+import { tokensToCredits } from "@/lib/ai/credits";
+import { modelReasoningType } from "@/lib/ai/models";
+import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
+import { getLanguageModel } from "@/lib/ai/providers";
 import { creditsCache } from "@/lib/cache/credits-cache";
 import { isProductionEnvironment } from "@/lib/constants";
-import { tokensToCredits } from "@/lib/ai/credits";
-import type { AgentConfig } from "@/lib/ai/agents-registry";
-import { getLanguageModel } from "@/lib/ai/providers";
-import { modelReasoningType } from "@/lib/ai/models";
-import { systemPrompt, type RequestHints } from "@/lib/ai/prompts";
-import {
-  isChatDebugEnabled,
-  logChatDebug,
-} from "@/lib/ai/chat-debug";
+import { deductCreditsAndRecordUsage, pingDatabase } from "@/lib/db/queries";
+import { buildAiSdkTelemetry } from "@/lib/telemetry";
 
 const isDev = process.env.NODE_ENV === "development";
 
@@ -92,7 +89,9 @@ export function buildActiveToolNames(opts: {
   hasDocuments: boolean;
   agentConfig: AgentConfig;
 }): ActiveToolName[] {
-  if (opts.isReasoningModel) return [];
+  if (opts.isReasoningModel) {
+    return [];
+  }
   return [
     ...BASE_TOOL_NAMES,
     ...(opts.hasDocuments ? (["buscarNoProcesso"] as const) : []),
@@ -214,9 +213,13 @@ export function createChatAgent<TOOLS extends ToolSet>(
     stopWhen: stepCountIs(agentConfig.usePipelineTool ? 7 : 5),
     callOptionsSchema: chatCallOptionsSchema,
 
-    prepareCall: async (callParams) => {
-      // options is always defined when callOptionsSchema is set and caller passes options
-      const options = callParams.options!;
+    prepareCall: (callParams) => {
+      const options = callParams.options;
+      if (options === undefined) {
+        throw new Error(
+          "createChatAgent prepareCall: options em falta com callOptionsSchema definido."
+        );
+      }
       const isAdaptiveThinking =
         modelReasoningType(options.effectiveModel) === "adaptive";
 
@@ -236,9 +239,9 @@ export function createChatAgent<TOOLS extends ToolSet>(
           hasDocuments: options.hasDocuments,
           agentConfig,
         }),
-        ...(!options.isReasoningModel && !isAdaptiveThinking
-          ? { temperature: 0.2 as const }
-          : {}),
+        ...(options.isReasoningModel || isAdaptiveThinking
+          ? {}
+          : { temperature: 0.2 as const }),
         ...(options.isReasoningModel
           ? {
               providerOptions: {
@@ -268,9 +271,7 @@ export function createChatAgent<TOOLS extends ToolSet>(
 
     onStepFinish: ({ stepNumber, usage, toolCalls, finishReason }) => {
       if (isDev) {
-        const toolNames = toolCalls.flatMap((tc) =>
-          tc ? [tc.toolName] : []
-        );
+        const toolNames = toolCalls.flatMap((tc) => (tc ? [tc.toolName] : []));
         const tools = toolNames.length > 0 ? toolNames.join(", ") : "none";
         console.info(
           `[stream-step] step=${stepNumber} finish=${finishReason} tools=[${tools}] tokens=in:${usage?.inputTokens ?? 0}/out:${usage?.outputTokens ?? 0}`
@@ -287,7 +288,9 @@ export function createChatAgent<TOOLS extends ToolSet>(
     },
 
     onFinish: async ({ totalUsage }) => {
-      if (creditsDisabled) return;
+      if (creditsDisabled) {
+        return;
+      }
       try {
         await deductCreditsWithRetry({
           userId,
@@ -297,8 +300,7 @@ export function createChatAgent<TOOLS extends ToolSet>(
           model: effectiveModel,
         });
       } catch (error) {
-        const msg =
-          error instanceof Error ? error.message : String(error);
+        const msg = error instanceof Error ? error.message : String(error);
         const isTimeout =
           typeof (error as { code?: string })?.code === "string" &&
           (error as { code: string }).code === "57014";

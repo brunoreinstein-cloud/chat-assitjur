@@ -226,56 +226,48 @@ describe("AssistJur.IA Master — consistência com agents-registry-metadata", (
   });
 });
 
-describe("AssistJur.IA Master — route.ts e pipeline", () => {
-  it("route.ts aplica stepCountIs=7 para usePipelineTool (Master)", () => {
-    const routePath = path.join(
+describe("AssistJur.IA Master — chat-agent e pipeline", () => {
+  it("chat-agent.ts aplica stepCountIs=7 para usePipelineTool (Master)", () => {
+    const chatAgentPath = path.join(
       __dirname,
       "..",
       "..",
-      "app",
-      "(chat)",
-      "api",
-      "chat",
-      "route.ts"
+      "lib",
+      "ai",
+      "chat-agent.ts"
     );
-    const routeCode = readFileSync(routePath, "utf-8");
-    expect(routeCode).toContain(
-      "stepCountIs(ctx.agentConfig.usePipelineTool ? 7 : 5)"
+    const agentCode = readFileSync(chatAgentPath, "utf-8");
+    expect(agentCode).toContain(
+      "stepCountIs(agentConfig.usePipelineTool ? 7 : 5)"
     );
   });
 
-  it("route.ts usa maxOutputTokens do agentConfig com fallback para 8192", () => {
-    const routePath = path.join(
+  it("chat-agent.ts usa maxOutputTokens do agentConfig com fallback para 8192", () => {
+    const chatAgentPath = path.join(
       __dirname,
       "..",
       "..",
-      "app",
-      "(chat)",
-      "api",
-      "chat",
-      "route.ts"
+      "lib",
+      "ai",
+      "chat-agent.ts"
     );
-    const routeCode = readFileSync(routePath, "utf-8");
-    expect(routeCode).toContain(
-      "maxOutputTokens: ctx.agentConfig.maxOutputTokens ?? 8192"
+    const agentCode = readFileSync(chatAgentPath, "utf-8");
+    expect(agentCode).toContain(
+      "maxOutputTokens: agentConfig.maxOutputTokens ?? 8192"
     );
   });
 
-  it("route.ts bloqueia tools para modelos reasoning (isReasoningModel → [])", () => {
-    const routePath = path.join(
+  it("chat-agent.ts bloqueia tools para modelos reasoning (isReasoningModel → [])", () => {
+    const chatAgentPath = path.join(
       __dirname,
       "..",
       "..",
-      "app",
-      "(chat)",
-      "api",
-      "chat",
-      "route.ts"
+      "lib",
+      "ai",
+      "chat-agent.ts"
     );
-    const routeCode = readFileSync(routePath, "utf-8");
-    expect(routeCode).toMatch(
-      /isReasoningModel[\s\S]*?\[\]|activeToolNames[\s\S]*?isReasoningModel.*\[\]/
-    );
+    const agentCode = readFileSync(chatAgentPath, "utf-8");
+    expect(agentCode).toMatch(/isReasoningModel[\s\S]*?return \[\]/m);
   });
 
   it("config Master: maxOutputTokens=16000 (suporte a M13: 250 campos, 30-50 pgs)", () => {
