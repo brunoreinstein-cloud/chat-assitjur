@@ -25,24 +25,20 @@ function loadFixture(caso: string, file: string): string {
 }
 
 describe("Cenário A — Gate-1 feliz (parâmetros da API)", () => {
-  it("execute.ts (chat pipeline) usa temperature=0.2 e maxOutputTokens configurável por agente", () => {
-    const executePath = path.join(
+  it("chat-agent aplica temperature=0.2 e maxOutputTokens configurável por agente", () => {
+    const chatAgentPath = path.join(
       __dirname,
       "..",
       "..",
-      "app",
-      "(chat)",
-      "api",
-      "chat",
       "lib",
-      "chat-pipeline",
-      "execute.ts"
+      "ai",
+      "chat-agent.ts"
     );
-    const executeCode = readFileSync(executePath, "utf-8");
-    expect(executeCode).toContain("temperature: 0.2");
-    // maxOutputTokens é agora configurable por agente (default 8192, Master usa 16000)
-    expect(executeCode).toContain(
-      "maxOutputTokens: ctx.agentConfig.maxOutputTokens ?? 8192"
+    const agentCode = readFileSync(chatAgentPath, "utf-8");
+    expect(agentCode).toContain("temperature: 0.2");
+    // maxOutputTokens é configurável por agente (default 8192, Master usa 16000)
+    expect(agentCode).toContain(
+      "maxOutputTokens: agentConfig.maxOutputTokens ?? 8192"
     );
   });
 

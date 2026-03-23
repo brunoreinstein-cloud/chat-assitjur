@@ -67,7 +67,10 @@ export interface ImprovePromptResult {
  * Melhora um prompt com base em boas práticas de engenharia de prompts.
  * Usado pela API /api/prompt/improve e pela tool improvePrompt do chat.
  */
-export async function improvePrompt(raw: string): Promise<ImprovePromptResult> {
+export async function improvePrompt(
+  raw: string,
+  abortSignal?: AbortSignal
+): Promise<ImprovePromptResult> {
   const trimmed = raw.trim();
   if (trimmed.length === 0) {
     throw new Error("O prompt não pode estar vazio.");
@@ -89,6 +92,7 @@ export async function improvePrompt(raw: string): Promise<ImprovePromptResult> {
       description:
         "Resultado da melhoria: diagnóstico, prompt melhorado e notas de alteração",
     }),
+    abortSignal,
   });
 
   const parsed = IMPROVE_RESULT_SCHEMA.safeParse(output);

@@ -26,7 +26,7 @@ export const requestSuggestions = ({
           "The UUID of an existing document artifact that was previously created with createDocument"
         ),
     }),
-    execute: async ({ documentId }) => {
+    execute: async ({ documentId }, { abortSignal }) => {
       const document = await getDocumentById({ id: documentId });
 
       if (!document?.content) {
@@ -43,6 +43,7 @@ export const requestSuggestions = ({
       const { partialOutputStream } = streamText({
         model: getArtifactModel(),
         maxOutputTokens: 4096,
+        abortSignal,
         system:
           "You are a help writing assistant. Given a piece of writing, please offer suggestions to improve the piece of writing and describe the change. It is very important for the edits to contain full sentences instead of just words. Max 5 suggestions.",
         prompt: document.content,

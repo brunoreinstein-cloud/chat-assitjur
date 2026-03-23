@@ -12,9 +12,9 @@ export const improvePromptTool = tool({
         "O texto do prompt ou instrução que o utilizador quer melhorar (até 4000 caracteres)."
       ),
   }),
-  execute: async ({ prompt }) => {
+  execute: async ({ prompt }, { abortSignal }) => {
     try {
-      const result = await improvePrompt(prompt);
+      const result = await improvePrompt(prompt, abortSignal);
       return {
         improvedPrompt: result.improvedPrompt,
         diagnosis: result.diagnosis,
