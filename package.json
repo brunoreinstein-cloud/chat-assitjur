@@ -157,6 +157,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@ai-sdk/devtools": "^0.0.15",
     "@biomejs/biome": "2.4.5",
     "@next/bundle-analyzer": "^16.1.6",
     "@playwright/test": "^1.58.2",

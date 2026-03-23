@@ -1,10 +1,13 @@
 import { gateway } from "@ai-sdk/gateway";
+import { devToolsMiddleware } from "@ai-sdk/devtools";
 import {
   customProvider,
   extractReasoningMiddleware,
   wrapLanguageModel,
 } from "ai";
 import { isTestEnvironment } from "../constants";
+
+const isDevEnvironment = process.env.NODE_ENV === "development";
 
 const THINKING_SUFFIX_REGEX = /-thinking$/;
 
@@ -102,12 +105,25 @@ export function getLanguageModel(modelId: string) {
   if (isReasoningModel) {
     const gatewayModelId = modelId.replace(THINKING_SUFFIX_REGEX, "");
 
-    return wrapLanguageModel({
+    const reasoningModel = wrapLanguageModel({
       model: gateway.languageModel(gatewayModelId),
       middleware: extractReasoningMiddleware({ tagName: "thinking" }),
     });
+    if (isDevEnvironment) {
+      return wrapLanguageModel({
+        model: reasoningModel,
+        middleware: devToolsMiddleware(),
+      });
+    }
+    return reasoningModel;
   }
 
+  if (isDevEnvironment) {
+    return wrapLanguageModel({
+      model: gateway.languageModel(modelId),
+      middleware: devToolsMiddleware(),
+    });
+  }
   return gateway.languageModel(modelId);
 }
 

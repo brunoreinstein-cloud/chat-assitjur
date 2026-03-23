@@ -3,14 +3,14 @@
   "configurations": [
     {
       "name": "next-dev",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["run", "dev"],
-      "port": 3300
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "pnpm", "exec", "next", "dev", "--turbo", "-p", "3301"],
+      "port": 3301
     },
     {
       "name": "drizzle-studio",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["run", "db:studio"],
+      "runtimeExecutable": "cmd",
+      "runtimeArgs": ["/c", "pnpm", "run", "db:studio"],
       "port": 4983
     }
   ]

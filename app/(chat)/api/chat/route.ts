@@ -5,8 +5,6 @@ import {
   createUIMessageStreamResponse,
   generateId,
   safeValidateUIMessages,
-  stepCountIs,
-  streamText,
 } from "ai";
 import { after } from "next/server";
 import type { Session } from "next-auth";
@@ -37,7 +35,12 @@ import {
   MAX_CHARS_PER_DOCUMENT,
   MAX_TOTAL_DOC_CHARS,
 } from "@/lib/ai/context-window";
-import { MIN_CREDITS_TO_START_CHAT, tokensToCredits } from "@/lib/ai/credits";
+import { MIN_CREDITS_TO_START_CHAT } from "@/lib/ai/credits";
+import {
+  buildActiveToolNames,
+  createChatAgent,
+  type ChatCallOptions,
+} from "@/lib/ai/chat-agent";
 import {
   buildSmartDocumentContext,
   extractDocumentTextsFromAllMessages,
@@ -56,7 +59,6 @@ import {
 import { stripImageParts } from "@/lib/ai/multimodal";
 import { getPromptCachingCacheControl } from "@/lib/ai/prompt-caching-config";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
-import { getLanguageModel } from "@/lib/ai/providers";
 import {
   REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID,
   REDATOR_BANCO_SYSTEM_USER_ID,
@@ -80,12 +82,10 @@ import { updateDocument } from "@/lib/ai/tools/update-document";
 import { validationToolsForValidate } from "@/lib/ai/tools/validation-tools";
 import { getCachedBuiltInAgentOverrides } from "@/lib/cache/agent-overrides-cache";
 import { creditsCache } from "@/lib/cache/credits-cache";
-import { isProductionEnvironment } from "@/lib/constants";
 import { FASE_LABEL, RISCO_LABEL } from "@/lib/constants/processo";
 import {
   addCreditsToUser,
   createStreamId,
-  deductCreditsAndRecordUsage,
   deleteChatById,
   ensureStatementTimeout,
   ensureUserExistsInDb,
@@ -97,7 +97,6 @@ import {
   getOrCreateCreditBalance,
   getProcessoById,
   getUserFilesByIds,
-  pingDatabase,
   saveChat,
   saveMessages,
   updateChatActiveStreamId,
@@ -113,7 +112,6 @@ import {
   isStatementTimeoutError,
 } from "@/lib/errors";
 import { retrieveKnowledgeContext } from "@/lib/rag";
-import { buildAiSdkTelemetry } from "@/lib/telemetry";
 import type { ChatMessage } from "@/lib/types";
 import { convertToUIMessages, generateUUID } from "@/lib/utils";
 import { generateTitleFromUserMessage } from "../../actions";
@@ -1411,7 +1409,6 @@ async function prepareModelMessagesForStream(
   return { messagesForModel, preStreamEnd };
 }
 
-type StreamTextResult = Awaited<ReturnType<typeof streamText>>;
 
 /** Contexto para o handler execute do stream. */
 interface StreamExecuteContext {
@@ -1437,11 +1434,8 @@ interface StreamExecuteContext {
   mcpTools: Record<string, unknown>;
 }
 
-/** Cria o callback execute para createUIMessageStream; escreve streamTextResult em ref. */
-function createStreamExecuteHandler(
-  ctx: StreamExecuteContext,
-  streamTextResultRef: { current: StreamTextResult | null }
-) {
+/** Cria o callback execute para createUIMessageStream. */
+function createStreamExecuteHandler(ctx: StreamExecuteContext) {
   return async ({
     writer: dataStream,
   }: {
@@ -1469,45 +1463,7 @@ function createStreamExecuteHandler(
     const effectiveAgentInstructions =
       ctx.agentInstructions?.trim() || ctx.agentConfig.instructions;
 
-    const baseToolNames = [
-      "getWeather",
-      "createDocument",
-      "updateDocument",
-      "requestSuggestions",
-      "improvePrompt",
-      "saveMemory",
-      "recallMemories",
-      "forgetMemory",
-      "requestApproval",
-    ] as const;
-    type ActiveToolName =
-      | (typeof baseToolNames)[number]
-      | "buscarNoProcesso"
-      | "createRevisorDefesaDocuments"
-      | "createRedatorContestacaoDocument"
-      | "analyzeProcessoPipeline"
-      | "createMasterDocuments";
-    const activeToolNames: ActiveToolName[] = ctx.isReasoningModel
-      ? []
-      : [
-          ...baseToolNames,
-          // buscarNoProcesso: disponível sempre que há documentos com texto anexados
-          ...(ctx.documentTexts.size > 0
-            ? (["buscarNoProcesso"] as const)
-            : []),
-          ...(ctx.agentConfig.useRevisorDefesaTools
-            ? (["createRevisorDefesaDocuments"] as const)
-            : []),
-          ...(ctx.agentConfig.useRedatorContestacaoTool
-            ? (["createRedatorContestacaoDocument"] as const)
-            : []),
-          ...(ctx.agentConfig.usePipelineTool
-            ? (["analyzeProcessoPipeline"] as const)
-            : []),
-          ...(ctx.agentConfig.useMasterDocumentsTool
-            ? (["createMasterDocuments"] as const)
-            : []),
-        ];
+    // Nota: activeTools é calculado em prepareCall do agente (via buildActiveToolNames).
 
     const memoryTools = createMemoryTools({ userId: ctx.session.user.id });
     const tools = {
@@ -1583,56 +1539,41 @@ function createStreamExecuteHandler(
       Object.assign(tools, ctx.mcpTools);
     }
 
-    const result = streamText({
-      model: getLanguageModel(ctx.effectiveModel),
-      // temperature não é suportado quando thinking está activo (adaptive ou extended).
-      // Omitir evita o warning da AI SDK e o parâmetro a ser silenciosamente ignorado.
-      ...(ctx.isReasoningModel || ctx.isAdaptiveThinking
-        ? {}
-        : { temperature: 0.2 }),
-      maxOutputTokens: ctx.agentConfig.maxOutputTokens ?? 8192,
-      system: systemPrompt({
-        selectedChatModel: ctx.effectiveModel,
-        requestHints: ctx.requestHints,
-        agentInstructions: effectiveAgentInstructions,
-        knowledgeContext: ctx.knowledgeContext,
-        processoContext: ctx.processoContext,
-        hasDocuments: ctx.documentTexts.size > 0,
-      }),
+    // Cria o agente com prepareCall (system prompt + model settings) e onFinish (créditos).
+    // Instância por-request: tools dependem de session/dataStream disponíveis só aqui.
+    const agent = createChatAgent({
+      tools,
+      agentConfig: ctx.agentConfig,
+      userId: ctx.session.user.id,
+      chatId: ctx.id,
+      effectiveModel: ctx.effectiveModel,
+      creditsDisabled,
+    });
+
+    // Parâmetros de chamada tipados pelo callOptionsSchema do agente.
+    const callOptions: ChatCallOptions = {
+      userId: ctx.session.user.id,
+      chatId: ctx.id,
+      effectiveModel: ctx.effectiveModel,
+      agentInstructions: effectiveAgentInstructions,
+      isReasoningModel: ctx.isReasoningModel,
+      isAdaptiveThinking: ctx.isAdaptiveThinking,
+      knowledgeContext: ctx.knowledgeContext,
+      processoContext: ctx.processoContext,
+      requestHints: ctx.requestHints,
+      hasDocuments: ctx.documentTexts.size > 0,
+    };
+
+    // agent.stream() retorna Promise<StreamTextResult> — resolve quando o stream está
+    // pronto para consumo (não aguarda a conclusão total do stream).
+    const result = await agent.stream({
       messages: ctx.messagesForModel as Awaited<
         ReturnType<typeof convertToModelMessages>
       >,
-      // Permite múltiplos steps: step 1 = model chama tool; step 2 = model gera texto após tool result (entrega).
-      // Sem isto (default stepCountIs(1)) o stream encerra após a tool e o utilizador não vê mensagem.
-      // Master com pipeline pode precisar: pipeline → createDocument → resposta (7 steps).
-      stopWhen: stepCountIs(ctx.agentConfig.usePipelineTool ? 7 : 5),
-      experimental_activeTools: activeToolNames,
-      providerOptions: ctx.isReasoningModel
-        ? {
-            anthropic: {
-              thinking: {
-                type: "enabled",
-                budgetTokens: 4000,
-              },
-            },
-          }
-        : ctx.isAdaptiveThinking
-          ? { anthropic: { thinking: { type: "adaptive" } } }
-          : undefined,
-      tools,
-      experimental_telemetry: buildAiSdkTelemetry({
-        isEnabled: isProductionEnvironment,
-        functionId: "stream-text",
-        agentId: ctx.agentId,
-        model: ctx.effectiveModel,
-        userId: ctx.session.user.id,
-        chatId: ctx.id,
-      }),
-      // Aborta o stream ao fim de 270s para fechar graciosamente antes do
-      // corte do Vercel (300s). Evita o "Task timed out after 300 seconds".
+      // Aborta graciosamente antes do corte do Vercel (300s).
       abortSignal: AbortSignal.timeout(270_000),
+      options: callOptions,
     });
-    streamTextResultRef.current = result as unknown as StreamTextResult;
 
     dataStream.merge(result.toUIMessageStream({ sendReasoning: true }));
 
@@ -1654,17 +1595,13 @@ interface StreamOnFinishContext {
   uiMessages: ChatMessage[];
 }
 
-/** Cria o callback onFinish para createUIMessageStream. */
-function createStreamOnFinishHandler(
-  ctx: StreamOnFinishContext,
-  streamTextResultRef: { current: StreamTextResult | null }
-) {
+/** Cria o callback onFinish para createUIMessageStream (persistência de mensagens). */
+function createStreamOnFinishHandler(ctx: StreamOnFinishContext) {
   return async ({
     messages: finishedMessages,
   }: {
     messages: Array<{ id: string; role: string; parts: unknown[] }>;
   }) => {
-    const streamTextResult = streamTextResultRef.current;
     const onFinishStart = Date.now();
     logTiming(
       "onFinish (stream terminou) total request",
@@ -1733,81 +1670,8 @@ function createStreamOnFinishHandler(
         saveMessagesPromise = Promise.resolve();
       }
 
-      const creditsPromise =
-        creditsDisabled || !streamTextResult
-          ? Promise.resolve()
-          : (async () => {
-              try {
-                const usage = await streamTextResult.totalUsage;
-                const promptTokens =
-                  "promptTokens" in usage
-                    ? (usage as { promptTokens: number }).promptTokens
-                    : ((usage as { inputTokens?: number }).inputTokens ?? 0);
-                const completionTokens =
-                  "completionTokens" in usage
-                    ? (usage as { completionTokens: number }).completionTokens
-                    : ((usage as { outputTokens?: number }).outputTokens ?? 0);
-                const creditsConsumed = tokensToCredits(
-                  promptTokens,
-                  completionTokens
-                );
-                const deductArgs = {
-                  userId: ctx.session.user.id,
-                  chatId: ctx.id,
-                  promptTokens,
-                  completionTokens,
-                  model: ctx.effectiveModel,
-                  creditsConsumed,
-                };
-                // Após streams longos (>2min) o pool PgBouncer pode estar
-                // esgotado. Aguarda o warm-up (await) para que a ligação esteja
-                // activa antes do primeiro retry — sem await o SELECT 1 ainda não
-                // tinha terminado quando a transacção era tentada.
-                const CREDITS_MAX_RETRIES = 5;
-                const CREDITS_RETRY_BASE_MS = 1000;
-                await pingDatabase().catch(() => {
-                  /* warm-up silencioso; ignora erro de ping */
-                });
-                let lastCreditsError: unknown;
-                let saved = false;
-                for (
-                  let attempt = 0;
-                  attempt < CREDITS_MAX_RETRIES;
-                  attempt++
-                ) {
-                  try {
-                    await deductCreditsAndRecordUsage(deductArgs);
-                    saved = true;
-                    break;
-                  } catch (err) {
-                    lastCreditsError = err;
-                    if (attempt < CREDITS_MAX_RETRIES - 1) {
-                      const delay = CREDITS_RETRY_BASE_MS * 2 ** attempt; // 1s, 2s, 4s, 8s
-                      if (isDev) {
-                        console.warn(
-                          `[chat] créditos: tentativa ${attempt + 1} falhou, retry em ${delay}ms:`,
-                          err instanceof Error ? err.message : err
-                        );
-                      }
-                      await new Promise((resolve) =>
-                        setTimeout(resolve, delay)
-                      );
-                    }
-                  }
-                }
-                if (!saved) {
-                  throw lastCreditsError;
-                }
-                creditsCache.delete(ctx.session.user.id);
-              } catch (error_) {
-                logOnFinishDbError(
-                  "Falha ao registar uso/créditos em onFinish",
-                  error_
-                );
-              }
-            })();
-
-      await Promise.all([saveMessagesPromise, creditsPromise]);
+      // Créditos são deduzidos em agent.onFinish (recebe totalUsage directamente).
+      await saveMessagesPromise;
 
       after(() => {
         updateChatActiveStreamId({
@@ -1915,12 +1779,6 @@ function buildStreamAndResponse(
     effectiveModel.includes("reasoning") || effectiveModel.includes("thinking");
   const isAdaptiveThinking = modelReasoningType(effectiveModel) === "adaptive";
 
-  // Ref partilhada entre execute e onFinish: o SDK invoca execute antes de onFinish,
-  // pelo que onFinish pode ler streamTextResultRef.current com segurança.
-  const streamTextResultRef: { current: StreamTextResult | null } = {
-    current: null,
-  };
-
   const executeContext: StreamExecuteContext = {
     session,
     agentInstructions,
@@ -1953,9 +1811,9 @@ function buildStreamAndResponse(
 
   const stream = createUIMessageStream({
     originalMessages: isToolApprovalFlow ? uiMessages : undefined,
-    execute: createStreamExecuteHandler(executeContext, streamTextResultRef),
+    execute: createStreamExecuteHandler(executeContext),
     generateId: generateUUID,
-    onFinish: createStreamOnFinishHandler(onFinishContext, streamTextResultRef),
+    onFinish: createStreamOnFinishHandler(onFinishContext),
     onError: streamOnErrorHandler,
   });
 
