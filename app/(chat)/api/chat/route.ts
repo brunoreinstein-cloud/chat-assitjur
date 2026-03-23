@@ -1342,7 +1342,6 @@ async function prepareModelMessagesForStream(
             ...(documentType ? { documentType } : {}),
           } as unknown as ChatMessage["parts"][number],
         ],
-        createdAt: new Date(0),
       };
       uiMessagesWithCache = [syntheticMsg, ...uiMessages];
     }
