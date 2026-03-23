@@ -8,14 +8,17 @@ import {
 } from "ai";
 import { after } from "next/server";
 import type { Session } from "next-auth";
+import { createResumableStreamContext } from "resumable-stream";
+import { ZodError } from "zod";
 import { auth, type UserType } from "@/app/(auth)/auth";
 import {
   getDefaultModelForAgent,
   isModelAllowedForAgent,
 } from "@/lib/ai/agent-models";
+import type { AgentConfig } from "@/lib/ai/agents-registry";
 import {
+  AGENT_ID_REDATOR_CONTESTACAO,
   AGENT_IDS,
-  type AgentConfig,
   DEFAULT_AGENT_ID_WHEN_EMPTY,
   getAgentConfigForCustomAgent,
   getAgentConfigWithOverrides,
@@ -39,6 +42,10 @@ import {
   extractDocumentTextsFromAllMessages,
 } from "@/lib/ai/document-context";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
+import {
+  extractStructuredFields,
+  formatStructuredFieldsAsHeader,
+} from "@/lib/ai/extract-structured-fields";
 import { getAllMcpTools } from "@/lib/ai/mcp-config";
 import {
   DEFAULT_CHAT_MODEL,
@@ -76,8 +83,14 @@ import {
   addCreditsToUser,
   createStreamId,
   deleteChatById,
+  ensureStatementTimeout,
   ensureUserExistsInDb,
   getChatById,
+  getCustomAgentById,
+  getKnowledgeDocumentsByIds,
+  getMessageCountByUserId,
+  getMessagesByChatId,
+  getOrCreateCreditBalance,
   getProcessoById,
   getUserFilesByIds,
   saveChat,
@@ -96,35 +109,14 @@ import {
 } from "@/lib/errors";
 import { retrieveKnowledgeContext } from "@/lib/rag";
 import type { ChatMessage } from "@/lib/types";
-import { convertToUIMessages } from "@/lib/utils";
+import { convertToUIMessages, generateUUID } from "@/lib/utils";
+import { generateTitleFromUserMessage } from "../../actions";
 import {
-  buildChatStreamResponse,
-  type ChatStreamParams,
-} from "./lib/chat-pipeline/execute";
-import {
-  buildKnowledgeContextFromParts,
-  handleChatPostError,
-  runValidationRagUserFiles,
-  saveUserMessageToDb,
-} from "./lib/chat-pipeline/prepare";
-import {
-  isDev,
-  logTiming,
-  normalizeMessageParts,
-  truncateDocumentPartsInBody,
-} from "./lib/chat-pipeline/utils";
-import {
-  type ChatDbBatchResult,
-  checkRateLimitAndCredits,
-  ensureDbReady,
-  parsePostBody,
-  persistChatAndGetTitlePromise,
-  runChatDbBatch,
-  validateAvaliadorDocumentParts,
-  validateRevisorDocumentParts,
-  validateUserMessageContent,
-} from "./lib/chat-pipeline/validate";
-import type { PostRequestBody } from "./schema";
+  MAX_DOCUMENT_PART_TEXT_DB_LENGTH,
+  MAX_DOCUMENT_PART_TEXT_LENGTH,
+  type PostRequestBody,
+  postRequestBodySchema,
+} from "./schema";
 
 /** Limite de execução da rota (segundos).
  * Vercel Pro suporta até 800s para rotas com streaming.
@@ -1886,6 +1878,7 @@ function resolveAgentConfigFromBatch(
 
 /**
  * Resolve agentConfig + effectiveModel e valida Revisor; devolve Response (erro) ou dados.
+ * Refatoração futura: lançar ChatbotError e deixar o try/catch do POST converter com toResponse().
  */
 function getAgentConfigAndEffectiveModel(
   agentId: string,
@@ -1911,10 +1904,6 @@ function getAgentConfigAndEffectiveModel(
   const revisorError = validateRevisorDocumentParts(message, agentConfig);
   if (revisorError) {
     return revisorError;
-  }
-  const avaliadorError = validateAvaliadorDocumentParts(message, agentConfig);
-  if (avaliadorError) {
-    return avaliadorError;
   }
   return { agentConfig, effectiveModel };
 }
@@ -2164,7 +2153,12 @@ async function handleChatPostAuthenticated(
   uiMessages = validatedUiMessages;
 
   const { longitude, latitude, city, country } = geolocation(request);
-  const requestHints = { longitude, latitude, city, country };
+  const requestHints: RequestHints = {
+    longitude,
+    latitude,
+    city,
+    country,
+  };
 
   const knowledgeContext = buildKnowledgeContextFromParts(
     ragChunks,
@@ -2230,6 +2224,9 @@ async function handleChatPostAuthenticated(
     }>
   );
 
+  // Fluxo "document-first": se o processo tem parsedText em cache e o utilizador não
+  // fez upload de nenhum documento nesta sessão, injetar o texto cacheado como contexto.
+  // Evita re-upload do mesmo PDF a cada tarefa — economiza ~8 créditos por operação.
   let cachedProcessoDocument:
     | { name: string; text: string; documentType?: "pi" | "contestacao" }
     | undefined;
@@ -2250,12 +2247,15 @@ async function handleChatPostAuthenticated(
       text: proc.parsedText,
       documentType: docType,
     };
+    // Também disponibiliza para o tool buscarNoProcesso
     documentTexts.set(docName, proc.parsedText);
   }
 
+  // Carregar MCP tools em paralelo (Gmail, Drive, Notion, etc.)
+  // Falhas são silenciadas — tools MCP são opcionais.
   const mcpTools = await getAllMcpTools();
 
-  const streamParams: ChatStreamParams = {
+  return buildChatStreamResponse({
     requestStart,
     debugTracker,
     id,
@@ -2274,9 +2274,7 @@ async function handleChatPostAuthenticated(
     documentTexts,
     mcpTools,
     cachedProcessoDocument,
-  };
-
-  return buildChatStreamResponse(streamParams);
+  });
 }
 
 export async function POST(request: Request) {
