@@ -27,16 +27,28 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useAutoResume } from "@/hooks/use-auto-resume";
+import {
+  useAgentModelSync,
+  useAppendQueryFromSearchParams,
+  useCustomAgentKnowledgeSync,
+  useKnowledgeOpenFromSearchParams,
+  useSyncAgentToUrl,
+} from "@/hooks/use-chat-hooks";
 import { useChatVisibility } from "@/hooks/use-chat-visibility";
+import { AGENT_IDS } from "@/lib/ai/agents-registry-metadata";
 import {
-  getDefaultModelForAgent,
-  isModelAllowedForAgent,
-} from "@/lib/ai/agent-models";
+  buildChatRequestBody,
+  type ChatRequestRefs,
+} from "@/lib/chat/chat-request-builder";
+import { saveReplyToKnowledge } from "@/lib/chat/knowledge-actions";
 import {
-  AGENT_IDS,
-  type AgentId,
-  DEFAULT_AGENT_ID_WHEN_EMPTY,
-} from "@/lib/ai/agents-registry-metadata";
+  MAX_PART_TEXT_CLIENT,
+  truncateMessagePartsForRequest,
+} from "@/lib/chat/message-utils";
+import {
+  updateUrlForKnowledgeOpen,
+  updateUrlRemoveKnowledge,
+} from "@/lib/chat/url-utils";
 import type { Vote } from "@/lib/db/schema";
 import { ChatbotError } from "@/lib/errors";
 import type { Attachment, ChatMessage } from "@/lib/types";
@@ -63,54 +75,6 @@ import type { VisibilityType } from "./visibility-selector";
 
 const MAX_KNOWLEDGE_SELECT = 50;
 
-/** Alinhado ao schema do servidor (2M). Pipeline multi-chamadas processa docs grandes em blocos. */
-const MAX_PART_TEXT_CLIENT = 2_000_000;
-
-const TRUNCATE_SUFFIX_CLIENT =
-  "\n\n[Truncado: o documento excedeu o limite de caracteres.]";
-
-function truncateMessagePartsForRequest(messages: unknown[]): {
-  messages: unknown[];
-  lastMessage: unknown;
-  didTruncate: boolean;
-  truncatedTotal: number;
-} {
-  let didTruncate = false;
-  let truncatedTotal = 0;
-  const maxLen = MAX_PART_TEXT_CLIENT - TRUNCATE_SUFFIX_CLIENT.length;
-  const out: unknown[] = [];
-  for (const msg of messages) {
-    const m = msg as { parts?: Array<{ type?: string; text?: string }> };
-    if (!m || typeof m !== "object" || !Array.isArray(m.parts)) {
-      out.push(msg);
-      continue;
-    }
-    const newParts = m.parts.map((part) => {
-      if (
-        part?.type === "document" &&
-        typeof part.text === "string" &&
-        part.text.length > MAX_PART_TEXT_CLIENT
-      ) {
-        didTruncate = true;
-        truncatedTotal +=
-          part.text.length - (maxLen + TRUNCATE_SUFFIX_CLIENT.length);
-        return {
-          ...part,
-          text: part.text.slice(0, maxLen) + TRUNCATE_SUFFIX_CLIENT,
-        };
-      }
-      return part;
-    });
-    out.push({ ...m, parts: newParts });
-  }
-  return {
-    messages: out,
-    lastMessage: out.at(-1),
-    didTruncate,
-    truncatedTotal,
-  };
-}
-
 function getInitialAttachments(storageKey: string): Attachment[] {
   if (globalThis.window === undefined) {
     return [];
@@ -121,26 +85,6 @@ function getInitialAttachments(storageKey: string): Attachment[] {
   } catch {
     return [];
   }
-}
-
-async function saveReplyToKnowledge(
-  title: string,
-  content: string
-): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
-  const res = await fetch("/api/knowledge", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title, content }),
-  });
-  if (!res.ok) {
-    const data = (await res.json().catch(() => ({}))) as { message?: string };
-    return {
-      ok: false,
-      error: data?.message ?? "Erro ao guardar em conhecimento.",
-    };
-  }
-  const created = (await res.json()) as { id: string; title: string };
-  return { ok: true, id: created.id };
 }
 
 function getEffectiveAgentId(agentId: string): (typeof AGENT_IDS)[number] {
@@ -180,125 +124,6 @@ function isToolApprovalContinuation(
       const state = (part as { state?: string })?.state;
       return state === "approval-responded" || state === "output-denied";
     })
-  );
-}
-
-interface ChatRequestRefs {
-  currentModelIdRef: { current: string };
-  agentInstructionsRef: { current: string };
-  knowledgeDocumentIdsRef: { current: string[] };
-  archivoIdsForChatRef: { current: string[] };
-  agentIdRef: { current: string };
-}
-
-function buildChatRequestBody(
-  request: { id: string; messages: unknown[]; body: Record<string, unknown> },
-  isContinuation: boolean,
-  lastMessage: unknown,
-  refs: ChatRequestRefs,
-  initialChatModel: string,
-  visibilityType: string,
-  processoId?: string | null
-): Record<string, unknown> {
-  const body: Record<string, unknown> = {
-    id: request.id,
-    ...(isContinuation
-      ? { messages: request.messages }
-      : { message: lastMessage }),
-    selectedChatModel:
-      refs.currentModelIdRef.current?.trim() || initialChatModel,
-    selectedVisibilityType: visibilityType ?? "private",
-    agentId: refs.agentIdRef.current?.trim() || DEFAULT_AGENT_ID_WHEN_EMPTY,
-    ...request.body,
-  };
-  if (refs.agentInstructionsRef.current?.trim()) {
-    body.agentInstructions = refs.agentInstructionsRef.current.trim();
-  }
-  if (refs.knowledgeDocumentIdsRef.current.length > 0) {
-    body.knowledgeDocumentIds = refs.knowledgeDocumentIdsRef.current;
-  }
-  if (refs.archivoIdsForChatRef.current.length > 0) {
-    body.archivoIds = refs.archivoIdsForChatRef.current;
-  }
-  if (processoId) {
-    body.processoId = processoId;
-  }
-  return body;
-}
-
-function useSyncAgentToUrl(
-  agentId: string,
-  pathname: string,
-  router: ReturnType<typeof useRouter>
-) {
-  useEffect(() => {
-    if (pathname !== "/chat" || globalThis.window === undefined) {
-      return;
-    }
-    const expectedSearch = agentId
-      ? `?agent=${encodeURIComponent(agentId)}`
-      : "";
-    if (globalThis.window.location.search !== expectedSearch) {
-      router.replace(`/chat${expectedSearch}`);
-    }
-  }, [agentId, pathname, router]);
-}
-
-function useCustomAgentKnowledgeSync(
-  agentId: string,
-  setKnowledgeDocumentIds: React.Dispatch<React.SetStateAction<string[]>>
-) {
-  useEffect(() => {
-    if (!agentId || AGENT_IDS.includes(agentId as AgentId)) {
-      return;
-    }
-    fetch(`/api/agents/custom/${agentId}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((agent: { knowledgeDocumentIds?: string[] } | null) => {
-        const ids =
-          agent?.knowledgeDocumentIds?.slice(0, MAX_KNOWLEDGE_SELECT) ?? [];
-        setKnowledgeDocumentIds(ids);
-      })
-      .catch(() => {
-        // Ignore fetch errors (e.g. no agent config)
-      });
-  }, [agentId, setKnowledgeDocumentIds]);
-}
-
-function useAgentModelSync(
-  agentId: string,
-  currentModelId: string,
-  setCurrentModelId: React.Dispatch<React.SetStateAction<string>>
-) {
-  useEffect(() => {
-    const effectiveAgentId = agentId?.trim() || DEFAULT_AGENT_ID_WHEN_EMPTY;
-    if (!isModelAllowedForAgent(effectiveAgentId, currentModelId)) {
-      setCurrentModelId(getDefaultModelForAgent(effectiveAgentId));
-    }
-  }, [agentId, currentModelId, setCurrentModelId]);
-}
-
-function updateUrlRemoveKnowledge(base = "/chat") {
-  if (globalThis.window === undefined) {
-    return;
-  }
-  const params = new URLSearchParams(globalThis.window.location.search);
-  params.delete("knowledge");
-  params.delete("folder");
-  const q = params.toString();
-  globalThis.window.history.replaceState(null, "", q ? `${base}?${q}` : base);
-}
-
-function updateUrlForKnowledgeOpen(base = "/chat") {
-  if (globalThis.window === undefined) {
-    return;
-  }
-  const params = new URLSearchParams(globalThis.window.location.search);
-  params.set("knowledge", "open");
-  globalThis.window.history.replaceState(
-    null,
-    "",
-    `${base}?${params.toString()}`
   );
 }
 
@@ -362,39 +187,6 @@ type ChatProps = Readonly<{
   isReadonly: boolean;
   autoResume: boolean;
 }>;
-
-function useKnowledgeOpenFromSearchParams(
-  searchParams: ReturnType<typeof useSearchParams>,
-  setKnowledgeOpen: React.Dispatch<React.SetStateAction<boolean>>
-) {
-  useEffect(() => {
-    if (searchParams.get("knowledge") === "open") {
-      setKnowledgeOpen(true);
-    }
-  }, [searchParams, setKnowledgeOpen]);
-}
-
-function useAppendQueryFromSearchParams(
-  query: string | null,
-  sendMessage: (msg: {
-    role: "user";
-    parts: [{ type: "text"; text: string }];
-  }) => void,
-  chatId: string
-) {
-  const [hasAppendedQuery, setHasAppendedQuery] = useState(false);
-  useEffect(() => {
-    if (query === null || query === "" || hasAppendedQuery) {
-      return;
-    }
-    sendMessage({
-      role: "user" as const,
-      parts: [{ type: "text", text: query }],
-    });
-    setHasAppendedQuery(true);
-    globalThis.window.history.replaceState({}, "", `/chat/${chatId}`);
-  }, [query, sendMessage, hasAppendedQuery, chatId]);
-}
 
 export function Chat({
   id,

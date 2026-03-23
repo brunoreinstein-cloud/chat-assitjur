@@ -131,8 +131,8 @@ describe("AssistJur.IA Master — diagnóstico: maxOutputTokens", () => {
     expect(config.maxOutputTokens).toBeGreaterThanOrEqual(16_000);
   });
 
-  it("route.ts usa maxOutputTokens do agentConfig com fallback para 8192", () => {
-    const routePath = path.join(
+  it("execute.ts usa maxOutputTokens do agentConfig com fallback para 8192", () => {
+    const executePath = path.join(
       __dirname,
       "..",
       "..",
@@ -140,16 +140,18 @@ describe("AssistJur.IA Master — diagnóstico: maxOutputTokens", () => {
       "(chat)",
       "api",
       "chat",
-      "route.ts"
+      "lib",
+      "chat-pipeline",
+      "execute.ts"
     );
-    const routeCode = readFileSync(routePath, "utf-8");
-    expect(routeCode).toContain(
+    const executeCode = readFileSync(executePath, "utf-8");
+    expect(executeCode).toContain(
       "maxOutputTokens: ctx.agentConfig.maxOutputTokens ?? 8192"
     );
   });
 
   it("DIAGNÓSTICO: stopWhen do Master agent usa 7 steps (adequado para pipeline)", () => {
-    const routePath = path.join(
+    const executePath = path.join(
       __dirname,
       "..",
       "..",
@@ -157,17 +159,19 @@ describe("AssistJur.IA Master — diagnóstico: maxOutputTokens", () => {
       "(chat)",
       "api",
       "chat",
-      "route.ts"
+      "lib",
+      "chat-pipeline",
+      "execute.ts"
     );
-    const routeCode = readFileSync(routePath, "utf-8");
+    const executeCode = readFileSync(executePath, "utf-8");
     // Master agent tem usePipelineTool=true → usa 7 steps
-    expect(routeCode).toContain(
+    expect(executeCode).toContain(
       "stepCountIs(ctx.agentConfig.usePipelineTool ? 7 : 5)"
     );
   });
 
   it("DIAGNÓSTICO: isReasoningModel bloqueia tools — modelos de raciocínio não podem gerar docs", () => {
-    const routePath = path.join(
+    const executePath = path.join(
       __dirname,
       "..",
       "..",
@@ -175,11 +179,13 @@ describe("AssistJur.IA Master — diagnóstico: maxOutputTokens", () => {
       "(chat)",
       "api",
       "chat",
-      "route.ts"
+      "lib",
+      "chat-pipeline",
+      "execute.ts"
     );
-    const routeCode = readFileSync(routePath, "utf-8");
+    const executeCode = readFileSync(executePath, "utf-8");
     // Confirmar que tools são desactivadas para modelos de raciocínio
-    expect(routeCode).toMatch(
+    expect(executeCode).toMatch(
       /isReasoningModel[\s\S]*?\[\]|activeToolNames[\s\S]*?isReasoningModel.*\[\]/
     );
     // Se o utilizador usou um modelo -thinking ou -reasoning no Master,

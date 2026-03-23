@@ -11,6 +11,7 @@ import { getAgentConfig } from "@/lib/ai/agents-registry";
 import {
   AGENT_ID_ASSISTENTE_GERAL,
   AGENT_ID_ASSISTJUR_MASTER,
+  AGENT_ID_AVALIADOR_CONTESTACAO,
   AGENT_ID_REDATOR_CONTESTACAO,
   AGENT_ID_REVISOR_DEFESAS,
   AGENT_IDS,
@@ -160,15 +161,16 @@ describe("AssistJur.IA Master — ferramenta createMasterDocuments", () => {
 });
 
 describe("AssistJur.IA Master — consistência com agents-registry-metadata", () => {
-  it("AGENT_IDS exporta exatamente 4 agentes", () => {
-    expect(AGENT_IDS).toHaveLength(4);
+  it("AGENT_IDS exporta exatamente 5 agentes", () => {
+    expect(AGENT_IDS).toHaveLength(5);
     expect(AGENT_IDS).toContain(AGENT_ID_ASSISTENTE_GERAL);
     expect(AGENT_IDS).toContain(AGENT_ID_REVISOR_DEFESAS);
     expect(AGENT_IDS).toContain(AGENT_ID_REDATOR_CONTESTACAO);
+    expect(AGENT_IDS).toContain(AGENT_ID_AVALIADOR_CONTESTACAO);
     expect(AGENT_IDS).toContain(AGENT_ID_ASSISTJUR_MASTER);
   });
 
-  it("todos os 4 agentes têm descrição não-vazia e única no metadata", async () => {
+  it("todos os 5 agentes têm descrição não-vazia e única no metadata", async () => {
     const { getAgentConfig: getMetaConfig } = await import(
       "@/lib/ai/agents-registry-metadata"
     );
@@ -226,9 +228,9 @@ describe("AssistJur.IA Master — consistência com agents-registry-metadata", (
   });
 });
 
-describe("AssistJur.IA Master — route.ts e pipeline", () => {
-  it("route.ts aplica stepCountIs=7 para usePipelineTool (Master)", () => {
-    const routePath = path.join(
+describe("AssistJur.IA Master — execute.ts (chat pipeline) e pipeline", () => {
+  it("execute.ts aplica stepCountIs=7 para usePipelineTool (Master)", () => {
+    const executePath = path.join(
       __dirname,
       "..",
       "..",
@@ -236,16 +238,18 @@ describe("AssistJur.IA Master — route.ts e pipeline", () => {
       "(chat)",
       "api",
       "chat",
-      "route.ts"
+      "lib",
+      "chat-pipeline",
+      "execute.ts"
     );
-    const routeCode = readFileSync(routePath, "utf-8");
-    expect(routeCode).toContain(
+    const executeCode = readFileSync(executePath, "utf-8");
+    expect(executeCode).toContain(
       "stepCountIs(ctx.agentConfig.usePipelineTool ? 7 : 5)"
     );
   });
 
-  it("route.ts usa maxOutputTokens do agentConfig com fallback para 8192", () => {
-    const routePath = path.join(
+  it("execute.ts usa maxOutputTokens do agentConfig com fallback para 8192", () => {
+    const executePath = path.join(
       __dirname,
       "..",
       "..",
@@ -253,16 +257,18 @@ describe("AssistJur.IA Master — route.ts e pipeline", () => {
       "(chat)",
       "api",
       "chat",
-      "route.ts"
+      "lib",
+      "chat-pipeline",
+      "execute.ts"
     );
-    const routeCode = readFileSync(routePath, "utf-8");
-    expect(routeCode).toContain(
+    const executeCode = readFileSync(executePath, "utf-8");
+    expect(executeCode).toContain(
       "maxOutputTokens: ctx.agentConfig.maxOutputTokens ?? 8192"
     );
   });
 
-  it("route.ts bloqueia tools para modelos reasoning (isReasoningModel → [])", () => {
-    const routePath = path.join(
+  it("execute.ts bloqueia tools para modelos reasoning (isReasoningModel → [])", () => {
+    const executePath = path.join(
       __dirname,
       "..",
       "..",
@@ -270,10 +276,12 @@ describe("AssistJur.IA Master — route.ts e pipeline", () => {
       "(chat)",
       "api",
       "chat",
-      "route.ts"
+      "lib",
+      "chat-pipeline",
+      "execute.ts"
     );
-    const routeCode = readFileSync(routePath, "utf-8");
-    expect(routeCode).toMatch(
+    const executeCode = readFileSync(executePath, "utf-8");
+    expect(executeCode).toMatch(
       /isReasoningModel[\s\S]*?\[\]|activeToolNames[\s\S]*?isReasoningModel.*\[\]/
     );
   });

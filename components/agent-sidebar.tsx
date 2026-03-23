@@ -30,6 +30,7 @@ const AGENT_DOTS: Record<AgentId, string> = {
   "assistente-geral": "bg-assistjur-purple",
   "revisor-defesas": "bg-assistjur-gold",
   "redator-contestacao": "bg-assistjur-purple",
+  "avaliador-contestacao": "bg-assistjur-gold",
   /** Master usa gold — produto flagship, visualmente distinto do Redator (purple). */
   "assistjur-master": "bg-assistjur-gold",
 };

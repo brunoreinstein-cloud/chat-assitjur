@@ -1,7 +1,6 @@
 "use client";
 
 import type { UseChatHelpers } from "@ai-sdk/react";
-import { upload as uploadToBlob } from "@vercel/blob/client";
 import type { UIMessage, UIMessagePart } from "ai";
 import equal from "fast-deep-equal";
 import {
@@ -35,52 +34,32 @@ import {
 import { toast } from "sonner";
 import useSWR from "swr";
 import { useLocalStorage, useWindowSize } from "usehooks-ts";
-import { getExtractionQuality } from "@/lib/extraction-quality";
-
-interface CustomAgentRow {
-  id: string;
-  name: string;
-  instructions: string;
-  baseAgentId: string | null;
-  knowledgeDocumentIds?: string[];
-  createdAt: string;
-}
-
-type UploadPhase = "uploading" | "extracting" | "classifying" | "done";
-
-const PHASE_LABELS: Record<UploadPhase, string> = {
-  uploading: "Enviando…",
-  extracting: "Extraindo texto…",
-  classifying: "Classificando…",
-  done: "Concluído",
-};
-
-/** Tamanho a partir do qual mostra label estendida na extração (10 MB). */
-const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024;
-
-function getPhaseLabel(phase: UploadPhase, fileSize?: number): string {
-  if (phase === "extracting" && fileSize && fileSize > LARGE_FILE_THRESHOLD) {
-    return "Extraindo texto (documento grande, pode levar 30s+)…";
-  }
-  return PHASE_LABELS[phase];
-}
-
-interface UploadQueueItem {
-  id: string;
-  label: string;
-  /** Current phase of the upload pipeline */
-  phase: UploadPhase;
-  /** Upload progress 0-100 (only meaningful during 'uploading' phase) */
-  percent: number;
-  /** File size in bytes */
-  fileSize?: number;
-}
-
 import {
   getAgentConfig,
   NO_AGENT_SELECTED,
 } from "@/lib/ai/agents-registry-metadata";
 import { MIN_CREDITS_TO_START_CHAT } from "@/lib/ai/credits";
+import {
+  ACCEPTED_FILE_ACCEPT,
+  autoAssignMissingDocumentType,
+  BODY_SIZE_LIMIT_BYTES,
+  buildAttachmentParts,
+  getPhaseLabel,
+  inferDocumentTypeFromFilename,
+  isAcceptedAttachmentType,
+  MAX_KNOWLEDGE_SELECT,
+  POST_UPLOAD_PROMPTS,
+  removeAttachmentByUrl,
+  type UploadPhase,
+  type UploadQueueItem,
+  updateAttachmentByUrl,
+  uploadLargeFile,
+  uploadSmallFile,
+  usePromptImprovement,
+  validateAttachmentsForSubmit,
+  validateRevisorPiContestacao,
+} from "@/lib/attachments";
+import { getExtractionQuality } from "@/lib/extraction-quality";
 import type {
   Attachment,
   ChatMessage,
@@ -97,7 +76,9 @@ import {
   PromptInputToolbar,
   PromptInputTools,
 } from "./elements/prompt-input";
-import { ArrowUpIcon, PaperclipIcon, StopIcon } from "./icons";
+import { ArrowUpIcon } from "./icons";
+import { AttachmentsButton } from "./multimodal-input/attachments-button";
+import { StopButton } from "./multimodal-input/stop-button";
 import { REVISOR_PROMPTS } from "./prompt-selector";
 import {
   AlertDialog,
@@ -145,6 +126,15 @@ import {
 import { Textarea } from "./ui/textarea";
 import type { VisibilityType } from "./visibility-selector";
 
+interface CustomAgentRow {
+  id: string;
+  name: string;
+  instructions: string;
+  baseAgentId: string | null;
+  knowledgeDocumentIds?: string[];
+  createdAt: string;
+}
+
 const AGENT_INSTRUCTIONS_MAX_LENGTH = 4000;
 
 /** Dot colorido por agente (mantido em sincronia com chat-topbar.tsx). */
@@ -155,222 +145,6 @@ const AGENT_DOT_CLASS: Record<string, string> = {
   "assistjur-master": "bg-assistjur-purple",
 };
 
-/** Máximo de documentos da base de conhecimento selecionáveis no popover @ e no formulário de agente. */
-const MAX_KNOWLEDGE_SELECT = 50;
-
-/** Tipos MIME aceites para anexos (chat e base de conhecimento). */
-const ACCEPTED_FILE_ACCEPT =
-  "image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/plain,application/vnd.oasis.opendocument.text";
-
-const ACCEPTED_DROP_EXTENSIONS = /\.(docx?|pdf|jpe?g|png|xlsx?|csv|txt|odt)$/i;
-
-/** Quick prompts surfaced in the composer after a document is uploaded (first message only). */
-const POST_UPLOAD_PROMPTS: {
-  docType: "pi" | "contestacao" | "any";
-  agentId: string | "any";
-  label: string;
-  text: string;
-}[] = [
-  // AssistJur.IA Master
-  {
-    docType: "any",
-    agentId: "assistjur-master",
-    label: "🧠 Análise completa",
-    text: "Faça uma análise completa do documento anexado, identificando pontos críticos.",
-  },
-  {
-    docType: "contestacao",
-    agentId: "assistjur-master",
-    label: "📊 Mapear pedidos",
-    text: "Mapeie todos os pedidos da contestação e avalie o risco de cada um.",
-  },
-  {
-    docType: "pi",
-    agentId: "assistjur-master",
-    label: "⚖️ Estratégia defensiva",
-    text: "Elabore uma estratégia defensiva completa para o caso anexado.",
-  },
-  // Redator de Contestações
-  {
-    docType: "pi",
-    agentId: "redator-contestacao",
-    label: "✍️ Redigir contestação",
-    text: "Redija uma contestação trabalhista para a PI anexada.",
-  },
-  {
-    docType: "any",
-    agentId: "redator-contestacao",
-    label: "📋 Extrair pedidos",
-    text: "Extraia todos os pedidos do documento anexado para eu contestar.",
-  },
-  // Generic (shown for any agent)
-  {
-    docType: "contestacao",
-    agentId: "any",
-    label: "🔍 Analisar contestação",
-    text: "Analise a contestação anexada e identifique os principais argumentos defensivos.",
-  },
-  {
-    docType: "pi",
-    agentId: "any",
-    label: "📋 Mapear pedidos",
-    text: "Mapeie todos os pedidos da petição inicial anexada.",
-  },
-  {
-    docType: "any",
-    agentId: "any",
-    label: "📄 Resumir",
-    text: "Resuma o documento anexado destacando os pontos principais.",
-  },
-  {
-    docType: "any",
-    agentId: "any",
-    label: "❓ Tirar dúvidas",
-    text: "Tenho dúvidas sobre este documento:",
-  },
-];
-
-function isAcceptedAttachmentType(type: string, filename?: string): boolean {
-  if (
-    type.startsWith("image/") ||
-    type === "application/pdf" ||
-    type === "application/msword" ||
-    type ===
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-    type ===
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
-    type === "application/vnd.ms-excel" ||
-    type === "text/csv" ||
-    type === "text/plain" ||
-    type === "application/vnd.oasis.opendocument.text"
-  ) {
-    return true;
-  }
-  // Fallback: Windows/browsers may report application/octet-stream or "" for DOCX/PDF on drag-and-drop
-  if ((type === "" || type === "application/octet-stream") && filename) {
-    return ACCEPTED_DROP_EXTENSIONS.test(filename);
-  }
-  return false;
-}
-
-function _setCookie(name: string, value: string) {
-  const maxAge = 60 * 60 * 24 * 365; // 1 year
-  // biome-ignore lint/suspicious/noDocumentCookie: needed for client-side cookie setting
-  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}`;
-}
-
-/** Limite do body em produção (Vercel). Ficheiros maiores usam upload direto para Blob. */
-const BODY_SIZE_LIMIT_BYTES = 4.5 * 1024 * 1024;
-
-interface FileUploadResponse {
-  url?: string;
-  pathname?: string;
-  contentType?: string;
-  extractedText?: string;
-  extractionFailed?: boolean;
-  extractionDetail?: string;
-  documentType?: "pi" | "contestacao";
-  pageCount?: number;
-}
-
-function buildAttachmentFromUploadResponse(
-  data: FileUploadResponse,
-  file: File
-) {
-  const {
-    url,
-    pathname,
-    contentType,
-    extractedText,
-    extractionFailed,
-    extractionDetail,
-    documentType,
-  } = data;
-  if (extractionFailed === true) {
-    const reason =
-      typeof extractionDetail === "string" && extractionDetail.length > 0
-        ? ` Motivo: ${extractionDetail}`
-        : "";
-    toast.warning(
-      `Não foi possível extrair o texto deste ficheiro. Pode colar o texto no cartão do documento abaixo.${reason}`
-    );
-  }
-  const docType =
-    documentType === "pi" || documentType === "contestacao"
-      ? documentType
-      : undefined;
-  return {
-    url: url ?? "",
-    name: file.name,
-    contentType: contentType ?? file.type,
-    ...(typeof pathname === "string" && pathname.length > 0
-      ? { pathname }
-      : {}),
-    ...(typeof extractedText === "string" ? { extractedText } : {}),
-    ...(extractionFailed === true ? { extractionFailed: true } : {}),
-    ...(docType ? { documentType: docType } : {}),
-    ...(typeof data.pageCount === "number"
-      ? { pageCount: data.pageCount }
-      : {}),
-  };
-}
-
-function updateAttachmentByUrl(
-  attachments: Attachment[],
-  url: string,
-  update: Partial<Attachment>
-): Attachment[] {
-  return attachments.map((a) => (a.url === url ? { ...a, ...update } : a));
-}
-
-function removeAttachmentByUrl(
-  attachments: Attachment[],
-  url: string
-): Attachment[] {
-  return attachments.filter((a) => a.url !== url);
-}
-
-function isDocumentContentType(ct: string | undefined): boolean {
-  return (
-    ct === "application/pdf" ||
-    ct === "application/msword" ||
-    ct ===
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-  );
-}
-
-/**
- * Infere PI ou Contestação a partir do nome do ficheiro (ex.: "Inicial.pdf", "Contestação.docx").
- * Usado quando o anexo é adicionado pelo clipe ou drop genérico, para reconhecer o tipo mesmo sem backend.
- */
-function inferDocumentTypeFromFilename(
-  filename: string
-): "pi" | "contestacao" | undefined {
-  const n = filename.toLowerCase().replace(/\s+/g, " ");
-  const looksLikeContestacao =
-    n.includes("contest") ||
-    n.includes("defesa") ||
-    n.includes("reclamado") ||
-    n.includes("impugna");
-  const looksLikePi =
-    (n.includes("inicial") ||
-      n.includes("petição") ||
-      n.includes("peticao") ||
-      n.includes("reclamante")) &&
-    !looksLikeContestacao;
-  if (looksLikeContestacao) {
-    return "contestacao";
-  }
-  if (looksLikePi) {
-    return "pi";
-  }
-  return undefined;
-}
-
-/**
- * Devolve ícone e cor Tailwind para o chip de anexo de acordo com o tipo MIME.
- * Mantido em sync com preview-attachment.tsx (getFileTypeAppearance).
- */
 function getChipIcon(contentType: string | undefined): {
   Icon: typeof FileTextIcon;
   color: string;
@@ -401,270 +175,6 @@ function getChipIcon(contentType: string | undefined): {
     return { Icon: FileTextIcon, color: "text-purple-500" };
   }
   return { Icon: FileTextIcon, color: "text-muted-foreground" };
-}
-
-/**
- * Se há exatamente 2 anexos de documento com texto e apenas um tem tipo (PI ou Contestação),
- * atribui o tipo em falta ao outro — completa a identificação automática.
- */
-function autoAssignMissingDocumentType(
-  attachments: Attachment[]
-): Attachment[] {
-  const docsWithText = attachments.filter(
-    (a) =>
-      typeof a.extractedText === "string" &&
-      isDocumentContentType(a.contentType)
-  );
-  if (docsWithText.length !== 2) {
-    return attachments;
-  }
-  const [first, second] = docsWithText;
-  const type1 = first.documentType;
-  const type2 = second.documentType;
-  if (type1 && type2) {
-    return attachments;
-  }
-  if (!(type1 || type2)) {
-    return attachments;
-  }
-  const missingType: "pi" | "contestacao" =
-    type1 === "pi" ? "contestacao" : "pi";
-  const urlToFix = type1 ? second.url : first.url;
-  return attachments.map((a) =>
-    a.url === urlToFix ? { ...a, documentType: missingType } : a
-  );
-}
-
-/** Retorna mensagem de erro se houver documentos sem texto extraído; null se válido para envio. */
-function validateAttachmentsForSubmit(
-  attachments: Attachment[]
-): string | null {
-  const docsWithoutText = attachments.filter(
-    (a) => isDocumentContentType(a.contentType) && a.extractedText == null
-  );
-  if (docsWithoutText.length > 0) {
-    return `${docsWithoutText.length} documento(s) sem texto. Cole o texto no cartão do documento ou remova-os para enviar.`;
-  }
-  return null;
-}
-
-/**
- * Validação pré-envio para o Revisor de Defesas: exige PI e Contestação identificados.
- * Aplicar quando o agente é o Revisor (sem instruções customizadas) e há anexos de documento ou primeira mensagem.
- * Retorna mensagem de erro ou null se válido.
- */
-function validateRevisorPiContestacao(
-  attachments: Attachment[],
-  messageCount: number
-): string | null {
-  const hasDocumentParts = attachments.some(
-    (a) =>
-      typeof a.extractedText === "string" &&
-      (a.documentType === "pi" || a.documentType === "contestacao")
-  );
-  if (!hasDocumentParts && messageCount > 0) {
-    return null;
-  }
-  const hasPi = attachments.some(
-    (a) => typeof a.extractedText === "string" && a.documentType === "pi"
-  );
-  const hasContestacao = attachments.some(
-    (a) =>
-      typeof a.extractedText === "string" && a.documentType === "contestacao"
-  );
-  if (!(hasPi && hasContestacao)) {
-    return "Para auditar a contestação, anexe a Petição Inicial e a Contestação (arraste para os slots ou use o anexo). O tipo é identificado automaticamente quando possível; pode ajustar no menu de cada documento.";
-  }
-  return null;
-}
-
-interface DocumentPart {
-  type: "document";
-  name: string;
-  text: string;
-  documentType?: "pi" | "contestacao";
-}
-
-interface FilePart {
-  type: "file";
-  url: string;
-  name: string;
-  mediaType: string;
-}
-
-function buildAttachmentParts(
-  attachments: Attachment[]
-): Array<DocumentPart | FilePart> {
-  const parts: Array<DocumentPart | FilePart> = [];
-  for (const attachment of attachments) {
-    if (typeof attachment.extractedText === "string") {
-      parts.push({
-        type: "document",
-        name: attachment.name,
-        text: attachment.extractedText,
-        ...(attachment.documentType
-          ? { documentType: attachment.documentType }
-          : {}),
-      });
-    } else if (attachment.contentType?.startsWith("image/")) {
-      parts.push({
-        type: "file",
-        url: attachment.url,
-        name: attachment.name,
-        mediaType: attachment.contentType,
-      });
-    }
-  }
-  return parts;
-}
-
-async function _getUploadErrorFromResponse(
-  response: Response
-): Promise<string> {
-  if (response.status === 401) {
-    return "Inicie sessão para anexar ficheiros. Use «Continuar como visitante» ou entre na sua conta.";
-  }
-  if (response.status === 413) {
-    return "Ficheiro demasiado grande. Em produção o limite é 4,5 MB. Use um ficheiro com menos de 4,5 MB.";
-  }
-  try {
-    const data = (await response.json()) as { error?: string; detail?: string };
-    if (typeof data?.error === "string" && data.error.length > 0) {
-      let msg = data.error;
-      if (typeof data?.detail === "string" && data.detail.length > 0) {
-        msg += ` (${data.detail})`;
-      }
-      return msg;
-    }
-  } catch {
-    // Resposta não é JSON; manter mensagem genérica
-  }
-  return "Falha ao enviar o arquivo. Tente novamente.";
-}
-
-async function uploadLargeFile(
-  file: File,
-  onPhase?: (phase: UploadPhase, percent: number) => void
-): Promise<ReturnType<typeof buildAttachmentFromUploadResponse> | undefined> {
-  const tokenCheckRes = await fetch("/api/files/upload-token", {
-    method: "GET",
-  });
-  if (!tokenCheckRes.ok) {
-    const errData = (await tokenCheckRes.json().catch(() => ({}))) as {
-      error?: string;
-    };
-    const msg =
-      typeof errData.error === "string"
-        ? errData.error
-        : "Upload de ficheiros grandes não disponível. Use um ficheiro com menos de 4,5 MB.";
-    toast.error(msg);
-    return undefined;
-  }
-  try {
-    onPhase?.("uploading", 10);
-    const blob = await uploadToBlob(file.name, file, {
-      access: "public",
-      handleUploadUrl: "/api/files/upload-token",
-    });
-    onPhase?.("extracting", 50);
-    const processRes = await fetch("/api/files/process", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: blob.url,
-        pathname: blob.pathname,
-        contentType: file.type || "application/octet-stream",
-        filename: file.name,
-      }),
-    });
-    if (!processRes.ok) {
-      const errData = (await processRes.json().catch(() => ({}))) as {
-        error?: string;
-      };
-      const msg =
-        typeof errData.error === "string"
-          ? errData.error
-          : "Falha ao processar o ficheiro após o upload.";
-      toast.error(msg);
-      return undefined;
-    }
-    onPhase?.("classifying", 90);
-    const data = (await processRes.json()) as FileUploadResponse;
-    onPhase?.("done", 100);
-    return buildAttachmentFromUploadResponse(data, file);
-  } catch (directError: unknown) {
-    const msg =
-      directError instanceof Error
-        ? directError.message
-        : "Upload de ficheiros grandes não disponível.";
-    toast.error(
-      `${msg} Use um ficheiro com menos de 4,5 MB ou tente novamente.`
-    );
-    return undefined;
-  }
-}
-
-async function uploadSmallFile(
-  file: File,
-  onPhase?: (phase: UploadPhase, percent: number) => void
-): Promise<ReturnType<typeof buildAttachmentFromUploadResponse> | undefined> {
-  onPhase?.("uploading", 0);
-  const formData = new FormData();
-  formData.append("file", file);
-
-  // Use XHR for real upload progress tracking
-  const result = await new Promise<{
-    ok: boolean;
-    status: number;
-    body: string;
-  }>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", "/api/files/upload");
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        const pct = Math.round((e.loaded / e.total) * 60); // Upload = 0-60%
-        onPhase?.("uploading", pct);
-      }
-    };
-    xhr.onload = () => {
-      onPhase?.("extracting", 65);
-      resolve({
-        ok: xhr.status >= 200 && xhr.status < 300,
-        status: xhr.status,
-        body: xhr.responseText,
-      });
-    };
-    xhr.onerror = () => reject(new Error("Network error"));
-    xhr.send(formData);
-  });
-
-  if (result.ok) {
-    onPhase?.("classifying", 90);
-    try {
-      const data = JSON.parse(result.body) as FileUploadResponse;
-      onPhase?.("done", 100);
-      return buildAttachmentFromUploadResponse(data, file);
-    } catch {
-      toast.error("Resposta inválida do servidor.");
-      return undefined;
-    }
-  }
-
-  // Error handling
-  try {
-    const errData = JSON.parse(result.body) as {
-      error?: string;
-      message?: string;
-    };
-    toast.error(
-      errData.error ??
-        errData.message ??
-        "Falha ao enviar o arquivo. Tente novamente."
-    );
-  } catch {
-    toast.error("Falha ao enviar o arquivo. Tente novamente.");
-  }
-  return undefined;
 }
 
 type PureMultimodalInputProps = Readonly<{
@@ -703,73 +213,6 @@ type PureMultimodalInputProps = Readonly<{
   /** Quando true, desativa o overlay de drag-and-drop para não interceptar drops destinados à KB sidebar. */
   knowledgeSidebarOpen?: boolean;
 }>;
-
-interface ImproveTextOptions {
-  emptyError: string;
-  genericError: string;
-  successTitle: string;
-}
-
-function usePromptImprovement() {
-  const [isImproving, setIsImproving] = useState(false);
-  const improveText = useCallback(
-    async (
-      text: string,
-      setResult: (value: string) => void,
-      options: ImproveTextOptions
-    ) => {
-      const trimmed = text.trim();
-      if (trimmed.length === 0) {
-        toast.error(options.emptyError);
-        return;
-      }
-      setIsImproving(true);
-      try {
-        const res = await fetch("/api/prompt/improve", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: trimmed }),
-        });
-        const data = (await res.json()) as
-          | { improvedPrompt: string; diagnosis?: string; notes?: string }
-          | { error?: string };
-        if (!res.ok) {
-          const msg =
-            "error" in data && typeof data.error === "string"
-              ? data.error
-              : options.genericError;
-          toast.error(msg);
-          return;
-        }
-        if (
-          "improvedPrompt" in data &&
-          typeof data.improvedPrompt === "string"
-        ) {
-          setResult(data.improvedPrompt);
-          const parts: string[] = [];
-          if (data.diagnosis?.trim()) {
-            parts.push(data.diagnosis.trim());
-          }
-          if (data.notes?.trim()) {
-            parts.push(`Alterações: ${data.notes.trim()}`);
-          }
-          const description =
-            parts.length > 0
-              ? parts.join("\n\n").slice(0, 400) +
-                (parts.join("\n\n").length > 400 ? "…" : "")
-              : undefined;
-          toast.success(options.successTitle, { description });
-        }
-      } catch {
-        toast.error("Erro de ligação. Tente novamente.");
-      } finally {
-        setIsImproving(false);
-      }
-    },
-    []
-  );
-  return { improveText, isImproving };
-}
 
 function PureMultimodalInput({
   chatId,
@@ -2600,62 +2043,3 @@ export const MultimodalInput = memo(
     return true;
   }
 );
-
-function PureAttachmentsButton({
-  fileInputRef,
-  status,
-  selectedModelId,
-}: Readonly<{
-  fileInputRef: React.MutableRefObject<HTMLInputElement | null>;
-  status: UseChatHelpers<ChatMessage>["status"];
-  selectedModelId: string;
-}>) {
-  const isReasoningModel =
-    selectedModelId.includes("reasoning") || selectedModelId.includes("think");
-  const disabled = status !== "ready" || isReasoningModel;
-
-  const openFileDialog = useCallback(() => {
-    fileInputRef.current?.click();
-  }, [fileInputRef]);
-
-  return (
-    <Button
-      aria-label="Anexar documentos (imagens, PDF, DOC, DOCX, XLS, XLSX, CSV, TXT, ODT)"
-      className="aspect-square h-8 rounded-lg p-1 transition-colors hover:bg-accent"
-      data-testid="attachments-button"
-      disabled={disabled}
-      onClick={openFileDialog}
-      title="Anexar documentos (imagens, PDF, DOC, DOCX, Excel, CSV, TXT, ODT)"
-      type="button"
-      variant="ghost"
-    >
-      <PaperclipIcon size={14} />
-    </Button>
-  );
-}
-
-const AttachmentsButton = memo(PureAttachmentsButton);
-
-function PureStopButton({
-  stop,
-  setMessages,
-}: Readonly<{
-  stop: () => void;
-  setMessages: UseChatHelpers<ChatMessage>["setMessages"];
-}>) {
-  return (
-    <Button
-      className="size-7 rounded-full bg-foreground p-1 text-background transition-colors duration-200 hover:bg-foreground/90 disabled:bg-muted disabled:text-muted-foreground"
-      data-testid="stop-button"
-      onClick={(event) => {
-        event.preventDefault();
-        stop();
-        setMessages((messages) => messages);
-      }}
-    >
-      <StopIcon size={14} />
-    </Button>
-  );
-}
-
-const StopButton = memo(PureStopButton);

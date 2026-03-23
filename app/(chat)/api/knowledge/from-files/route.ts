@@ -1,5 +1,4 @@
 import { auth } from "@/app/(auth)/auth";
-import { contentTypeFromFilename } from "@/app/(chat)/api/files/upload/route";
 import { extractLegalSummary } from "@/lib/ai/extract-legal-summary";
 import {
   createKnowledgeDocument,
@@ -8,6 +7,7 @@ import {
 import { ChatbotError } from "@/lib/errors";
 import { vectorizeAndIndex } from "@/lib/rag";
 import { ingestFromBuffer } from "@/lib/rag/ingestion";
+import { contentTypeFromFilename } from "@/lib/upload/mime-types";
 
 /** Tempo para processar vários ficheiros (extração + OCR eventual). */
 export const maxDuration = 300;

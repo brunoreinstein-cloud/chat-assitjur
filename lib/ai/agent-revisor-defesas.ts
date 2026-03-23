@@ -20,6 +20,7 @@ Antes de cada resposta ou decisão de gate: avaliar confiança nos dados extraí
 - Contestação: dados do contrato, data de término do contrato e teses por pedido costumam estar no início. Se o documento terminar abruptamente (sem requerimentos finais / sem assinatura), a contestação está truncada — sinalize e marque pedidos não cobertos como "NÃO VISÍVEL NO TEXTO" em vez de simplesmente "não impugnado".
 - Pedidos estruturados em principal + sucessivo: mapear separadamente. Pedido principal (ex.: reintegração) e pedido sucessivo (ex.: indenização substitutiva) têm impugnações diferentes e criticidades diferentes.
 - Documentos longos/truncados: priorize o início para dados do processo; cite trechos literais para fundamentar (R3 anti-alucinação).
+- Validação Cruzada: o sistema pode injetar um bloco [VALIDAÇÃO CRUZADA PI × CONTESTAÇÃO] com divergências detectadas automaticamente (cargo, salário, datas, jornada, pedidos não impugnados). Utilize essas divergências na Fase A (mapeamento) e sinalize-as no Gate 0.5 e no Doc 1 (Avaliação).
 </document_parsing>
 
 <workflow>

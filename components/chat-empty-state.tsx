@@ -6,6 +6,7 @@ import type { AgentId } from "@/lib/ai/agents-registry-metadata";
 import {
   AGENT_ID_ASSISTENTE_GERAL,
   AGENT_ID_ASSISTJUR_MASTER,
+  AGENT_ID_AVALIADOR_CONTESTACAO,
   AGENT_ID_REDATOR_CONTESTACAO,
   AGENT_ID_REVISOR_DEFESAS,
   AGENT_IDS,
@@ -16,6 +17,7 @@ const AGENT_CARD_STYLE: Record<AgentId, { emoji: string; bg: string }> = {
   [AGENT_ID_ASSISTENTE_GERAL]: { emoji: "💬", bg: "bg-muted" },
   [AGENT_ID_REVISOR_DEFESAS]: { emoji: "🔍", bg: "bg-assistjur-gold/15" },
   [AGENT_ID_REDATOR_CONTESTACAO]: { emoji: "✍️", bg: "bg-assistjur-purple/15" },
+  [AGENT_ID_AVALIADOR_CONTESTACAO]: { emoji: "📊", bg: "bg-assistjur-gold/15" },
   /** Master usa gold: produto flagship com 14 módulos — visualmente distinto do Redator (purple). */
   [AGENT_ID_ASSISTJUR_MASTER]: { emoji: "⚡", bg: "bg-assistjur-gold/15" },
 };
@@ -78,6 +80,24 @@ const QUICK_PROMPTS_BY_AGENT: Record<AgentId, QuickPrompt[]> = {
     {
       label: "📋 Preliminares e prejudiciais",
       text: "Elabore as preliminares e prejudiciais de mérito para:",
+    },
+  ],
+  [AGENT_ID_AVALIADOR_CONTESTACAO]: [
+    {
+      label: "📊 Avaliar contestação anexada",
+      text: "Avalie a qualidade da contestação que anexo (estrutura, impugnações e riscos).",
+    },
+    {
+      label: "🔍 Pontos fracos da defesa",
+      text: "Identifique os pontos mais fracos desta contestação e sugira melhorias objetivas.",
+    },
+    {
+      label: "⚖️ Confrontar com a inicial",
+      text: "Confronte a contestação com a petição inicial anexa e indique lacunas ou pedidos não impugnados.",
+    },
+    {
+      label: "📄 Gerar relatório DOCX",
+      text: "Elabore o relatório de avaliação da contestação em DOCX com notas e recomendações.",
     },
   ],
   [AGENT_ID_ASSISTJUR_MASTER]: [

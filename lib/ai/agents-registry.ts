@@ -5,6 +5,7 @@
 
 import { AGENTE_ASSISTENTE_GERAL_INSTRUCTIONS } from "@/lib/ai/agent-assistente-geral";
 import { AGENTE_ASSISTJUR_MASTER_INSTRUCTIONS } from "@/lib/ai/agent-assistjur-master";
+import { AGENTE_AVALIADOR_CONTESTACAO_INSTRUCTIONS } from "@/lib/ai/agent-avaliador-contestacao";
 import { AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS } from "@/lib/ai/agent-redator-contestacao";
 import { AGENTE_REVISOR_DEFESAS_INSTRUCTIONS } from "@/lib/ai/agent-revisor-defesas";
 import { nonReasoningChatModelIds } from "@/lib/ai/models";
@@ -12,6 +13,7 @@ import { nonReasoningChatModelIds } from "@/lib/ai/models";
 export const AGENT_ID_ASSISTENTE_GERAL = "assistente-geral";
 export const AGENT_ID_REVISOR_DEFESAS = "revisor-defesas";
 export const AGENT_ID_REDATOR_CONTESTACAO = "redator-contestacao";
+export const AGENT_ID_AVALIADOR_CONTESTACAO = "avaliador-contestacao";
 export const AGENT_ID_ASSISTJUR_MASTER = "assistjur-master";
 
 /** Id usado pela API quando o cliente não envia agentId (chat sem agente selecionado). */
@@ -21,6 +23,7 @@ export const AGENT_IDS = [
   AGENT_ID_ASSISTENTE_GERAL,
   AGENT_ID_REVISOR_DEFESAS,
   AGENT_ID_REDATOR_CONTESTACAO,
+  AGENT_ID_AVALIADOR_CONTESTACAO,
   AGENT_ID_ASSISTJUR_MASTER,
 ] as const;
 
@@ -74,6 +77,12 @@ export interface AgentConfig {
    * Default: false — activar apenas no Master agent.
    */
   usePipelineTool?: boolean;
+  /**
+   * Habilitar createAvaliadorContestacaoDocument.
+   * Quando true, o agente pode gerar o DOCX de Avaliação de Qualidade da Contestação.
+   * Default: false — activar apenas no Avaliador de Contestação.
+   */
+  useAvaliadorContestacaoTool?: boolean;
   /**
    * Habilitar createMasterDocuments (geração DOCX direta + ZIP).
    * Quando true, o agente gera documentos DOCX via stream direto (sem artifact)
@@ -139,6 +148,17 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
     useMemoryTools: true,
     useApprovalTool: true, // Advogado aprova minuta antes de gerar DOCX final
     allowedModelIds: REDATOR_ALLOWED_MODEL_IDS,
+  },
+  [AGENT_ID_AVALIADOR_CONTESTACAO]: {
+    id: AGENT_ID_AVALIADOR_CONTESTACAO,
+    label: "Avaliador de Contestação",
+    instructions: AGENTE_AVALIADOR_CONTESTACAO_INSTRUCTIONS,
+    useRevisorDefesaTools: false,
+    useRedatorContestacaoTool: false,
+    useAvaliadorContestacaoTool: true,
+    useMemoryTools: true,
+    useApprovalTool: false,
+    allowedModelIds: nonReasoningChatModelIds,
   },
   [AGENT_ID_ASSISTJUR_MASTER]: {
     id: AGENT_ID_ASSISTJUR_MASTER,

@@ -120,18 +120,86 @@ export const TOOL_RESULT_PLACEHOLDER =
   "[Resultado da ferramenta omitido para poupar contexto]";
 
 /** Número de mensagens recentes a manter intactas (sem trim de tool results nem strip de reasoning). */
-export const CONTEXT_EDITING_KEEP_LAST_N_MESSAGES = 6;
+export const CONTEXT_EDITING_KEEP_LAST_N_MESSAGES = 10;
+
+/**
+ * Regex para detectar text parts que contêm documentos injetados (PI, Contestação, Documento genérico).
+ * Match no início do texto (após whitespace opcional).
+ */
+const DOCUMENT_TEXT_PREFIX_RE =
+  /^\s*\[(Petição Inicial|Contestação|Documento)\s*:/;
+
+/**
+ * Regex para extrair blocos [CAMPOS EXTRAÍDOS POR REGEX …] preservados durante compaction.
+ * Captura tudo entre os delimitadores (inclusive).
+ */
+const CAMPOS_EXTRAIDOS_RE =
+  /\[CAMPOS EXTRAÍDOS POR REGEX[\s\S]*?\[\/CAMPOS EXTRAÍDOS POR REGEX\]/;
+
+/**
+ * Regex para extrair bloco [VALIDAÇÃO CRUZADA PI × CONTESTAÇÃO …] preservado durante compaction.
+ */
+const VALIDACAO_CRUZADA_RE =
+  /\[VALIDAÇÃO CRUZADA PI × CONTESTAÇÃO[\s\S]*?\[\/VALIDAÇÃO CRUZADA PI × CONTESTAÇÃO\]/;
+
+/** Delimitadores GATE 0.5 — mensagens que os contêm não devem ser truncadas. */
+const GATE_05_MARKERS = [
+  "--- GATE_0.5_RESUMO ---",
+  "--- GATE_0.5_AVALIACAO ---",
+];
+
+/** Limiar (chars) acima do qual text parts do assistant são truncadas em mensagens antigas. */
+const ASSISTANT_TEXT_TRUNCATE_THRESHOLD = 2000;
+/** Comprimento alvo após truncagem de text parts do assistant. */
+const ASSISTANT_TEXT_TRUNCATE_TARGET = 800;
+
+/**
+ * Compacta uma text part que contém um documento (PI/Contestação/Documento).
+ * Preserva blocos estruturados ([CAMPOS EXTRAÍDOS…] e [VALIDAÇÃO CRUZADA…]) e substitui
+ * o texto integral por um placeholder curto.
+ */
+function compactDocumentText(text: string): string {
+  const preserved: string[] = [];
+  const camposMatch = CAMPOS_EXTRAIDOS_RE.exec(text);
+  if (camposMatch) {
+    preserved.push(camposMatch[0]);
+  }
+  const validacaoMatch = VALIDACAO_CRUZADA_RE.exec(text);
+  if (validacaoMatch) {
+    preserved.push(validacaoMatch[0]);
+  }
+  // Extrair nome do documento do prefixo (ex.: "[Petição Inicial: nome.pdf …]")
+  const nameMatch =
+    /^\s*\[(?:Petição Inicial|Contestação|Documento)\s*:\s*([^\]]{1,80})/.exec(
+      text
+    );
+  const docName = nameMatch ? nameMatch[1].trim() : "documento";
+
+  const placeholder = `[Documento: ${docName} — conteúdo omitido para poupar contexto.${preserved.length > 0 ? " Dados estruturados preservados abaixo." : ""}]`;
+  return preserved.length > 0
+    ? `${placeholder}\n\n${preserved.join("\n\n")}`
+    : placeholder;
+}
 
 /**
  * Context editing: reduz tokens enviados ao modelo sem alterar a conversa guardada.
- * - Em mensagens "antigas" (fora das últimas N), substitui o conteúdo de tool-result por um placeholder.
- * - Em mensagens assistant antigas, remove partes de reasoning/thinking (a API Claude pode stripá-las, mas removê-las aqui poupa tokens de input).
+ * - Em mensagens "antigas" (fora das últimas N):
+ *   1. Substitui conteúdo de tool-result por um placeholder curto.
+ *   2. Remove partes de reasoning/thinking.
+ *   3. Compacta text parts que contêm documentos (PI, Contestação), preservando blocos estruturados.
+ *   4. Trunca text parts longas do assistant (excepto as que contêm resumos GATE 0.5).
  *
  * Só deve ser aplicado à cópia das mensagens que é enviada ao modelo, não às mensagens persistidas.
  */
 export function applyContextEditing<
   T extends {
-    parts?: Array<{ type?: string; result?: unknown; [key: string]: unknown }>;
+    role?: string;
+    parts?: Array<{
+      type?: string;
+      text?: string;
+      result?: unknown;
+      [key: string]: unknown;
+    }>;
   },
 >(
   messages: T[],
@@ -147,22 +215,65 @@ export function applyContextEditing<
       return msg;
     }
     const isOld = index < boundary;
+    if (!isOld) {
+      return msg;
+    }
+
+    const isAssistant = msg.role === "assistant";
+
+    // Verificar se a mensagem contém delimitadores GATE 0.5 (não truncar)
+    const hasGateMarker =
+      isAssistant &&
+      msg.parts.some(
+        (p) =>
+          p.type === "text" &&
+          typeof p.text === "string" &&
+          GATE_05_MARKERS.some((m) => p.text?.includes(m))
+      );
+
     const newParts = msg.parts.map((part) => {
       const type = part.type ?? "";
-      if (!isOld) {
-        return part;
-      }
+
+      // Tool results → placeholder
       if (type === "tool-result") {
         return {
           ...part,
           result: TOOL_RESULT_PLACEHOLDER,
         };
       }
+
+      // Reasoning/thinking → remover
       if (type === "reasoning" || type === "thinking") {
         return null;
       }
+
+      // Text parts — compactar documentos e truncar respostas longas
+      if (type === "text" && typeof part.text === "string") {
+        const text = part.text;
+
+        // Documentos injetados (user messages com PI/Contestação/Documento)
+        if (DOCUMENT_TEXT_PREFIX_RE.test(text) && text.length > 500) {
+          return { ...part, text: compactDocumentText(text) };
+        }
+
+        // Respostas longas do assistant (excepto GATE 0.5)
+        if (
+          isAssistant &&
+          !hasGateMarker &&
+          text.length > ASSISTANT_TEXT_TRUNCATE_THRESHOLD
+        ) {
+          return {
+            ...part,
+            text:
+              text.slice(0, ASSISTANT_TEXT_TRUNCATE_TARGET) +
+              "\n[… resposta resumida para poupar contexto …]",
+          };
+        }
+      }
+
       return part;
     });
+
     const filtered = newParts.filter((p) => p != null);
     if (
       filtered.length === msg.parts.length &&

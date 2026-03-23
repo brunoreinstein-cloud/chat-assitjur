@@ -7,6 +7,7 @@ import { getAgentConfig } from "@/lib/ai/agents-registry";
 import {
   AGENT_ID_ASSISTENTE_GERAL,
   AGENT_ID_ASSISTJUR_MASTER,
+  AGENT_ID_AVALIADOR_CONTESTACAO,
   AGENT_ID_REDATOR_CONTESTACAO,
   AGENT_ID_REVISOR_DEFESAS,
   type AgentId,
@@ -182,6 +183,12 @@ export function validateAgentInstructions(
       warnings.push(...r.warnings);
       break;
     }
+    case AGENT_ID_AVALIADOR_CONTESTACAO: {
+      const r = validateRedator(trimmed);
+      errors.push(...r.errors);
+      warnings.push(...r.warnings);
+      break;
+    }
     case AGENT_ID_ASSISTENTE_GERAL: {
       const r = validateAssistente(trimmed);
       errors.push(...r.errors);
@@ -216,6 +223,7 @@ export function validateAllBuiltInAgents(): AgentValidationResult[] {
     AGENT_ID_ASSISTENTE_GERAL,
     AGENT_ID_REVISOR_DEFESAS,
     AGENT_ID_REDATOR_CONTESTACAO,
+    AGENT_ID_AVALIADOR_CONTESTACAO,
     AGENT_ID_ASSISTJUR_MASTER,
   ] as const;
 

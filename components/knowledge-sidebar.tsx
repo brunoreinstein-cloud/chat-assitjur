@@ -19,9 +19,8 @@ import {
   UploadIcon,
   XIcon,
 } from "lucide-react";
-import { usePathname, useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import useSWR, { useSWRConfig } from "swr";
 import {
@@ -62,143 +61,27 @@ import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  KNOWLEDGE_FILES_ACCEPT,
+  MAX_ARCHIVOS_FOR_CHAT,
+  MAX_FILES_PER_BATCH,
+  MAX_KNOWLEDGE_SELECT,
+  RECENT_DOCS_LIMIT,
+} from "@/lib/knowledge/constants";
+import { useKnowledgeFolderFromUrl } from "@/lib/knowledge/hooks";
+import type {
+  DocRef,
+  KnowledgeDoc,
+  KnowledgeFolderType,
+  UploadProgress,
+  UserFileType,
+} from "@/lib/knowledge/types";
+import {
+  filterAcceptedFiles,
+  getDocumentCoverageInfo,
+  parseSummaryBadge,
+} from "@/lib/knowledge/utils";
 import { cn, fetcher } from "@/lib/utils";
-
-const KNOWLEDGE_FILES_ACCEPT =
-  ".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx,.csv,.txt,.odt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/plain,application/vnd.oasis.opendocument.text,image/jpeg,image/png";
-/** Máximo de ficheiros por pedido à API (enviados em lotes se for mais). */
-const MAX_FILES_PER_BATCH = 50;
-const MAX_KNOWLEDGE_SELECT = 50;
-const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
-const ACCEPTED_EXTENSIONS = /\.(docx?|pdf|jpe?g|png|xlsx?|csv|txt|odt)$/i;
-const RECENT_DOCS_LIMIT = 8;
-
-interface KnowledgeDoc {
-  id: string;
-  title: string;
-  folderId?: string | null;
-  createdAt?: string;
-  /** pending = só guardado; indexed = chunks disponíveis; failed = erro ao vetorizar. */
-  indexingStatus?: "pending" | "indexed" | "failed";
-  /** Resumo estruturado extraído por IA para PI/Contestação. Null para outros tipos. */
-  structuredSummary?: string | null;
-}
-
-/** Limites em chars para classificação de cobertura (espelha extract-legal-summary.ts e chat/route.ts). */
-const COVERAGE_FULL_LIMIT = 78_000; // cabe inteiro no structured summary sem amostragem
-const COVERAGE_SAMPLED_LIMIT = 200_000; // amostragem início+fim; cobertura boa mas não total
-const LEGAL_DOC_RE =
-  /petição\s+inicial|contestação|peticao\s+inicial|contestacao/i;
-
-/** Avalia a cobertura esperada de um documento com base no tamanho e tipo. */
-export function getDocumentCoverageInfo(
-  contentLength: number,
-  documentType?: string
-): {
-  level: "full" | "structured" | "sampled" | "truncated";
-  label: string;
-  detail: string;
-} {
-  const isLegal = documentType ? LEGAL_DOC_RE.test(documentType) : false;
-  if (contentLength <= COVERAGE_FULL_LIMIT) {
-    return {
-      level: "full",
-      label: "Cobertura total",
-      detail: `${Math.round(contentLength / 1000)}k chars — documento completo no contexto`,
-    };
-  }
-  if (isLegal && contentLength <= COVERAGE_SAMPLED_LIMIT) {
-    return {
-      level: "structured",
-      label: "Resumo estruturado",
-      detail: `${Math.round(contentLength / 1000)}k chars — PI/Contestação: resumo estruturado em geração (~10s)`,
-    };
-  }
-  if (isLegal) {
-    return {
-      level: "sampled",
-      label: "Resumo com amostragem",
-      detail: `${Math.round(contentLength / 1000)}k chars — documento muito grande; início+fim amostrados`,
-    };
-  }
-  return {
-    level: "truncated",
-    label: "⚠️ Truncado",
-    detail: `${Math.round(contentLength / 1000)}k chars — excede 80k; texto será truncado. Considere dividir o documento.`,
-  };
-}
-
-/** Extrai informações do resumo estruturado para exibir no badge. */
-function parseSummaryBadge(summary: string): {
-  docType: "pi" | "contestacao";
-  pedidosCount: number;
-  isPartial: boolean;
-} {
-  const isPI = summary.includes("Petição Inicial");
-  const docType = isPI ? "pi" : "contestacao";
-  // Conta linhas de tabela de pedidos (linhas com | que não são cabeçalho/separador)
-  const tableRows = summary.match(/^\|\s*\d+\s*\|/gm);
-  const pedidosCount = tableRows?.length ?? 0;
-  const isPartial =
-    summary.includes("NÃO VISÍVEL") || summary.includes("não visível");
-  return { docType, pedidosCount, isPartial };
-}
-
-interface KnowledgeFolderType {
-  id: string;
-  name: string;
-  parentId: string | null;
-}
-
-interface UserFileType {
-  id: string;
-  filename: string;
-  pathname: string;
-  contentType: string;
-  createdAt: string;
-}
-
-/** Pasta selecionada: null = raiz. Estado no URL ?folder=root ou ?folder=uuid. Usa history.replaceState para não provocar remount do Chat (preserva agente selecionado). */
-function useKnowledgeFolderFromUrl(): [
-  string | null,
-  (folderId: string | null) => void,
-] {
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const rawFromUrl = searchParams.get("folder");
-  const fromUrl =
-    rawFromUrl === "root" || rawFromUrl === "" || !rawFromUrl
-      ? null
-      : rawFromUrl;
-  const [folderState, setFolderState] = useState<string | null | undefined>(
-    undefined
-  );
-  const current = folderState === undefined ? fromUrl : folderState;
-
-  useEffect(() => {
-    setFolderState(undefined);
-  }, []);
-
-  const setFolder = useCallback(
-    (folderId: string | null) => {
-      setFolderState(folderId);
-      if (globalThis.window !== undefined) {
-        const params = new URLSearchParams(globalThis.window.location.search);
-        params.set("knowledge", "open");
-        params.set("folder", folderId ?? "root");
-        globalThis.window.history.replaceState(
-          null,
-          "",
-          `${pathname ?? "/chat"}?${params.toString()}`
-        );
-      }
-    },
-    [pathname]
-  );
-  return [current, setFolder];
-}
-
-const MAX_ARCHIVOS_FOR_CHAT = 50;
 
 export function KnowledgeSidebarContent({
   knowledgeDocumentIds,
@@ -228,30 +111,19 @@ export function KnowledgeSidebarContent({
     new Set()
   );
   const [isAddingFromFiles, setIsAddingFromFiles] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<{
-    processed: number;
-    total: number;
-    currentFile?: string;
-  } | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(
+    null
+  );
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [isAddingFolder, setIsAddingFolder] = useState(false);
   const [selectedArchivoIds, setSelectedArchivoIds] = useState<string[]>([]);
   const [isAddingFromArchivos, setIsAddingFromArchivos] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [docToRename, setDocToRename] = useState<{
-    id: string;
-    title: string;
-  } | null>(null);
+  const [docToRename, setDocToRename] = useState<DocRef | null>(null);
   const [renameInputValue, setRenameInputValue] = useState("");
-  const [docToDelete, setDocToDelete] = useState<{
-    id: string;
-    title: string;
-  } | null>(null);
-  const [docToView, setDocToView] = useState<{
-    id: string;
-    title: string;
-  } | null>(null);
+  const [docToDelete, setDocToDelete] = useState<DocRef | null>(null);
+  const [docToView, setDocToView] = useState<DocRef | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isPatchingDoc, setIsPatchingDoc] = useState(false);
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
@@ -415,12 +287,6 @@ export function KnowledgeSidebarContent({
       setIsAddingFolder(false);
     }
   };
-
-  /** Filtra ficheiros por extensão e tamanho (útil quando vêm de uma pasta). */
-  const filterAcceptedFiles = (files: File[]): File[] =>
-    files.filter(
-      (f) => f.size <= MAX_FILE_SIZE_BYTES && ACCEPTED_EXTENSIONS.test(f.name)
-    );
 
   const handleKnowledgeFiles = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) {
@@ -2083,3 +1949,6 @@ export function KnowledgeSidebar({
     </aside>
   );
 }
+
+// Re-export for backward compatibility with any callers that imported from this module.
+export { getDocumentCoverageInfo } from "@/lib/knowledge/utils";

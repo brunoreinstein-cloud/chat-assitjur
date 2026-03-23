@@ -2,7 +2,7 @@ import { smoothStream, streamText } from "ai";
 import { getModeloRevisorFromTitle, loadModeloRevisor } from "@/lib/ai/modelos";
 import { updateDocumentPrompt } from "@/lib/ai/prompts";
 import { getArtifactModel } from "@/lib/ai/providers";
-import { createDocumentHandler } from "@/lib/artifacts/server";
+import { createDocumentHandler } from "@/lib/artifacts/create-document-handler";
 
 const SYSTEM_TEMPLATE_REVISOR = `És um assistente que preenche documentos do Revisor de Defesas Trabalhistas.
 DEVES seguir à risca a estrutura do modelo abaixo. Mantém títulos, secções, tabelas e placeholders [entre colchetes].
