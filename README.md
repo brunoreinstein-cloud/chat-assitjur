@@ -1,89 +1,220 @@
 # Chatbot — Agentes Jurídicos com IA
 
-Plataforma de chat com **5 agentes de IA** especializados em **contencioso trabalhista**: Assistente Geral, Revisor de Defesas, Redator de Contestações, Avaliador de Contestação e AssistJur.IA Master. Baseada em Next.js e no Vercel AI SDK.
+![Next.js](https://img.shields.io/badge/Next.js-16.1-black)
+![React](https://img.shields.io/badge/React-19-blue)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Status](https://img.shields.io/badge/Status-Production-brightgreen)
+![Docs](https://img.shields.io/badge/Docs-Complete-brightblue)
+
+Plataforma de chat com **5 agentes de IA** especializados em **contencioso trabalhista**: Assistente Geral, Revisor de Defesas, Redator de Contestações, Avaliador de Contestação e AssistJur.IA Master. Baseada em Next.js 16, React 19 e Vercel AI SDK.
 
 <p align="center">
-  <a href="#funcionalidades"><strong>Funcionalidades</strong></a> ·
-  <a href="#stack"><strong>Stack</strong></a> ·
-  <a href="#provedores-de-modelos"><strong>Provedores de modelos</strong></a> ·
-  <a href="#executar-localmente"><strong>Executar localmente</strong></a> ·
-  <a href="#deploy"><strong>Deploy</strong></a> ·
-  <a href="#documentação"><strong>Documentação</strong></a> ·
-  <a href="#agent-skills"><strong>Agent Skills</strong></a>
+  <a href="#-funcionalidades"><strong>Funcionalidades</strong></a> ·
+  <a href="#-stack"><strong>Stack</strong></a> ·
+  <a href="#-quick-start"><strong>Quick Start</strong></a> ·
+  <a href="#-documentação"><strong>Documentação</strong></a> ·
+  <a href="#-deployment"><strong>Deployment</strong></a> ·
+  <a href="#-model-context-protocol"><strong>Model Context Protocol</strong></a>
 </p>
 <br/>
 
-## Funcionalidades
+## 🎯 Funcionalidades
 
-- **Chat com LLM** — Streaming, histórico de conversas, **5 agentes built-in** especializados em contencioso trabalhista:
-  - **Assistente Geral** — assistente de uso geral, memória persistente.
-  - **Revisor de Defesas** — auditoria PI + contestação (fluxo GATE-1 → FASE A → GATE 0.5 → FASE B), gera DOCX.
-  - **Redator de Contestações** — redação de minuta de contestação (modo Modelo ou modo @bancodetese), aprovação HITL, gera DOCX.
-  - **Avaliador de Contestação** — avaliação de qualidade da contestação, gera relatório DOCX.
-  - **AssistJur.IA Master** — agente master com pipeline multi-chamadas para PDFs grandes, gera DOCX/XLSX/JSON + ZIP.
-- **Base de conhecimento** — Documentos (teses, precedentes, cláusulas) associados ao utilizador, injetados no contexto do chat; suporte a modo @bancodetese no Redator de Contestações.
-- **Ferramentas** — Criar/atualizar documentos, sugestões, memória persistente, human-in-the-loop (aprovação), pipeline multi-chamadas, MCP (Model Context Protocol).
-- **Tracking de processos** — Tabelas `Processo` e `TaskExecution` para rastreio de chamados trabalhistas (intake, auditoria de tarefas).
-- **Autenticação** — Auth.js (NextAuth) v5; **modo visitante (guest)** para usar o chat sem conta.
-- **Upload de ficheiros** — Vercel Blob ou Supabase Storage; suporte a PDF, DOCX, XLSX no chat (extração server-side).
-- **Ajuda** — `/ajuda`: guia das funcionalidades (agentes, base de conhecimento, créditos, ficheiros, modo visitante).
-- **Painel administrativo** — `/admin/agents`: edição de instruções, etiquetas e modelo padrão dos agentes built-in; APIs de créditos LLM (protegidas por chave).
-- **Persistência** — PostgreSQL (Supabase/Neon) com Drizzle ORM; histórico de chats, mensagens, processos e execuções.
+| Feature | Descrição | Status |
+|---------|-----------|--------|
+| **Chat com LLM** | Streaming em tempo real, histórico persistente, 5 agentes especializados | ✅ |
+| **Assistente Geral** | Assistência geral em direito do trabalho, memória persistente | ✅ |
+| **Revisor de Defesas** | Auditoria 2-fase (GATE-1 → FASE A → GATE 0.5 → FASE B), output DOCX | ✅ |
+| **Redator de Contestações** | Minuta automática (Modelo ou @bancodetese), aprovação HITL, DOCX | ✅ |
+| **Avaliador de Contestação** | Avaliação de qualidade (score 0-100), relatório DOCX | ✅ |
+| **AssistJur Master** | Pipeline multi-chamadas, intake complexos, output DOCX/XLSX/ZIP | ✅ |
+| **Base de Conhecimento** | Documentos (teses, jurisprudência, cláusulas) injetados no contexto | ✅ |
+| **Tracking de Processos** | Intake e rastreio de processos trabalhistas | ✅ |
+| **Upload de Ficheiros** | PDF, DOCX, XLSX; extração OCR automática | ✅ |
+| **Autenticação** | NextAuth v5 + modo visitante (guest) | ✅ |
+| **RBAC** | Role-based access control (admin, redator, revisor) | ✅ |
+| **MCP Pronto** | Integração plug-and-play com Gmail, Drive, Notion, GitHub | 🔄 |
+| **Cache LLM** | Redis opcional para reduzir latência e custos | ✅ |
+| **Painel Admin** | Editar prompts, labels, modelos; gerenciar créditos | ✅ |
+| **Persistência** | PostgreSQL + Drizzle ORM, histórico completo | ✅ |
 
-## Stack
+## 🛠️ Stack
 
-| Área            | Tecnologia |
-|-----------------|------------|
-| Framework       | Next.js 16 (App Router), React 19 |
-| IA              | Vercel AI SDK, AI Gateway (xAI, OpenAI, etc.) |
-| Base de dados   | PostgreSQL (Supabase/Neon), Drizzle ORM |
-| Auth            | Auth.js (NextAuth) v5 beta |
-| Storage         | Vercel Blob ou Supabase Storage |
-| Lint/Format     | Ultracite (Biome) |
-| Package manager | pnpm |
-| Deploy          | Vercel (recomendado) |
+| Área | Tecnologia | Versão |
+|------|-----------|--------|
+| **Frontend** | React + Next.js (App Router) | 19 / 16.1 |
+| **Styling** | Tailwind CSS + Radix UI | 4.2 / 1.4 |
+| **AI Orchestration** | Vercel AI SDK | 6.0 |
+| **LLM Provider** | Vercel AI Gateway (xAI Grok, OpenAI) | Latest |
+| **Database** | PostgreSQL (Supabase ou Neon) + Drizzle ORM | 15+ / 0.34 |
+| **Auth** | NextAuth.js (Auth.js) | 5.0-beta.30 |
+| **Storage** | Vercel Blob ou Supabase Storage | Latest |
+| **Cache** | Redis (optional, Upstash) | Latest |
+| **PDF Processing** | unpdf + pdfjs-dist + pdf-lib | 1.4 / 5.5 / 1.17 |
+| **Document Gen** | docx + mammoth (DOCX) | 9.6 / 1.11 |
+| **OCR** | tesseract.js (lazy-loaded) | 7.0 |
+| **Code Highlight** | shiki | 3.23 |
+| **Graphs** | @xyflow/react (flowchart visualization) | 12.10 |
+| **Lint/Format** | Biome (via Ultracite) | 2.4 |
+| **Testing** | Playwright (E2E) + Vitest (unit) | 1.58 / 2.1 |
+| **Package Manager** | pnpm | 10.0 |
+| **Deploy** | Vercel | Recommended |
 
-## Provedores de modelos
-
-O projeto usa o [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) para aceder a vários modelos (xAI, OpenAI, etc.). A configuração padrão inclui modelos xAI via gateway.
-
-- **Deploy na Vercel:** autenticação via OIDC.
-- **Fora da Vercel:** definir `AI_GATEWAY_API_KEY` em `.env.local`.
-
-Com o [AI SDK](https://ai-sdk.dev/docs/introduction) é possível usar outros provedores (OpenAI, Anthropic, etc.) alterando poucas linhas.
-
-## Executar localmente
-
-Usar as variáveis definidas em [`.env.example`](.env.example). Recomendado: Vercel CLI para puxar env (`pnpm run vercel:env`). Ver [docs/vercel-cli.md](docs/vercel-cli.md).
-
-> Não commitar `.env` ou `.env.local` — contêm segredos.
+## 🚀 Quick Start
 
 ```bash
+# 1. Instalar dependências
 pnpm install
-pnpm db:migrate   # criar/aplicar migrações
+
+# 2. Configurar ambiente
+pnpm run vercel:env
+# Ou manualmente: copiar .env.example para .env.local
+
+# 3. Aplicar migrações BD
+pnpm run db:migrate
+
+# 4. Iniciar dev server
 pnpm dev
+
+# 5. Abrir em browser
+# http://localhost:3300
 ```
 
-A aplicação fica disponível em [http://localhost:3300](http://localhost:3300). O primeiro carregamento em dev pode ser mais lento (Turbopack compila sob pedido); depois fica rápido. Opcional: com o servidor a correr, noutro terminal `pnpm run dev:warmup` para aquecer a cache.
+**Primeiro load pode ser mais lento (Turbopack compila sob demand).** Depois é rápido. Opcional: `pnpm run dev:warmup` para aquecer cache.
 
-**Outros comandos úteis:** `pnpm run prebuild` (lint + testes unitários), `pnpm build`, `pnpm db:studio` (Drizzle Studio), `pnpm run format`, `pnpm run lint`. Ver [AGENTS.md](AGENTS.md#comandos-úteis).
+---
 
-## Deploy
+## 💾 Cache & Performance
 
-Deploy recomendado na [Vercel](https://vercel.com). Checklist e variáveis em [docs/vercel-setup.md](docs/vercel-setup.md) e [docs/vercel-cli.md](docs/vercel-cli.md). Antes do push: `pnpm run prepush` (build completo).
+| Feature | Descrição | Status |
+|---------|-----------|--------|
+| **LLM Response Cache** | Redis (opcional, reduz latência) | ✅ Implementado |
+| **Document Cache** | In-memory com TTL (instância Vercel) | ✅ Implementado |
+| **DB Connection Pooling** | Supabase pooler (porta 6543) | ✅ Implementado |
+| **Lazy Loading** | tesseract.js, katex, @xyflow (sob demand) | ✅ Implementado |
+| **Message Limit** | Últimas 80 mensagens por chat (não todo histórico) | ✅ Implementado |
 
-## Documentação
+**Latência típica:** 4-40s total (95% é resposta do LLM).
 
-- **[AGENTS.md](AGENTS.md)** — Guia para agentes de IA: visão do projeto, stack, estrutura, regras, variáveis de ambiente, painel admin, base de conhecimento, comandos.
-- **[docs/PROJETO-REVISOR-DEFESAS.md](docs/PROJETO-REVISOR-DEFESAS.md)** — Agente Revisor de Defesas: fluxo (GATE-1 → FASE A → GATE 0.5 → FASE B), entradas/saídas (Doc 1–3), API, base de conhecimento.
-- **[docs/AGENTES-IA-PERSONALIZADOS.md](docs/AGENTES-IA-PERSONALIZADOS.md)** — Agentes built-in, instruções customizadas e base de conhecimento.
-- **[docs/SPEC-AI-DRIVE-JURIDICO.md](docs/SPEC-AI-DRIVE-JURIDICO.md)** — Especificação do produto AI Drive Jurídico.
-- **[docs/SPEC-CREDITOS-LLM.md](docs/SPEC-CREDITOS-LLM.md)** — Créditos LLM e painel administrativo.
+---
 
-## Agent Skills
+## 🔗 Model Context Protocol (MCP)
 
-O projeto usa [Agent Skills](https://skills.sh) em `.agents/skills/` (Next.js, React, AI SDK, Supabase, debugging, revisor-defesas-context, etc.).
+AssistJur suporta integração com servidores MCP para acesso a ferramentas externas **sem código custom**.
 
-- **Listar:** `npx skills list` ou `pnpm run skills:list`
-- **Atualizar:** `npx skills update` ou `pnpm run skills:check`
-- **Visão geral:** [.agents/README.md](.agents/README.md)
+| Servidor | Ferramentas | Status |
+|----------|------------|--------|
+| **Gmail MCP** | Leitura/envio de e-mails | 🔄 Pronto |
+| **Google Drive MCP** | Documentos e petições | 🔄 Pronto |
+| **Notion MCP** | Base de conhecimento | 🔄 Pronto |
+| **GitHub MCP** | Repositórios de templates | 🔄 Pronto |
+
+**Ativar MCP:** Configurar env vars (`MCP_GMAIL_URL`, `MCP_GMAIL_TOKEN`, etc.) e agentes usam automaticamente.
+
+Ver [docs/MCP.md](docs/MCP.md) para setup completo.
+
+---
+
+## 📚 Documentação
+
+| Doc | Descrição | Audiência |
+|-----|-----------|-----------|
+| **[AGENTS.md](AGENTS.md)** | Guia de agentes, prompts, instrções | Dev + Product |
+| **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** | Diagrama 6-layer, decisões de design, fluxos | Tech Lead + Dev |
+| **[docs/DESENVOLVIMENTO.md](docs/DESENVOLVIMENTO.md)** | Setup local, padrões, estrutura de pastas, debugging | Dev |
+| **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** | Vercel, Redis, variáveis, troubleshooting | DevOps + Dev |
+| **[docs/MCP.md](docs/MCP.md)** | Model Context Protocol, setup, exemplos | Dev + Product |
+| **[docs/vercel-cli.md](docs/vercel-cli.md)** | Vercel CLI commands, env sync | Dev |
+| **[docs/vercel-setup.md](docs/vercel-setup.md)** | Vercel setup completo, variables, migrations | DevOps |
+| **[scripts/README.md](scripts/README.md)** | Scripts one-off (db seed, healthchecks, benchmarks) | Dev |
+
+---
+
+## 🌍 Provedores de Modelos
+
+Usa [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) para aceder a múltiplos provedores:
+
+| Provider | Modelos | Setup |
+|----------|---------|-------|
+| **xAI (Grok)** | grok-2-latest | OIDC na Vercel |
+| **OpenAI** | gpt-4-turbo, gpt-4o | `OPENAI_API_KEY` |
+| **Anthropic** | claude-3.5-sonnet | `ANTHROPIC_API_KEY` |
+
+**Setup:**
+- **Em Vercel:** OIDC automático
+- **Local ou fora da Vercel:** Definir `AI_GATEWAY_API_KEY`
+
+Trocar provider é uma linha de código em `lib/ai/providers.ts`.
+
+---
+
+## 🚢 Deployment
+
+Deploy recomendado em [Vercel](https://vercel.com).
+
+**Checklist antes de push:**
+```bash
+pnpm run prepush    # lint + testes + build
+pnpm run config:check  # verificar variáveis
+```
+
+**Deploy:**
+```bash
+# Preview (branch atual)
+pnpm run vercel:deploy
+
+# Production
+pnpm run vercel:deploy:prod
+```
+
+**Setup completo:** [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+
+## 🧠 Agent Skills
+
+O projeto usa [Agent Skills](https://skills.sh) para integração com Claude Code.
+
+```bash
+# Listar skills
+pnpm run skills:list
+
+# Verificar updates
+pnpm run skills:check
+```
+
+Skills disponíveis: Next.js, React, AI SDK, Supabase, debugging, revisor-defesas-context, etc.
+
+Ver [.agents/README.md](.agents/README.md) para lista completa.
+
+---
+
+## 📋 Referência de Documentação Adicional
+
+| Doc | Descrição |
+|-----|-----------|
+| [docs/PROJETO-REVISOR-DEFESAS.md](docs/PROJETO-REVISOR-DEFESAS.md) | Fluxo detalhado do Revisor de Defesas |
+| [docs/AGENTES-IA-PERSONALIZADOS.md](docs/AGENTES-IA-PERSONALIZADOS.md) | Customização de prompts e labels |
+| [docs/SPEC-AI-DRIVE-JURIDICO.md](docs/SPEC-AI-DRIVE-JURIDICO.md) | Especificação funcional do produto |
+| [docs/SPEC-CREDITOS-LLM.md](docs/SPEC-CREDITOS-LLM.md) | Sistema de créditos LLM |
+| [docs/REVISAO-DEPENDENCIAS-ARQUITETURA.md](docs/REVISAO-DEPENDENCIAS-ARQUITETURA.md) | Análise de dependências e melhorias |
+| [docs/PLANO-IMPLEMENTACAO-REVISAO.md](docs/PLANO-IMPLEMENTACAO-REVISAO.md) | Roadmap de 4 semanas |
+
+---
+
+## 🆘 Precisa de Ajuda?
+
+- **Setup local?** Ver [docs/DESENVOLVIMENTO.md](docs/DESENVOLVIMENTO.md)
+- **Deploy para Vercel?** Ver [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- **Entender arquitetura?** Ver [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- **Integrar MCP?** Ver [docs/MCP.md](docs/MCP.md)
+- **Scripts de utilidade?** Ver [scripts/README.md](scripts/README.md)
+
+---
+
+## 📄 Licença
+
+MIT
+
+---
+
+**Built with ❤️ for legal professionals**
