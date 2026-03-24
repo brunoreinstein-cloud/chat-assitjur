@@ -495,10 +495,10 @@ export function Chat({
   const effectiveAgentId = getEffectiveAgentId(agentId);
 
   const handleProcessoChange = useCallback(
-    (newProcessoId: string | null) => {
+    async (newProcessoId: string | null) => {
       setProcessoId(newProcessoId);
-      // Persiste a vinculação na BD (fire-and-forget; UI já reagiu via estado).
-      setChatProcessoAction(id, newProcessoId).catch(() => {
+      // Persiste a vinculação na BD (UI já reagiu via estado).
+      await setChatProcessoAction(id, newProcessoId).catch(() => {
         /* persistência opcional */
       });
     },
