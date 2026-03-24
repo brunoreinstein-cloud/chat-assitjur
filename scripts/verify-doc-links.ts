@@ -7,8 +7,8 @@
  * Uso: tsx scripts/verify-doc-links.ts
  */
 
-import fs from "fs";
-import path from "path";
+import fs from "node:fs";
+import path from "node:path";
 
 // Extensões de ficheiros que podem ser linkeados
 const VALID_EXTENSIONS = [".md", ".ts", ".tsx", ".json"];
@@ -19,16 +19,9 @@ const DIRS_TO_CHECK = ["docs", "."];
 // Pattern para encontrar links em markdown: [texto](caminho)
 const LINK_PATTERN = /\[([^\]]+)\]\(([^)]+)\)/g;
 
-interface LinkResult {
-  file: string;
-  line: number;
-  text: string;
-  url: string;
-  exists: boolean;
-  error?: string;
-}
+// LinkResult interface removed (no longer used)
 
-async function findMarkdownFiles(): Promise<string[]> {
+function findMarkdownFiles(): string[] {
   const files: string[] = [];
 
   function walkDir(dir: string) {
@@ -37,8 +30,12 @@ async function findMarkdownFiles(): Promise<string[]> {
 
       for (const entry of entries) {
         // Skip node_modules, .git, etc.
-        if (entry.name.startsWith(".") && entry.name !== ".agents") continue;
-        if (entry.name === "node_modules") continue;
+        if (entry.name.startsWith(".") && entry.name !== ".agents") {
+          continue;
+        }
+        if (entry.name === "node_modules") {
+          continue;
+        }
 
         const fullPath = path.join(dir, entry.name);
 
@@ -68,21 +65,25 @@ function extractLinks(
   const links: { line: number; text: string; url: string }[] = [];
 
   lines.forEach((line, lineIndex) => {
-    let match;
     LINK_PATTERN.lastIndex = 0; // Reset regex
-    while ((match = LINK_PATTERN.exec(line)) !== null) {
+    let match = LINK_PATTERN.exec(line);
+    while (match !== null) {
       links.push({
         line: lineIndex + 1,
         text: match[1],
         url: match[2],
       });
+      match = LINK_PATTERN.exec(line);
     }
   });
 
   return links;
 }
 
-function validateLink(docPath: string, url: string): { exists: boolean; error?: string } {
+function validateLink(
+  docPath: string,
+  url: string
+): { exists: boolean; error?: string } {
   // Ignore external URLs
   if (url.startsWith("http://") || url.startsWith("https://")) {
     return { exists: true }; // Assume external links work
@@ -123,19 +124,20 @@ function validateLink(docPath: string, url: string): { exists: boolean; error?: 
   };
 }
 
-async function main() {
+function main() {
   console.log("[verify-doc-links] Starting verification...\n");
 
-  const mdFiles = await findMarkdownFiles();
+  const mdFiles = findMarkdownFiles();
   console.log(`Found ${mdFiles.length} markdown files\n`);
 
-  const allResults: LinkResult[] = [];
   let totalLinks = 0;
   let brokenLinks = 0;
 
   for (const file of mdFiles) {
     const links = extractLinks(file);
-    if (links.length === 0) continue;
+    if (links.length === 0) {
+      continue;
+    }
 
     totalLinks += links.length;
     console.log(`📄 ${file} (${links.length} links)`);
@@ -161,12 +163,18 @@ async function main() {
     console.log("✅ All documentation links are valid!\n");
     process.exit(0);
   } else {
-    console.log(`❌ Found ${brokenLinks} broken link(s). Fix them before deploying.\n`);
+    console.log(
+      `❌ Found ${brokenLinks} broken link(s). Fix them before deploying.\n`
+    );
     process.exit(1);
   }
 }
 
-main().catch((error) => {
-  console.error("[verify-doc-links] Error:", error);
-  process.exit(1);
-});
+(async () => {
+  try {
+    await main();
+  } catch (error) {
+    console.error("[verify-doc-links] Error:", error);
+    process.exit(1);
+  }
+})();
