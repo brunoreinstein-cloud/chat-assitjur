@@ -4,7 +4,7 @@ Documento de análise do **AssistJur-PRD-Spec-v1.0** (Módulo Contencioso Trabal
 
 **Fonte PRD:** `AssistJur-PRD-Spec-v1.0.docx` (exportado em `docs/AssistJur-PRD-Spec-v1.0.html` para referência).
 
-**Última atualização:** 2026-03-23 (Atualizado: schema Processo implementado; 5 agentes; ToolLoopAgent em produção.)
+**Última atualização:** 2026-03-24 (Atualizado: Sprint 4 RF-07 + fases + riscos + peças; Sprint 5 RBAC; Sprint 6 ProcessoPanel + telemetria + painel de passivo.)
 
 ---
 
@@ -59,8 +59,14 @@ Documento de análise do **AssistJur-PRD-Spec-v1.0** (Módulo Contencioso Trabal
 | **Upload / OCR** | PDF/DOC/DOCX, extração e tipagem; OCR para escaneados | `api/files/upload`, `api/files/process` |
 | **Entregas estruturadas** | 3 DOCX (Revisor): Avaliação, Roteiro Advogado, Roteiro Preposto | Agente Revisor, modelos em `lib/ai` |
 | **Auth** | Auth.js v5, guest mode, warmup BD | `app/api/auth` |
-| **Schema BD** | User, Chat, Message_v2, KnowledgeDocument, KnowledgeChunk; **`Processo`, `TaskExecution`, `VerbaProcesso` já existem** (fase, riscoGlobal, intake, cache PDF); CRUD e chat com `processoId` ainda pendentes | `lib/db/schema.ts`, [PROCESSO-TASKEXECUTION.md](PROCESSO-TASKEXECUTION.md) |
-| **RBAC** | Não implementado (PRD: paralegal, adv_junior, adv_pleno, adv_senior, socio, cliente) | — |
+| **Schema BD** | User, Chat, Message_v2, KnowledgeDocument, KnowledgeChunk; `Processo`, `TaskExecution`, `VerbaProcesso`, **`Peca`** (migração 0030); CRUD completo, chat por processo, fases e peças ligados. | `lib/db/schema.ts`, [PROCESSO-TASKEXECUTION.md](PROCESSO-TASKEXECUTION.md) |
+| **Chat por processo** | ✅ `processoId` no body POST `/api/chat`; `getProcessoContexto()` injectado no system prompt; `ProcessoSelector` no topbar (dropdown + modal inline de criação); `setChatProcessoAction`. | `app/(chat)/api/chat/route.ts`, `components/processo-selector.tsx` |
+| **Fases (state machine)** | ✅ `avancaFaseAction`, `setFaseAction`, `FASE_ORDER`, badge de fase na página do processo. | `lib/db/queries/processos.ts` |
+| **AgentRisk / verbas** | ✅ `upsertRiscoVerba` tool + action; tabela `VerbaProcesso` populada por agente. | `lib/ai/tools/` |
+| **Peças** | ✅ Tabela `Peca` (migração 0030); `savePecaAction`; link ao chat gerador. | `lib/db/migrations/0030_pecas.sql` |
+| **RBAC** | ✅ `lib/rbac/roles.ts` (6 perfis + `can()`), `requirePermission`, `role` em JWT/Session, admin UI + API route, guards em todas as server actions, migração 0031. | `lib/rbac/` |
+| **Telemetria** | ✅ `TaskTelemetry` (8 métricas: latência, tokens, steps, tools, finishReason, modelId) em `TaskExecution.result`; `buildAiSdkTelemetry` emite spans para Vercel/OpenTelemetry. | `lib/telemetry.ts` |
+| **Painel de passivo** | ✅ `/processos/passivo` server component com agregação por risco + CSV export. Portal do cliente (read-only externo) ainda pendente. | `app/(chat)/processos/passivo/` |
 | **Documentação** | SPEC AI Drive Jurídico, PROJETO-REVISOR-DEFESAS, AGENTES-IA-PERSONALIZADOS, PLANO-PROXIMOS-PASSOS | `docs/` |
 
 ### 2.2 Agentes atuais vs PRD
@@ -85,74 +91,80 @@ Documento de análise do **AssistJur-PRD-Spec-v1.0** (Módulo Contencioso Trabal
 
 | Gap | Descrição | Impacto |
 |-----|-----------|--------|
-| **Entidade Processo** | ✅ Schema `Processo` criado com todos os campos principais do PRD (numeroAutos, reclamante, reclamada, vara, fase, riscoGlobal, provisao, prazoFatal, intake, cache PDF). Falta: CRUD completo de API, UI e ligação ao chat via `processoId`. | Médio — schema feito; lógica e UI pendentes |
-| **State machine (fases)** | Campo `fase` existe no schema. Falta: `avancaFaseAction`, validação de transições e badge de fase na UI. | Médio |
-| **Risco por verba** | ✅ Tabela `VerbaProcesso` criada (verba, risco, valorMin, valorMax). Falta: AgentRisk e UI de painel de risco. | Médio |
-| **Peças (pecas)** | Versões de peças por processo (contestação, RO, etc.), status (rascunho, em_revisao, aprovado, protocolado), blob_url. Não existe. | Alto |
-| **Chat por processo × agente** | PRD: histórico por (processoId, agentId). Hoje: histórico por chatId (conversa), com agentId no chat. Não há “sessão por processo + agente”. | Alto |
-| **Cliente e passivo** | Entidade cliente, painel de passivo (RF-06), relatório PDF. Não existe. | Médio |
-| **RBAC** | 5 perfis (paralegal, adv_junior, adv_pleno, adv_senior, socio) + cliente. Não implementado. | Médio |
+| **Entidade Processo** | ✅ Schema `Processo` + CRUD completo + UI (ProcessoSelector inline, página processo, badge de fase). | — |
+| **State machine (fases)** | ✅ `avancaFaseAction`, `setFaseAction`, `FASE_ORDER`, badge de fase na UI. | — |
+| **Risco por verba** | ✅ Tabela `VerbaProcesso` + `upsertRiscoVerba` tool + action; painel de risco inline. | — |
+| **Peças (pecas)** | ✅ Tabela `Peca` (migração 0030); `savePecaAction`; `blobUrl` e link ao chat gerador. Status granular (rascunho/aprovado/protocolado) ainda sem UI dedicada. | Baixo |
+| **Chat por processo × agente** | ✅ `processoId` no body do chat; contexto injectado no system prompt; histórico por conversa (chatId) com `processoId` associado. | — |
+| **Cliente e passivo** | ✅ Painel `/processos/passivo` com agregação por risco + CSV. Portal read-only externo (P4) e relatório PDF mensal ainda não existem. | Médio |
+| **RBAC** | ✅ 6 perfis (`paralegal`, `adv_junior`, `adv_pleno`, `adv_senior`, `socio`, `cliente`) + `can()`; guards em server actions; admin UI. | — |
 
 ### 3.2 Funcionalidades
 
-| Gap | Descrição |
-|-----|-----------|
-| **Cadastro de processo (RF-01)** | CRUD de processos com validação CNJ e campos do PRD. |
-| **Fluxo de fases (RF-02)** | Transições de fase (manual ou via tool); UI refletindo fase atual. |
-| **AgentRisk (RF-03)** | Agente que produz análise de risco por verba (generateObject), persistência em `risco_por_verba`. |
-| **AgentDrafter integrado** | Elaboração atrelada ao processo e à fase “elaboracao”; gravação de peças em `pecas` e Blob. |
-| **Painel de passivo (RF-06)** | Por cliente: totais, provisão, histórico de acordos, PDF, alertas. |
-| **Chat com processoId (RF-07)** | API e UI: seleção de processo; getProcessoContexto(); histórico por (processoId, agentId). |
-| **Portal do cliente** | Área read-only para cliente (P4) com passivo e andamentos. |
+| Gap | Descrição | Estado |
+|-----|-----------|--------|
+| **Cadastro de processo (RF-01)** | CRUD de processos com validação CNJ e campos do PRD. | ✅ |
+| **Fluxo de fases (RF-02)** | Transições de fase (manual ou via tool); UI refletindo fase atual. | ✅ |
+| **AgentRisk (RF-03)** | `upsertRiscoVerba` tool; painel de risco. Agente dedicado `AgentRisk` autónomo não existe (tool activa no Master). | Parcial |
+| **AgentDrafter integrado** | Elaboração atrelada ao processo + `savePecaAction` + Blob. Fluxo de aprovação (rascunho→aprovado→protocolado) sem UI dedicada. | Parcial |
+| **Painel de passivo (RF-06)** | `/processos/passivo` com agregados + CSV. PDF mensal e alertas não existem. | Parcial |
+| **Chat com processoId (RF-07)** | API e UI com ProcessoSelector; getProcessoContexto() injectado no system prompt. | ✅ |
+| **Portal do cliente** | Área read-only externa (P4) com passivo e andamentos. | — |
+| **Intake automático** | PDF uploaded → agente extrai metadados → cria/atualiza Processo automaticamente. | — |
+| **Dashboard de custos** | View SQL (`llm-costs.ts`) calcula custo por token/modelo; falta ligar à UI admin. | Pendente |
+| **useSemanticRerank nos agentes** | Flag `useSemanticRerank` já existe no código; Master e Revisor não a activam ainda. | Pendente |
+| **searchJurisprudencia** | Tool criada; precisa de ser registada em `agent-assistjur-master` (registry e route). | Pendente |
+| **Langfuse traceId** | `createLoggingMiddleware` emite spans no formato correcto; falta passar `traceId` para o SDK Langfuse. | Pendente |
 
-### 3.3 API e Server Actions (PRD)
+### 3.3 API e Server Actions
 
-- **API:** GET/POST processos, GET processo/:id/contexto, GET processo/:id/passivo, GET/DELETE processo/:id/chat/:agentId.
-- **Actions:** createProcessoAction, avancaFaseAction, getProcessoContextoAction, upsertRiscoVerbaAction, savePecaAction, aprovaPecaAction.
-- **Chat:** body com `processoId` (obrigatório) e `agentId`; contexto sempre buscado no servidor.
-
-Hoje: chat usa `chatId` e opcionalmente `knowledgeDocumentIds`; não há `processoId` nem endpoints de processo/contexto/passivo.
+- **Actions existentes:** `createProcessoAction`, `avancaFaseAction`, `setFaseAction`, `getProcessoContextoAction`, `upsertRiscoVerbaAction`, `savePecaAction`, `setChatProcessoAction`, `updateUserRole`.
+- **Chat:** body com `processoId` (opcional) e `agentId`; contexto do processo injectado no system prompt quando presente.
+- **Pendente:** `aprovaPecaAction` (transição rascunho→aprovado→protocolado com UI dedicada); endpoints REST para portal do cliente.
 
 ---
 
 ## 4. Próximos passos recomendados
 
-### 4.1 Priorização sugerida
+### 4.1 Estado dos sprints PRD
 
-A ordem abaixo equilibra dependências do PRD e reuso do que já existe (Revisor, Redator, RAG, upload).
+| Sprint | Objetivo | Estado |
+|--------|----------|--------|
+| **1–3** | Schema Processo + CRUD + chat por processo + ProcessoPanel | ✅ Concluído |
+| **4 (RF-07)** | `processoId` no chat; fases; AgentRisk/verbas; peças | ✅ Concluído (2026-03-24) |
+| **5 (RBAC)** | 6 perfis, `can()`, guards, migração 0031 | ✅ Concluído (2026-03-24) |
+| **6** | ProcessoPanel, telemetria (TaskTelemetry), painel de passivo | ✅ Concluído (2026-03-24) |
+| **7 (RAG teses)** | Base de teses jurisprudenciais; `searchJurisprudencia` tool | Pendente (tool criada, falta registar) |
+| **8 (E2E / observ.)** | Langfuse traceId, dashboard de custos, load tests, deploy final | Pendente |
 
-| Ordem | Objetivo | Entregas | Estado | Depende de |
-|-------|----------|----------|--------|------------|
-| **1** | ~~Alinhar documentação e decisões~~ | ~~Decidir se evoluímos para “por processo”~~ | ✅ Concluído (schema criado) | — |
-| **2** | ~~Modelo de dados “processo”~~ | Schema `Processo`, `TaskExecution`, `VerbaProcesso` com todos os campos principais | ✅ Schema criado — CRUD API e UI pendentes | — |
-| **3** | **Chat “por processo” (RF-07)** | `processoId` no body do chat; `getProcessoContexto()`; ligar `TaskExecution` ao `chatId`; ProcessoPanel na UI | — | #2 ✅ |
-| **4** | **State machine (fases)** | `avancaFaseAction`, validação de transições; badge de fase na UI | — | #2 ✅ |
-| **5** | **AgentRisk + risco por verba (RF-03)** | Agente AgentRisk; `upsertRiscoVerbaAction`; painel de risco na UI | — | #2 ✅, #4 |
-| **6** | **Peças e AgentDrafter integrado (RF-05)** | Tabela `pecas`; `savePecaAction` (Blob); `aprovaPecaAction`; Redator recebendo contexto do processo | — | #2 ✅, #4 |
-| **7** | **RBAC (perfis PRD)** | Roles em User ou sessão; middleware por rota; visibilidade por perfil | — | Auth atual |
-| **8** | **Painel de passivo e cliente (RF-06)** | Entidade cliente; agregados; relatório PDF; alertas | — | #2 ✅, #7 |
+### 4.2 Próximos passos concretos
 
-### 4.2 O que manter do estado atual
+| # | Tarefa | Detalhe | Ficheiro-chave |
+|---|--------|---------|----------------|
+| 1 | **Dashboard de custos → UI admin** | View SQL em `llm-costs.ts` calcula custo/token por modelo; criar componente no painel admin que consulta a view e apresenta tabela/gráfico por período e agente. | `lib/db/llm-costs.ts`, `app/(chat)/admin/` |
+| 2 | **`useSemanticRerank: true`** | Flag já existe em `AgentConfig`; activar em Master e Revisor no `agents-registry.ts` e garantir que o pipeline RAG respeita a flag no `prepareCall`. | `lib/ai/agents-registry.ts`, `lib/ai/chat-agent.ts` |
+| 3 | **Registar `searchJurisprudencia` no Master** | Tool já criada; adicionar à lista de tools activas do `assistjur-master` no registry e em `route.ts` (secção que monta tools por agente). | `lib/ai/agents-registry.ts`, `app/(chat)/api/chat/route.ts` |
+| 4 | **Langfuse traceId** | `createLoggingMiddleware` já emite spans no formato correcto; instanciar o SDK Langfuse e passar `traceId` no `experimental_telemetry.metadata` (ou via `wrapLanguageModel`). | `lib/telemetry.ts`, `lib/ai/chat-agent.ts` |
+| 5 | **Portal do cliente (RF-06 restante)** | Área read-only para P4: passivo, andamentos, relatório PDF mensal, alertas. | Novo `app/(portal)/` |
+| 6 | **Intake automático** | PDF uploaded → agente extrai metadados → cria/atualiza `Processo` (`intakeStatus`). | `lib/ai/`, `app/(chat)/api/files/` |
+
+### 4.3 O que manter do estado atual
 
 - Revisor de Defesas e Redator de Contestações (como agentes de revisão e redação).
 - Base de conhecimento e RAG (já alinhada ao PRD RF-04 em conceito).
 - Validação pré-envio, checklist, política de dados, OCR, upload.
 - Stack técnica (Next.js, Vercel AI SDK, Neon, Auth.js, Blob).
 
-### 4.3 Roadmap do PRD (Sprints 1–8) — referência
+### 4.4 Roadmap do PRD (Sprints 1–8) — estado
 
-O PRD descreve 8 sprints de 2 semanas. Para alinhar:
-
-- **Sprint 1:** Schema + CRUD processos + createProcessoAction, avancaFaseAction.
-- **Sprint 2:** /api/chat com contexto de processo, persistência histórico processo×agente.
-- **Sprint 3:** ProcessoPanel, useProcessoChat, layout two-panel.
-- **Sprint 4:** AgentRisk, painel risco, upsertRiscoVerbas.
-- **Sprint 5:** AgentDrafter, Blob, fluxo aprovação peças.
-- **Sprint 6:** RBAC, painel passivo, PDF mensal.
-- **Sprint 7:** RAG base teses, tool searchTeses.
-- **Sprint 8:** E2E, load tests, Sentry, deploy.
-
-O plano atual do repositório (PLANO-PROXIMOS-PASSOS.md) pode ser atualizado para incluir estes itens como “curto/médio prazo” conforme a priorização acima.
+| Sprint PRD | Foco | Estado |
+|------------|------|--------|
+| 1–3 | Schema, CRUD, chat por processo, ProcessoPanel | ✅ |
+| 4 | AgentRisk, painel risco, upsertRiscoVerbas | ✅ (via tool, não agente autónomo) |
+| 5 | AgentDrafter, Blob, fluxo aprovação peças | ✅ (sem UI de aprovação) |
+| 6 | RBAC, painel passivo | ✅ (PDF mensal pendente) |
+| 7 | RAG base teses, `searchJurisprudencia` | Parcial (tool criada, não registada) |
+| 8 | E2E, load tests, Langfuse, dashboard custos, deploy | Pendente |
 
 ---
 
