@@ -333,6 +333,133 @@ export function searchInDocumentText(
   });
 }
 
+// ---------------------------------------------------------------------------
+// Detecção automática de fase processual (Playbook v9.0 Sprint 2 — Gap 9)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fases processuais detectáveis a partir do conteúdo dos documentos.
+ * Prevalência: fases mais avançadas sobrescrevem as anteriores.
+ */
+export type FaseProcessual =
+  | "CONHECIMENTO"
+  | "RECURSAL-TRT"
+  | "RECURSAL-TST"
+  | "EXECUCAO-PROVISORIA"
+  | "EXECUCAO-DEFINITIVA"
+  | "ACORDO"
+  | "ENCERRADO"
+  | "DESCONHECIDA";
+
+/**
+ * Detecta a fase processual a partir do texto do processo.
+ * Baseia-se em keywords características de cada fase; analisa todo o texto.
+ *
+ * Lógica de prevalência (maior número = fase mais avançada):
+ *  7 ENCERRADO > 6 ACORDO > 5 EXECUÇÃO DEFINITIVA > 4 EXECUÇÃO PROVISÓRIA
+ *  > 3 RECURSAL-TST > 2 RECURSAL-TRT > 1 CONHECIMENTO > 0 DESCONHECIDA
+ */
+export function detectFaseProcessual(text: string): FaseProcessual {
+  const upper = text.toUpperCase();
+
+  // Pontuação de fase (maior = mais avançado)
+  let score = 0;
+  let fase: FaseProcessual = "DESCONHECIDA";
+
+  const set = (s: number, f: FaseProcessual) => {
+    if (s > score) {
+      score = s;
+      fase = f;
+    }
+  };
+
+  // 1 — CONHECIMENTO: petição inicial e/ou contestação presentes
+  if (
+    upper.includes("PETIÇÃO INICIAL") ||
+    upper.includes("PETICAO INICIAL") ||
+    upper.includes("CONTESTAÇÃO") ||
+    upper.includes("CONTESTACAO")
+  ) {
+    set(1, "CONHECIMENTO");
+  }
+
+  // 2 — RECURSAL-TRT: recurso ordinário ou contrarrazões
+  if (
+    upper.includes("RECURSO ORDINÁRIO") ||
+    upper.includes("RECURSO ORDINARIO") ||
+    upper.includes("CONTRARRAZÕES") ||
+    upper.includes("CONTRARRAZOES") ||
+    (upper.includes("ACÓRDÃO") && upper.includes("TRT"))
+  ) {
+    set(2, "RECURSAL-TRT");
+  }
+
+  // 3 — RECURSAL-TST: recurso de revista, agravo de instrumento, AIRR
+  if (
+    upper.includes("RECURSO DE REVISTA") ||
+    upper.includes("AGRAVO DE INSTRUMENTO") ||
+    upper.includes("AIRR") ||
+    upper.includes("RR-") ||
+    (upper.includes("ACÓRDÃO") && upper.includes("TST"))
+  ) {
+    set(3, "RECURSAL-TST");
+  }
+
+  // 4 — EXECUÇÃO PROVISÓRIA: cálculos de liquidação sem trânsito em julgado
+  if (
+    (upper.includes("PLANILHA DE CÁLCULO") ||
+      upper.includes("PLANILHA DE CALCULO") ||
+      upper.includes("CONTA DE LIQUIDAÇÃO") ||
+      upper.includes("CONTA DE LIQUIDACAO") ||
+      upper.includes("MEMÓRIA DE CÁLCULO") ||
+      upper.includes("MEMORIA DE CALCULO")) &&
+    !upper.includes("CERTIFICO O TRÂNSITO") &&
+    !upper.includes("CERTIFICO O TRANSITO") &&
+    !upper.includes("TRANSITOU EM JULGADO")
+  ) {
+    set(4, "EXECUCAO-PROVISORIA");
+  }
+
+  // 5 — EXECUÇÃO DEFINITIVA: trânsito em julgado + execução / penhora
+  if (
+    (upper.includes("CERTIFICO O TRÂNSITO") ||
+      upper.includes("CERTIFICO O TRANSITO") ||
+      upper.includes("TRANSITOU EM JULGADO")) &&
+    (upper.includes("CUMPRIMENTO DE SENTENÇA") ||
+      upper.includes("CUMPRIMENTO DE SENTENCA") ||
+      upper.includes("EXECUÇÃO") ||
+      upper.includes("EXECUCAO") ||
+      upper.includes("PENHORA") ||
+      upper.includes("RCTE"))
+  ) {
+    set(5, "EXECUCAO-DEFINITIVA");
+  }
+
+  // 6 — ACORDO: homologação de acordo
+  if (
+    upper.includes("ACORDO HOMOLOGADO") ||
+    upper.includes("HOMOLOGA O ACORDO") ||
+    upper.includes("TERMO DE ACORDO") ||
+    upper.includes("ACORDO JUDICIAL")
+  ) {
+    set(6, "ACORDO");
+  }
+
+  // 7 — ENCERRADO: arquivamento definitivo
+  if (
+    upper.includes("ARQUIVAMENTO DEFINITIVO") ||
+    upper.includes("PROCESSO ARQUIVADO") ||
+    upper.includes("BAIXA DEFINITIVA") ||
+    (upper.includes("ARQUIVADO") && upper.includes("DEFINITIVAMENTE"))
+  ) {
+    set(7, "ENCERRADO");
+  }
+
+  return fase;
+}
+
+// ---------------------------------------------------------------------------
+
 /**
  * Extract document texts from message parts for use in the search tool.
  * Returns a map of document name → full extracted text.

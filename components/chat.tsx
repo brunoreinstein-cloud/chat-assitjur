@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
+import { setChatProcessoAction } from "@/app/(chat)/processos/actions";
 import { ChatComposerHeader } from "@/components/chat-composer-header";
 import { ChatTopbar } from "@/components/chat-topbar";
 import {
@@ -199,6 +200,8 @@ export function Chat({
 }: ChatProps) {
   const router = useRouter();
   const pathname = usePathname();
+  // Colocado no topo para poder inicializar processoId a partir do URL.
+  const searchParams = useSearchParams();
 
   const { visibilityType } = useChatVisibility({
     chatId: id,
@@ -232,11 +235,16 @@ export function Chat({
   const [saveToKnowledgeOpen, setSaveToKnowledgeOpen] = useState(false);
   const [saveToKnowledgeTitle, setSaveToKnowledgeTitle] = useState("");
   const [isSavingToKnowledge, setIsSavingToKnowledge] = useState(false);
+  /** Processo vinculado ao chat — inicializado a partir do URL (?processo=<uuid>). */
+  const [processoId, setProcessoId] = useState<string | null>(
+    () => searchParams.get("processo") ?? null
+  );
   const currentModelIdRef = useRef(currentModelId);
   const agentInstructionsRef = useRef(agentInstructions);
   const agentIdRef = useRef(agentId);
   const knowledgeDocumentIdsRef = useRef(knowledgeDocumentIds);
   const archivoIdsForChatRef = useRef(archivoIdsForChat);
+  const processoIdRef = useRef<string | null>(processoId);
 
   useEffect(() => {
     currentModelIdRef.current = currentModelId;
@@ -259,6 +267,10 @@ export function Chat({
   useEffect(() => {
     archivoIdsForChatRef.current = archivoIdsForChat;
   }, [archivoIdsForChat]);
+
+  useEffect(() => {
+    processoIdRef.current = processoId;
+  }, [processoId]);
 
   useSyncAgentToUrl(agentId, pathname, router);
   useCustomAgentKnowledgeSync(agentId, setKnowledgeDocumentIds);
@@ -305,6 +317,7 @@ export function Chat({
           knowledgeDocumentIdsRef,
           archivoIdsForChatRef,
           agentIdRef,
+          processoIdRef,
         };
         return {
           body: buildChatRequestBody(
@@ -317,8 +330,7 @@ export function Chat({
             truncatedLastMessage,
             refs,
             initialChatModel,
-            visibilityType ?? "private",
-            processoIdFromUrl
+            visibilityType ?? "private"
           ),
         };
       },
@@ -343,9 +355,7 @@ export function Chat({
     }
   }, [status, setDbFallbackUsed]);
 
-  const searchParams = useSearchParams();
   const query = searchParams.get("query");
-  const processoIdFromUrl = searchParams.get("processo");
   const [knowledgeOpen, setKnowledgeOpen] = useState(false);
   useKnowledgeOpenFromSearchParams(searchParams, setKnowledgeOpen);
 
@@ -484,6 +494,17 @@ export function Chat({
 
   const effectiveAgentId = getEffectiveAgentId(agentId);
 
+  const handleProcessoChange = useCallback(
+    (newProcessoId: string | null) => {
+      setProcessoId(newProcessoId);
+      // Persiste a vinculação na BD (fire-and-forget; UI já reagiu via estado).
+      setChatProcessoAction(id, newProcessoId).catch(() => {
+        /* persistência opcional */
+      });
+    },
+    [id]
+  );
+
   return (
     <>
       <div className="flex h-dvh w-full min-w-0 bg-background dark:bg-[#0d0f12]">
@@ -494,8 +515,9 @@ export function Chat({
             hasAssistantMessage={hasAssistantMessage}
             isReadonly={isReadonly}
             onKnowledgeBase={openKnowledgeSidebar}
+            onProcessoChange={handleProcessoChange}
             onSaveToKnowledge={openSaveToKnowledgeDialog}
-            processoId={processoIdFromUrl}
+            processoId={processoId}
             selectedVisibilityType={visibilityType}
           />
 
@@ -573,6 +595,7 @@ export function Chat({
                 messages={messages}
                 onModelChange={setCurrentModelId}
                 onOpenKnowledgeSidebar={openKnowledgeSidebar}
+                processoId={processoId}
                 selectedModelId={currentModelId}
                 selectedVisibilityType={visibilityType}
                 sendMessage={sendMessage}

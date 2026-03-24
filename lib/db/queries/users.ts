@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { asc, eq, like, not } from "drizzle-orm";
 import { type User, user } from "@/lib/db/schema";
 import { generateHashedPassword } from "@/lib/db/utils";
 import { ChatbotError } from "@/lib/errors";
@@ -52,6 +52,47 @@ export async function createGuestUser() {
     throw new ChatbotError(
       "bad_request:database",
       `Failed to create guest user: ${detail}`
+    );
+  }
+}
+
+export interface UserAdminRow {
+  id: string;
+  email: string | null;
+  role: string | null;
+}
+
+/** Lista todos os utilizadores não-guest com email e role (para o painel admin). */
+export async function listUsersForAdmin(): Promise<UserAdminRow[]> {
+  try {
+    return await getDb()
+      .select({ id: user.id, email: user.email, role: user.role })
+      .from(user)
+      .where(not(like(user.email, "guest-%")))
+      .orderBy(asc(user.email));
+  } catch (err) {
+    const detail =
+      err instanceof Error ? err.message : "Unknown database error";
+    throw new ChatbotError(
+      "bad_request:database",
+      `Failed to list users: ${detail}`
+    );
+  }
+}
+
+/** Atualiza o role de um utilizador (admin). */
+export async function updateUserRole(
+  userId: string,
+  role: string | null
+): Promise<void> {
+  try {
+    await getDb().update(user).set({ role }).where(eq(user.id, userId));
+  } catch (err) {
+    const detail =
+      err instanceof Error ? err.message : "Unknown database error";
+    throw new ChatbotError(
+      "bad_request:database",
+      `Failed to update user role: ${detail}`
     );
   }
 }

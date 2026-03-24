@@ -6,9 +6,15 @@ Este documento orienta agentes de IA (Cursor, Codex, etc.) a trabalhar neste rep
 
 ## Visão geral do projeto
 
-- **Nome:** Chatbot (template Next.js + AI SDK).
-- **Domínio:** Agente Revisor de Defesas Trabalhistas (auditor jurídico sênior — contencioso trabalhista). As instruções padrão do agente estão em `lib/ai/agent-revisor-defesas.ts` e são injetadas no system prompt quando o usuário não envia "Instruções do agente".
-- **Funcionalidades principais:** chat com LLM (streaming), histórico de conversas, base de conhecimento (documentos injetados no contexto), ferramentas (clima, criar/atualizar documento, sugestões), autenticação, **modo visitante (guest)** para usar o chat sem conta, upload de ficheiros (Vercel Blob ou Supabase Storage). A página **/ajuda** descreve o projeto e as funcionalidades para o utilizador final.
+- **Nome:** Chatbot (AssistJur.IA — Next.js + AI SDK).
+- **Domínio:** Plataforma de agentes de IA para **contencioso trabalhista**. Inclui 5 agentes built-in especializados, base de conhecimento, tracking de processos e painel administrativo.
+- **Agentes built-in:**
+  - `assistente-geral` — assistente de uso geral com memória persistente.
+  - `revisor-defesas` — auditoria PI + contestação (GATE-1 → FASE A → GATE 0.5 → FASE B); gera DOCX.
+  - `redator-contestacao` — redação de minuta (modo Modelo / modo @bancodetese); aprovação HITL; gera DOCX.
+  - `avaliador-contestacao` — avaliação de qualidade da contestação; gera DOCX.
+  - `assistjur-master` — pipeline multi-chamadas para PDFs grandes (>500 pgs); gera DOCX/XLSX/JSON + ZIP.
+- **Funcionalidades principais:** chat com LLM (streaming), histórico de conversas, base de conhecimento (documentos injetados no contexto), ferramentas (criar/atualizar documento, sugestões, memória, HITL, pipeline, MCP), tracking de processos (`Processo` + `TaskExecution`), autenticação, **modo visitante (guest)**, upload de ficheiros (PDF/DOCX/XLSX via Vercel Blob ou Supabase Storage). A página **/ajuda** descreve o projeto e as funcionalidades para o utilizador final.
 
 ---
 
@@ -33,26 +39,54 @@ Este documento orienta agentes de IA (Cursor, Codex, etc.) a trabalhar neste rep
 app/
   (auth)/          # rotas e layout de autenticação
   (chat)/          # chat UI, API /api/chat
-  api/             # outras APIs (ex.: knowledge)
+  api/             # outras APIs (knowledge, processos, admin, health)
 lib/
-  ai/              # prompts, providers, tools, agent-revisor-defesas, knowledge-base.md
+  ai/              # agentes, prompts, providers, tools, registry, context, MCP
   db/              # schema Drizzle, queries, migrate, supabase-types
   artifacts/       # artefactos do editor (server)
   editor/          # config do editor
   supabase/        # cliente e server Supabase
   errors.ts, types.ts, utils.ts, constants.ts
-components/        # UI (chat, sidebar, etc.)
-scripts/           # db-ping, db-tables, supabase-env
+components/        # UI (chat, sidebar, artifacts, admin, etc.)
+scripts/           # db-ping, db-tables, supabase-env, health-check
 ```
 
-**Ficheiros críticos para o chat e agente:**
+**Ficheiros críticos para o chat e agentes:**
 
-- `app/(chat)/api/chat/route.ts` — handler do POST do chat (streaming, system prompt, tools, knowledge).
+- `app/(chat)/api/chat/route.ts` — handler do POST do chat (ToolLoopAgent, system prompt, tools, knowledge, processos).
+- `lib/ai/chat-agent.ts` — cria o `ToolLoopAgent` por pedido; lógica de loop de ferramentas.
+- `lib/ai/agents-registry.ts` — registry de todos os agentes built-in; `AgentConfig`, `getAgentConfig`, `getAgentConfigWithOverrides`.
 - `lib/ai/prompts.ts` — `systemPrompt()` e dicas de pedido.
+- `lib/ai/context-window.ts` — estimativa de tokens, edição de documentos, otimização de contexto.
+- `lib/ai/document-context.ts` — extração de documentos das mensagens, construção de contexto inteligente.
+- `lib/ai/mcp-config.ts` — definições de ferramentas MCP (Model Context Protocol).
 - `lib/ai/agent-revisor-defesas.ts` — instruções do Agente Revisor (export `AGENTE_REVISOR_DEFESAS_INSTRUCTIONS`).
 - `lib/ai/agent-redator-contestacao.ts` — instruções do Agente Redator de Contestações v4.0 (modo Modelo e modo @bancodetese).
+- `lib/ai/agent-avaliador-contestacao.ts` — instruções do Agente Avaliador de Contestação.
+- `lib/ai/agent-assistjur-master.ts` — instruções do AssistJur.IA Master.
+- `lib/ai/agent-assistente-geral.ts` — instruções do Assistente Geral.
 - `lib/ai/knowledge-base.md` — documentação da base de conhecimento e evolução RAG.
-- `lib/db/queries.ts` — funções como `getKnowledgeDocumentsByIds`, `getMessagesByChatId`, `saveChat`, etc.
+- `lib/db/queries.ts` — funções como `getKnowledgeDocumentsByIds`, `getMessagesByChatId`, `saveChat`, `getProcessoById`, etc.
+
+---
+
+## AgentToolFlags — referência das flags por agente
+
+Cada agente tem um conjunto de flags que ativam ferramentas específicas. São configuráveis via admin override (BD) sem alterar código.
+
+| Flag | O que ativa | Revisor | Redator | Avaliador | Master | Assistente |
+|------|-------------|:-------:|:-------:|:---------:|:------:|:----------:|
+| `useRevisorDefesaTools` | `createRevisorDefesaDocuments`, validação PI+Contestação | ✅ | — | — | — | — |
+| `useRedatorContestacaoTool` | `createRedatorContestacaoDocument` (DOCX minuta) | — | ✅ | — | — | — |
+| `useAvaliadorContestacaoTool` | `createAvaliadorContestacaoDocument` (DOCX avaliação) | — | — | ✅ | — | — |
+| `useMasterDocumentsTool` | `createMasterDocuments` (DOCX/XLSX/JSON + ZIP download) | — | — | — | ✅ | — |
+| `useMemoryTools` | `saveMemory`, `recallMemories`, `forgetMemory` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `useApprovalTool` | `requestApproval` (HITL — pausa para aprovação) | — | ✅ | — | ✅ | — |
+| `usePipelineTool` | `analyzeProcessoPipeline` (multi-chamadas, PDFs >500 pgs) | — | — | — | ✅ | — |
+
+**Modelos restritos:**
+- `revisor-defesas`, `avaliador-contestacao`, `assistjur-master` — apenas modelos sem extended thinking (`nonReasoningChatModelIds`); reasoning desativa tools → documentos não gerados.
+- `redator-contestacao` — restrito a Claude Sonnet/Opus (qualidade de redação jurídica longa).
 
 ---
 
@@ -65,7 +99,9 @@ O projeto usa **Ultracite** (regras em `.cursor/rules/ultracite.mdc`). Ao editar
 3. **React/JSX:** hooks no top-level, keys em listas, sem `children` + `dangerouslySetInnerHTML`.
 4. **Qualidade:** sem `console` em código de produção, tratar erros de forma explícita, usar `===`/`!==`.
 5. **Next.js:** não usar `<img>` (usar componente do Next.js), não importar `next/document` fora de `_document`.
-6. **Documentação:** qualquer alteração a constantes de timeout ou ao fluxo de `app/(chat)/api/chat/route.ts` requer atualização dos docs em `docs/` (ex.: RASTREAR-E-CORRIGIR-PROBLEMAS.md, CHAT-DEBUG.md, DB-TIMEOUT-TROUBLESHOOTING.md, REFERENCIA-ERROS-400.md), para evitar dessincronização entre código e documentação.
+6. **ToolLoopAgent:** o chat usa o padrão `ToolLoopAgent` (criado em `lib/ai/chat-agent.ts`, invocado em `route.ts`). Não misturar com `streamText` direto — manter o padrão de loop por pedido.
+7. **MCP:** ferramentas Model Context Protocol estão em `lib/ai/mcp-config.ts`; ao adicionar novas ferramentas MCP, registar nesse ficheiro.
+8. **Documentação:** qualquer alteração a constantes de timeout ou ao fluxo de `app/(chat)/api/chat/route.ts` requer atualização dos docs em `docs/` (ex.: RASTREAR-E-CORRIGIR-PROBLEMAS.md, CHAT-DEBUG.md, DB-TIMEOUT-TROUBLESHOOTING.md, REFERENCIA-ERROS-400.md), para evitar dessincronização entre código e documentação.
 
 Comandos úteis:
 
@@ -95,7 +131,7 @@ Não hardcodar segredos; usar sempre variáveis de ambiente.
 ## Painel administrativo
 
 - **Rota:** `/admin/agents` (link na sidebar: "Administração — Agentes built-in").
-- **Função:** listar e editar instruções e etiquetas dos agentes built-in (Revisor de Defesas, Redator de Contestações, AssistJur Master). As alterações aplicam-se a todos os utilizadores.
+- **Função:** listar e editar instruções, etiquetas e modelo padrão dos 5 agentes built-in (Assistente Geral, Revisor de Defesas, Redator de Contestações, Avaliador de Contestação, AssistJur.IA Master). As alterações aplicam-se a todos os utilizadores.
 - **Acesso:** a página exige uma **chave de administrador**. Quem tiver essa chave pode ver a lista e editar; as APIs admin rejeitam pedidos sem o header `x-admin-key` correto.
 
 **Como criar/configurar a senha de acesso:**
@@ -150,7 +186,8 @@ Deploy na Vercel: [docs/vercel-setup.md](docs/vercel-setup.md) (checklist, env, 
 
 - **Antes de editar:** analisar padrões existentes no módulo e respeitar Ultracite e a11y.
 - **Ao alterar APIs:** manter compatibilidade com o cliente (ex.: schema do body em `app/(chat)/api/chat/schema.ts`).
-- **Ao alterar o agente ou prompts:** verificar `lib/ai/agent-revisor-defesas.ts` e `lib/ai/prompts.ts` e o uso em `route.ts`.
+- **Ao alterar agentes ou prompts:** verificar o ficheiro do agente em `lib/ai/agent-*.ts`, `lib/ai/agents-registry.ts`, `lib/ai/prompts.ts` e o uso em `route.ts` / `chat-agent.ts`.
+- **Ao adicionar um novo agente:** registar em `agents-registry.ts` (novo `AGENT_ID_*`, `AgentConfig`, entrada em `AGENT_CONFIGS`); criar ficheiro `lib/ai/agent-<nome>.ts` com as instruções.
 - **Ao tocar em DB:** usar Drizzle e migrations; não alterar `lib/db/schema.ts` sem gerar/migrar.
 - **Idioma:** o produto e a documentação interna estão em português; comentários e commits podem seguir o mesmo critério.
 
@@ -164,13 +201,20 @@ Comandos: `npx skills list` | `npx skills find [query]` | `npx skills update`.
 
 ---
 
-## Documentação do produto (Revisor de Defesas)
+## Documentação dos agentes e do produto
 
+- **[docs/AGENTES-IA-PERSONALIZADOS.md](docs/AGENTES-IA-PERSONALIZADOS.md)** — Visão geral dos 5 agentes built-in, instruções customizadas, base de conhecimento e agentes criados pelo utilizador.
 - **[docs/PROJETO-REVISOR-DEFESAS.md](docs/PROJETO-REVISOR-DEFESAS.md)** — Documentação completa do Agente Revisor: o que é, stack, arquitetura do agente, fluxo (GATE-1 → FASE A → GATE 0.5 → FASE B), API, base de conhecimento, formato dos 3 DOCX, UX/UI, env e comandos.
+- **[docs/AGENTE-AVALIADOR-CONTESTACAO.md](docs/AGENTE-AVALIADOR-CONTESTACAO.md)** — Agente Avaliador de Contestação: score de qualidade (A–E), mapeamento pedido×impugnação, fluxo GATE-1 → FASE A → GATE 0.5 → FASE B, diferença face ao Revisor.
+- **[docs/AGENTE-ASSISTJUR-MASTER.md](docs/AGENTE-ASSISTJUR-MASTER.md)** — AssistJur.IA Master: catálogo de 14 módulos, comandos de ativação, pipeline multi-chamadas, geração de DOCX/XLSX/JSON + ZIP, HITL.
+- **[docs/FLUXO-CHAT-AGENTE.md](docs/FLUXO-CHAT-AGENTE.md)** — Fluxo completo do chat: cliente → API → BD batch → AgentConfig → ToolLoopAgent → stream → onFinish.
 - **[docs/SPEC-AI-DRIVE-JURIDICO.md](docs/SPEC-AI-DRIVE-JURIDICO.md)** — Spec completa do produto "AI Drive Jurídico": visão, personas, domínios jurídicos, capacidades, arquitetura, segurança, UX, roadmap e métricas.
-- **[docs/AGENTES-IA-PERSONALIZADOS.md](docs/AGENTES-IA-PERSONALIZADOS.md)** — Agentes de IA personalizados: agentes pré-definidos (Revisor, Redator de Contestações), instruções customizadas e base de conhecimento; referência técnica e evolução futura.
 - **[docs/PLANO-PROXIMOS-PASSOS.md](docs/PLANO-PROXIMOS-PASSOS.md)** — Plano de próximos passos: tarefas imediatas (ex.: prebuild), curto prazo, índice do roadmap e onde a documentação descreve "próximos passos". Atualizar este ficheiro quando mudarem prioridades.
 - **[docs/ASSISTJUR-PRD-ALINHAMENTO.md](docs/ASSISTJUR-PRD-ALINHAMENTO.md)** — Alinhamento do PRD AssistJur.IA v1.0 (Contencioso Trabalhista) com o estado atual: gaps (processo, fases, AgentRisk, peças, chat por processo×agente, RBAC, passivo) e próximos passos priorizados.
+- **[docs/SPEC-ASSISTJUR-V9.md](docs/SPEC-ASSISTJUR-V9.md)** — SPEC baseada no MEGA_PLAYBOOK_PROCESSO_TRABALHISTA_v9.0: taxonomia 4 camadas, 7 princípios universais, mapeamento de agentes, estado dos 14 módulos (M01–M14), 12 gaps identificados (Template Lock, gates formais, entrega tripartite, etc.) e roadmap em 4 sprints.
+- **[docs/MEMORY-TOOLS.md](docs/MEMORY-TOOLS.md)** — Memory tools (`saveMemory`, `recallMemories`, `forgetMemory`): como usar, chaves, limites, referência técnica.
+- **[docs/HUMAN-IN-THE-LOOP.md](docs/HUMAN-IN-THE-LOOP.md)** — HITL (`requestApproval`): fluxo de aprovação, diferença face ao GATE do Revisor, parâmetros, agentes que o usam.
+- **[docs/PROCESSO-TASKEXECUTION.md](docs/PROCESSO-TASKEXECUTION.md)** — Schema e APIs de `Processo`, `TaskExecution` e `VerbaProcesso`; fluxo de intake document-first.
 - **[docs/OTIMIZACAO-CUSTO-TOKENS-LLM.md](docs/OTIMIZACAO-CUSTO-TOKENS-LLM.md)** — Revisão e otimização de custo de tokens e uso de LLM: onde se consome, limites atuais, checklist e ações recomendadas.
 - **[docs/PROMPT-LEAK-REDUCTION.md](docs/PROMPT-LEAK-REDUCTION.md)** — Estratégias para reduzir prompt leak (instruções sensíveis, base de conhecimento); o que o projeto já faz e melhorias opcionais (pós-processamento, auditorias).
 - **[docs/PDF-INPUTS-ESTADO-E-MELHORIAS.md](docs/PDF-INPUTS-ESTADO-E-MELHORIAS.md)** — Estado atual do tratamento de PDFs no chat (extração no servidor, partes `document` → texto) e melhorias possíveis com OpenRouter PDF (URL/base64, plugins, anotações).

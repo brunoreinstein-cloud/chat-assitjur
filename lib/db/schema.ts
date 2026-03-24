@@ -20,6 +20,12 @@ export const user = pgTable("User", {
   email: varchar("email", { length: 64 }).notNull(),
   /** Hash de palavra-passe (bcrypt ~60 chars; argon2 até ~95). text evita truncação silenciosa ao mudar de algoritmo. */
   password: text("password"),
+  /**
+   * Perfil RBAC: cliente | paralegal | adv_junior | adv_pleno | adv_senior | socio.
+   * null = sem perfil atribuído (utilizadores legados recebem adv_pleno via migração 0031).
+   * Lido da BD no login e armazenado no JWT; alterações ao role só têm efeito no próximo login.
+   */
+  role: varchar("role", { length: 32 }),
 });
 
 export type User = InferSelectModel<typeof user>;
@@ -143,6 +149,49 @@ export const verbaProcesso = pgTable("VerbaProcesso", {
 });
 
 export type VerbaProcesso = InferSelectModel<typeof verbaProcesso>;
+
+/**
+ * Peças processuais geradas pelos agentes (Redator, Master).
+ * Armazena o conteúdo markdown e opcionalmente o URL do DOCX no Blob.
+ */
+export const peca = pgTable(
+  "Peca",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    processoId: uuid("processoId")
+      .notNull()
+      .references(() => processo.id, { onDelete: "cascade" }),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /** Título descritivo (ex.: "Contestação Ygor Silva x CBD 0001234-56.2024.5.03.0001"). */
+    titulo: varchar("titulo", { length: 512 }).notNull(),
+    /**
+     * Tipo de peça: contestacao | recurso_ordinario | recurso_de_revista |
+     * manifestacao | relatorio | outro
+     */
+    tipo: varchar("tipo", { length: 64 }).notNull().default("outro"),
+    /** Conteúdo markdown gerado pelo agente. */
+    conteudo: text("conteudo"),
+    /** URL do DOCX no Vercel Blob (opcional — preenchido após upload). */
+    blobUrl: varchar("blobUrl", { length: 2048 }),
+    /** Chat que gerou esta peça (para navegação de volta). */
+    chatId: uuid("chatId"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (table) => ({
+    processoIdCreatedAtIdx: index("Peca_processoId_createdAt_idx").on(
+      table.processoId,
+      table.createdAt
+    ),
+    userIdCreatedAtIdx: index("Peca_userId_createdAt_idx").on(
+      table.userId,
+      table.createdAt
+    ),
+  })
+);
+
+export type Peca = InferSelectModel<typeof peca>;
 
 export const chat = pgTable(
   "Chat",

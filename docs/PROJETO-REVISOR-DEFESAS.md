@@ -37,7 +37,7 @@ Três documentos operacionais para a equipe jurídica se preparar para audiênci
 | Área | Tecnologia |
 |------|------------|
 | **Framework** | Next.js 16 (App Router), React 19 |
-| **IA** | Vercel AI SDK (`streamText`), AI Gateway (xAI, OpenAI, etc.) |
+| **IA** | Vercel AI SDK (`ToolLoopAgent`), AI Gateway (xAI, OpenAI, Anthropic, etc.) |
 | **Base de dados** | PostgreSQL (Supabase/Neon), Drizzle ORM |
 | **Autenticação** | Auth.js (NextAuth) v5 beta |
 | **Storage** | Vercel Blob ou Supabase Storage (upload de ficheiros) |
@@ -47,7 +47,7 @@ Três documentos operacionais para a equipe jurídica se preparar para audiênci
 
 ### Dependências principais (IA e runtime)
 
-- `ai` (Vercel AI SDK) — `streamText`, tools, streaming.
+- `ai` (Vercel AI SDK) — `ToolLoopAgent`, tools, streaming. O agente é criado por pedido em `lib/ai/chat-agent.ts` e invocado em `route.ts`.
 - `@ai-sdk/gateway` — roteamento para modelos (OpenAI, Anthropic, Google, xAI, etc.).
 - `@ai-sdk/react` — hooks (`useChat`, etc.).
 - Next.js 16, React 19, Drizzle ORM, Auth.js, Supabase/Blob conforme `.env`.
@@ -58,7 +58,7 @@ Três documentos operacionais para a equipe jurídica se preparar para audiênci
 
 ### 3.1 Visão geral
 
-O agente é implementado como **instruções de sistema** longas injetadas no `streamText` do AI SDK. O fluxo é **orientado por prompt**: o modelo segue as fases e gates descritos nas instruções. Não há máquina de estados explícita no código; a orquestração é feita pelo LLM + instruções.
+O agente é implementado como **instruções de sistema** longas injetadas no `ToolLoopAgent` do AI SDK. O fluxo é **orientado por prompt**: o modelo segue as fases e gates descritos nas instruções. Não há máquina de estados explícita no código; a orquestração é feita pelo LLM + instruções.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -74,7 +74,7 @@ O agente é implementado como **instruções de sistema** longas injetadas no `s
 │  • knowledgeDocumentIds → getKnowledgeDocumentsByIds → knowledgeContext  │
 │  • effectiveAgentInstructions = agentInstructions || AGENTE_REVISOR_...  │
 │  • systemPrompt({ agentInstructions, knowledgeContext })                 │
-│  • streamText(model, system, messages, tools)                            │
+│  • createChatAgent(config) → ToolLoopAgent.stream(messages, tools)      │
 └─────────────────────────────────────────────────────────────────────────┘
                                       │
           ┌───────────────────────────┼───────────────────────────┐

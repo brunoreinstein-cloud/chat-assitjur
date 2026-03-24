@@ -32,7 +32,7 @@ import {
   useState,
 } from "react";
 import { toast } from "sonner";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import { useLocalStorage, useWindowSize } from "usehooks-ts";
 import {
   getAgentConfig,
@@ -212,6 +212,8 @@ type PureMultimodalInputProps = Readonly<{
   onOpenKnowledgeSidebar?: () => void;
   /** Quando true, desativa o overlay de drag-and-drop para não interceptar drops destinados à KB sidebar. */
   knowledgeSidebarOpen?: boolean;
+  /** ID do processo vinculado ao chat — quando definido, dispara intake automático ao fazer upload de PDF. */
+  processoId?: string | null;
 }>;
 
 function PureMultimodalInput({
@@ -238,7 +240,9 @@ function PureMultimodalInput({
   setAgentInstructions,
   onOpenKnowledgeSidebar,
   knowledgeSidebarOpen = false,
+  processoId = null,
 }: PureMultimodalInputProps) {
+  const { mutate } = useSWRConfig();
   const [atPopoverOpen, setAtPopoverOpen] = useState(false);
   const [agentInstructionsDialogOpen, setAgentInstructionsDialogOpen] =
     useState(false);
@@ -713,6 +717,41 @@ function PureMultimodalInput({
             setAttachments((current) =>
               autoAssignMissingDocumentType([...current, a])
             );
+            // Intake automático: dispara em background quando há processoId e o ficheiro é PDF
+            const isPdf =
+              attachment.contentType === "application/pdf" ||
+              file.name.toLowerCase().endsWith(".pdf");
+            if (processoId && isPdf) {
+              const intakeToastId = `intake-${processoId}`;
+              toast.loading("Processando documento no processo...", {
+                id: intakeToastId,
+              });
+              fetch("/api/processos/intake", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  processoId,
+                  blobUrl: attachment.url,
+                  filename: file.name,
+                }),
+              })
+                .then((res) => res.json())
+                .then((data: { intakeStatus?: string; titulo?: string }) => {
+                  if (data.intakeStatus === "ready") {
+                    toast.success("Documento processado no processo", {
+                      id: intakeToastId,
+                      description: data.titulo ?? undefined,
+                    });
+                    // Actualiza o ProcessoSelector com os novos dados (titulo, reclamante, etc.)
+                    mutate("/api/processos");
+                  } else {
+                    toast.dismiss(intakeToastId);
+                  }
+                })
+                .catch(() => {
+                  toast.dismiss(intakeToastId);
+                });
+            }
           }
           setUploadQueue((prev) => {
             const idx = prev.findIndex((q) => q.label === file.name);
@@ -726,7 +765,7 @@ function PureMultimodalInput({
         setUploadQueue([]);
       }
     },
-    [attachments, setAttachments, uploadFile]
+    [attachments, setAttachments, uploadFile, processoId, mutate]
   );
 
   const handleFileChange = useCallback(

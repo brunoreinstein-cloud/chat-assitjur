@@ -2,7 +2,7 @@
 
 Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. Atualizar este ficheiro quando prioridades ou estado mudarem.
 
-**Última atualização:** 2026-03-13 (Adicionadas secções Médio prazo — Cookbook features — e Longo prazo — arquitectura.)
+**Última atualização:** 2026-03-24 (Arquivados: Sprint 4 RF-07 + fases + riscos + peças; Sprint 5 RBAC; Sprint 6 ProcessoPanel + Telemetria + Painel de Passivo + Migrações manuais.)
 
 ---
 
@@ -10,13 +10,26 @@ Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. 
 
 | #   | Tarefa                                        | Detalhe                                                                                                                                 | Estado   |
 |-----|-----------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------|----------|
-| 1   | **Decisão: evolução para “por processo”**    | Definir se o produto evolui para o modelo do PRD (entidade Processo, chat por processo×agente, fases, AgentRisk, passivo). Ver [ASSISTJUR-PRD-ALINHAMENTO.md](ASSISTJUR-PRD-ALINHAMENTO.md) § 4.                             | —        |
+| 1   | **Executar migrações manuais em produção** | `pnpm tsx lib/db/apply-manual-migrations.ts` (com `POSTGRES_URL` de produção) — aplica `0029_processo_intake.sql`, `0030_pecas.sql`, `0031_user_role.sql`. Localmente já aplicadas. | — |
+| 2   | **Intake automático** | PDF uploaded → agente extrai metadados → cria/atualiza processo automaticamente (sem formulário manual). Ver PRD §3 e `intakeStatus` no schema. | — |
+| 3   | **Relatório de qualidade** | UI que lê `TaskExecution.result` (8 métricas `TaskTelemetry`) e apresenta dashboard por processo/agente. | — |
 
 ### 1.1 Concluído (arquivo)
 
 | #   | Tarefa             | Resolução                                                                                                                                 |
 |-----|--------------------|-------------------------------------------------------------------------------------------------------------------------------------------|
-| —   | Prebuild a passar  | Alinhada rota `/api/chat` com teste: `temperature: 0.2`, `maxOutputTokens: 8192` em `streamText`; prebuild e build passam.                 |
+| —   | **Sprint 6 — ProcessoPanel + Telemetria + Painel de Passivo** (2026-03-24) | `ProcessoSelector` no topbar do chat (dropdown + modal inline de criação); `setChatProcessoAction`; `processoIdRef` em `ChatRequestRefs`. Telemetria: `TaskTelemetry` (8 métricas: latência, tokens, steps, tools, finishReason, modelId) em `TaskExecution.result`. Painel `/processos/passivo`: server component com agregação por risco + CSV export. Migrações `0029`/`0030`/`0031` aplicadas via `lib/db/apply-manual-migrations.ts`. |
+| —   | **Sprint 5 — RBAC** (2026-03-24) | `lib/rbac/roles.ts` (6 perfis + `can()`), `lib/rbac/guards.ts` (`requirePermission`), `role` em JWT/Session, `updateUserRole`, admin RBAC UI + API route, guards em todas as server actions, migração `0031_user_role.sql`. |
+| —   | **Sprint 4 — RF-07 + Fases + Riscos + Peças** (2026-03-24) | `processoId` no body POST /api/chat; injeção de contexto no system prompt; `TaskExecution` auto-link; `avancaFaseAction` + `setFaseAction`; `FASE_ORDER` state machine; badge de fases na página do processo; `upsertRiscoVerba` tool + action; tabela `Peca`; `savePecaAction`; migração `0030_pecas.sql`. |
+| —   | **ToolLoopAgent (AI SDK Agents)** | `streamText` substituído por `ToolLoopAgent` per-request em `lib/ai/chat-agent.ts`. `callOptionsSchema` + `prepareCall` para injeção de RAG/contexto. Créditos em `agent.onFinish`. Ver [AI-SDK-AGENTS-PROXIMOS-PASSOS.md](AI-SDK-AGENTS-PROXIMOS-PASSOS.md). |
+| —   | **Novos agentes: Avaliador, Master, Assistente Geral** | 5 agentes built-in: `assistente-geral`, `revisor-defesas`, `redator-contestacao`, `avaliador-contestacao`, `assistjur-master`. Registry em `lib/ai/agents-registry.ts`. Ver [AGENTES-IA-PERSONALIZADOS.md](AGENTES-IA-PERSONALIZADOS.md). |
+| —   | **Memory tools** | `saveMemory`, `recallMemories`, `forgetMemory` — memória persistente por userId. `useMemoryTools: true` em todos os agentes. Ver [MEMORY-TOOLS.md](MEMORY-TOOLS.md). |
+| —   | **Human-in-the-Loop (HITL)** | `requestApproval` (tool sem execute) — AI SDK pausa o stream; frontend mostra diálogo. Ativo em Redator e Master. Ver [HUMAN-IN-THE-LOOP.md](HUMAN-IN-THE-LOOP.md). |
+| —   | **Pipeline multi-chamadas** | `analyzeProcessoPipeline` — PDFs >500 pgs divididos em blocos temáticos. Ativo no Master (`usePipelineTool: true`). |
+| —   | **AssistJur Master Documents + ZIP** | `createMasterDocuments` gera DOCX/XLSX/JSON + download ZIP. `maxOutputTokens: 16000` no Master. Ver [AGENTE-ASSISTJUR-MASTER.md](AGENTE-ASSISTJUR-MASTER.md). |
+| —   | **Schema Processo / TaskExecution** | Tabelas `Processo`, `TaskExecution`, `VerbaProcesso` criadas com schema completo (fase, riscoGlobal, intake, cache PDF). Ver [PROCESSO-TASKEXECUTION.md](PROCESSO-TASKEXECUTION.md). |
+| —   | **Decisão: evolução para "por processo"** | Adoptado: schema Processo já criado; próximo passo é ligar o chat ao processo (RF-07). |
+| —   | Prebuild a passar  | Alinhada rota `/api/chat` com teste: `temperature: 0.2`, `maxOutputTokens: 8192`; prebuild e build passam.                 |
 | —   | **Validação pré-envio (PI + Contestação)** | Frontend: `validateRevisorPiContestacao` em `multimodal-input.tsx` (agente Revisor, primeira mensagem ou anexos com documentos). Backend: validação em `POST /api/chat` quando Revisor e mensagem tem partes document. |
 | —   | **Checklist "Antes de executar"** | `RevisorChecklist` renderizado em `chat.tsx` (acima do input), com `attachments`, `knowledgeDocumentIds`, `messageCount`. |
 | —   | **Política "dados não usados para treino"** | Texto em `lib/ai/data-policy.ts`; componente `DataPolicyLink` com dialog; link "Como usamos os seus dados" no footer do chat. |
@@ -47,7 +60,7 @@ Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. 
 | 8 | **Mais melhorias UX/UI chat** | (1) Indicador de modelo LLM ao lado do agente no header. (2) Breadcrumb ou título da conversa visível no topo. (3) Reduzir redundância: agente mostrado na sidebar + header + greeting — considerar um único ponto de verdade com destaque. (4) Botão "Faça anexar PI e Contestação" só quando Revisor selecionado. (5) Acessibilidade: garantir que o seletor de agente tenha foco lógico e anúncio para leitores de ecrã. | [ux-ui-revisor-defesas.md](ux-ui-revisor-defesas.md) |
 | 9 | **Workflow DevKit (useworkflow.dev)** | Avaliar adopção para workflows duráveis (Revisor GATE-1→FASE A→GATE 0.5→FASE B), retries em tool calls, human-in-the-loop no GATE 0.5, observabilidade e (futuro) sleep/agendamento. POC mínima recomendada antes de integrar no chat. | [WORKFLOW-DEVKIT-PROXIMOS-PASSOS.md](WORKFLOW-DEVKIT-PROXIMOS-PASSOS.md) |
 | ~~10~~ | ~~**AI SDK Agents (ToolLoopAgent, call options)**~~ | ✅ **Concluído (2026-03-23).** `streamText` substituído por `ToolLoopAgent` per-request em `lib/ai/chat-agent.ts`. `callOptionsSchema` (Zod) + `prepareCall` para injeção de system prompt/RAG. Créditos em `agent.onFinish`. `abortSignal` propagado. DevTools activo. Ver [AI-SDK-AGENTS-PROXIMOS-PASSOS.md](AI-SDK-AGENTS-PROXIMOS-PASSOS.md). | [AI-SDK-AGENTS-PROXIMOS-PASSOS.md](AI-SDK-AGENTS-PROXIMOS-PASSOS.md) |
-| 11 | **AssistJur PRD — modelo “por processo”** | Conforme [ASSISTJUR-PRD-ALINHAMENTO.md](ASSISTJUR-PRD-ALINHAMENTO.md): (1) Schema e CRUD de processos; (2) Chat com processoId e histórico por (processoId, agentId); (3) State machine de fases; (4) AgentRisk + risco por verba; (5) Peças e AgentDrafter integrado; (6) RBAC; (7) Painel de passivo. Priorização e dependências no doc. | [ASSISTJUR-PRD-ALINHAMENTO.md](ASSISTJUR-PRD-ALINHAMENTO.md) |
+| 11 | **AssistJur PRD — completar modelo “por processo”** | Concluído (✅): schema, chat por processo, fases, AgentRisk/verbas, peças, RBAC, ProcessoPanel, telemetria. **Pendente:** (1) Criar processo inline no chat (modal no `ProcessoSelector`); (2) Painel de passivo agregado; (3) Intake automático (PDF → cria processo automaticamente); (4) Relatório de qualidade via `TaskExecution.result`. Ver [ASSISTJUR-PRD-ALINHAMENTO.md](ASSISTJUR-PRD-ALINHAMENTO.md). | [ASSISTJUR-PRD-ALINHAMENTO.md](ASSISTJUR-PRD-ALINHAMENTO.md) |
 
 ---
 

@@ -94,7 +94,21 @@ export const createMasterDocuments = ({
         .array(
           z.object({
             title: z.string().describe("Document title"),
-            content: z.string().describe("Document content in markdown format"),
+            content: z
+              .string()
+              .describe(
+                "Document content in markdown format. " +
+                  "For Template Lock mode (M02/M04/M06): pass the full template content with {PLACEHOLDER} markers already present; " +
+                  "use the 'placeholders' field to supply the substitution values."
+              ),
+            placeholders: z
+              .record(z.string(), z.string())
+              .optional()
+              .describe(
+                "Template Lock — map of {PLACEHOLDER_KEY}: value to substitute in the content. " +
+                  "Example: { 'NOME_RECLAMANTE': 'João Silva', 'DATA_ADMISSAO': '01/03/2020' }. " +
+                  "Keys must match exactly the placeholder names inside braces in the template content."
+              ),
           })
         )
         .min(1)
@@ -126,7 +140,14 @@ export const createMasterDocuments = ({
 
       for (let i = 0; i < total; i++) {
         const id = generateUUID();
-        const { title, content } = documents[i];
+        const { title, placeholders } = documents[i];
+        // Template Lock: substituir {PLACEHOLDER} pelo valor mapeado (se fornecido)
+        let content = documents[i].content;
+        if (placeholders && Object.keys(placeholders).length > 0) {
+          for (const [key, value] of Object.entries(placeholders)) {
+            content = content.replaceAll(`{${key}}`, value);
+          }
+        }
         ids.push(id);
         titles.push(title);
 

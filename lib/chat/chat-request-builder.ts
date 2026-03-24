@@ -6,6 +6,8 @@ export interface ChatRequestRefs {
   knowledgeDocumentIdsRef: { current: string[] };
   archivoIdsForChatRef: { current: string[] };
   agentIdRef: { current: string };
+  /** ID do processo vinculado ao chat — atualizado via ProcessoSelector. */
+  processoIdRef: { current: string | null };
 }
 
 export function buildChatRequestBody(
@@ -14,8 +16,7 @@ export function buildChatRequestBody(
   lastMessage: unknown,
   refs: ChatRequestRefs,
   initialChatModel: string,
-  visibilityType: string,
-  processoId?: string | null
+  visibilityType: string
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {
     id: request.id,
@@ -37,8 +38,8 @@ export function buildChatRequestBody(
   if (refs.archivoIdsForChatRef.current.length > 0) {
     body.archivoIds = refs.archivoIdsForChatRef.current;
   }
-  if (processoId) {
-    body.processoId = processoId;
+  if (refs.processoIdRef.current) {
+    body.processoId = refs.processoIdRef.current;
   }
   return body;
 }

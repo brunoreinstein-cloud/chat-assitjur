@@ -1,4 +1,4 @@
-import { BotIcon, CoinsIcon } from "lucide-react";
+import { BotIcon, CoinsIcon, ShieldCheckIcon } from "lucide-react";
 import Link from "next/link";
 
 const adminSections = [
@@ -15,6 +15,13 @@ const adminSections = [
     description:
       "Listar utilizadores com saldo e adicionar créditos a quem precisar.",
     icon: CoinsIcon,
+  },
+  {
+    href: "/admin/rbac",
+    title: "Perfis RBAC",
+    description:
+      "Gerir os perfis de acesso dos utilizadores (cliente, paralegal, adv_junior, adv_pleno, adv_senior, sócio).",
+    icon: ShieldCheckIcon,
   },
 ] as const;
 

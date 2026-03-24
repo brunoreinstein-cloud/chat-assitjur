@@ -77,9 +77,14 @@ Se o batch falhar ou der timeout global (120s) → resposta 400 com mensagem de 
 
 Cada `AgentConfig` tem:
 - `id`, `label`, `instructions`
-- `useRevisorDefesaTools` (createRevisorDefesaDocuments, validação PI+Contestação)
-- `useRedatorContestacaoTool` (createRedatorContestacaoDocument)
-- `allowedModelIds` (opcional)
+- `useRevisorDefesaTools` — ativa `createRevisorDefesaDocuments` + validação PI+Contestação
+- `useRedatorContestacaoTool` — ativa `createRedatorContestacaoDocument`
+- `useAvaliadorContestacaoTool` — ativa `createAvaliadorContestacaoDocument`
+- `useMasterDocumentsTool` — ativa `createMasterDocuments` (DOCX/XLSX/JSON + ZIP)
+- `useMemoryTools` — ativa `saveMemory`, `recallMemories`, `forgetMemory`
+- `useApprovalTool` — ativa `requestApproval` (HITL)
+- `usePipelineTool` — ativa `analyzeProcessoPipeline` (multi-chamadas, PDFs >500 pgs)
+- `allowedModelIds` (opcional), `maxOutputTokens` (opcional)
 
 **Modelo efetivo:**  
 - Se `selectedChatModel` estiver em `allowedModelIds` do agente → usa esse modelo.  
@@ -146,21 +151,28 @@ Ou seja: o “agente” entra no fluxo como **texto de instruções** injetado n
 
 ---
 
-## 9. Stream: streamText + tools
+## 9. Stream: ToolLoopAgent + tools
 
-**Onde:** `buildChatStreamResponse()` → `createUIMessageStream()` com callback `execute` que chama `streamText()`.
+**Onde:** `buildChatStreamResponse()` → `createUIMessageStream()` com callback `execute` que chama `createChatAgent(config).stream()`.
+
+O agente é criado por pedido em `lib/ai/chat-agent.ts` (`createChatAgent`) e retorna um `ToolLoopAgent` configurado com modelo, system prompt, tools e callbacks. É per-request porque as tools dependem do `dataStream` disponível apenas dentro do handler.
 
 - **Modelo:** `getLanguageModel(effectiveModel)` (provedor configurado no projeto).
 - **System:** `systemPrompt({ selectedChatModel, requestHints, agentInstructions: effectiveAgentInstructions, knowledgeContext })` — mesmo conteúdo já descrito.
 - **Mensagens:** as preparadas para o modelo (histórico + nova mensagem).
 - **Tools activas** conforme `agentConfig`:
-  - Sempre: `getWeather`, `createDocument`, `updateDocument`, `requestSuggestions`, `improvePrompt`.
+  - Sempre: `createDocument`, `updateDocument`, `requestSuggestions`, `improvePrompt`.
+  - Se `useMemoryTools`: `saveMemory`, `recallMemories`, `forgetMemory`.
   - Se `useRevisorDefesaTools`: `createRevisorDefesaDocuments`.
   - Se `useRedatorContestacaoTool`: `createRedatorContestacaoDocument`.
-- **Parâmetros:** `temperature: 0.2`, `maxOutputTokens: 8192`, `stopWhen: stepCountIs(5)`. Para modelos “reasoning”, podem ser passadas opções de thinking (ex.: Anthropic).
-- O resultado de `streamText()` é convertido para o stream de UI (`toUIMessageStream`) e fundido no `dataStream` (incluindo título do chat quando existir `titlePromise`).
+  - Se `useAvaliadorContestacaoTool`: `createAvaliadorContestacaoDocument`.
+  - Se `useMasterDocumentsTool`: `createMasterDocuments`.
+  - Se `useApprovalTool`: `requestApproval` (HITL).
+  - Se `usePipelineTool`: `analyzeProcessoPipeline`.
+- **Parâmetros:** `temperature: 0.2`, `maxOutputTokens: 8192` (ou `agentConfig.maxOutputTokens` — Master usa 16000). Para modelos “reasoning”, opções de thinking passadas via provedor.
+- O resultado é convertido para o stream de UI (`toUIMessageStream`) e fundido no `dataStream` (incluindo título do chat quando existir `titlePromise`).
 
-Quando o modelo chama uma tool (ex.: createRevisorDefesaDocuments), o AI SDK executa a tool; em fluxos com aprovação, o resultado pode voltar ao cliente e o próximo POST trará `messages` em vez de uma única `message`.
+Quando o modelo chama uma tool (ex.: `createRevisorDefesaDocuments`), o ToolLoopAgent executa a tool e pode continuar o loop (stepCountIs). Em fluxos com `requestApproval` (HITL), o resultado volta ao cliente; o utilizador aprova/rejeita e o próximo POST trará `messages` em vez de uma única `message`.
 
 ---
 
@@ -181,7 +193,7 @@ Quando o modelo chama uma tool (ex.: createRevisorDefesaDocuments), o AI SDK exe
 5. **Créditos** e persistência do chat (incl. `agentId` no chat).
 6. **Mensagens** = histórico + nova; validação + RAG + ficheiros; construção de `knowledgeContext`.
 7. **System prompt** = base + base de conhecimento + **instruções do agente** (`agentConfig.instructions` ou overrides/custom).
-8. **streamText** com esse system, mensagens e **tools** dependentes do agente (Revisor, Redator, base).
+8. **ToolLoopAgent** (`createChatAgent`) com esse system, mensagens e **tools** dependentes das flags do agente.
 9. Resposta em **stream** para o cliente; no fim, gravação de mensagens e créditos.
 
 O “agente” é portanto: **(agentId → AgentConfig → instruções no system prompt + conjunto de tools)**. O mesmo pipeline de chat serve todos os agentes; a diferença está na config (instruções + flags de tools) e no modelo permitido.

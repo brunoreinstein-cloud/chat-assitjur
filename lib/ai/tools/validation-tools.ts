@@ -129,6 +129,53 @@ export const validationTools = {
     execute: noop,
   }),
 
+  // upsertRiscoVerba stub — valida histórico com chamadas a este tool.
+  // Schema em sync com lib/ai/tools/upsert-risco-verba.ts.
+  upsertRiscoVerba: tool({
+    description:
+      "Guarda ou actualiza a classificação de risco das verbas (pedidos) do processo trabalhista.",
+    inputSchema: z.object({
+      processoId: z.string().uuid(),
+      verbas: z
+        .array(
+          z.object({
+            verba: z.string().min(1).max(256),
+            risco: z.enum(["provavel", "possivel", "remoto"]),
+            valorMin: z.number().int().nonnegative().optional(),
+            valorMax: z.number().int().nonnegative().optional(),
+          })
+        )
+        .min(1)
+        .max(50),
+    }),
+    execute: noop,
+  }),
+
+  // runProcessoGates stub — valida histórico com chamadas a este tool.
+  // Schema em sync com lib/ai/tools/run-processo-gates.ts.
+  runProcessoGates: tool({
+    description:
+      "Executa os 6 Gates obrigatórios de validação antes de gerar qualquer documento do processo.",
+    inputSchema: z.object({
+      numeroCNJ: z.string().optional(),
+      cnpjReclamada: z.string().optional(),
+      dataAdmissao: z.string().optional(),
+      dataDemissao: z.string().optional(),
+      dataDistribuicao: z.string().optional(),
+      dataSentenca: z.string().optional(),
+      dataTransito: z.string().optional(),
+      valorCausa: z.number().optional(),
+      valorCondenacao: z.number().optional(),
+      posTransito: z.boolean().optional(),
+      camposCriticos: z
+        .array(
+          z.object({ nome: z.string(), confianca: z.number().min(0).max(1) })
+        )
+        .optional(),
+    }),
+    execute: noop,
+  }),
+
   // Human-in-the-Loop stub — valida histórico com chamadas a requestApproval.
   // Schema em sync com lib/ai/tools/human-in-the-loop.ts.
   requestApproval: tool({

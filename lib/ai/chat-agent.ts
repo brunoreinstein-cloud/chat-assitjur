@@ -73,6 +73,8 @@ const BASE_TOOL_NAMES = [
   "recallMemories",
   "forgetMemory",
   "requestApproval",
+  "runProcessoGates",
+  "upsertRiscoVerba",
 ] as const;
 
 type BaseToolName = (typeof BASE_TOOL_NAMES)[number];
@@ -163,6 +165,33 @@ export async function deductCreditsWithRetry(args: {
 }
 
 // ---------------------------------------------------------------------------
+// Telemetria de qualidade
+// ---------------------------------------------------------------------------
+
+/**
+ * 8 métricas capturadas por execução de agente e gravadas em TaskExecution.result.
+ * Definição: https://docs.assistjur.ia/telemetria
+ */
+export interface TaskTelemetry {
+  /** Latência total (ms) desde o início do request até ao fim do agente. */
+  latencyMs: number;
+  /** Tokens de input (prompt) totais na execução. */
+  inputTokens: number;
+  /** Tokens de output (completion) totais na execução. */
+  outputTokens: number;
+  /** Total de tokens (input + output). */
+  totalTokens: number;
+  /** Número de steps do agente (inclui steps de tool + step final). */
+  stepsCount: number;
+  /** Lista de nomes de tools invocadas (sem duplicados, ordenados por primeira chamada). */
+  toolsUsed: string[];
+  /** Razão de paragem do último step: stop | tool-calls | length | content-filter | error. */
+  finishReason: string;
+  /** Modelo utilizado nesta execução. */
+  modelId: string;
+}
+
+// ---------------------------------------------------------------------------
 // Parâmetros do factory
 // ---------------------------------------------------------------------------
 
@@ -178,6 +207,14 @@ export interface CreateChatAgentParams<TOOLS extends ToolSet> {
   effectiveModel: string;
   /** Flag créditos desabilitados (DISABLE_CREDITS=true). */
   creditsDisabled: boolean;
+  /**
+   * Callback opcional chamado em onFinish com as 8 métricas de qualidade.
+   * Se fornecido, o agent grava automaticamente as métricas (TaskExecution.result).
+   * Timestamp de início: se não fornecido, usa Date.now() no momento da criação do agente.
+   */
+  onTelemetry?: (metrics: TaskTelemetry) => void | Promise<void>;
+  /** Timestamp de início do request (para cálculo de latência). Default: Date.now(). */
+  telemetryStartMs?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -203,7 +240,14 @@ export function createChatAgent<TOOLS extends ToolSet>(
     chatId,
     effectiveModel,
     creditsDisabled,
+    onTelemetry,
+    telemetryStartMs = Date.now(),
   } = params;
+
+  // Acumuladores de métricas (mutáveis dentro do closure do agente).
+  let stepsCount = 0;
+  const toolsUsedSet: string[] = [];
+  let lastFinishReason = "stop";
 
   const languageModel = getLanguageModel(effectiveModel);
 
@@ -223,6 +267,18 @@ export function createChatAgent<TOOLS extends ToolSet>(
       const isAdaptiveThinking =
         modelReasoningType(options.effectiveModel) === "adaptive";
 
+      // Thinking adaptativo efectivo:
+      // - false explícito na config (ex.: Master extração) → sempre desativado
+      // - true explícito na config (ex.: Revisor, Redator) → forçar adaptive em modelos compatíveis
+      // - undefined → usar comportamento do modelo (legacy)
+      const thinkingDisabled = agentConfig.thinkingEnabled === false;
+      const thinkingForced =
+        agentConfig.thinkingEnabled === true &&
+        !options.isReasoningModel &&
+        !isAdaptiveThinking;
+      const effectiveAdaptiveThinking =
+        !thinkingDisabled && (isAdaptiveThinking || thinkingForced);
+
       return {
         model: languageModel,
         system: systemPrompt({
@@ -239,9 +295,11 @@ export function createChatAgent<TOOLS extends ToolSet>(
           hasDocuments: options.hasDocuments,
           agentConfig,
         }),
-        ...(options.isReasoningModel || isAdaptiveThinking
+        // Temperature: omitir para reasoning/adaptive (esses modos não aceitam temperature).
+        // Usa valor da config do agente (0.1 para extração, 0.2 para análise/redação).
+        ...(options.isReasoningModel || effectiveAdaptiveThinking
           ? {}
-          : { temperature: 0.2 as const }),
+          : { temperature: agentConfig.temperature ?? 0.2 }),
         ...(options.isReasoningModel
           ? {
               providerOptions: {
@@ -250,7 +308,7 @@ export function createChatAgent<TOOLS extends ToolSet>(
                 },
               },
             }
-          : isAdaptiveThinking
+          : effectiveAdaptiveThinking
             ? {
                 providerOptions: {
                   anthropic: { thinking: { type: "adaptive" as const } },
@@ -270,11 +328,20 @@ export function createChatAgent<TOOLS extends ToolSet>(
     }),
 
     onStepFinish: ({ stepNumber, usage, toolCalls, finishReason }) => {
+      // Acumular métricas de telemetria.
+      stepsCount = stepNumber + 1;
+      lastFinishReason = finishReason ?? "stop";
+      for (const tc of toolCalls) {
+        if (tc?.toolName && !toolsUsedSet.includes(tc.toolName)) {
+          toolsUsedSet.push(tc.toolName);
+        }
+      }
+
       if (isDev) {
         const toolNames = toolCalls.flatMap((tc) => (tc ? [tc.toolName] : []));
-        const tools = toolNames.length > 0 ? toolNames.join(", ") : "none";
+        const toolsStr = toolNames.length > 0 ? toolNames.join(", ") : "none";
         console.info(
-          `[stream-step] step=${stepNumber} finish=${finishReason} tools=[${tools}] tokens=in:${usage?.inputTokens ?? 0}/out:${usage?.outputTokens ?? 0}`
+          `[stream-step] step=${stepNumber} finish=${finishReason} tools=[${toolsStr}] tokens=in:${usage?.inputTokens ?? 0}/out:${usage?.outputTokens ?? 0}`
         );
       }
       if (isChatDebugEnabled()) {
@@ -288,6 +355,29 @@ export function createChatAgent<TOOLS extends ToolSet>(
     },
 
     onFinish: async ({ totalUsage }) => {
+      // Telemetria de qualidade (fire-and-forget; não bloqueia créditos).
+      if (onTelemetry) {
+        const metrics: TaskTelemetry = {
+          latencyMs: Date.now() - telemetryStartMs,
+          inputTokens: totalUsage.inputTokens ?? 0,
+          outputTokens: totalUsage.outputTokens ?? 0,
+          totalTokens:
+            (totalUsage.inputTokens ?? 0) + (totalUsage.outputTokens ?? 0),
+          stepsCount,
+          toolsUsed: toolsUsedSet,
+          finishReason: lastFinishReason,
+          modelId: effectiveModel,
+        };
+        Promise.resolve(onTelemetry(metrics)).catch((err) => {
+          if (isDev) {
+            console.warn(
+              "[chat-agent] onTelemetry falhou:",
+              err instanceof Error ? err.message : err
+            );
+          }
+        });
+      }
+
       if (creditsDisabled) {
         return;
       }

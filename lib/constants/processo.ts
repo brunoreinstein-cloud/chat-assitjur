@@ -36,6 +36,30 @@ export const FASE_LABEL: Record<string, string> = {
   protocolo: "Protocolo",
 };
 
+/** Sequência ordenada de fases do pipeline (primeira → última). */
+export const FASE_ORDER = [
+  "recebimento",
+  "analise_risco",
+  "estrategia",
+  "elaboracao",
+  "revisao",
+  "protocolo",
+] as const;
+
+export type Fase = (typeof FASE_ORDER)[number];
+
+/**
+ * Retorna a próxima fase do pipeline, ou null se já estiver na fase terminal.
+ * Fases desconhecidas (valores legados) também retornam null.
+ */
+export function nextFase(fase: string | null | undefined): Fase | null {
+  const idx = FASE_ORDER.indexOf(fase as Fase);
+  if (idx === -1 || idx === FASE_ORDER.length - 1) {
+    return null;
+  }
+  return FASE_ORDER[idx + 1];
+}
+
 /** Mapeia fase do processo para o agentId recomendado. */
 export const FASE_TO_AGENT: Record<string, AgentId> = {
   recebimento: AGENT_ID_ASSISTJUR_MASTER,

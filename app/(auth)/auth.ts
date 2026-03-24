@@ -13,6 +13,8 @@ declare module "next-auth" {
     user: {
       id: string;
       type: UserType;
+      /** Perfil RBAC; null = sem perfil (guest ou utilizador sem role atribuído). */
+      role: string | null;
     } & DefaultSession["user"];
   }
 
@@ -20,6 +22,8 @@ declare module "next-auth" {
     id?: string;
     email?: string | null;
     type: UserType;
+    /** Perfil RBAC lido da BD no momento do login. */
+    role?: string | null;
   }
 }
 
@@ -27,6 +31,7 @@ declare module "next-auth/jwt" {
   interface JWT extends DefaultJWT {
     id: string;
     type: UserType;
+    role: string | null;
   }
 }
 
@@ -91,7 +96,7 @@ export const {
             return null;
           }
 
-          return { ...user, type: "regular" };
+          return { ...user, type: "regular", role: user.role ?? null };
         } catch (err) {
           if (process.env.NODE_ENV === "development") {
             console.error("[auth] authorize (credentials) failed:", err);
@@ -106,7 +111,7 @@ export const {
       async authorize() {
         try {
           const [guestUser] = await createGuestUser();
-          return { ...guestUser, type: "guest" };
+          return { ...guestUser, type: "guest", role: null };
         } catch (err) {
           if (process.env.NODE_ENV === "development") {
             console.error("[auth] authorize (guest) failed:", err);
@@ -121,6 +126,7 @@ export const {
       if (user) {
         token.id = user.id as string;
         token.type = user.type;
+        token.role = user.role ?? null;
       }
 
       return token;
@@ -129,6 +135,7 @@ export const {
       if (session.user) {
         session.user.id = token.id;
         session.user.type = token.type;
+        session.user.role = token.role ?? null;
       }
 
       return session;

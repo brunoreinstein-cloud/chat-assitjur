@@ -23,7 +23,11 @@ import {
   getAgentConfigForCustomAgent,
   getAgentConfigWithOverrides,
 } from "@/lib/ai/agents-registry";
-import { type ChatCallOptions, createChatAgent } from "@/lib/ai/chat-agent";
+import {
+  type ChatCallOptions,
+  createChatAgent,
+  type TaskTelemetry,
+} from "@/lib/ai/chat-agent";
 import {
   createChatDebugTracker,
   isChatDebugEnabled,
@@ -73,8 +77,10 @@ import { requestApproval } from "@/lib/ai/tools/human-in-the-loop";
 import { improvePromptTool } from "@/lib/ai/tools/improve-prompt";
 import { createMemoryTools } from "@/lib/ai/tools/memory";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
+import { runProcessoGates } from "@/lib/ai/tools/run-processo-gates";
 import { createSearchDocumentTool } from "@/lib/ai/tools/search-document";
 import { updateDocument } from "@/lib/ai/tools/update-document";
+import { upsertRiscoVerba } from "@/lib/ai/tools/upsert-risco-verba";
 import { validationToolsForValidate } from "@/lib/ai/tools/validation-tools";
 import { getCachedBuiltInAgentOverrides } from "@/lib/cache/agent-overrides-cache";
 import { creditsCache } from "@/lib/cache/credits-cache";
@@ -82,6 +88,7 @@ import { FASE_LABEL, RISCO_LABEL } from "@/lib/constants/processo";
 import {
   addCreditsToUser,
   createStreamId,
+  createTaskExecution,
   deleteChatById,
   ensureStatementTimeout,
   ensureUserExistsInDb,
@@ -92,6 +99,7 @@ import {
   getMessagesByChatId,
   getOrCreateCreditBalance,
   getProcessoById,
+  getTaskExecutionByChatId,
   getUserFilesByIds,
   saveChat,
   saveMessages,
@@ -99,6 +107,7 @@ import {
   updateChatAgentId,
   updateChatTitleById,
   updateMessage,
+  updateTaskExecution,
 } from "@/lib/db/queries";
 import {
   ChatbotError,
@@ -988,6 +997,15 @@ async function persistChatAndGetTitlePromise(
       agentId,
       processoId: processoId ?? null,
     });
+    // Quando o chat é criado com um processo vinculado, registar a execução em background.
+    // Faz-se aqui (não em onFinish) para garantir exatamente 1 registo por chat novo.
+    if (processoId) {
+      createTaskExecution({ processoId, taskId: agentId, chatId: id }).catch(
+        () => {
+          /* silencioso — auditoria não crítica */
+        }
+      );
+    }
   } catch (saveChatErr) {
     if (
       saveChatErr instanceof ChatbotError &&
@@ -1285,6 +1303,8 @@ interface ChatStreamParams {
     text: string;
     documentType?: "pi" | "contestacao";
   };
+  /** ID do processo vinculado ao chat (para telemetria). */
+  processoId?: string | null;
 }
 
 /** Resultado da preparação de mensagens para o modelo. */
@@ -1427,6 +1447,8 @@ interface StreamExecuteContext {
   documentTexts: Map<string, string>;
   /** Tools MCP externas (Gmail, Drive, Notion, etc.) já carregadas. */
   mcpTools: Record<string, unknown>;
+  /** ID do processo vinculado (para gravar telemetria em TaskExecution). */
+  processoId: string | null;
 }
 
 /** Cria o callback execute para createUIMessageStream. */
@@ -1474,6 +1496,8 @@ function createStreamExecuteHandler(ctx: StreamExecuteContext) {
       recallMemories: memoryTools.recallMemories,
       forgetMemory: memoryTools.forgetMemory,
       requestApproval,
+      runProcessoGates,
+      upsertRiscoVerba,
       // buscarNoProcesso criado com os textos completos em closure
       ...(ctx.documentTexts.size > 0
         ? {
@@ -1492,6 +1516,8 @@ function createStreamExecuteHandler(ctx: StreamExecuteContext) {
       recallMemories: ReturnType<typeof createMemoryTools>["recallMemories"];
       forgetMemory: ReturnType<typeof createMemoryTools>["forgetMemory"];
       requestApproval: typeof requestApproval;
+      runProcessoGates: typeof runProcessoGates;
+      upsertRiscoVerba: typeof upsertRiscoVerba;
       buscarNoProcesso?: ReturnType<typeof createSearchDocumentTool>;
       createRevisorDefesaDocuments?: ReturnType<
         typeof createRevisorDefesaDocuments
@@ -1534,8 +1560,26 @@ function createStreamExecuteHandler(ctx: StreamExecuteContext) {
       Object.assign(tools, ctx.mcpTools);
     }
 
-    // Cria o agente com prepareCall (system prompt + model settings) e onFinish (créditos).
+    // Cria o agente com prepareCall (system prompt + model settings) e onFinish (créditos + telemetria).
     // Instância por-request: tools dependem de session/dataStream disponíveis só aqui.
+    const onTelemetry = ctx.processoId
+      ? async (metrics: TaskTelemetry) => {
+          const te = await getTaskExecutionByChatId(ctx.id);
+          if (te) {
+            await updateTaskExecution({
+              id: te.id,
+              data: {
+                result: metrics as unknown as Record<string, unknown>,
+                status: "complete",
+                completedAt: new Date(),
+              },
+            }).catch(() => {
+              /* telemetria opcional; falha silenciosa */
+            });
+          }
+        }
+      : undefined;
+
     const agent = createChatAgent({
       tools,
       agentConfig: ctx.agentConfig,
@@ -1543,6 +1587,8 @@ function createStreamExecuteHandler(ctx: StreamExecuteContext) {
       chatId: ctx.id,
       effectiveModel: ctx.effectiveModel,
       creditsDisabled,
+      onTelemetry,
+      telemetryStartMs: ctx.requestStart,
     });
 
     // Parâmetros de chamada tipados pelo callOptionsSchema do agente.
@@ -1791,6 +1837,7 @@ function buildStreamAndResponse(
     requestStart,
     preStreamEnd,
     dbUsedFallback: params.dbUsedFallback,
+    processoId: params.processoId ?? null,
     documentTexts,
     mcpTools: params.mcpTools,
   };
@@ -2274,6 +2321,7 @@ async function handleChatPostAuthenticated(
     documentTexts,
     mcpTools,
     cachedProcessoDocument,
+    processoId: effectiveProcessoId,
   });
 }
 

@@ -1,8 +1,10 @@
-# Workflow DevKit (useworkflow.dev) — Benefícios e próximos passos
+# Workflow DevKit (useworkflow.dev) — Avaliação e Decisão
 
-Análise dos benefícios que o [Workflow DevKit](https://useworkflow.dev/) pode trazer ao sistema (chat, Revisor de Defesas, Redator de Contestações) e passos sugeridos para avaliação e eventual adoção.
+Análise dos benefícios que o [Workflow DevKit](https://useworkflow.dev/) pode trazer ao sistema (chat, Revisor de Defesas, Redator de Contestações) e decisão sobre adopção.
 
-**Última atualização:** 2026-03-09
+**Última atualização:** 2026-03-23
+
+> **Decisão actual: adiar.** Produto em beta com API instável e custo de integração alto; o problema de "falha mid-flow" não é um pain point activo. Reavaliar quando sair de beta ou quando surgir um caso concreto de falha no meio do fluxo.
 
 ---
 
@@ -41,19 +43,44 @@ Referência: [useworkflow.dev](https://useworkflow.dev/).
 
 ---
 
-## 4. Próximos passos (ações sugeridas)
+## 4. Avaliação de risco/benefício
+
+### Ganho potencial
+
+O fluxo do Revisor (GATE-1 → FASE A → GATE 0.5 → FASE B) é hoje orquestrado por prompt dentro do `streamText`. Workflow DevKit permitiria:
+
+- Cada fase como step explícito com retry automático.
+- Estado durável entre fases sem depender do contexto de prompt.
+- Human-in-the-loop nativo no GATE 0.5 (pause/resume).
+
+### Por que adiar
+
+| Factor | Detalhe |
+|--------|---------|
+| **Beta instável** | `useworkflow.dev` é um produto em beta do ecossistema Vercel. A API pode mudar a qualquer momento, invalidando integrações. |
+| **Custo de integração alto** | Migrar a orquestração do Revisor de “lógica no prompt” para workflows duráveis exige reescrever a estrutura de agente; não é uma adição incremental. |
+| **Sem pain point activo** | O problema de “falha no meio do fluxo” não acontece na prática hoje. O ganho imediato é baixo para o custo envolvido. |
+| **Alternativa existente** | O fluxo por prompt funciona e já inclui `resumable-stream`; não há urgência de substituir. |
+
+### Condições para reavaliar
+
+- O produto sair de beta com API estável e garantias de SLA.
+- Surgir um caso concreto e recorrente de falha mid-flow no Revisor ou Redator.
+- Aparecer um novo cenário (ex.: pipeline de pós-processamento assíncrono) onde workflows duráveis sejam a solução natural.
+
+## 5. Próximos passos (se/quando reavaliar)
+
+Se no futuro as condições acima se verificarem, a sequência recomendada é:
 
 | # | Ação | Detalhe |
 |---|------|---------|
-| 1 | **Documentação e requisitos** | Ler a doc oficial (Getting Started, Workflows and Steps, AI Agents, Errors & Retrying). Verificar requisitos de runtime (Node, Vercel, limites) e compatibilidade com `streamText` e AI SDK atuais. |
-| 2 | **POC mínima** | Criar um workflow simples fora do chat (ex.: função com 2–3 steps, um deles a chamar uma API ou BD) no repo; executar em dev e (se possível) na Vercel. Validar retry, persistência e observabilidade. |
-| 3 | **Avaliar integração com o chat** | Se a POC for positiva, desenhar como o POST `/api/chat` poderia iniciar ou continuar um workflow (por exemplo: um step “run streamText” com tools como sub-steps). Avaliar impacto em tempo de resposta, cold start e custos. |
-| 4 | **Avaliar fluxo Revisor como workflow** | Especificar o fluxo GATE-1 → FASE A → GATE 0.5 → FASE B como workflow com steps nomeados; identificar onde human-in-the-loop (GATE 0.5) e retries trariam mais valor. Documentar em PROJETO-REVISOR-DEFESAS.md ou SPEC se houver decisão de avançar. |
-| 5 | **Decisão de adoção** | Com base na POC e na avaliação: (a) adoptar para novas funcionalidades (ex.: pipelines de pós-processamento), (b) adoptar apenas para o Revisor, ou (c) adiar e rever quando o ecossistema estiver mais maduro (beta). |
+| 1 | **POC mínima isolada** | Criar um workflow simples fora do chat (2–3 steps, uma chamada a API ou BD) para validar retry, persistência e observabilidade antes de qualquer integração no repo principal. |
+| 2 | **Avaliar integração com o chat** | Se a POC for positiva, desenhar como o POST `/api/chat` poderia iniciar/continuar um workflow; avaliar impacto em cold start e custos. |
+| 3 | **Modelar o Revisor como workflow** | Especificar GATE-1 → FASE A → GATE 0.5 → FASE B como workflow com steps nomeados; documentar em PROJETO-REVISOR-DEFESAS.md se houver decisão de avançar. |
 
 ---
 
-## 5. Referências
+## 6. Referências
 
 - [Workflow DevKit — useworkflow.dev](https://useworkflow.dev/)
 - [Building Durable AI Agents](https://useworkflow.dev/docs/ai-agents/durable-agents) (doc do site)

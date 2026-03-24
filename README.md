@@ -1,6 +1,6 @@
 # Chatbot — Agentes Jurídicos com IA
 
-Aplicação de chat com agentes de IA especializados em **contencioso trabalhista**: Revisor de Defesas Trabalhistas, Redator de Contestações e AssistJur Master. Baseada em Next.js e no Vercel AI SDK.
+Plataforma de chat com **5 agentes de IA** especializados em **contencioso trabalhista**: Assistente Geral, Revisor de Defesas, Redator de Contestações, Avaliador de Contestação e AssistJur.IA Master. Baseada em Next.js e no Vercel AI SDK.
 
 <p align="center">
   <a href="#funcionalidades"><strong>Funcionalidades</strong></a> ·
@@ -15,14 +15,20 @@ Aplicação de chat com agentes de IA especializados em **contencioso trabalhist
 
 ## Funcionalidades
 
-- **Chat com LLM** — Streaming, histórico de conversas, múltiplos agentes built-in (Revisor de Defesas, Redator de Contestações, AssistJur Master).
+- **Chat com LLM** — Streaming, histórico de conversas, **5 agentes built-in** especializados em contencioso trabalhista:
+  - **Assistente Geral** — assistente de uso geral, memória persistente.
+  - **Revisor de Defesas** — auditoria PI + contestação (fluxo GATE-1 → FASE A → GATE 0.5 → FASE B), gera DOCX.
+  - **Redator de Contestações** — redação de minuta de contestação (modo Modelo ou modo @bancodetese), aprovação HITL, gera DOCX.
+  - **Avaliador de Contestação** — avaliação de qualidade da contestação, gera relatório DOCX.
+  - **AssistJur.IA Master** — agente master com pipeline multi-chamadas para PDFs grandes, gera DOCX/XLSX/JSON + ZIP.
 - **Base de conhecimento** — Documentos (teses, precedentes, cláusulas) associados ao utilizador, injetados no contexto do chat; suporte a modo @bancodetese no Redator de Contestações.
-- **Ferramentas** — Clima, criar/atualizar documento, sugestões; integração com o fluxo do agente.
+- **Ferramentas** — Criar/atualizar documentos, sugestões, memória persistente, human-in-the-loop (aprovação), pipeline multi-chamadas, MCP (Model Context Protocol).
+- **Tracking de processos** — Tabelas `Processo` e `TaskExecution` para rastreio de chamados trabalhistas (intake, auditoria de tarefas).
 - **Autenticação** — Auth.js (NextAuth) v5; **modo visitante (guest)** para usar o chat sem conta.
-- **Upload de ficheiros** — Vercel Blob ou Supabase Storage; suporte a PDF e outros formatos no chat.
+- **Upload de ficheiros** — Vercel Blob ou Supabase Storage; suporte a PDF, DOCX, XLSX no chat (extração server-side).
 - **Ajuda** — `/ajuda`: guia das funcionalidades (agentes, base de conhecimento, créditos, ficheiros, modo visitante).
-- **Painel administrativo** — `/admin/agents`: edição das instruções e etiquetas dos agentes built-in; APIs de créditos LLM (protegidas por chave).
-- **Persistência** — PostgreSQL (Supabase/Neon) com Drizzle ORM; histórico de chats e mensagens.
+- **Painel administrativo** — `/admin/agents`: edição de instruções, etiquetas e modelo padrão dos agentes built-in; APIs de créditos LLM (protegidas por chave).
+- **Persistência** — PostgreSQL (Supabase/Neon) com Drizzle ORM; histórico de chats, mensagens, processos e execuções.
 
 ## Stack
 

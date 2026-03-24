@@ -60,6 +60,23 @@ const INTAKE_SCHEMA = z.object({
   reclamada: z
     .string()
     .describe("Nome da empresa reclamada. Vazio se não identificado."),
+  pedidos: z
+    .array(z.string())
+    .max(20)
+    .describe(
+      "Lista de pedidos/verbas trabalhistas requeridos (ex: 'Horas extras', 'FGTS + 40%', 'Dano moral R$ 10.000'). Vazio se não identificado."
+    ),
+  teses: z
+    .array(z.string())
+    .max(10)
+    .describe(
+      "Principais teses jurídicas ou argumentos da peça (ex: 'Prescrição bienal', 'Jornada legal respeitada', 'Ausência de dano'). Vazio se não identificado."
+    ),
+  valorCausa: z
+    .string()
+    .describe(
+      "Valor total da causa indicado na petição (ex: 'R$ 50.000,00'). Vazio se não encontrado."
+    ),
 });
 
 const INTAKE_SYSTEM = `Você é um especialista em direito do trabalho brasileiro. Analise o texto do documento jurídico e extraia os metadados solicitados.
@@ -149,6 +166,9 @@ async function extractIntakeMetadata(
     numeroPedidos: 0,
     reclamante: "",
     reclamada: "",
+    pedidos: [],
+    teses: [],
+    valorCausa: "",
   };
 }
 
@@ -292,7 +312,7 @@ export async function POST(request: Request) {
     // Extrai metadados via IA
     const meta = await extractIntakeMetadata(parsedText, filename);
 
-    // Salva tudo no processo
+    // Salva tudo no processo; auto-preenche partes se ainda vazias (criação inline sem formulário)
     await updateProcessoIntake({
       id: processoId,
       userId,
@@ -307,8 +327,18 @@ export async function POST(request: Request) {
           numeroPedidos: meta.numeroPedidos,
           reclamante: meta.reclamante,
           reclamada: meta.reclamada,
+          pedidos: meta.pedidos,
+          teses: meta.teses,
+          valorCausa: meta.valorCausa,
         },
         intakeStatus: "ready",
+        // Auto-fill: só preenche se o processo foi criado com campos em branco
+        ...(!proc.reclamante?.trim() && meta.reclamante
+          ? { reclamante: meta.reclamante }
+          : {}),
+        ...(!proc.reclamada?.trim() && meta.reclamada
+          ? { reclamada: meta.reclamada }
+          : {}),
       },
     });
 

@@ -182,6 +182,18 @@ export function AppSidebar({
           <div className="border-border/60 border-t px-3 py-2">
             <Link
               className="flex items-center gap-2 rounded-md px-2 py-1.5 text-muted-foreground text-sm transition-colors hover:text-foreground"
+              href="/processos"
+            >
+              Processos
+            </Link>
+            <Link
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-muted-foreground text-sm transition-colors hover:text-foreground"
+              href="/processos/passivo"
+            >
+              Painel de passivo
+            </Link>
+            <Link
+              className="flex items-center gap-2 rounded-md px-2 py-1.5 text-muted-foreground text-sm transition-colors hover:text-foreground"
               href="/admin"
             >
               Administração

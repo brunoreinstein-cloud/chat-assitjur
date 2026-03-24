@@ -91,6 +91,19 @@ export interface AgentConfig {
    */
   useMasterDocumentsTool?: boolean;
   /**
+   * Temperature do modelo para este agente.
+   * Playbook v9.0: Tipo A/F/G (extração/dados) → 0.1; Tipo B/C/D/E (análise/redação) → 0.2.
+   * Se omitido, usa 0.2 como default global.
+   */
+  temperature?: number;
+  /**
+   * Habilitar thinking adaptativo (Playbook v9.0 — Tipo B/C/D).
+   * true → ativa adaptive thinking em modelos compatíveis (mesmo sem reasoning variant).
+   * false → desativa adaptive thinking mesmo que o modelo o suporte (ex.: Master em modo extração).
+   * undefined → comportamento baseado no modelo selecionado (legacy).
+   */
+  thinkingEnabled?: boolean;
+  /**
    * IDs de modelos LLM permitidos para este agente (ex.: ["anthropic/claude-sonnet-4.6"]).
    * Se omitido ou vazio, todos os modelos do catálogo são permitidos.
    */
@@ -136,7 +149,9 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
     useRedatorContestacaoTool: false,
     useMemoryTools: true,
     useApprovalTool: false, // Usa GATE do sistema prompt; HITL não necessário aqui
-    /** Apenas modelos sem extended thinking: ferramentas ativas e primeira resposta rápida (evita "Thinking" prolongado). */
+    // Tipo B (Analisador): análise complexa → thinking adaptativo ativado.
+    thinkingEnabled: true,
+    /** Apenas modelos sem extended thinking: ferramentas ativas e primeira resposta rápida. */
     allowedModelIds: nonReasoningChatModelIds,
   },
   [AGENT_ID_REDATOR_CONTESTACAO]: {
@@ -147,6 +162,8 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
     useRedatorContestacaoTool: true,
     useMemoryTools: true,
     useApprovalTool: true, // Advogado aprova minuta antes de gerar DOCX final
+    // Tipo C (Redator de Peça): redação complexa → thinking adaptativo ativado.
+    thinkingEnabled: true,
     allowedModelIds: REDATOR_ALLOWED_MODEL_IDS,
   },
   [AGENT_ID_AVALIADOR_CONTESTACAO]: {
@@ -158,6 +175,8 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
     useAvaliadorContestacaoTool: true,
     useMemoryTools: true,
     useApprovalTool: false,
+    // Tipo B (Analisador): análise complexa → thinking adaptativo ativado.
+    thinkingEnabled: true,
     allowedModelIds: nonReasoningChatModelIds,
   },
   [AGENT_ID_ASSISTJUR_MASTER]: {
@@ -170,6 +189,11 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
     useApprovalTool: true, // Master agent pode executar acções — requer aprovação
     usePipelineTool: true, // Pipeline multi-chamadas para PDFs grandes (>500 pgs)
     useMasterDocumentsTool: true, // Geração DOCX direta + ZIP download
+    // Tipo A/F/G (extração/dados): temperature baixa para minimizar variância em campos extraídos.
+    temperature: 0.1,
+    // Thinking desativado: extração de dados beneficia de determinismo (temperature 0.1).
+    // Adaptive thinking aumentaria latência e custo sem ganho em tarefas estruturadas.
+    thinkingEnabled: false,
     // 16000 tokens para relatórios longos (M13: 250 campos, 30-50 pgs ≈ 15K-30K tokens).
     // O default global (8192) trunca o tool call JSON, impedindo a geração do documento.
     maxOutputTokens: 16_000,

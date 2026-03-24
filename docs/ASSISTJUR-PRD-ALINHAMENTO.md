@@ -4,7 +4,7 @@ Documento de análise do **AssistJur-PRD-Spec-v1.0** (Módulo Contencioso Trabal
 
 **Fonte PRD:** `AssistJur-PRD-Spec-v1.0.docx` (exportado em `docs/AssistJur-PRD-Spec-v1.0.html` para referência).
 
-**Última atualização:** 2026-03-09
+**Última atualização:** 2026-03-23 (Atualizado: schema Processo implementado; 5 agentes; ToolLoopAgent em produção.)
 
 ---
 
@@ -52,14 +52,14 @@ Documento de análise do **AssistJur-PRD-Spec-v1.0** (Módulo Contencioso Trabal
 
 | Área | Estado atual | Referência |
 |------|--------------|------------|
-| **Chat + streaming** | useChat, streamText, histórico por conversa (Chat + Message_v2) | `app/(chat)/api/chat/route.ts` |
-| **Multi-agente** | Revisor de Defesas, Redator de Contestações; selector no header; `agentId` no body | `lib/ai/agents-registry.ts`, schema chat |
+| **Chat + streaming** | useChat, `ToolLoopAgent` per-request, histórico por conversa (Chat + Message_v2) | `app/(chat)/api/chat/route.ts`, `lib/ai/chat-agent.ts` |
+| **Multi-agente** | 5 agentes: Assistente Geral, Revisor de Defesas, Redator de Contestações, Avaliador de Contestação, AssistJur.IA Master; selector no header; `agentId` no body | `lib/ai/agents-registry.ts`, schema chat |
 | **Base de conhecimento** | KnowledgeDocument + RAG (KnowledgeChunk, pgvector); threshold de similaridade; injeção no prompt | `lib/ai/knowledge-base.md`, queries |
 | **Validação pré-envio** | PI + Contestação para Revisor; checklist "Antes de executar" | `multimodal-input.tsx`, `chat.tsx` |
 | **Upload / OCR** | PDF/DOC/DOCX, extração e tipagem; OCR para escaneados | `api/files/upload`, `api/files/process` |
 | **Entregas estruturadas** | 3 DOCX (Revisor): Avaliação, Roteiro Advogado, Roteiro Preposto | Agente Revisor, modelos em `lib/ai` |
 | **Auth** | Auth.js v5, guest mode, warmup BD | `app/api/auth` |
-| **Schema BD** | User, Chat, Message_v2, KnowledgeDocument, KnowledgeChunk; **não** existe entidade Processo nem fluxo de fases | `lib/db/schema.ts` |
+| **Schema BD** | User, Chat, Message_v2, KnowledgeDocument, KnowledgeChunk; **`Processo`, `TaskExecution`, `VerbaProcesso` já existem** (fase, riscoGlobal, intake, cache PDF); CRUD e chat com `processoId` ainda pendentes | `lib/db/schema.ts`, [PROCESSO-TASKEXECUTION.md](PROCESSO-TASKEXECUTION.md) |
 | **RBAC** | Não implementado (PRD: paralegal, adv_junior, adv_pleno, adv_senior, socio, cliente) | — |
 | **Documentação** | SPEC AI Drive Jurídico, PROJETO-REVISOR-DEFESAS, AGENTES-IA-PERSONALIZADOS, PLANO-PROXIMOS-PASSOS | `docs/` |
 
@@ -67,12 +67,15 @@ Documento de análise do **AssistJur-PRD-Spec-v1.0** (Módulo Contencioso Trabal
 
 | PRD | Atual | Observação |
 |-----|--------|------------|
-| AgentIngestor (recebimento) | — | Não existe agente dedicado ao cadastro/triagem |
-| AgentRisk (análise de risco) | — | Não existe; RF-03 não implementado |
+| AgentIngestor (recebimento) | AssistJur.IA Master (M08 Cadastro eLaw) | Parcial: intake de PDF e extração de metadados existem em `Processo`; agente dedicado ao fluxo de recebimento não existe |
+| AgentRisk (análise de risco) | — | RF-03 não implementado; schema `VerbaProcesso` existe mas sem agente |
 | AgentStrategy (estratégia) | — | Não existe |
-| AgentDrafter (elaboração) | Redator de Contestações | Parcial: redação de contestação; falta integração com “processo” e fases |
-| AgentRevisor (revisão) | Revisor de Defesas | Alinhado ao fluxo de revisão de defesas (GATE-1 → FASE A/B) |
+| AgentDrafter (elaboração) | Redator de Contestações | Parcial: redação de contestação; falta integração com entidade `Processo` e fases |
+| AgentRevisor (revisão) | Revisor de Defesas | Alinhado ao fluxo GATE-1 → FASE A/B |
 | AgentProtocol (protocolo) | — | Não existe |
+| — (extra) | Avaliador de Contestação | Novo: avalia qualidade da contestação já redigida (score A–E) |
+| — (extra) | AssistJur.IA Master | Novo: 14 módulos unificados; pipeline multi-chamadas; DOCX/XLSX/ZIP |
+| — (extra) | Assistente Geral | Novo: assistente de uso geral com memória persistente |
 
 ---
 
@@ -82,9 +85,9 @@ Documento de análise do **AssistJur-PRD-Spec-v1.0** (Módulo Contencioso Trabal
 
 | Gap | Descrição | Impacto |
 |-----|-----------|--------|
-| **Entidade Processo** | PRD exige `processos` (numero_autos, reclamante, reclamada, vara, fase, risco_global, provisao, prazo_fatal, cliente_id, adv_responsavel_id, etc.). Hoje não existe; o chat é “por conversa”, não “por processo”. | Alto — base para RF-01, RF-02, RF-07 |
-| **State machine (fases)** | PRD: recebimento → analise_risco → … → encerrado. Hoje não há modelo de fases nem transições. | Alto |
-| **Risco por verba** | Tabela `risco_por_verba` e AgentRisk (RF-03). Não existe. | Alto |
+| **Entidade Processo** | ✅ Schema `Processo` criado com todos os campos principais do PRD (numeroAutos, reclamante, reclamada, vara, fase, riscoGlobal, provisao, prazoFatal, intake, cache PDF). Falta: CRUD completo de API, UI e ligação ao chat via `processoId`. | Médio — schema feito; lógica e UI pendentes |
+| **State machine (fases)** | Campo `fase` existe no schema. Falta: `avancaFaseAction`, validação de transições e badge de fase na UI. | Médio |
+| **Risco por verba** | ✅ Tabela `VerbaProcesso` criada (verba, risco, valorMin, valorMax). Falta: AgentRisk e UI de painel de risco. | Médio |
 | **Peças (pecas)** | Versões de peças por processo (contestação, RO, etc.), status (rascunho, em_revisao, aprovado, protocolado), blob_url. Não existe. | Alto |
 | **Chat por processo × agente** | PRD: histórico por (processoId, agentId). Hoje: histórico por chatId (conversa), com agentId no chat. Não há “sessão por processo + agente”. | Alto |
 | **Cliente e passivo** | Entidade cliente, painel de passivo (RF-06), relatório PDF. Não existe. | Médio |
@@ -118,16 +121,16 @@ Hoje: chat usa `chatId` e opcionalmente `knowledgeDocumentIds`; não há `proces
 
 A ordem abaixo equilibra dependências do PRD e reuso do que já existe (Revisor, Redator, RAG, upload).
 
-| Ordem | Objetivo | Entregas | Depende de |
-|-------|----------|----------|------------|
-| **1** | Alinhar documentação e decisões | Incorporar PRD na SPEC ou criar SPEC-AssistJur; decidir se evoluímos o produto atual para “por processo” ou mantemos dois modos (chat livre vs. processo). | — |
-| **2** | Modelo de dados “processo” | Schema: `processos` (e, se aplicável, `clientes`); migrations; CRUD mínimo (create, list, get by id). | Decisão de produto |
-| **3** | Chat “por processo” (RF-07) | `processoId` no body do chat; getProcessoContexto(); histórico por (processoId, agentId) — nova tabela ou extensão de Chat. ProcessoPanel na UI (selecionar/criar processo). | #2 |
-| **4** | State machine (fases) | Campo `fase` em processos; enum; avancaFaseAction (e opcionalmente tool do agente). UI: badge de fase. | #2 |
-| **5** | AgentRisk + risco por verba (RF-03) | Agente AgentRisk; schema `risco_por_verba`; generateObject + upsertRiscoVerbaAction; painel de risco na UI. | #2, #4 |
-| **6** | Peças e AgentDrafter integrado (RF-05) | Tabela `pecas`; savePecaAction (Blob); aprovaPecaAction; AgentDrafter (ou Redator) recebendo contexto do processo e gravando peça. | #2, #4 |
-| **7** | RBAC (perfis PRD) | Roles em User ou sessão; middleware por rota/action; visibilidade de componentes por perfil. | Auth atual |
-| **8** | Painel de passivo e cliente (RF-06) | Entidade cliente; agregados por cliente; relatório PDF; alertas. Opcional: portal do cliente. | #2, #7 |
+| Ordem | Objetivo | Entregas | Estado | Depende de |
+|-------|----------|----------|--------|------------|
+| **1** | ~~Alinhar documentação e decisões~~ | ~~Decidir se evoluímos para “por processo”~~ | ✅ Concluído (schema criado) | — |
+| **2** | ~~Modelo de dados “processo”~~ | Schema `Processo`, `TaskExecution`, `VerbaProcesso` com todos os campos principais | ✅ Schema criado — CRUD API e UI pendentes | — |
+| **3** | **Chat “por processo” (RF-07)** | `processoId` no body do chat; `getProcessoContexto()`; ligar `TaskExecution` ao `chatId`; ProcessoPanel na UI | — | #2 ✅ |
+| **4** | **State machine (fases)** | `avancaFaseAction`, validação de transições; badge de fase na UI | — | #2 ✅ |
+| **5** | **AgentRisk + risco por verba (RF-03)** | Agente AgentRisk; `upsertRiscoVerbaAction`; painel de risco na UI | — | #2 ✅, #4 |
+| **6** | **Peças e AgentDrafter integrado (RF-05)** | Tabela `pecas`; `savePecaAction` (Blob); `aprovaPecaAction`; Redator recebendo contexto do processo | — | #2 ✅, #4 |
+| **7** | **RBAC (perfis PRD)** | Roles em User ou sessão; middleware por rota; visibilidade por perfil | — | Auth atual |
+| **8** | **Painel de passivo e cliente (RF-06)** | Entidade cliente; agregados; relatório PDF; alertas | — | #2 ✅, #7 |
 
 ### 4.2 O que manter do estado atual
 

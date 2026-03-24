@@ -2,7 +2,9 @@ import "server-only";
 
 import { and, desc, eq, inArray } from "drizzle-orm";
 import {
+  type Peca,
   type Processo,
+  peca,
   processo,
   type TaskExecution,
   taskExecution,
@@ -220,6 +222,9 @@ export async function updateProcessoIntake({
     fileHash?: string;
     intakeMetadata?: Record<string, unknown>;
     intakeStatus: string;
+    /** Preenche reclamante/reclamada só se actualmente vazios (auto-fill do intake). */
+    reclamante?: string;
+    reclamada?: string;
   };
 }): Promise<Processo | null> {
   try {
@@ -317,5 +322,88 @@ export async function getTaskExecutionsByProcessoId({
       .orderBy(desc(taskExecution.startedAt));
   } catch (err) {
     toDatabaseError(err, "Failed to get task executions by processo id");
+  }
+}
+
+/** Procura a execução de tarefa associada a um chat específico (para gravar telemetria). */
+export async function getTaskExecutionByChatId(
+  chatId: string
+): Promise<TaskExecution | null> {
+  try {
+    const [te] = await getDb()
+      .select()
+      .from(taskExecution)
+      .where(eq(taskExecution.chatId, chatId))
+      .limit(1);
+    return te ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Peças ───────────────────────────────────────────────────────────────────
+
+export async function savePeca({
+  processoId,
+  userId,
+  titulo,
+  tipo,
+  conteudo,
+  blobUrl,
+  chatId,
+}: {
+  processoId: string;
+  userId: string;
+  titulo: string;
+  tipo: string;
+  conteudo?: string;
+  blobUrl?: string;
+  chatId?: string;
+}): Promise<Peca> {
+  try {
+    const [created] = await getDb()
+      .insert(peca)
+      .values({ processoId, userId, titulo, tipo, conteudo, blobUrl, chatId })
+      .returning();
+    return created;
+  } catch (err) {
+    toDatabaseError(err, "Failed to save peca");
+  }
+}
+
+export async function getPecasByProcessoId({
+  processoId,
+}: {
+  processoId: string;
+}): Promise<Peca[]> {
+  try {
+    return await getDb()
+      .select()
+      .from(peca)
+      .where(eq(peca.processoId, processoId))
+      .orderBy(desc(peca.createdAt));
+  } catch (err) {
+    toDatabaseError(err, "Failed to get pecas by processo id");
+  }
+}
+
+export async function updatePecaBlobUrl({
+  id,
+  userId,
+  blobUrl,
+}: {
+  id: string;
+  userId: string;
+  blobUrl: string;
+}): Promise<Peca | null> {
+  try {
+    const [updated] = await getDb()
+      .update(peca)
+      .set({ blobUrl })
+      .where(and(eq(peca.id, id), eq(peca.userId, userId)))
+      .returning();
+    return updated ?? null;
+  } catch (err) {
+    toDatabaseError(err, "Failed to update peca blob url");
   }
 }

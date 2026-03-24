@@ -35,7 +35,7 @@ describe("Cenário A — Gate-1 feliz (parâmetros da API)", () => {
       "chat-agent.ts"
     );
     const agentCode = readFileSync(chatAgentPath, "utf-8");
-    expect(agentCode).toContain("temperature: 0.2");
+    expect(agentCode).toContain("agentConfig.temperature ?? 0.2");
     // maxOutputTokens é configurável por agente (default 8192, Master usa 16000)
     expect(agentCode).toContain(
       "maxOutputTokens: agentConfig.maxOutputTokens ?? 8192"
