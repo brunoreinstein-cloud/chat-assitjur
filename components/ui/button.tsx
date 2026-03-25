@@ -9,7 +9,9 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        // Primary = brand purple (não preto genérico)
+        default:
+          "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/95",
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-destructive/90",
         outline:
@@ -18,6 +20,11 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
+        // Gold — para CTAs de destaque / ações premium
+        gold: "bg-brand-gold-500 font-semibold text-assistjur-purple-darker hover:bg-brand-gold-400 active:bg-brand-gold-600 dark:bg-brand-gold-500 dark:hover:bg-brand-gold-400",
+        // Outline da marca — borda purple, sem fill
+        "outline-brand":
+          "border border-primary bg-transparent text-primary hover:bg-primary/8 active:bg-primary/12",
       },
       size: {
         default: "h-10 px-4 py-2",

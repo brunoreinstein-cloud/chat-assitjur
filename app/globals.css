@@ -11,139 +11,343 @@
 @plugin "tailwindcss-animate";
 @plugin "@tailwindcss/typography";
 
-/* AssistJur.IA brand tokens — Brand Book docs/BRAND-BOOK-ASSISTJUR.md */
+/* ============================================================
+   ASSISTJUR DESIGN SYSTEM — Brand Book: docs/DESIGN-SYSTEM.md
+   ============================================================
+
+   Conceito: "Legal Intelligence"
+   Stack: Tailwind CSS v4 + shadcn/ui + CSS Custom Properties
+
+   Camadas de token:
+     1. Primitivos de marca  (--assistjur-*)      → valores brutos
+     2. Semânticos de tema   (--background, etc.) → mapeamento light/dark
+     3. Tailwind theme       (@theme)             → bridging p/ classes utilitárias
+   ============================================================ */
+
+/* ------------------------------------------------------------
+   1. PRIMITIVOS DE MARCA
+      Paleta completa. Não usar diretamente em componentes —
+      sempre via tokens semânticos abaixo.
+   ------------------------------------------------------------ */
 :root {
-  --assistjur-purple: #7c3aed;
-  --assistjur-purple-dark: #3f1c6b;
-  --assistjur-purple-darker: #2e1065;
-  --assistjur-gold: #eab308;
+  /* Purple — cor dominante da marca */
+  --assistjur-purple-50: #f5f3ff;
+  --assistjur-purple-100: #ede9fe;
+  --assistjur-purple-200: #ddd6fe;
+  --assistjur-purple-300: #c4b5fd;
+  --assistjur-purple-400: #a78bfa;
+  --assistjur-purple-500: #8b5cf6;
+  --assistjur-purple-600: #7c3aed; /* ← brand primary */
+  --assistjur-purple-700: #6d28d9;
+  --assistjur-purple-800: #4c1d95;
+  --assistjur-purple-900: #3f1c6b; /* ← brand dark */
+  --assistjur-purple-950: #2e1065; /* ← brand darker */
+  --assistjur-purple-deepest: #180a38;
+
+  /* Gold — acento exclusivo para CTAs e destaques críticos */
+  --assistjur-gold-50: #fefce8;
+  --assistjur-gold-100: #fef9c3;
+  --assistjur-gold-200: #fef08a;
+  --assistjur-gold-300: #fde047;
+  --assistjur-gold-400: #facc15;
+  --assistjur-gold-500: #eab308; /* ← brand gold */
+  --assistjur-gold-600: #ca8a04;
+  --assistjur-gold-700: #a16207;
+  --assistjur-gold-800: #854d0e;
+
+  /* Neutral com warm undertone (levemente lilás) */
+  --assistjur-neutral-50: #fafafa;
+  --assistjur-neutral-100: #f4f4f8;
+  --assistjur-neutral-200: #e8e8f0;
+  --assistjur-neutral-300: #d1d1e0;
+  --assistjur-neutral-400: #a0a0b8;
+  --assistjur-neutral-500: #6b6b85;
+  --assistjur-neutral-600: #525268;
+  --assistjur-neutral-700: #3d3d52;
+  --assistjur-neutral-800: #272738;
+  --assistjur-neutral-900: #17172a;
+  --assistjur-neutral-950: #0d0d1a;
+
+  /* Status */
+  --assistjur-success: #16a34a;
+  --assistjur-success-light: #dcfce7;
+  --assistjur-warning: #d97706;
+  --assistjur-warning-light: #fef3c7;
+  --assistjur-error: #dc2626;
+  --assistjur-error-light: #fee2e2;
+  --assistjur-info: #2563eb;
+  --assistjur-info-light: #dbeafe;
+
+  /* Workflow — status de caso/processo */
+  --workflow-draft: hsl(252 15% 60%);
+  --workflow-draft-bg: hsl(252 20% 95%);
+  --workflow-active: hsl(262 83% 57%);
+  --workflow-active-bg: hsl(262 30% 95%);
+  --workflow-review: hsl(38 92% 50%);
+  --workflow-review-bg: hsl(48 96% 95%);
+  --workflow-done: hsl(142 71% 36%);
+  --workflow-done-bg: hsl(142 76% 95%);
+  --workflow-blocked: hsl(0 72% 50%);
+  --workflow-blocked-bg: hsl(0 72% 95%);
+
+  /* Confiança — rastreabilidade de fontes e inferências */
+  --confidence-source: hsl(210 85% 53%);
+  --confidence-source-bg: hsl(210 85% 95%);
+  --confidence-inference: hsl(38 92% 50%);
+  --confidence-inference-bg: hsl(48 96% 95%);
+  --confidence-alert: hsl(0 72% 50%);
+  --confidence-alert-bg: hsl(0 72% 95%);
+  --confidence-verified: hsl(142 71% 36%);
+  --confidence-verified-bg: hsl(142 76% 95%);
+
+  /* Superfícies de layout */
+  --surface-workspace: hsl(262 15% 98%);
+  --surface-panel: hsl(0 0% 100%);
+  --surface-artifact: hsl(0 0% 100%);
+  --surface-composer: hsl(0 0% 100%);
+  --surface-sidebar-active: hsl(262 30% 93%);
+  --border-subtle: hsl(262 15% 92%);
+  --border-split: hsl(262 20% 88%);
+
+  /* Atalhos retrocompatíveis (manter para não quebrar usos diretos) */
+  --assistjur-purple: var(--assistjur-purple-600);
+  --assistjur-purple-light: var(--assistjur-purple-400);
+  --assistjur-purple-dark: var(--assistjur-purple-900);
+  --assistjur-purple-darker: var(--assistjur-purple-950);
+  --assistjur-gold: var(--assistjur-gold-500);
   --assistjur-gold-alt: #f59e0b;
-  --assistjur-gray: #9ca3af;
-  --assistjur-gray-light: #d1d5db;
-  --assistjur-purple-light: #a78bfa;
+  --assistjur-gray: var(--assistjur-neutral-400);
+  --assistjur-gray-light: var(--assistjur-neutral-300);
 }
 
-/* define design tokens (light mode) */
+/* ------------------------------------------------------------
+   2A. TOKENS SEMÂNTICOS — LIGHT MODE
+       Design: UI limpa, branca, com bordas e textos
+       levemente tingidos de roxo para coerência de marca.
+       Primary = roxo da marca (não preto genérico).
+   ------------------------------------------------------------ */
 :root {
+  /* Superfícies */
   --background: hsl(0 0% 100%);
-  --foreground: hsl(240 10% 3.9%);
+  --foreground: hsl(252 25% 9%); /* near-black c/ warm undertone */
   --card: hsl(0 0% 100%);
-  --card-foreground: hsl(240 10% 3.9%);
+  --card-foreground: hsl(252 25% 9%);
   --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(240 10% 3.9%);
-  --primary: hsl(240 5.9% 10%);
-  --primary-foreground: hsl(0 0% 98%);
-  --secondary: hsl(240 4.8% 95.9%);
-  --secondary-foreground: hsl(240 5.9% 10%);
-  --muted: hsl(240 4.8% 95.9%);
-  --muted-foreground: hsl(240 3.8% 46.1%);
-  --accent: hsl(240 4.8% 95.9%);
-  --accent-foreground: hsl(240 5.9% 10%);
-  --destructive: hsl(0 84.2% 60.2%);
-  --destructive-foreground: hsl(0 0% 98%);
-  --border: hsl(240 5.9% 90%);
-  --input: hsl(240 5.9% 90%);
-  --ring: hsl(240 10% 3.9%);
-  --chart-1: hsl(12 76% 61%);
-  --chart-2: hsl(173 58% 39%);
-  --chart-3: hsl(197 37% 24%);
-  --chart-4: hsl(43 74% 66%);
-  --chart-5: hsl(27 87% 67%);
-  --sidebar-background: hsl(0 0% 98%);
-  --sidebar-foreground: hsl(240 5.3% 26.1%);
-  --sidebar-primary: hsl(240 5.9% 10%);
-  --sidebar-primary-foreground: hsl(0 0% 98%);
-  --sidebar-accent: hsl(240 4.8% 95.9%);
-  --sidebar-accent-foreground: hsl(240 5.9% 10%);
-  --sidebar-border: hsl(220 13% 91%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
-  /* border radius unit */
-  --radius: 0.5rem;
-  --sidebar: hsl(0 0% 98%);
-}
+  --popover-foreground: hsl(252 25% 9%);
 
-/* define design tokens (dark mode) */
-.dark {
-  --background: hsl(240 10% 3.9%);
-  --foreground: hsl(0 0% 98%);
-  --card: hsl(240 10% 3.9%);
-  --card-foreground: hsl(0 0% 98%);
-  --popover: hsl(240 10% 3.9%);
-  --popover-foreground: hsl(0 0% 98%);
-  --primary: hsl(0 0% 98%);
-  --primary-foreground: hsl(240 5.9% 10%);
-  --secondary: hsl(240 3.7% 15.9%);
-  --secondary-foreground: hsl(0 0% 98%);
-  --muted: hsl(240 3.7% 15.9%);
-  --muted-foreground: hsl(240 5% 64.9%);
-  --accent: hsl(240 3.7% 15.9%);
-  --accent-foreground: hsl(0 0% 98%);
-  --destructive: hsl(0 62.8% 30.6%);
-  --destructive-foreground: hsl(0 0% 98%);
-  --border: hsl(240 3.7% 15.9%);
-  --input: hsl(240 3.7% 15.9%);
-  --ring: hsl(240 4.9% 83.9%);
-  --chart-1: hsl(220 70% 50%);
-  --chart-2: hsl(160 60% 45%);
-  --chart-3: hsl(30 80% 55%);
-  --chart-4: hsl(280 65% 60%);
-  --chart-5: hsl(340 75% 55%);
-  --sidebar-background: hsl(240 5.9% 10%);
-  --sidebar-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-primary: hsl(224.3 76.3% 48%);
+  /* Brand como primary — botões, focus rings, estados ativos */
+  --primary: hsl(262 83% 57%); /* #7c3aed */
+  --primary-foreground: hsl(0 0% 100%);
+
+  /* Secondary: wash lilás suave */
+  --secondary: hsl(262 30% 95%);
+  --secondary-foreground: hsl(262 50% 28%);
+
+  /* Muted: fundo para elementos desativados / áreas de baixo contraste */
+  --muted: hsl(262 15% 96%);
+  --muted-foreground: hsl(252 15% 45%);
+
+  /* Accent: hover em ghost buttons, badges, highlights */
+  --accent: hsl(262 30% 93%);
+  --accent-foreground: hsl(262 60% 25%);
+
+  /* Destrutivo */
+  --destructive: hsl(0 72% 51%);
+  --destructive-foreground: hsl(0 0% 100%);
+
+  /* Bordas e inputs */
+  --border: hsl(262 20% 88%);
+  --input: hsl(262 20% 88%);
+  --ring: hsl(262 83% 57%); /* focus ring = brand purple */
+
+  /* Radius base — 10 px (moderno, não excessivo) */
+  --radius: 0.625rem;
+
+  /* Charts */
+  --chart-1: hsl(262 83% 57%); /* purple */
+  --chart-2: hsl(43 96% 50%); /* gold */
+  --chart-3: hsl(199 89% 45%); /* blue */
+  --chart-4: hsl(162 63% 38%); /* green */
+  --chart-5: hsl(0 72% 51%); /* red */
+
+  /* Sidebar — painel ligeiramente tingido para separação visual */
+  --sidebar-background: hsl(262 25% 97%);
+  --sidebar-foreground: hsl(252 20% 25%);
+  --sidebar-primary: hsl(262 83% 57%);
   --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(240 3.7% 15.9%);
-  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-border: hsl(240 3.7% 15.9%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
-  --sidebar: hsl(240 5.9% 10%);
+  --sidebar-accent: hsl(262 30% 91%);
+  --sidebar-accent-foreground: hsl(262 55% 28%);
+  --sidebar-border: hsl(262 20% 90%);
+  --sidebar-ring: hsl(262 83% 57%);
+  --sidebar: hsl(262 25% 97%);
+
+  /* Sombras — sistema de elevação em 5 níveis */
+  --shadow-xs: 0 1px 2px 0 hsl(252 40% 10% / 0.04);
+  --shadow-sm:
+    0 1px 3px 0 hsl(252 40% 10% / 0.08), 0 1px 2px -1px hsl(252 40% 10% / 0.06);
+  --shadow-md:
+    0 4px 6px -1px hsl(252 40% 10% / 0.08),
+    0 2px 4px -2px hsl(252 40% 10% / 0.05);
+  --shadow-lg:
+    0 10px 15px -3px hsl(252 40% 10% / 0.1),
+    0 4px 6px -4px hsl(252 40% 10% / 0.06);
+  --shadow-xl:
+    0 20px 25px -5px hsl(252 40% 10% / 0.1),
+    0 8px 10px -6px hsl(252 40% 10% / 0.06);
+  /* Glow de foco — anel suave c/ cor de marca */
+  --shadow-brand: 0 0 0 3px hsl(262 83% 57% / 0.18);
+  --shadow-gold: 0 0 0 3px hsl(43 96% 50% / 0.22);
 }
 
-/* define theme */
+/* ------------------------------------------------------------
+   2B. TOKENS SEMÂNTICOS — DARK MODE
+       Design: fundo roxo profundo (não preto genérico).
+       Cria identidade de marca premium no modo noturno.
+       Sidebar levemente mais escura que o fundo → profundidade.
+   ------------------------------------------------------------ */
+.dark {
+  /* Superfícies em escala de roxo profundo */
+  --background: hsl(256 32% 5%); /* ~#09061a — quase preto, tom lilás */
+  --foreground: hsl(262 15% 93%); /* near-white c/ warmth */
+  --card: hsl(256 26% 8%); /* card elevado sobre bg */
+  --card-foreground: hsl(262 15% 93%);
+  --popover: hsl(256 28% 7%);
+  --popover-foreground: hsl(262 15% 93%);
+
+  /* Primary mais claro para contraste sobre fundo escuro */
+  --primary: hsl(262 75% 67%); /* vivid purple legível no dark */
+  --primary-foreground: hsl(256 32% 5%); /* fundo próprio como fg */
+
+  --secondary: hsl(256 22% 14%);
+  --secondary-foreground: hsl(262 20% 85%);
+
+  --muted: hsl(256 22% 13%);
+  --muted-foreground: hsl(256 18% 56%);
+
+  --accent: hsl(256 22% 16%);
+  --accent-foreground: hsl(262 20% 88%);
+
+  --destructive: hsl(0 65% 48%);
+  --destructive-foreground: hsl(0 0% 100%);
+
+  --border: hsl(256 22% 16%);
+  --input: hsl(256 22% 14%);
+  --ring: hsl(262 75% 67%);
+
+  /* Charts ajustados para contraste no escuro */
+  --chart-1: hsl(262 70% 68%); /* purple */
+  --chart-2: hsl(43 95% 60%); /* gold */
+  --chart-3: hsl(199 85% 60%); /* blue */
+  --chart-4: hsl(162 60% 52%); /* green */
+  --chart-5: hsl(0 70% 62%); /* red */
+
+  /* Sidebar: levemente mais escura que bg → efeito "recessed panel" */
+  --sidebar-background: hsl(256 35% 4%);
+  --sidebar-foreground: hsl(262 15% 82%);
+  --sidebar-primary: hsl(262 75% 67%);
+  --sidebar-primary-foreground: hsl(256 32% 5%);
+  --sidebar-accent: hsl(256 22% 11%);
+  --sidebar-accent-foreground: hsl(262 20% 85%);
+  --sidebar-border: hsl(256 22% 12%);
+  --sidebar-ring: hsl(262 75% 67%);
+  --sidebar: hsl(256 35% 4%);
+
+  /* Sombras no dark — mais sutis, usam tom roxo */
+  --shadow-xs: 0 1px 2px 0 hsl(256 60% 3% / 0.4);
+  --shadow-sm:
+    0 1px 3px 0 hsl(256 60% 3% / 0.5), 0 1px 2px -1px hsl(256 60% 3% / 0.4);
+  --shadow-md:
+    0 4px 6px -1px hsl(256 60% 3% / 0.5), 0 2px 4px -2px hsl(256 60% 3% / 0.35);
+  --shadow-lg:
+    0 10px 15px -3px hsl(256 60% 3% / 0.6), 0 4px 6px -4px hsl(256 60% 3% / 0.4);
+  --shadow-xl:
+    0 20px 25px -5px hsl(256 60% 3% / 0.6),
+    0 8px 10px -6px hsl(256 60% 3% / 0.4);
+  --shadow-brand: 0 0 0 3px hsl(262 75% 67% / 0.22);
+  --shadow-gold: 0 0 0 3px hsl(43 95% 60% / 0.25);
+
+  /* Workflow — dark mode */
+  --workflow-draft: hsl(252 15% 50%);
+  --workflow-draft-bg: hsl(252 20% 14%);
+  --workflow-active: hsl(262 75% 67%);
+  --workflow-active-bg: hsl(262 30% 12%);
+  --workflow-review: hsl(38 90% 55%);
+  --workflow-review-bg: hsl(38 60% 12%);
+  --workflow-done: hsl(142 65% 48%);
+  --workflow-done-bg: hsl(142 50% 10%);
+  --workflow-blocked: hsl(0 70% 58%);
+  --workflow-blocked-bg: hsl(0 50% 12%);
+
+  /* Confiança — dark mode */
+  --confidence-source: hsl(210 80% 65%);
+  --confidence-source-bg: hsl(210 60% 12%);
+  --confidence-inference: hsl(38 90% 55%);
+  --confidence-inference-bg: hsl(38 60% 12%);
+  --confidence-alert: hsl(0 70% 58%);
+  --confidence-alert-bg: hsl(0 50% 12%);
+  --confidence-verified: hsl(142 65% 48%);
+  --confidence-verified-bg: hsl(142 50% 10%);
+
+  /* Superfícies de layout — dark mode */
+  --surface-workspace: hsl(256 28% 6%);
+  --surface-panel: hsl(256 26% 8%);
+  --surface-artifact: hsl(256 24% 9%);
+  --surface-composer: hsl(256 26% 8%);
+  --surface-sidebar-active: hsl(262 30% 12%);
+  --border-subtle: hsl(256 20% 12%);
+  --border-split: hsl(256 22% 16%);
+}
+
+/* ------------------------------------------------------------
+   3. TAILWIND THEME BRIDGE
+      Mapeia os tokens CSS para as classes utilitárias do Tailwind.
+   ------------------------------------------------------------ */
 @theme {
+  /* Tipografia */
   --font-sans: var(--font-geist);
   --font-mono: var(--font-geist-mono);
 
+  /* Breakpoints */
   --breakpoint-toast-mobile: 600px;
 
-  --radius-lg: var(--radius);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-sm: calc(var(--radius) - 4px);
+  /* Border radius — escala completa derivada do valor base */
+  --radius-xs: calc(var(--radius) - 4px); /* 6px  */
+  --radius-sm: calc(var(--radius) - 2px); /* 8px  */
+  --radius-md: var(--radius); /* 10px */
+  --radius-lg: calc(var(--radius) + 2px); /* 12px */
+  --radius-xl: calc(var(--radius) + 6px); /* 16px */
+  --radius-2xl: calc(var(--radius) + 14px); /* 24px */
+  --radius-full: 9999px;
 
+  /* Cores semânticas → classes bg-*, text-*, border-* */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
-
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
-
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
-
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
-
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
-
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
-
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
-
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
 
+  /* Charts */
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
 
+  /* Sidebar */
   --color-sidebar: var(--sidebar-background);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -152,16 +356,120 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Sombras como tokens Tailwind */
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+
+  /* Primitivos de marca disponíveis como classes Tailwind */
+  --color-brand-purple-50: var(--assistjur-purple-50);
+  --color-brand-purple-100: var(--assistjur-purple-100);
+  --color-brand-purple-200: var(--assistjur-purple-200);
+  --color-brand-purple-300: var(--assistjur-purple-300);
+  --color-brand-purple-400: var(--assistjur-purple-400);
+  --color-brand-purple-500: var(--assistjur-purple-500);
+  --color-brand-purple-600: var(--assistjur-purple-600);
+  --color-brand-purple-700: var(--assistjur-purple-700);
+  --color-brand-purple-800: var(--assistjur-purple-800);
+  --color-brand-purple-900: var(--assistjur-purple-900);
+  --color-brand-purple-950: var(--assistjur-purple-950);
+
+  --color-brand-gold-300: var(--assistjur-gold-300);
+  --color-brand-gold-400: var(--assistjur-gold-400);
+  --color-brand-gold-500: var(--assistjur-gold-500);
+  --color-brand-gold-600: var(--assistjur-gold-600);
+  --color-brand-gold-700: var(--assistjur-gold-700);
+
+  --color-brand-neutral-50: var(--assistjur-neutral-50);
+  --color-brand-neutral-100: var(--assistjur-neutral-100);
+  --color-brand-neutral-200: var(--assistjur-neutral-200);
+  --color-brand-neutral-300: var(--assistjur-neutral-300);
+  --color-brand-neutral-400: var(--assistjur-neutral-400);
+  --color-brand-neutral-500: var(--assistjur-neutral-500);
+  --color-brand-neutral-600: var(--assistjur-neutral-600);
+  --color-brand-neutral-700: var(--assistjur-neutral-700);
+  --color-brand-neutral-800: var(--assistjur-neutral-800);
+  --color-brand-neutral-900: var(--assistjur-neutral-900);
+  --color-brand-neutral-950: var(--assistjur-neutral-950);
+
+  /* Status */
+  --color-brand-success: var(--assistjur-success);
+  --color-brand-success-light: var(--assistjur-success-light);
+  --color-brand-warning: var(--assistjur-warning);
+  --color-brand-warning-light: var(--assistjur-warning-light);
+  --color-brand-error: var(--assistjur-error);
+  --color-brand-error-light: var(--assistjur-error-light);
+  --color-brand-info: var(--assistjur-info);
+  --color-brand-info-light: var(--assistjur-info-light);
+
+  /* Workflow */
+  --color-workflow-draft: var(--workflow-draft);
+  --color-workflow-draft-bg: var(--workflow-draft-bg);
+  --color-workflow-active: var(--workflow-active);
+  --color-workflow-active-bg: var(--workflow-active-bg);
+  --color-workflow-review: var(--workflow-review);
+  --color-workflow-review-bg: var(--workflow-review-bg);
+  --color-workflow-done: var(--workflow-done);
+  --color-workflow-done-bg: var(--workflow-done-bg);
+  --color-workflow-blocked: var(--workflow-blocked);
+  --color-workflow-blocked-bg: var(--workflow-blocked-bg);
+
+  /* Confiança */
+  --color-confidence-source: var(--confidence-source);
+  --color-confidence-source-bg: var(--confidence-source-bg);
+  --color-confidence-inference: var(--confidence-inference);
+  --color-confidence-inference-bg: var(--confidence-inference-bg);
+  --color-confidence-alert: var(--confidence-alert);
+  --color-confidence-alert-bg: var(--confidence-alert-bg);
+  --color-confidence-verified: var(--confidence-verified);
+  --color-confidence-verified-bg: var(--confidence-verified-bg);
+
+  /* Superfícies de layout */
+  --color-surface-workspace: var(--surface-workspace);
+  --color-surface-panel: var(--surface-panel);
+  --color-surface-artifact: var(--surface-artifact);
+  --color-surface-composer: var(--surface-composer);
+  --color-surface-sidebar-active: var(--surface-sidebar-active);
+  --color-border-subtle: var(--border-subtle);
+  --color-border-split: var(--border-split);
+
+  /* Atalhos retrocompatíveis no Tailwind */
+  --color-assistjur-purple: var(--assistjur-purple);
+  --color-assistjur-purple-light: var(--assistjur-purple-light);
+  --color-assistjur-purple-dark: var(--assistjur-purple-dark);
+  --color-assistjur-purple-darker: var(--assistjur-purple-darker);
+  --color-assistjur-gold: var(--assistjur-gold);
+  --color-assistjur-gray: var(--assistjur-gray);
+  --color-assistjur-gray-light: var(--assistjur-gray-light);
 }
 
-/*
-  The default border color has changed to `currentcolor` in Tailwind CSS v4,
-  so we've added these compatibility styles to make sure everything still
-  looks the same as it did with Tailwind CSS v3.
+/* @theme inline — valores computados para uso em Tailwind v4 */
+@theme inline {
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  /* Atalhos de marca para Tailwind */
+  --color-assistjur-purple: var(--assistjur-purple);
+  --color-assistjur-purple-dark: var(--assistjur-purple-dark);
+  --color-assistjur-purple-darker: var(--assistjur-purple-darker);
+  --color-assistjur-gold: var(--assistjur-gold);
+  --color-assistjur-gray: var(--assistjur-gray);
+  --color-assistjur-gray-light: var(--assistjur-gray-light);
+}
 
-  If we ever want to remove these styles, we need to add an explicit border
-  color utility to any element that depends on these defaults.
-*/
+/* ------------------------------------------------------------
+   4. TAILWIND COMPATIBILITY LAYER
+      Garante que bordas usem --border por padrão (Tailwind v4
+      mudou o default para currentcolor).
+   ------------------------------------------------------------ */
 @layer base {
   *,
   ::after,
@@ -172,6 +480,9 @@
   }
 }
 
+/* ------------------------------------------------------------
+   5. UTILITÁRIOS GLOBAIS
+   ------------------------------------------------------------ */
 @utility text-balance {
   text-wrap: balance;
 }
@@ -188,6 +499,18 @@
   overscroll-behavior: contain;
 }
 
+/* Sombras de marca como utilitários */
+@utility shadow-brand {
+  box-shadow: var(--shadow-brand);
+}
+
+@utility shadow-gold {
+  box-shadow: var(--shadow-gold);
+}
+
+/* ------------------------------------------------------------
+   6. BASE — Reset e estilos fundamentais
+   ------------------------------------------------------------ */
 @layer utilities {
   :root {
     --foreground-rgb: 0, 0, 0;
@@ -206,7 +529,7 @@
 
 @layer base {
   * {
-    @apply border-border;
+    @apply border-border outline-ring/50;
   }
 
   body {
@@ -218,8 +541,33 @@
   html {
     overflow-x: hidden;
   }
+
+  /* Tipografia base — hierarquia headings */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.025em;
+  }
+
+  /* Seleção de texto — usa cor da marca */
+  ::selection {
+    color: inherit;
+    background-color: hsl(262 83% 57% / 0.15);
+  }
+
+  .dark ::selection {
+    background-color: hsl(262 75% 67% / 0.25);
+  }
 }
 
+/* ------------------------------------------------------------
+   7. SKELETON — Loading states
+   ------------------------------------------------------------ */
 .skeleton {
   * {
     pointer-events: none !important;
@@ -239,6 +587,9 @@
   }
 }
 
+/* ------------------------------------------------------------
+   8. EDITORES — CodeMirror + ProseMirror
+   ------------------------------------------------------------ */
 .ProseMirror {
   outline: none;
 }
@@ -275,11 +626,16 @@
   @apply rounded-l-sm!;
 }
 
+/* ------------------------------------------------------------
+   9. INLINE SUGGESTIONS (AI)
+   ------------------------------------------------------------ */
 .suggestion-highlight {
-  @apply bg-blue-200 hover:bg-blue-300 dark:hover:bg-blue-400/50 dark:text-blue-50 dark:bg-blue-500/40;
+  @apply bg-brand-purple-100 hover:bg-brand-purple-200 dark:bg-brand-purple-900/40 dark:hover:bg-brand-purple-800/50 dark:text-brand-purple-200;
 }
 
-/* minimal scrollbar styling */
+/* ------------------------------------------------------------
+   10. SCROLLBAR — estilo mínimo e consistente
+   ------------------------------------------------------------ */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -296,65 +652,40 @@
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: --alpha(var(--muted-foreground) / 0.5);
+  background: color-mix(in srgb, var(--muted-foreground) 50%, transparent);
 }
 
 ::-webkit-scrollbar-corner {
   background: transparent;
 }
 
-/* firefox scrollbar styling */
+/* Firefox */
 * {
   scrollbar-color: var(--border) transparent;
   scrollbar-width: thin;
 }
 
-@theme inline {
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
-  /* AssistJur.IA brand */
-  --color-assistjur-purple: var(--assistjur-purple);
-  --color-assistjur-purple-dark: var(--assistjur-purple-dark);
-  --color-assistjur-purple-darker: var(--assistjur-purple-darker);
-  --color-assistjur-gold: var(--assistjur-gold);
-  --color-assistjur-gray: var(--assistjur-gray);
-  --color-assistjur-gray-light: var(--assistjur-gray-light);
-}
-
-@layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
-}
-
-/* Skip link — visible on focus, hidden otherwise (a11y) */
+/* ------------------------------------------------------------
+   11. ACESSIBILIDADE — Skip link
+   ------------------------------------------------------------ */
 .skip-link {
   @apply absolute left-4 top-4 z-[100] -translate-y-[200%] rounded-md bg-assistjur-gold px-4 py-3 font-bold text-assistjur-purple-darker text-sm transition-transform duration-200 focus:translate-y-0 focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-assistjur-purple-darker focus:outline-none;
 }
 
-/* Landing: reduced motion — disable decorative transitions */
+/* ------------------------------------------------------------
+   12. MOTION — Preferências de movimento reduzido
+   ------------------------------------------------------------ */
 @media (prefers-reduced-motion: reduce) {
-  .skip-link {
-    transition: none;
-  }
-  .landing-card-hover {
-    transition: none;
-  }
+  .skip-link,
+  .landing-card-hover,
   .landing-cta-hover {
     transition: none;
   }
 }
 
-/* Copy button for code blocks (injected by Response component) */
+/* ------------------------------------------------------------
+   13. COPY BUTTON — Blocos de código
+   ------------------------------------------------------------ */
 .copy-code-btn {
   position: absolute;
   top: 0.4rem;
