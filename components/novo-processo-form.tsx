@@ -61,13 +61,13 @@ interface NovoProcessoFormProps {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const inputClass =
-  "w-full rounded-md border border-border bg-muted/50 px-2.5 py-1.5 text-[12px] text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-assistjur-gold/50 focus:ring-1 focus:ring-assistjur-gold/30 dark:border-white/8 dark:bg-assistjur-purple-dark/60 dark:text-white dark:placeholder:text-assistjur-gray/50";
+  "w-full rounded-md border border-border bg-muted/50 px-2.5 py-1.5 text-[12px] text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20";
 
 const labelClass =
-  "mb-1 block text-[9px] font-semibold uppercase tracking-widest text-muted-foreground dark:text-assistjur-gray";
+  "mb-1 block text-[9px] font-semibold uppercase tracking-widest text-muted-foreground";
 
 const btnSecondary =
-  "flex-1 rounded-md border border-border bg-muted px-3 py-1.5 text-[12px] text-muted-foreground transition-colors hover:bg-muted/80 disabled:opacity-40 dark:border-white/8 dark:bg-assistjur-purple-dark dark:text-assistjur-gray-light";
+  "flex-1 rounded-md border border-border bg-muted px-3 py-1.5 text-[12px] text-muted-foreground transition-colors hover:bg-muted/80 disabled:opacity-40";
 
 const btnPrimary =
   "flex-1 rounded-md border border-assistjur-gold/40 bg-assistjur-gold/10 px-3 py-1.5 font-medium text-[12px] text-assistjur-gold transition-colors hover:bg-assistjur-gold/20 disabled:cursor-not-allowed disabled:opacity-40";
@@ -181,8 +181,8 @@ export function NovoProcessoForm({
         <button
           className={`flex w-full cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed bg-transparent px-4 py-5 text-left text-inherit outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
             isDragging
-              ? "border-assistjur-gold bg-assistjur-gold/5"
-              : "border-border hover:border-assistjur-gold/50 hover:bg-muted/30 dark:border-white/15"
+              ? "border-primary bg-primary/5"
+              : "border-border hover:border-primary/40 hover:bg-muted/30"
           }`}
           onClick={() => fileInputRef.current?.click()}
           onDragEnter={(e) => {
@@ -225,7 +225,7 @@ export function NovoProcessoForm({
           {/* PDF icon */}
           <svg
             aria-hidden
-            className={`h-8 w-8 transition-colors ${isDragging ? "text-assistjur-gold" : "text-muted-foreground/50"}`}
+            className={`h-8 w-8 transition-colors ${isDragging ? "text-primary" : "text-muted-foreground/50"}`}
             fill="none"
             stroke="currentColor"
             strokeWidth="1.5"
@@ -242,7 +242,7 @@ export function NovoProcessoForm({
             <p className="font-medium text-[12px] text-foreground dark:text-white">
               {isDragging ? "Solte o PDF aqui" : "Arraste o PDF do processo"}
             </p>
-            <p className="text-[11px] text-muted-foreground dark:text-assistjur-gray">
+            <p className="text-[11px] text-muted-foreground">
               ou clique para selecionar
             </p>
           </div>
@@ -251,7 +251,7 @@ export function NovoProcessoForm({
         {/* Divider */}
         <div className="flex items-center gap-2">
           <div className="h-px flex-1 bg-border dark:bg-white/10" />
-          <span className="shrink-0 text-[10px] text-muted-foreground dark:text-assistjur-gray">
+          <span className="shrink-0 text-[10px] text-muted-foreground">
             ou insira o número
           </span>
           <div className="h-px flex-1 bg-border dark:bg-white/10" />
@@ -296,7 +296,7 @@ export function NovoProcessoForm({
       <div className="flex flex-col items-center gap-3 py-8">
         <svg
           aria-hidden
-          className="h-5 w-5 animate-spin text-assistjur-gold"
+          className="h-5 w-5 animate-spin text-primary"
           fill="none"
           viewBox="0 0 24 24"
         >
@@ -315,7 +315,7 @@ export function NovoProcessoForm({
             fill="currentColor"
           />
         </svg>
-        <p className="text-[12px] text-muted-foreground dark:text-assistjur-gray">
+        <p className="text-[12px] text-muted-foreground">
           A extrair dados do PDF…
         </p>
       </div>

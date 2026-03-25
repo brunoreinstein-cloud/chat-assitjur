@@ -21,7 +21,7 @@ const buttonVariants = cva(
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
         // Gold — para CTAs de destaque / ações premium
-        gold: "bg-brand-gold-500 font-semibold text-assistjur-purple-darker hover:bg-brand-gold-400 active:bg-brand-gold-600 dark:bg-brand-gold-500 dark:hover:bg-brand-gold-400",
+        gold: "bg-brand-gold-500 font-semibold text-brand-purple-950 hover:bg-brand-gold-400 active:bg-brand-gold-600",
         // Outline da marca — borda purple, sem fill
         "outline-brand":
           "border border-primary bg-transparent text-primary hover:bg-primary/8 active:bg-primary/12",

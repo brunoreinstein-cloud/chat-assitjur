@@ -81,7 +81,7 @@ export function ChatInput({
           >
             <svg
               aria-hidden
-              className="h-[15px] w-[15px] text-assistjur-purple-darker dark:text-[#0d0f12]"
+              className="h-[15px] w-[15px] text-primary-foreground"
               fill="none"
               stroke="currentColor"
               strokeWidth="2.5"

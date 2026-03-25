@@ -103,7 +103,7 @@ export function ProcessoCard({
       >
         {/* Linha 1: número + risco badge */}
         <div className="mb-1 flex items-center justify-between gap-2">
-          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground dark:text-assistjur-gray-light">
+          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground">
             {processo.numeroAutos.length > 22
               ? `${processo.numeroAutos.slice(0, 22)}…`
               : processo.numeroAutos}
@@ -124,7 +124,7 @@ export function ProcessoCard({
         {/* Linha 2: partes */}
         <div className="mb-1.5 truncate text-[11.5px] text-foreground dark:text-white/80">
           {primeiroNomeReclamante}{" "}
-          <span className="text-muted-foreground dark:text-assistjur-gray">
+          <span className="text-muted-foreground">
             ×
           </span>{" "}
           {primeiroNomeReclamada}
@@ -133,12 +133,12 @@ export function ProcessoCard({
         {/* Linha 3: fase + prazo */}
         <div className="flex items-center justify-between">
           {processo.fase && (
-            <span className="text-[10px] text-muted-foreground dark:text-assistjur-gray">
+            <span className="text-[10px] text-muted-foreground">
               {FASE_LABEL[processo.fase] ?? processo.fase}
             </span>
           )}
           {prazoDate && (
-            <span className="text-[10px] text-muted-foreground dark:text-assistjur-gray">
+            <span className="text-[10px] text-muted-foreground">
               ⏰ {prazoDate}
             </span>
           )}

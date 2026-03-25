@@ -190,7 +190,7 @@ export function ProcessoSelector({
                 ? `Processo: ${triggerLabel}`
                 : "Vincular processo"
             }
-            className={`flex items-center gap-1.5 rounded-md border border-border bg-muted px-2.5 py-1.5 font-mono text-[11px] transition-colors hover:bg-muted/80 dark:border-white/8 dark:bg-assistjur-purple-dark dark:hover:bg-assistjur-purple ${
+            className={`flex items-center gap-1.5 rounded-md border border-border bg-muted px-2.5 py-1.5 font-mono text-[11px] transition-colors hover:bg-muted/80 ${
               isPending ? "opacity-60" : ""
             } ${disabled ? "pointer-events-none opacity-50" : ""}`}
             disabled={disabled || isPending}
@@ -202,10 +202,10 @@ export function ProcessoSelector({
                   aria-hidden
                   className={`h-2 w-2 shrink-0 rounded-full ${RISCO_DOT[currentProcesso.riscoGlobal ?? ""] ?? "bg-muted-foreground/40"}`}
                 />
-                <span className="text-muted-foreground dark:text-assistjur-gray-light">
+                <span className="text-muted-foreground">
                   {truncate(currentProcesso.numeroAutos, MAX_AUTOS_LEN)}
                 </span>
-                <span className="text-muted-foreground/40 dark:text-assistjur-gray/40">
+                <span className="text-muted-foreground/40">
                   ·
                 </span>
                 <span className="text-foreground dark:text-white/80">
@@ -216,16 +216,16 @@ export function ProcessoSelector({
               <>
                 <BriefcaseIcon
                   aria-hidden
-                  className="h-3 w-3 text-muted-foreground dark:text-assistjur-gray-light"
+                  className="h-3 w-3 text-muted-foreground"
                 />
-                <span className="text-muted-foreground dark:text-assistjur-gray-light">
+                <span className="text-muted-foreground">
                   Processo
                 </span>
               </>
             )}
             <svg
               aria-hidden
-              className="h-2.5 w-2.5 text-muted-foreground dark:text-assistjur-gray-light"
+              className="h-2.5 w-2.5 text-muted-foreground"
               fill="none"
               stroke="currentColor"
               strokeWidth="2.5"

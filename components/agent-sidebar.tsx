@@ -27,9 +27,9 @@ import type { Chat } from "@/lib/db/schema";
 import { fetcher, historyFetcher } from "@/lib/utils";
 
 const AGENT_DOTS: Record<AgentId, string> = {
-  "assistente-geral": "bg-assistjur-purple",
+  "assistente-geral": "bg-primary",
   "revisor-defesas": "bg-assistjur-gold",
-  "redator-contestacao": "bg-assistjur-purple",
+  "redator-contestacao": "bg-primary",
   "avaliador-contestacao": "bg-assistjur-gold",
   /** Master usa gold — produto flagship, visualmente distinto do Redator (purple). */
   "assistjur-master": "bg-assistjur-gold",
@@ -152,7 +152,7 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
   return (
     <aside
       aria-label="Navegação do chat e agentes"
-      className="flex h-full w-[260px] shrink-0 flex-col border-border border-r bg-sidebar dark:border-white/8 dark:bg-assistjur-purple-darker"
+      className="flex h-full w-[260px] shrink-0 flex-col border-border border-r bg-sidebar dark:border-white/8"
     >
       {/* Brand + Novo chat */}
       <div className="space-y-3 border-border border-b px-3 pt-4 pb-3 dark:border-white/8">
@@ -161,7 +161,7 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
         </div>
         <Link href="/chat">
           <button
-            className="flex w-full items-center justify-center gap-1.5 rounded-md border border-assistjur-gold/40 bg-assistjur-gold/10 px-3 py-2 font-medium text-[13px] text-assistjur-gold transition-all hover:border-assistjur-gold/50 hover:bg-assistjur-gold/20 dark:border-assistjur-gold/30"
+            className="flex w-full items-center justify-center gap-1.5 rounded-md border border-assistjur-gold/40 bg-assistjur-gold/10 px-3 py-2 font-medium text-[13px] text-assistjur-gold transition-all hover:border-assistjur-gold/60 hover:bg-assistjur-gold/20"
             type="button"
           >
             <svg
@@ -188,7 +188,7 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
               className={`flex-1 py-2 font-medium text-[11px] transition-colors ${
                 sidebarTab === tab
                   ? "border-assistjur-gold border-b-2 text-assistjur-gold"
-                  : "border-transparent border-b-2 text-muted-foreground hover:text-foreground dark:text-assistjur-gray dark:hover:text-white"
+                  : "border-transparent border-b-2 text-muted-foreground hover:text-foreground"
               }`}
               key={tab}
               onClick={() => {
@@ -208,7 +208,7 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
         <>
           {/* Agentes */}
           <div className="border-border border-b px-3 py-3 dark:border-white/8">
-            <p className="mb-1.5 px-1 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest dark:text-assistjur-gray">
+            <p className="mb-1.5 px-1 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest">
               Agentes
             </p>
             {AGENT_IDS.map((id) => {
@@ -217,8 +217,8 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
                 <button
                   className={`flex w-full items-center gap-2 rounded-md px-2.5 py-[7px] font-medium text-[13px] text-foreground transition-colors dark:text-white ${
                     activeAgent === id
-                      ? "bg-assistjur-purple/15 dark:bg-assistjur-purple-dark"
-                      : "hover:bg-muted dark:hover:bg-white/10"
+                      ? "bg-primary/10"
+                      : "hover:bg-muted"
                   }`}
                   key={id}
                   onClick={() => onAgentChange(id)}
@@ -244,7 +244,7 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
             ).map(([label, items]) =>
               items.length === 0 ? null : (
                 <div className="mb-3" key={label}>
-                  <p className="mb-1 px-1 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest dark:text-assistjur-gray">
+                  <p className="mb-1 px-1 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest">
                     {label}
                   </p>
                   {items.map((chat: ChatItem) => (
@@ -252,8 +252,8 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
                       <div
                         className={`flex cursor-pointer items-center gap-2 rounded-md px-2 py-[7px] text-[12.5px] transition-colors ${
                           activeChatId === chat.id
-                            ? "bg-assistjur-purple/10 text-foreground dark:bg-assistjur-purple-dark dark:text-white"
-                            : "text-muted-foreground hover:bg-muted hover:text-foreground dark:text-assistjur-gray-light dark:hover:bg-white/10 dark:hover:text-white"
+                            ? "bg-primary/10 text-foreground"
+                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
                         }`}
                       >
                         <svg
@@ -270,7 +270,7 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
                         <span className="min-w-0 flex-1 truncate">
                           {chat.title}
                         </span>
-                        <span className="shrink-0 text-[11px] text-muted-foreground dark:text-assistjur-gray">
+                        <span className="shrink-0 text-[11px] text-muted-foreground">
                           {chat.timeLabel}
                         </span>
                       </div>
@@ -288,14 +288,14 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Header da aba */}
           <div className="flex items-center justify-between border-border border-b px-3 py-2 dark:border-white/8">
-            <p className="font-semibold text-[10px] text-muted-foreground uppercase tracking-widest dark:text-assistjur-gray">
+            <p className="font-semibold text-[10px] text-muted-foreground uppercase tracking-widest">
               {processos
                 ? `${processos.length} processo${processos.length !== 1 ? "s" : ""}`
                 : "Processos"}
             </p>
             {!showNovoForm && (
               <button
-                className="rounded px-1.5 py-0.5 text-[11px] text-assistjur-gold hover:bg-assistjur-gold/10"
+                className="rounded px-1.5 py-0.5 text-[11px] text-assistjur-gold hover:bg-assistjur-gold/15"
                 onClick={() => setShowNovoForm(true)}
                 type="button"
               >
@@ -321,13 +321,13 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
           {/* Lista de processos */}
           <div className="flex-1 space-y-1.5 overflow-y-auto px-3 py-2">
             {!processos && (
-              <p className="py-6 text-center text-[11px] text-muted-foreground dark:text-assistjur-gray">
+              <p className="py-6 text-center text-[11px] text-muted-foreground">
                 Carregando…
               </p>
             )}
             {processos && processos.length === 0 && !showNovoForm && (
               <div className="py-8 text-center">
-                <p className="text-[12px] text-muted-foreground dark:text-assistjur-gray-light">
+                <p className="text-[12px] text-muted-foreground">
                   Nenhum processo ainda.
                 </p>
                 <button
@@ -354,13 +354,13 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
 
       {/* Créditos */}
       <div className="border-border border-t px-3 py-2.5 dark:border-white/8">
-        <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-2.5 py-2 dark:border-white/8 dark:bg-assistjur-purple-dark/80">
+        <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-2.5 py-2">
           <span aria-hidden className="shrink-0 text-assistjur-gold text-sm">
             ⚡
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between">
-              <span className="text-[11px] text-muted-foreground dark:text-assistjur-gray-light">
+              <span className="text-[11px] text-muted-foreground">
                 Créditos disponíveis
               </span>
               <span className="font-semibold text-[13px] text-assistjur-gold">
@@ -381,13 +381,13 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
       <div className="border-border border-t px-3 py-2 dark:border-white/8">
         <div className="flex flex-col gap-0.5">
           <Link
-            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-muted-foreground text-sm transition-colors hover:bg-muted hover:text-foreground dark:text-assistjur-gray-light dark:hover:bg-white/10 dark:hover:text-white"
+            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-muted-foreground text-sm transition-colors hover:bg-muted hover:text-foreground hover:text-foreground"
             href="/ajuda"
           >
             Ajuda
           </Link>
           <Link
-            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-muted-foreground text-sm transition-colors hover:bg-muted hover:text-foreground dark:text-assistjur-gray-light dark:hover:bg-white/10 dark:hover:text-white"
+            className="flex items-center gap-2 rounded-md px-2 py-1.5 text-muted-foreground text-sm transition-colors hover:bg-muted hover:text-foreground hover:text-foreground"
             href="/admin/agents"
           >
             Administração — Agentes built-in
@@ -397,10 +397,10 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
 
       {isGuest && (
         <div className="border-border border-t px-3 py-2 dark:border-white/8">
-          <p className="text-muted-foreground text-xs dark:text-assistjur-gray-light">
+          <p className="text-muted-foreground text-xs">
             Está a usar como visitante. Ao sair, o histórico é apagado.{" "}
             <Link
-              className="font-medium text-foreground underline underline-offset-2 outline-none hover:no-underline focus-visible:ring-2 focus-visible:ring-assistjur-gold focus-visible:ring-offset-2 dark:text-white dark:focus-visible:ring-offset-assistjur-purple-darker"
+              className="font-medium text-foreground underline underline-offset-2 outline-none hover:no-underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               href="/register"
             >
               Crie uma conta

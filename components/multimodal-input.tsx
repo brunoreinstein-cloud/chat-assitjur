@@ -141,8 +141,8 @@ const AGENT_INSTRUCTIONS_MAX_LENGTH = 4000;
 const AGENT_DOT_CLASS: Record<string, string> = {
   "assistente-geral": "bg-muted-foreground/60",
   "revisor-defesas": "bg-assistjur-gold",
-  "redator-contestacao": "bg-assistjur-purple",
-  "assistjur-master": "bg-assistjur-purple",
+  "redator-contestacao": "bg-primary",
+  "assistjur-master": "bg-primary",
 };
 
 function getChipIcon(contentType: string | undefined): {

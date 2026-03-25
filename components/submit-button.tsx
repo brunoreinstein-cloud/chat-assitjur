@@ -21,7 +21,7 @@ export function SubmitButton({
     <Button
       aria-disabled={pending || isSuccessful}
       className={cn(
-        "relative w-full bg-assistjur-purple-dark font-bold text-white hover:opacity-90 focus-visible:ring-assistjur-gold focus-visible:ring-offset-assistjur-purple-darker",
+        "relative w-full bg-primary font-bold text-primary-foreground hover:bg-primary/90 focus-visible:ring-ring",
         className
       )}
       disabled={pending || isSuccessful}

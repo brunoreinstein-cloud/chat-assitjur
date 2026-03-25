@@ -12,14 +12,14 @@ interface ChatSidebarProps {
 export function ChatSidebar({ user, isGuest }: ChatSidebarProps) {
   return (
     <Sidebar
-      className="w-[260px] min-w-[260px] shrink-0 border-border border-r bg-sidebar p-0 dark:border-white/8 dark:bg-assistjur-purple-darker"
+      className="w-[260px] min-w-[260px] shrink-0 border-border border-r bg-sidebar p-0"
       style={
         {
           "--sidebar-width": "260px",
         } as React.CSSProperties
       }
     >
-      <div className="h-full w-full overflow-hidden bg-sidebar dark:bg-assistjur-purple-darker">
+      <div className="h-full w-full overflow-hidden bg-sidebar">
         <AgentSidebar isGuest={isGuest} user={user} />
       </div>
     </Sidebar>

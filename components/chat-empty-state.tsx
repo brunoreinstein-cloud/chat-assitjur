@@ -16,7 +16,7 @@ import {
 const AGENT_CARD_STYLE: Record<AgentId, { emoji: string; bg: string }> = {
   [AGENT_ID_ASSISTENTE_GERAL]: { emoji: "💬", bg: "bg-muted" },
   [AGENT_ID_REVISOR_DEFESAS]: { emoji: "🔍", bg: "bg-assistjur-gold/15" },
-  [AGENT_ID_REDATOR_CONTESTACAO]: { emoji: "✍️", bg: "bg-assistjur-purple/15" },
+  [AGENT_ID_REDATOR_CONTESTACAO]: { emoji: "✍️", bg: "bg-primary/15" },
   [AGENT_ID_AVALIADOR_CONTESTACAO]: { emoji: "📊", bg: "bg-assistjur-gold/15" },
   /** Master usa gold: produto flagship com 14 módulos — visualmente distinto do Redator (purple). */
   [AGENT_ID_ASSISTJUR_MASTER]: { emoji: "⚡", bg: "bg-assistjur-gold/15" },
@@ -281,7 +281,7 @@ function MasterModulesGrid({ onSelect }: MasterModulesGridProps) {
       <div className="grid grid-cols-2 gap-2">
         {visible.map((mod) => (
           <button
-            className="group flex flex-col gap-1.5 rounded-[10px] border border-border bg-card p-3 text-left shadow-sm transition-all hover:-translate-y-px hover:border-assistjur-purple/40 hover:bg-assistjur-purple/5 hover:shadow-md"
+            className="group flex flex-col gap-1.5 rounded-[10px] border border-border bg-card p-3 text-left shadow-sm transition-all hover:-translate-y-px hover:border-primary/30 hover:bg-primary/5 hover:shadow-md"
             key={mod.id}
             onClick={() => onSelect(mod.command)}
             type="button"
@@ -305,7 +305,7 @@ function MasterModulesGrid({ onSelect }: MasterModulesGridProps) {
             <p className="text-[11px] text-muted-foreground leading-snug">
               {mod.description}
             </p>
-            <p className="mt-0.5 font-mono text-[10px] text-muted-foreground/50 group-hover:text-assistjur-purple/60">
+            <p className="mt-0.5 font-mono text-[10px] text-muted-foreground/50 group-hover:text-primary/60">
               {mod.command}
             </p>
           </button>
@@ -314,7 +314,7 @@ function MasterModulesGrid({ onSelect }: MasterModulesGridProps) {
 
       {/* Toggle "Ver mais / Ver menos" */}
       <button
-        className="mt-2 w-full rounded-lg border border-border border-dashed py-2 text-[12px] text-muted-foreground transition-colors hover:border-assistjur-purple/40 hover:text-assistjur-purple"
+        className="mt-2 w-full rounded-lg border border-border border-dashed py-2 text-[12px] text-muted-foreground transition-colors hover:border-primary/30 hover:text-primary"
         onClick={() => setExpanded((v) => !v)}
         type="button"
       >
@@ -396,7 +396,7 @@ export function ChatEmptyState({
               const style = AGENT_CARD_STYLE[id];
               return (
                 <button
-                  className="group flex flex-col gap-2 rounded-[10px] border border-border bg-card p-3.5 text-left shadow-sm transition-all hover:-translate-y-px hover:border-assistjur-purple/40 hover:bg-assistjur-purple/5 hover:shadow-md"
+                  className="group flex flex-col gap-2 rounded-[10px] border border-border bg-card p-3.5 text-left shadow-sm transition-all hover:-translate-y-px hover:border-primary/30 hover:bg-primary/5 hover:shadow-md"
                   key={id}
                   onClick={() => onAgentSelect(id)}
                   type="button"
@@ -414,7 +414,7 @@ export function ChatEmptyState({
                   <p className="text-[11.5px] text-muted-foreground leading-relaxed">
                     {config.description ?? ""}
                   </p>
-                  <div className="mt-auto flex items-center gap-1 text-[11px] text-muted-foreground transition-colors group-hover:text-assistjur-purple">
+                  <div className="mt-auto flex items-center gap-1 text-[11px] text-muted-foreground transition-colors group-hover:text-primary">
                     <svg
                       aria-hidden
                       className="h-3 w-3"
@@ -443,7 +443,7 @@ export function ChatEmptyState({
           )}
           {quickPrompts.map((q) => (
             <button
-              className="whitespace-nowrap rounded-full border border-border bg-muted/80 px-3 py-1.5 text-[12px] text-muted-foreground transition-all hover:border-assistjur-purple/40 hover:bg-assistjur-purple/5 hover:text-foreground"
+              className="whitespace-nowrap rounded-full border border-border bg-muted/80 px-3 py-1.5 text-[12px] text-muted-foreground transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-foreground"
               key={q.label}
               onClick={() => onQuickPrompt(q.text)}
               type="button"
