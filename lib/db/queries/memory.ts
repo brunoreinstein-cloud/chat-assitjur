@@ -22,6 +22,8 @@ export async function saveUserMemory({
   expiresAt?: Date | null;
 }) {
   try {
+    // Upsert atómico: INSERT ... ON CONFLICT (userId, key) DO UPDATE.
+    // Requer uniqueIndex em (userId, key) — migração 0032.
     await getDb()
       .insert(userMemory)
       .values({
@@ -31,20 +33,10 @@ export async function saveUserMemory({
         updatedAt: new Date(),
         expiresAt: expiresAt ?? null,
       })
-      .onConflictDoNothing();
-    // Drizzle não suporta onConflict com UPDATE directo em todas as versões;
-    // usa delete + insert para garantir upsert por (userId, key).
-    const existing = await getDb()
-      .select({ id: userMemory.id })
-      .from(userMemory)
-      .where(and(eq(userMemory.userId, userId), eq(userMemory.key, key)))
-      .limit(1);
-    if (existing.length > 0) {
-      await getDb()
-        .update(userMemory)
-        .set({ value, updatedAt: new Date(), expiresAt: expiresAt ?? null })
-        .where(and(eq(userMemory.userId, userId), eq(userMemory.key, key)));
-    }
+      .onConflictDoUpdate({
+        target: [userMemory.userId, userMemory.key],
+        set: { value, updatedAt: new Date(), expiresAt: expiresAt ?? null },
+      });
   } catch (err) {
     toDatabaseError(err, "Failed to save user memory");
   }

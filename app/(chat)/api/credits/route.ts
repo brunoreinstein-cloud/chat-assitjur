@@ -127,23 +127,29 @@ export async function GET(request: Request) {
   const t0 = Date.now();
 
   try {
-    await ensureStatementTimeout();
-    if (isDev) {
-      console.info(
-        `[credits-timing] ensureStatementTimeout: ${Date.now() - t0}ms`
-      );
-    }
-
+    // Correr em paralelo: antes ensureStatementTimeout bloqueava ~5s (race) e só depois
+    // as queries (até ~10s), total ~15s em BD lenta; com Promise.all o teto é max(5s, 10s).
     const t1 = Date.now();
-    const [balanceResult, usageResult] = await Promise.all([
-      withTimeout(getCreditBalance(userId), balanceTimeoutMs),
-      withTimeout(getRecentUsageByUserId(userId, limit), usageTimeoutMs),
+    const [, [balanceResult, usageResult]] = await Promise.all([
+      ensureStatementTimeout().then(() => {
+        if (isDev) {
+          console.info(
+            `[credits-timing] ensureStatementTimeout: ${Date.now() - t0}ms`
+          );
+        }
+      }),
+      Promise.all([
+        withTimeout(getCreditBalance(userId), balanceTimeoutMs),
+        withTimeout(getRecentUsageByUserId(userId, limit), usageTimeoutMs),
+      ]).then((pair) => {
+        if (isDev) {
+          console.info(
+            `[credits-timing] getCreditBalance + getRecentUsage: ${Date.now() - t1}ms (paralelo com ensureStatementTimeout; wall total: ${Date.now() - t0}ms)`
+          );
+        }
+        return pair;
+      }),
     ]);
-    if (isDev) {
-      console.info(
-        `[credits-timing] getCreditBalance + getRecentUsage: ${Date.now() - t1}ms (total desde início: ${Date.now() - t0}ms)`
-      );
-    }
 
     const usageTimedOut = !usageResult.ok;
     const recentUsage = usageResult.ok ? usageResult.value : [];

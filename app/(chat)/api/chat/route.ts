@@ -51,13 +51,13 @@ import {
   formatStructuredFieldsAsHeader,
 } from "@/lib/ai/extract-structured-fields";
 import { getAllMcpTools } from "@/lib/ai/mcp-config";
+import { withPromptCaching } from "@/lib/ai/middleware";
 import {
   DEFAULT_CHAT_MODEL,
   modelReasoningType,
   modelSupportsVision,
 } from "@/lib/ai/models";
 import { stripImageParts } from "@/lib/ai/multimodal";
-import { getPromptCachingCacheControl } from "@/lib/ai/prompt-caching-config";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import {
   REDATOR_BANCO_KNOWLEDGE_DOCUMENT_ID,
@@ -138,44 +138,10 @@ const isDev = process.env.NODE_ENV === "development";
 /** Quando true, não consulta nem deduz créditos (para diagnóstico de latência). */
 const creditsDisabled = process.env.DISABLE_CREDITS === "true";
 
-/** Indica se o modelo é Anthropic (Claude), para aplicar prompt caching quando suportado. */
-function isAnthropicModel(modelId: string): boolean {
-  return modelId.includes("anthropic") || modelId.includes("claude");
-}
-
 /**
- * Adiciona cache_control à última mensagem para modelos Anthropic (prompt caching).
- * Reduz custo e latência em conversas multi-turn ao reutilizar o prefixo em cache.
- * Respeita PROMPT_CACHING_ENABLED e PROMPT_CACHING_TTL.
- * Ver: https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
+ * Prompt caching agora vive em `lib/ai/middleware/prompt-caching.ts`.
+ * `withPromptCaching` importado de `@/lib/ai/middleware`.
  */
-function withPromptCachingForAnthropic<T extends { providerOptions?: unknown }>(
-  modelId: string,
-  messages: T[]
-): T[] {
-  const cacheControl = getPromptCachingCacheControl();
-  if (
-    messages.length === 0 ||
-    !isAnthropicModel(modelId) ||
-    cacheControl === null
-  ) {
-    return messages;
-  }
-  const lastIndex = messages.length - 1;
-  const last = messages[lastIndex];
-  const baseOptions =
-    typeof last.providerOptions === "object" && last.providerOptions !== null
-      ? last.providerOptions
-      : {};
-  const augmented: T = {
-    ...last,
-    providerOptions: {
-      ...baseOptions,
-      anthropic: { cacheControl },
-    },
-  };
-  return [...messages.slice(0, lastIndex), augmented];
-}
 function logTiming(label: string, ms: number): void {
   if (isDev) {
     console.info(`[chat-timing] ${label}: ${Math.round(ms)}ms`);
@@ -1310,9 +1276,7 @@ interface ChatStreamParams {
 /** Resultado da preparação de mensagens para o modelo. */
 type PrepareModelMessagesResult =
   | {
-      messagesForModel: Awaited<
-        ReturnType<typeof withPromptCachingForAnthropic>
-      >;
+      messagesForModel: Awaited<ReturnType<typeof withPromptCaching>>;
       preStreamEnd: number;
     }
   | { response: Response };
@@ -1415,10 +1379,7 @@ async function prepareModelMessagesForStream(
     "contextEditing + estimateTokens + normalizeMessageParts + convertToModelMessages",
     Date.now() - t5
   );
-  const messagesForModel = withPromptCachingForAnthropic(
-    effectiveModel,
-    modelMessages
-  );
+  const messagesForModel = withPromptCaching(effectiveModel, modelMessages);
   const preStreamEnd = Date.now();
   debugTracker.flush("preStreamPhases");
   logTiming("preStream (total antes do stream)", preStreamEnd - requestStart);
@@ -1435,7 +1396,7 @@ interface StreamExecuteContext {
   requestHints: RequestHints;
   knowledgeContext: string | undefined;
   processoContext: string | undefined;
-  messagesForModel: Awaited<ReturnType<typeof withPromptCachingForAnthropic>>;
+  messagesForModel: Awaited<ReturnType<typeof withPromptCaching>>;
   isReasoningModel: boolean;
   isAdaptiveThinking: boolean;
   titlePromise: Promise<string> | null;
@@ -1795,7 +1756,7 @@ function createConsumeSseStreamHandler(chatId: string) {
 function buildStreamAndResponse(
   params: ChatStreamParams,
   prepared: {
-    messagesForModel: Awaited<ReturnType<typeof withPromptCachingForAnthropic>>;
+    messagesForModel: Awaited<ReturnType<typeof withPromptCaching>>;
     preStreamEnd: number;
   }
 ): Response {

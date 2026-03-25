@@ -3,7 +3,11 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { ChatbotError, isStatementTimeoutError } from "../errors";
+import {
+  ChatbotError,
+  isDatabaseConnectionError,
+  isStatementTimeoutError,
+} from "../errors";
 
 /** Converte erro de BD em ChatbotError; reconhece statement timeout (57014) para mensagem clara. */
 export function toDatabaseError(
@@ -76,8 +80,13 @@ export function getDb() {
         ? `${url}&sslmode=require`
         : `${url}?sslmode=require`;
     }
-    /** Em dev usa-se mais uma conexão para reduzir contenção entre chat, credits e health (mesmo processo). Em produção mantém 1 por invocação. */
-    const maxConnections = process.env.NODE_ENV === "development" ? 3 : 1;
+    /**
+     * Em dev usa-se 3 conexões para reduzir contenção entre chat, credits e health
+     * (mesmo processo). Em produção usa-se 3 também — com pooler Supabase (porta 6543,
+     * transaction mode) cada invocação serverless pode ter pedidos concorrentes
+     * (ex.: Promise.all de ensureStatementTimeout + queries); max:1 forçava fila.
+     */
+    const maxConnections = 3;
     const connectTimeout = process.env.NODE_ENV === "production" ? 25 : 10;
     const postgresOptions: Parameters<typeof postgres>[1] = {
       max: maxConnections,
@@ -134,6 +143,37 @@ export async function ensureStatementTimeout(): Promise<void> {
     }
     throw err;
   }
+}
+
+/**
+ * Retry com backoff exponencial para erros transientes de conexão (ECONNREFUSED,
+ * ECONNRESET, ETIMEDOUT, etc.). NÃO retenta statement_timeout nem erros de lógica.
+ *
+ * @param fn       Função async a executar (ex.: query Drizzle).
+ * @param retries  Número máximo de retentativas (default: 2 → até 3 tentativas no total).
+ * @param baseMs   Delay base em ms (default: 200). Dobra a cada retry (200, 400).
+ */
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  retries = 2,
+  baseMs = 200
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      // Só retenta erros transientes de conexão; statement_timeout e erros de
+      // lógica (FK, unique, etc.) propagam imediatamente.
+      if (!isDatabaseConnectionError(err) || attempt === retries) {
+        throw err;
+      }
+      const delay = baseMs * 2 ** attempt;
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw lastError;
 }
 
 /**

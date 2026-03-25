@@ -11,7 +11,7 @@ import {
   type VerbaProcesso,
   verbaProcesso,
 } from "@/lib/db/schema";
-import { getDb, toDatabaseError } from "../connection";
+import { getDb, toDatabaseError, withRetry } from "../connection";
 
 // ─── PROCESSOS ────────────────────────────────────────────────────────────────
 
@@ -23,25 +23,45 @@ export async function getProcessosByUserId({
   userId: string;
 }): Promise<ProcessoComVerbas[]> {
   try {
-    const processos = await getDb()
-      .select()
-      .from(processo)
-      .where(eq(processo.userId, userId))
-      .orderBy(desc(processo.createdAt));
+    // Buscar processos e todas as verbas do user em paralelo (evita 2 queries sequenciais).
+    // A query de verbas usa subquery para filtrar por userId sem precisar dos IDs primeiro.
+    // withRetry retenta erros transientes de conexão (ECONNREFUSED, ETIMEDOUT).
+    const [processos, verbas] = await withRetry(() =>
+      Promise.all([
+        getDb()
+          .select()
+          .from(processo)
+          .where(eq(processo.userId, userId))
+          .orderBy(desc(processo.createdAt)),
+        getDb()
+          .select()
+          .from(verbaProcesso)
+          .where(
+            inArray(
+              verbaProcesso.processoId,
+              getDb()
+                .select({ id: processo.id })
+                .from(processo)
+                .where(eq(processo.userId, userId))
+            )
+          ),
+      ])
+    );
 
     if (processos.length === 0) {
       return [];
     }
 
-    const processoIds = processos.map((p) => p.id);
-    const verbas = await getDb()
-      .select()
-      .from(verbaProcesso)
-      .where(inArray(verbaProcesso.processoId, processoIds));
+    const verbasByProcessoId = new Map<string, VerbaProcesso[]>();
+    for (const v of verbas) {
+      const arr = verbasByProcessoId.get(v.processoId) ?? [];
+      arr.push(v);
+      verbasByProcessoId.set(v.processoId, arr);
+    }
 
     return processos.map((p) => ({
       ...p,
-      verbas: verbas.filter((v) => v.processoId === p.id),
+      verbas: verbasByProcessoId.get(p.id) ?? [],
     }));
   } catch (err) {
     toDatabaseError(err, "Failed to get processos by user id");

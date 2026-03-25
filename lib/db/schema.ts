@@ -9,6 +9,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
   varchar,
   vector,
@@ -136,17 +137,23 @@ export const taskExecution = pgTable(
 export type TaskExecution = InferSelectModel<typeof taskExecution>;
 
 /** Verbas do processo com classificação de risco individual. */
-export const verbaProcesso = pgTable("VerbaProcesso", {
-  id: uuid("id").primaryKey().notNull().defaultRandom(),
-  processoId: uuid("processoId")
-    .notNull()
-    .references(() => processo.id, { onDelete: "cascade" }),
-  verba: varchar("verba", { length: 256 }).notNull(),
-  /** provavel | possivel | remoto */
-  risco: varchar("risco", { length: 16 }).notNull(),
-  valorMin: integer("valorMin"),
-  valorMax: integer("valorMax"),
-});
+export const verbaProcesso = pgTable(
+  "VerbaProcesso",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    processoId: uuid("processoId")
+      .notNull()
+      .references(() => processo.id, { onDelete: "cascade" }),
+    verba: varchar("verba", { length: 256 }).notNull(),
+    /** provavel | possivel | remoto */
+    risco: varchar("risco", { length: 16 }).notNull(),
+    valorMin: integer("valorMin"),
+    valorMax: integer("valorMax"),
+  },
+  (table) => ({
+    processoIdIdx: index("VerbaProcesso_processoId_idx").on(table.processoId),
+  })
+);
 
 export type VerbaProcesso = InferSelectModel<typeof verbaProcesso>;
 
@@ -374,6 +381,7 @@ export const stream = pgTable(
       columns: [table.chatId],
       foreignColumns: [chat.id],
     }),
+    chatIdIdx: index("Stream_chatId_idx").on(table.chatId),
   })
 );
 
@@ -470,22 +478,28 @@ export type KnowledgeChunk = InferSelectModel<typeof knowledgeChunk>;
  * Arquivos: biblioteca de ficheiros do utilizador (referências ao Storage).
  * Permite "Guardar em Arquivos" a partir do chat e depois "Adicionar à base de conhecimento".
  */
-export const userFile = pgTable("UserFile", {
-  id: uuid("id").primaryKey().notNull().defaultRandom(),
-  userId: uuid("userId")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  pathname: varchar("pathname", { length: 1024 }).notNull(),
-  /** URL pública para obter o ficheiro (Supabase public URL ou Blob); usada ao converter em conhecimento. */
-  url: varchar("url", { length: 2048 }).notNull(),
-  filename: varchar("filename", { length: 512 }).notNull(),
-  contentType: varchar("contentType", { length: 128 }).notNull(),
-  /** Texto extraído em cache; evita re-extração ao converter em conhecimento. */
-  extractedTextCache: text("extractedTextCache"),
-  /** Resumo estruturado (markdown) gerado por IA para PI/Contestação; evita perda de dados na truncagem. */
-  structuredSummary: text("structuredSummary"),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-});
+export const userFile = pgTable(
+  "UserFile",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    pathname: varchar("pathname", { length: 1024 }).notNull(),
+    /** URL pública para obter o ficheiro (Supabase public URL ou Blob); usada ao converter em conhecimento. */
+    url: varchar("url", { length: 2048 }).notNull(),
+    filename: varchar("filename", { length: 512 }).notNull(),
+    contentType: varchar("contentType", { length: 128 }).notNull(),
+    /** Texto extraído em cache; evita re-extração ao converter em conhecimento. */
+    extractedTextCache: text("extractedTextCache"),
+    /** Resumo estruturado (markdown) gerado por IA para PI/Contestação; evita perda de dados na truncagem. */
+    structuredSummary: text("structuredSummary"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdIdx: index("UserFile_userId_idx").on(table.userId),
+  })
+);
 
 export type UserFile = InferSelectModel<typeof userFile>;
 
@@ -598,8 +612,8 @@ export const userMemory = pgTable(
   (table) => ({
     /** Listar memórias por utilizador. */
     userIdIdx: index("UserMemory_userId_idx").on(table.userId),
-    /** Upsert por (userId, key). */
-    userIdKeyIdx: index("UserMemory_userId_key_idx").on(
+    /** Upsert atómico por (userId, key). uniqueIndex substitui o index anterior. */
+    userIdKeyIdx: uniqueIndex("UserMemory_userId_key_idx").on(
       table.userId,
       table.key
     ),

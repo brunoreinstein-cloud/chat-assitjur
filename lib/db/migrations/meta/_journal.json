@@ -190,6 +190,20 @@
       "when": 1742000000000,
       "tag": "0029_processo_intake",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1742900000000,
+      "tag": "0032_unique_user_memory_key",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1742900100000,
+      "tag": "0033_add_missing_indexes",
+      "breakpoints": true
     }
   ]
 }

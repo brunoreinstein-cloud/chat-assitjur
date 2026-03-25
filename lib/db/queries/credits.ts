@@ -3,18 +3,20 @@ import "server-only";
 import { and, desc, eq, gte, lt, type SQL, sql } from "drizzle-orm";
 import { llmUsageRecord, user, userCreditBalance } from "@/lib/db/schema";
 import { ChatbotError } from "@/lib/errors";
-import { getDb, toDatabaseError } from "../connection";
+import { getDb, toDatabaseError, withRetry } from "../connection";
 
 // --- Créditos por consumo de LLM (docs/SPEC-CREDITOS-LLM.md) ---
 
 export async function getCreditBalance(userId: string) {
   try {
-    const [row] = await getDb()
-      .select()
-      .from(userCreditBalance)
-      .where(eq(userCreditBalance.userId, userId))
-      .limit(1);
-    return row ?? null;
+    return await withRetry(async () => {
+      const [row] = await getDb()
+        .select()
+        .from(userCreditBalance)
+        .where(eq(userCreditBalance.userId, userId))
+        .limit(1);
+      return row ?? null;
+    });
   } catch (err) {
     toDatabaseError(err, "Failed to get credit balance");
   }

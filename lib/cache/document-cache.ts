@@ -1,27 +1,12 @@
 import type { Document } from "@/lib/db/schema";
+import { LruTtlMap } from "./lru-ttl-map";
 
 const DEFAULT_TTL_MS = 30_000;
 const PREVIEW_TTL_MS = 60_000;
 
-interface CacheEntry {
-  value: Document[];
-  expiresAt: number;
-}
-
-interface DocxCacheEntry {
-  buffer: Buffer;
-  filename: string;
-  expiresAt: number;
-}
-
-interface PreviewCacheEntry {
-  html: string;
-  expiresAt: number;
-}
-
-const store = new Map<string, CacheEntry>();
-const docxStore = new Map<string, DocxCacheEntry>();
-const previewStore = new Map<string, PreviewCacheEntry>();
+const store = new LruTtlMap<Document[]>(500);
+const docxStore = new LruTtlMap<{ buffer: Buffer; filename: string }>(100);
+const previewStore = new LruTtlMap<string>(200);
 
 function cacheKey(userId: string, documentId: string): string {
   return `doc:${userId}:${documentId}`;
@@ -29,10 +14,6 @@ function cacheKey(userId: string, documentId: string): string {
 
 function docxCacheKey(userId: string, documentId: string): string {
   return `docx:${userId}:${documentId}`;
-}
-
-function isExpired(entry: { expiresAt: number }): boolean {
-  return Date.now() >= entry.expiresAt;
 }
 
 /**
@@ -43,16 +24,7 @@ function isExpired(entry: { expiresAt: number }): boolean {
  */
 export const documentCache = {
   get(userId: string, documentId: string): Document[] | undefined {
-    const key = cacheKey(userId, documentId);
-    const entry = store.get(key);
-    if (!entry) {
-      return undefined;
-    }
-    if (isExpired(entry)) {
-      store.delete(key);
-      return undefined;
-    }
-    return entry.value;
+    return store.get(cacheKey(userId, documentId));
   },
 
   set(
@@ -61,11 +33,7 @@ export const documentCache = {
     value: Document[],
     ttlMs = DEFAULT_TTL_MS
   ): void {
-    const key = cacheKey(userId, documentId);
-    store.set(key, {
-      value,
-      expiresAt: Date.now() + ttlMs,
-    });
+    store.set(cacheKey(userId, documentId), value, ttlMs);
   },
 
   delete(userId: string, documentId: string): void {
@@ -82,16 +50,7 @@ export const docxCache = {
     userId: string,
     documentId: string
   ): { buffer: Buffer; filename: string } | undefined {
-    const key = docxCacheKey(userId, documentId);
-    const entry = docxStore.get(key);
-    if (!entry) {
-      return undefined;
-    }
-    if (isExpired(entry)) {
-      docxStore.delete(key);
-      return undefined;
-    }
-    return { buffer: entry.buffer, filename: entry.filename };
+    return docxStore.get(docxCacheKey(userId, documentId));
   },
 
   set(
@@ -101,11 +60,11 @@ export const docxCache = {
     filename: string,
     ttlMs = DEFAULT_TTL_MS
   ): void {
-    docxStore.set(docxCacheKey(userId, documentId), {
-      buffer,
-      filename,
-      expiresAt: Date.now() + ttlMs,
-    });
+    docxStore.set(
+      docxCacheKey(userId, documentId),
+      { buffer, filename },
+      ttlMs
+    );
   },
 
   delete(userId: string, documentId: string): void {
@@ -118,11 +77,7 @@ export const docxCache = {
    */
   deleteById(userId: string, documentId: string): void {
     const prefix = docxCacheKey(userId, documentId);
-    for (const key of docxStore.keys()) {
-      if (key === prefix || key.startsWith(`${prefix}:`)) {
-        docxStore.delete(key);
-      }
-    }
+    docxStore.deleteByPrefix(prefix);
   },
 };
 
@@ -131,32 +86,15 @@ export const docxCache = {
  * Chave: userId + documentId + layout. TTL 60s.
  */
 export const previewCache = {
-  get(userId: string, cacheKey: string): string | undefined {
-    const key = `preview:${userId}:${cacheKey}`;
-    const entry = previewStore.get(key);
-    if (!entry) {
-      return undefined;
-    }
-    if (isExpired(entry)) {
-      previewStore.delete(key);
-      return undefined;
-    }
-    return entry.html;
+  get(userId: string, cacheKeyStr: string): string | undefined {
+    return previewStore.get(`preview:${userId}:${cacheKeyStr}`);
   },
 
-  set(userId: string, cacheKey: string, html: string): void {
-    const key = `preview:${userId}:${cacheKey}`;
-    previewStore.set(key, {
-      html,
-      expiresAt: Date.now() + PREVIEW_TTL_MS,
-    });
+  set(userId: string, cacheKeyStr: string, html: string): void {
+    previewStore.set(`preview:${userId}:${cacheKeyStr}`, html, PREVIEW_TTL_MS);
   },
 
   delete(userId: string, documentId: string): void {
-    for (const key of previewStore.keys()) {
-      if (key.startsWith(`preview:${userId}:${documentId}`)) {
-        previewStore.delete(key);
-      }
-    }
+    previewStore.deleteByPrefix(`preview:${userId}:${documentId}`);
   },
 };

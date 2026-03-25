@@ -3,30 +3,18 @@
  * Evita dependência do Supabase para preview/download após o stream.
  */
 
-interface DocEntry {
-  title: string;
-  content: string;
-}
+import { createDocStore } from "@/lib/stores/doc-store-factory";
 
-const store = new Map<string, DocEntry>();
+const store = createDocStore();
 
-export function storeRevisorDoc(
+export const storeRevisorDoc = (
   id: string,
   title: string,
   content: string
-): void {
-  store.set(id, { title, content });
-}
+): void => store.storeDoc(id, title, content);
 
-export function getRevisorDoc(id: string): DocEntry | undefined {
-  return store.get(id);
-}
+export const getRevisorDoc = (id: string) => store.getDoc(id);
 
-export function getRevisorDocs(
+export const getRevisorDocs = (
   ids: string[]
-): Array<{ id: string; title: string; content: string }> {
-  return ids.flatMap((id) => {
-    const entry = store.get(id);
-    return entry ? [{ id, ...entry }] : [];
-  });
-}
+): Array<{ id: string; title: string; content: string }> => store.getDocs(ids);

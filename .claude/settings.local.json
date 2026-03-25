@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(node C:/Users/bruno/AppData/Roaming/npm/node_modules/pnpm/bin/pnpm.cjs run build)",
+      "Bash(node C:/Users/bruno/AppData/Roaming/npm/node_modules/pnpm/bin/pnpm.cjs test)",
+      "Bash(node C:/Users/bruno/AppData/Roaming/npm/node_modules/pnpm/bin/pnpm.cjs exec vitest run)",
+      "Bash(ls /c/Users/bruno/chatbot/lib/ai/*.ts)",
+      "Bash(node C:/Users/bruno/AppData/Roaming/npm/node_modules/pnpm/bin/pnpm.cjs exec tsc --noEmit)",
+      "Bash(node C:/Users/bruno/AppData/Roaming/npm/node_modules/pnpm/bin/pnpm.cjs exec vitest run --reporter=verbose)",
+      "Bash(ls \"C:\\\\Users\\\\bruno\\\\chatbot\\\\app\\\\\\(chat\\)\")",
+      "Bash(ls \"C:\\\\Users\\\\bruno\\\\chatbot\\\\app\\\\\\(chat\\)\\\\processos\")",
+      "Bash(ls \"C:\\\\Users\\\\bruno\\\\chatbot\\\\app\\\\\\(chat\\)\\\\processos\\\\[id]\")",
+      "Bash(npx tsc:*)",
+      "Bash(npx vitest:*)",
+      "Bash(ls \"C:\\\\Users\\\\bruno\\\\chatbot\\\\app\\\\\\(chat\\)\\\\api\\\\admin\")",
+      "Bash(ls C:/Users/bruno/chatbot/app/\\\\\\(chat\\\\\\)/admin/)",
+      "Bash(ls C:/Users/bruno/chatbot/app/\\\\\\(chat\\\\\\)/admin/credits/)",
+      "Bash(ls C:/Users/bruno/chatbot/app/\\\\\\(chat\\\\\\)/api/admin/)",
+      "Bash(npx next:*)",
+      "WebFetch(domain:skills.sh)"
+    ]
+  }
+}

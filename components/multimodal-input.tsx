@@ -689,10 +689,11 @@ function PureMultimodalInput({
           fileSize: f.size,
         })),
       ]);
-      try {
-        for (let i = 0; i < uniqueFiles.length; i++) {
-          const file = uniqueFiles[i];
-          const attachment = await uploadFile(file, queueIds[i]);
+      for (let i = 0; i < uniqueFiles.length; i++) {
+        const file = uniqueFiles[i];
+        const queueId = queueIds[i];
+        try {
+          const attachment = await uploadFile(file, queueId);
           if (attachment !== undefined && typeof attachment.url === "string") {
             // Preferir tipo pelo nome do ficheiro quando explícito (ex.: "Contestação - RO.pdf") para evitar classificação errada pelo conteúdo
             const docType =
@@ -753,16 +754,12 @@ function PureMultimodalInput({
                 });
             }
           }
-          setUploadQueue((prev) => {
-            const idx = prev.findIndex((q) => q.label === file.name);
-            if (idx < 0) {
-              return prev;
-            }
-            return [...prev.slice(0, idx), ...prev.slice(idx + 1)];
-          });
+        } finally {
+          // Remover só este item (por id), nunca esvaziar a fila inteira: outro
+          // processFiles em paralelo ou filas de outros ficheiros ficariam corrompidos
+          // e isUploading podia ficar true indefinidamente.
+          setUploadQueue((prev) => prev.filter((q) => q.id !== queueId));
         }
-      } finally {
-        setUploadQueue([]);
       }
     },
     [attachments, setAttachments, uploadFile, processoId, mutate]
@@ -862,18 +859,25 @@ function PureMultimodalInput({
           .filter((file): file is File => file !== null)
           .map((file) => uploadFile(file, imgQueueId));
 
-        const uploadedAttachments = await Promise.all(uploadPromises);
-        const successfullyUploadedAttachments = uploadedAttachments.filter(
-          (attachment) =>
-            attachment?.url != null && attachment?.contentType != null
+        // allSettled: se 1 de N uploads falha, os restantes continuam
+        const results = await Promise.allSettled(uploadPromises);
+        const fulfilled = results.filter(
+          (r): r is PromiseFulfilledResult<Attachment | undefined> =>
+            r.status === "fulfilled"
         );
+        const failedCount = results.length - fulfilled.length;
+        const successfullyUploadedAttachments = fulfilled
+          .map((r) => r.value)
+          .filter(
+            (attachment): attachment is Attachment =>
+              attachment?.url != null && attachment?.contentType != null
+          );
 
-        setAttachments((curr) => [
-          ...curr,
-          ...(successfullyUploadedAttachments as Attachment[]),
-        ]);
-      } catch {
-        toast.error("Falha ao enviar a(s) imagem(ns) colada(s)");
+        setAttachments((curr) => [...curr, ...successfullyUploadedAttachments]);
+
+        if (failedCount > 0) {
+          toast.error(`${failedCount} imagem(ns) falhou/falharam ao enviar`);
+        }
       } finally {
         setUploadQueue([]);
       }
@@ -1012,8 +1016,17 @@ function PureMultimodalInput({
   const hasInsufficientCredits =
     creditsData !== undefined &&
     creditsData.balance < MIN_CREDITS_TO_START_CHAT;
+  const docsSubmitError = validateAttachmentsForSubmit(attachments);
+  const revisorSubmitError =
+    isRevisorAgent && messages.length === 0
+      ? validateRevisorPiContestacao(attachments, messages.length)
+      : null;
+  const submitPrevalidationError = docsSubmitError ?? revisorSubmitError;
   const sendButtonDisabled =
-    isInputEmpty || isUploading || hasInsufficientCredits;
+    isInputEmpty ||
+    isUploading ||
+    hasInsufficientCredits ||
+    submitPrevalidationError !== null;
 
   return (
     <div className={cn("relative flex w-full flex-col gap-4", className)}>
@@ -2007,6 +2020,12 @@ function PureMultimodalInput({
               data-testid="send-button"
               disabled={sendButtonDisabled}
               status={status}
+              title={
+                submitPrevalidationError ??
+                (hasInsufficientCredits
+                  ? "Créditos insuficientes para iniciar conversa."
+                  : undefined)
+              }
             >
               <ArrowUpIcon size={14} />
             </PromptInputSubmit>

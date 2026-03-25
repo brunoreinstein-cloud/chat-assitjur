@@ -15,8 +15,10 @@ export async function GET() {
     if (!session?.user?.id) {
       return new ChatbotError("unauthorized:chat").toResponse();
     }
-    await ensureStatementTimeout();
-    const processos = await getProcessosByUserId({ userId: session.user.id });
+    const [, processos] = await Promise.all([
+      ensureStatementTimeout(),
+      getProcessosByUserId({ userId: session.user.id }),
+    ]);
     return Response.json(processos);
   } catch (error) {
     if (error instanceof ChatbotError) {

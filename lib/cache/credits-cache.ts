@@ -1,9 +1,13 @@
 /**
  * Cache em memória para GET /api/credits (saldo + uso recente).
- * Reduz carga na BD em refreshes frequentes; TTL curto para transparência.
- * Em serverless (Vercel) o cache é por instância.
+ * Reduz carga na BD em refreshes frequentes. 90s equilibra frescura e carga:
+ * créditos mudam apenas após envio de mensagem (dedução), e a rota invalida
+ * o cache explicitamente nesse momento.
+ * Em serverless (Vercel) o cache é por instância. LRU com max 500 entradas.
  */
-const TTL_MS = 30_000;
+import { LruTtlMap } from "./lru-ttl-map";
+
+const TTL_MS = 90_000;
 
 interface CachedCredits {
   balance: number;
@@ -19,27 +23,15 @@ interface CachedCredits {
   lowBalanceThreshold: number;
 }
 
-const store = new Map<string, { value: CachedCredits; expiresAt: number }>();
+const store = new LruTtlMap<CachedCredits>(500);
 
-function key(userId: string, limit: number): string {
+function cacheKey(userId: string, limit: number): string {
   return `credits:${userId}:${limit}`;
-}
-
-function isExpired(expiresAt: number): boolean {
-  return Date.now() >= expiresAt;
 }
 
 export const creditsCache = {
   get(userId: string, limit: number): CachedCredits | undefined {
-    const k = key(userId, limit);
-    const entry = store.get(k);
-    if (!entry || isExpired(entry.expiresAt)) {
-      if (entry) {
-        store.delete(k);
-      }
-      return undefined;
-    }
-    return entry.value;
+    return store.get(cacheKey(userId, limit));
   },
 
   set(
@@ -48,18 +40,11 @@ export const creditsCache = {
     value: CachedCredits,
     ttlMs = TTL_MS
   ): void {
-    store.set(key(userId, limit), {
-      value,
-      expiresAt: Date.now() + ttlMs,
-    });
+    store.set(cacheKey(userId, limit), value, ttlMs);
   },
 
   /** Invalida cache do utilizador (ex.: após dedução ou admin adicionar créditos). */
   delete(userId: string): void {
-    for (const k of store.keys()) {
-      if (k.startsWith(`credits:${userId}:`)) {
-        store.delete(k);
-      }
-    }
+    store.deleteByPrefix(`credits:${userId}:`);
   },
 };

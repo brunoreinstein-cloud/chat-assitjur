@@ -84,9 +84,12 @@ export async function saveChat({
 
 export async function deleteChatById({ id }: { id: string }) {
   try {
-    await getDb().delete(vote).where(eq(vote.chatId, id));
-    await getDb().delete(message).where(eq(message.chatId, id));
-    await getDb().delete(stream).where(eq(stream.chatId, id));
+    // vote, message e stream não têm FKs entre si — podem ser apagados em paralelo.
+    await Promise.all([
+      getDb().delete(vote).where(eq(vote.chatId, id)),
+      getDb().delete(message).where(eq(message.chatId, id)),
+      getDb().delete(stream).where(eq(stream.chatId, id)),
+    ]);
 
     const [chatsDeleted] = await getDb()
       .delete(chat)
@@ -111,9 +114,11 @@ export async function deleteAllChatsByUserId({ userId }: { userId: string }) {
 
     const chatIds = userChats.map((c) => c.id);
 
-    await getDb().delete(vote).where(inArray(vote.chatId, chatIds));
-    await getDb().delete(message).where(inArray(message.chatId, chatIds));
-    await getDb().delete(stream).where(inArray(stream.chatId, chatIds));
+    await Promise.all([
+      getDb().delete(vote).where(inArray(vote.chatId, chatIds)),
+      getDb().delete(message).where(inArray(message.chatId, chatIds)),
+      getDb().delete(stream).where(inArray(stream.chatId, chatIds)),
+    ]);
 
     const deletedChats = await getDb()
       .delete(chat)
