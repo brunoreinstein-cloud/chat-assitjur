@@ -95,25 +95,33 @@ export async function extractTextFromCsv(buffer: ArrayBuffer): Promise<string> {
     : text;
 }
 
-/** Excel (.xlsx / .xls): extrair texto de todas as folhas com xlsx. */
+/** Excel (.xlsx / .xls): extrair texto de todas as folhas com exceljs. */
 export async function extractTextFromExcel(
   buffer: ArrayBuffer
 ): Promise<string> {
-  const XLSX = await import("xlsx");
-  const workbook = XLSX.read(new Uint8Array(buffer), { type: "array" });
+  const ExcelJS = await import("exceljs");
+  const workbook = new ExcelJS.Workbook();
+  // biome-ignore lint/suspicious/noExplicitAny: exceljs type mismatch
+  await workbook.xlsx.load(Buffer.from(buffer) as any);
+
   const parts: string[] = [];
-  for (const sheetName of workbook.SheetNames) {
-    const sheet = workbook.Sheets[sheetName];
-    if (!sheet) {
-      continue;
-    }
-    const csv = XLSX.utils.sheet_to_csv(sheet, {
-      FS: "\t",
-      RS: "\n",
-      blankrows: false,
+  for (const worksheet of workbook.worksheets) {
+    const lines: string[] = [];
+    worksheet.eachRow((row) => {
+      const values = Array.isArray(row.values) ? row.values : [];
+      const rowValues = values
+        .slice(1) // ExcelJS indexa de 1, remover primeiro elemento vazio
+        .map((v: string | number | boolean | null | undefined) =>
+          v != null ? String(v).trim() : ""
+        )
+        .join("\t");
+      if (rowValues?.trim()) {
+        lines.push(rowValues);
+      }
     });
+    const csv = lines.join("\n");
     if (csv.trim().length > 0) {
-      parts.push(`[Folha: ${sheetName}]`, csv.trim());
+      parts.push(`[Folha: ${worksheet.name}]`, csv.trim());
     }
   }
   const text = parts.join("\n");
