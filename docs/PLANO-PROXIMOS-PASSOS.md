@@ -2,7 +2,7 @@
 
 Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. Atualizar este ficheiro quando prioridades ou estado mudarem.
 
-**Última atualização:** 2026-03-25 (Secção 9 — Plano de Melhorias v1.0: 32 melhorias em 8 categorias, roadmap de 4 sprints cobrindo segurança crítica, performance, qualidade, testes, arquitetura de agentes, observabilidade, UX e DevEx.)
+**Última atualização:** 2026-03-25 (Sprint 7+8 — searchJurisprudencia, dashboard custos LLM, status peças, faseProcessual automática, Langfuse OTel. Secção 1.1 actualizada.)
 
 ---
 
@@ -18,13 +18,18 @@ Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. 
 | 1   | **Executar migrações manuais em produção** | `pnpm tsx lib/db/apply-manual-migrations.ts` (com `POSTGRES_URL` de produção) — aplica `0029_processo_intake.sql`, `0030_pecas.sql`, `0031_user_role.sql`. Localmente já aplicadas. | — |
 | 2   | **Intake automático** | PDF uploaded → agente extrai metadados → cria/atualiza processo automaticamente (sem formulário manual). Ver PRD §3 e `intakeStatus` no schema. | — |
 | 3   | **Relatório de qualidade** | UI que lê `TaskExecution.result` (8 métricas `TaskTelemetry`) e apresenta dashboard por processo/agente. | — |
-| 4   | **Quick wins SPEC (análise BR Consultoria)** | 4 itens confirmados como pendentes: (a) `searchJurisprudencia` — registrar no route.ts (~30min); (b) `/ajuda` no chat (~2h); (c) IP Lock response padrão (~30min); (d) Checklist pré-entrega no DOCX (~2h). Ver §11.6 e §12. | — |
+| 4   | **Quick wins SPEC (análise BR Consultoria)** | ~~(a) `searchJurisprudencia`~~ ✅ feito. Pendentes: (b) `/ajuda` no chat (~2h); (c) IP Lock response padrão — mensagem uniforme `"⚠️ Acesso restrito…"` Playbook v9.0 (~30min); (d) Checklist pré-entrega no DOCX (~2h). Ver §11.6 e §12. | — |
 | 5   | **Sprint SPEC-A — Módulos XLSX** | M08 (Cadastro eLaw, ~2d), M09 (Encerramento, ~1d), M10 (Aquisição Créditos, ~3d), M05 (Formulário OBF, ~1d). Bloqueadores operacionais — estagiários dependem do M08 para upload no eLaw. Ver §11.5. | — |
+| 6   | **Template Lock M02/M04/M06** | Master gera DOCX do zero; deveria abrir template fixo do cliente (Autuori→M02, DPSP→M04, GPA→M06), localizar `{PLACEHOLDER}` e preencher preservando formatação. `createMasterDocuments` precisa de suporte a "modo template". | — |
+| 7   | **CNPJ routing automático** | Detectar CNPJ da empresa reclamada nos documentos e rotear para o módulo correcto (GPA→M01/M05/M06/M09, DPSP→M04, Autuori→M02/M07). Actualmente o Master infere por linguagem natural. | — |
+| 8   | **Pipeline FASE 0→4 para Type F (dados/Excel)** | M08/M09/M10/M14 requerem orquestração estruturada: FASE 0 (mapeamento de colunas) → FASE 1 (validação) → FASE 4 (saída). Hoje o Master chama tools directamente sem fases. | — |
+| 9   | **Confidence scoring em campos críticos** | Campos `prazo_fatal`, `CNJ`, `valor_condenacao`, `data_transito` devem ter score 0–1. Flag VERIFICAR se < 0.998; rejeição se < 0.700. Sem isso não há garantia de qualidade na extracção. | — |
 
 ### 1.1 Concluído (arquivo)
 
 | #   | Tarefa             | Resolução                                                                                                                                 |
 |-----|--------------------|-------------------------------------------------------------------------------------------------------------------------------------------|
+| —   | **Sprint 7+8 — SPEC gaps + observabilidade** (2026-03-25) | `searchJurisprudencia` tool (RAG semântico em KB, activa em revisor + master). Temperaturas Playbook v9.0: 0.1 assistente-geral (Tipo G), 0.2 revisor/redator/avaliador. Dashboard `/admin/costs` (TaskExecution por agente, créditos/tokens/latência, períodos 7–90d). `peca.status` rascunho→aprovado→protocolado: migração `0034`, `aprovaPecaAction`, RBAC `peca:approve` (adv_senior+), `PecaStatusBadge` + `PecaStatusButton` na UI. `faseProcessual` automática: detecção por keywords no intake (CONHECIMENTO/RECURSAL-TRT/…), migração `0035`, injectada no contexto dos agentes e visível na UI do processo. Langfuse OTel: `LangfuseExporter` condicional em `instrumentation.ts` + `traceId` em `buildAiSdkTelemetry`. |
 | —   | **Sprint 6 — ProcessoPanel + Telemetria + Painel de Passivo** (2026-03-24) | `ProcessoSelector` no topbar do chat (dropdown + modal inline de criação); `setChatProcessoAction`; `processoIdRef` em `ChatRequestRefs`. Telemetria: `TaskTelemetry` (8 métricas: latência, tokens, steps, tools, finishReason, modelId) em `TaskExecution.result`. Painel `/processos/passivo`: server component com agregação por risco + CSV export. Migrações `0029`/`0030`/`0031` aplicadas via `lib/db/apply-manual-migrations.ts`. |
 | —   | **Sprint 5 — RBAC** (2026-03-24) | `lib/rbac/roles.ts` (6 perfis + `can()`), `lib/rbac/guards.ts` (`requirePermission`), `role` em JWT/Session, `updateUserRole`, admin RBAC UI + API route, guards em todas as server actions, migração `0031_user_role.sql`. |
 | —   | **Sprint 4 — RF-07 + Fases + Riscos + Peças** (2026-03-24) | `processoId` no body POST /api/chat; injeção de contexto no system prompt; `TaskExecution` auto-link; `avancaFaseAction` + `setFaseAction`; `FASE_ORDER` state machine; badge de fases na página do processo; `upsertRiscoVerba` tool + action; tabela `Peca`; `savePecaAction`; migração `0030_pecas.sql`. |
