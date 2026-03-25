@@ -4,7 +4,7 @@
     {
       "name": "next-dev",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["C:\\Users\\bruno\\AppData\\Roaming\\npm\\node_modules\\pnpm\\bin\\pnpm.cjs", "exec", "next", "dev", "--turbo", "-p", "3300"],
+      "runtimeArgs": ["C:\\Users\\bruno\\chatbot\\node_modules\\next\\dist\\bin\\next", "dev", "--turbo", "-p", "3300"],
       "port": 3300,
       "autoPort": true,
       "env": {
