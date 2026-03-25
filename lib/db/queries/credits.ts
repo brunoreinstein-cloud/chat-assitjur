@@ -1,7 +1,12 @@
 import "server-only";
 
 import { and, desc, eq, gte, lt, type SQL, sql } from "drizzle-orm";
-import { llmUsageRecord, user, userCreditBalance } from "@/lib/db/schema";
+import {
+  creditTransaction,
+  llmUsageRecord,
+  user,
+  userCreditBalance,
+} from "@/lib/db/schema";
 import { ChatbotError } from "@/lib/errors";
 import { getDb, toDatabaseError, withRetry } from "../connection";
 
@@ -54,11 +59,13 @@ export async function getOrCreateCreditBalance(
 /**
  * Regista o consumo de LLM e debita créditos numa transação atómica.
  *
- * Correções face à versão anterior:
- * 1. Transação: INSERT + UPDATE fazem commit juntos — se o UPDATE falhar, o
- *    registo de uso também não fica gravado (sem créditos "gratuitos").
- * 2. UPDATE atómico: usa SQL `GREATEST(0, balance - creditsConsumed)` em vez de
- *    SELECT + Math.max(), eliminando a race condition TOCTOU em pedidos concorrentes.
+ * Implementação hardened (0b):
+ * 1. SELECT FOR UPDATE na linha do utilizador — garante exclusividade durante
+ *    a transação; previne race conditions em pedidos paralelos.
+ * 2. Verificação do saldo ANTES do débito: se balance < creditsConsumed, não
+ *    debita (regista igualmente o uso LLM para auditoria, com delta=0).
+ * 3. INSERT em CreditTransaction — audit log completo de todas as movimentações.
+ * 4. UPDATE atómico com GREATEST(0, ...) como salvaguarda adicional.
  *
  * NOTA: postgres.js envia BEGIN/COMMIT sobre a mesma conexão mesmo com o pooler
  * Supabase porta 6543 (Transaction mode) — o driver reserva a conexão para a
@@ -87,6 +94,19 @@ export async function deductCreditsAndRecordUsage({
       // herda o default Supabase (~8s) sem o SET que foi feito no início do request.
       await tx.execute(sql`SET LOCAL statement_timeout = '30s'`);
 
+      // SELECT FOR UPDATE: bloqueia a linha durante a transação.
+      // Previne race condition onde dois pedidos paralelos lêem o mesmo saldo
+      // e ambos debitam, resultando em saldo negativo ou duplo débito.
+      const [locked] = await tx.execute<{ balance: number }>(
+        sql`SELECT balance FROM "UserCreditBalance" WHERE "userId" = ${userId} FOR UPDATE`
+      );
+      const balanceBefore = locked?.balance ?? 0;
+
+      // Débito efectivo: não pode exceder o saldo disponível.
+      const actualDebit = Math.min(creditsConsumed, balanceBefore);
+      const balanceAfter = balanceBefore - actualDebit;
+
+      // Registo de uso LLM (sempre, mesmo se saldo insuficiente)
       await tx.insert(llmUsageRecord).values({
         userId,
         chatId,
@@ -95,15 +115,27 @@ export async function deductCreditsAndRecordUsage({
         model,
         creditsConsumed,
       });
-      // UPDATE atómico — elimina race condition TOCTOU de pedidos concorrentes.
-      // Não precisa de SELECT prévio: GREATEST garante balance ≥ 0 em linha única.
-      await tx
-        .update(userCreditBalance)
-        .set({
-          balance: sql`GREATEST(0, ${userCreditBalance.balance} - ${creditsConsumed})`,
-          updatedAt: new Date(),
-        })
-        .where(eq(userCreditBalance.userId, userId));
+
+      if (actualDebit > 0) {
+        // UPDATE atómico com GREATEST como salvaguarda adicional.
+        await tx
+          .update(userCreditBalance)
+          .set({
+            balance: sql`GREATEST(0, ${userCreditBalance.balance} - ${actualDebit})`,
+            updatedAt: new Date(),
+          })
+          .where(eq(userCreditBalance.userId, userId));
+
+        // Audit log da movimentação
+        await tx.insert(creditTransaction).values({
+          userId,
+          delta: -actualDebit,
+          type: "llm_debit",
+          referenceId: chatId ?? undefined,
+          balanceBefore,
+          balanceAfter,
+        });
+      }
     });
   } catch (err) {
     toDatabaseError(err, "Failed to deduct credits or record usage");
@@ -112,8 +144,8 @@ export async function deductCreditsAndRecordUsage({
 
 /**
  * Adiciona créditos a um utilizador de forma atómica (upsert).
+ * Regista também em CreditTransaction para audit log completo.
  *
- * Correções face à versão anterior:
  * 1. Usa INSERT … ON CONFLICT DO UPDATE em vez de SELECT + INSERT/UPDATE.
  *    Elimina a race condition onde dois pedidos simultâneos fazem SELECT → NULL
  *    e ambos tentam INSERT, falhando o segundo com 23505.
@@ -122,28 +154,50 @@ export async function deductCreditsAndRecordUsage({
 export async function addCreditsToUser({
   userId,
   delta,
+  type = "top_up",
+  referenceId,
 }: {
   userId: string;
   delta: number;
+  /** Tipo de movimentação: "top_up" | "refund" | "admin" | "initial". Default: "top_up". */
+  type?: string;
+  referenceId?: string;
 }) {
   if (delta <= 0) {
     return;
   }
   try {
-    await getDb()
-      .insert(userCreditBalance)
-      .values({
-        userId,
-        balance: delta,
-        updatedAt: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: userCreditBalance.userId,
-        set: {
-          balance: sql`${userCreditBalance.balance} + ${delta}`,
+    await getDb().transaction(async (tx) => {
+      // Saldo antes (para o audit log)
+      const [row] = await tx.execute<{ balance: number }>(
+        sql`SELECT balance FROM "UserCreditBalance" WHERE "userId" = ${userId} FOR UPDATE`
+      );
+      const balanceBefore = row?.balance ?? 0;
+
+      await tx
+        .insert(userCreditBalance)
+        .values({
+          userId,
+          balance: delta,
           updatedAt: new Date(),
-        },
+        })
+        .onConflictDoUpdate({
+          target: userCreditBalance.userId,
+          set: {
+            balance: sql`${userCreditBalance.balance} + ${delta}`,
+            updatedAt: new Date(),
+          },
+        });
+
+      await tx.insert(creditTransaction).values({
+        userId,
+        delta,
+        type,
+        referenceId,
+        balanceBefore,
+        balanceAfter: balanceBefore + delta,
       });
+    });
   } catch (err) {
     toDatabaseError(err, "Failed to add credits");
   }

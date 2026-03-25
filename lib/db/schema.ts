@@ -600,6 +600,37 @@ export const llmUsageRecord = pgTable(
 export type LlmUsageRecord = InferSelectModel<typeof llmUsageRecord>;
 
 /**
+ * Audit log de todas as movimentações de créditos (débitos, recargas, ajustes).
+ * Imutável: nunca apagar ou atualizar linhas.
+ * Tipos: llm_debit (consumo LLM), top_up (recarga), refund (estorno), admin (ajuste manual), initial (saldo inicial).
+ */
+export const creditTransaction = pgTable(
+  "CreditTransaction",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    /** Positivo = crédito (recarga/estorno). Negativo = débito (consumo LLM). */
+    delta: integer("delta").notNull(),
+    type: varchar("type", { length: 32 }).notNull(),
+    /** Referência opcional (chatId para débito LLM, etc.). */
+    referenceId: varchar("referenceId", { length: 256 }),
+    balanceBefore: integer("balanceBefore").notNull(),
+    balanceAfter: integer("balanceAfter").notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdCreatedAtIdx: index("CreditTransaction_userId_createdAt_idx").on(
+      table.userId,
+      table.createdAt
+    ),
+  })
+);
+
+export type CreditTransaction = InferSelectModel<typeof creditTransaction>;
+
+/**
  * Memórias persistentes por utilizador: pares chave-valor para contexto entre sessões.
  * Permite que os agentes "lembrem" dados do cliente, processo, preferências do advogado, etc.
  */

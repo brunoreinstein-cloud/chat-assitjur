@@ -60,7 +60,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    await addCreditsToUser({ userId, delta });
+    await addCreditsToUser({ userId, delta, type: "admin" });
     creditsCache.delete(userId);
     return NextResponse.json({ ok: true, userId, delta });
   } catch (err) {
