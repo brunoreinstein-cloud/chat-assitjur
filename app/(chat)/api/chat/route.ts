@@ -85,6 +85,7 @@ import { upsertRiscoVerba } from "@/lib/ai/tools/upsert-risco-verba";
 import { validationToolsForValidate } from "@/lib/ai/tools/validation-tools";
 import { getCachedBuiltInAgentOverrides } from "@/lib/cache/agent-overrides-cache";
 import { creditsCache } from "@/lib/cache/credits-cache";
+import { checkRateLimit } from "@/lib/cache/rate-limiter";
 import { FASE_LABEL, RISCO_LABEL } from "@/lib/constants/processo";
 import {
   addCreditsToUser,
@@ -2041,6 +2042,30 @@ async function handleChatPostAuthenticated(
     return earlyError;
   }
   const authenticatedSession = session as Session;
+
+  // Rate limiting: sliding window de 60s (Redis se disponível, fallback in-memory)
+  const rlResult = await checkRateLimit(
+    authenticatedSession.user.id,
+    authenticatedSession.user.type === "guest"
+  );
+  if (!rlResult.allowed) {
+    return new Response(
+      JSON.stringify({
+        error: "rate_limit_exceeded",
+        message: `Limite de ${rlResult.limit} mensagens por minuto atingido. Aguarde antes de enviar nova mensagem.`,
+        limit: rlResult.limit,
+      }),
+      {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          "X-RateLimit-Limit": String(rlResult.limit),
+          "X-RateLimit-Remaining": "0",
+          "Retry-After": "60",
+        },
+      }
+    );
+  }
 
   const userType: UserType = authenticatedSession.user.type;
   const isToolApprovalFlow = Boolean(messages);
