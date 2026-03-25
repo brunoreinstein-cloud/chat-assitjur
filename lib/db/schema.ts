@@ -57,6 +57,10 @@ export const processo = pgTable(
     rito: varchar("rito", { length: 32 }),
     /** Fase atual do pipeline: recebimento | analise_risco | estrategia | elaboracao | revisao | protocolo */
     fase: varchar("fase", { length: 32 }),
+    /** Fase processual judicial detectada automaticamente pelo intake:
+     *  CONHECIMENTO | RECURSAL-TRT | RECURSAL-TST | EXECUCAO-PROVISORIA |
+     *  EXECUCAO-DEFINITIVA | ACORDO | ENCERRADO | DESCONHECIDA */
+    faseProcessual: varchar("faseProcessual", { length: 32 }),
     /** Classificação global de risco: provavel | possivel | remoto */
     riscoGlobal: varchar("riscoGlobal", { length: 16 }),
     valorCausa: varchar("valorCausa", { length: 32 }),
@@ -184,6 +188,12 @@ export const peca = pgTable(
     blobUrl: varchar("blobUrl", { length: 2048 }),
     /** Chat que gerou esta peça (para navegação de volta). */
     chatId: uuid("chatId"),
+    /**
+     * Status do ciclo de vida da peça.
+     * rascunho → aprovado → protocolado
+     * Default: rascunho (agente acabou de gerar, aguarda revisão humana).
+     */
+    status: varchar("status", { length: 32 }).notNull().default("rascunho"),
     createdAt: timestamp("createdAt").notNull().defaultNow(),
   },
   (table) => ({

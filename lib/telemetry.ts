@@ -52,7 +52,11 @@ export function withSpan<T>(
 
 /**
  * Constrói o objeto experimental_telemetry do AI SDK com metadados completos.
- * Inclui agentId, model, userId e chatId para filtragem em dashboards (Vercel, Langfuse, etc.).
+ * Inclui agentId, model, userId, chatId e traceId para filtragem em dashboards
+ * (Vercel, Langfuse, etc.).
+ *
+ * traceId: quando LANGFUSE_PUBLIC_KEY está configurado, o exporter Langfuse usa
+ * este campo para criar/ligar traces no dashboard. Por omissão, é igual ao chatId.
  */
 export function buildAiSdkTelemetry(opts: {
   isEnabled: boolean;
@@ -61,7 +65,10 @@ export function buildAiSdkTelemetry(opts: {
   model?: string;
   userId?: string;
   chatId?: string;
+  /** ID do trace para Langfuse/OpenTelemetry. Default: chatId. */
+  traceId?: string;
 }) {
+  const traceId = opts.traceId ?? opts.chatId;
   return {
     isEnabled: opts.isEnabled,
     functionId: opts.functionId ?? "stream-text",
@@ -70,6 +77,7 @@ export function buildAiSdkTelemetry(opts: {
       ...(opts.model ? { model: opts.model } : {}),
       ...(opts.userId ? { userId: opts.userId } : {}),
       ...(opts.chatId ? { chatId: opts.chatId } : {}),
+      ...(traceId ? { traceId } : {}),
     },
   } as const;
 }

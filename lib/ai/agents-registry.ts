@@ -109,6 +109,12 @@ export interface AgentConfig {
    */
   allowedModelIds?: string[];
   /**
+   * Habilitar busca semântica de jurisprudência na Knowledge Base (searchJurisprudencia).
+   * Quando true, o agente pode buscar acórdãos, súmulas e OJs indexados pelo utilizador.
+   * Default: false — ativar apenas em agentes que fundamentam teses jurídicas.
+   */
+  useSearchJurisprudenciaTool?: boolean;
+  /**
    * Limite de tokens de output para o modelo (maxOutputTokens).
    * Se omitido, usa o default global do route.ts (8192).
    * O Master agent usa 16000 para suportar relatórios longos (M13: 250 campos, 30-50 pgs).
@@ -140,6 +146,10 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
     useRedatorContestacaoTool: false,
     useMemoryTools: true,
     useApprovalTool: false,
+    // Tipo G (Pesquisa): extração e consulta → temperature baixa para respostas determinísticas.
+    temperature: 0.1,
+    // Tipo G: sem análise complexa — adaptive thinking desnecessário.
+    thinkingEnabled: false,
   },
   [AGENT_ID_REVISOR_DEFESAS]: {
     id: AGENT_ID_REVISOR_DEFESAS,
@@ -149,6 +159,9 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
     useRedatorContestacaoTool: false,
     useMemoryTools: true,
     useApprovalTool: false, // Usa GATE do sistema prompt; HITL não necessário aqui
+    useSearchJurisprudenciaTool: true, // Busca súmulas/OJs para fundamentar análise de defesas.
+    // Tipo B (Analisador): análise jurídica → temperature 0.2 (alguma variação criativa).
+    temperature: 0.2,
     // Tipo B (Analisador): análise complexa → thinking adaptativo ativado.
     thinkingEnabled: true,
     /** Apenas modelos sem extended thinking: ferramentas ativas e primeira resposta rápida. */
@@ -162,6 +175,8 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
     useRedatorContestacaoTool: true,
     useMemoryTools: true,
     useApprovalTool: true, // Advogado aprova minuta antes de gerar DOCX final
+    // Tipo C (Redator de Peça): redação jurídica → temperature 0.2 para variação argumentativa.
+    temperature: 0.2,
     // Tipo C (Redator de Peça): redação complexa → thinking adaptativo ativado.
     thinkingEnabled: true,
     allowedModelIds: REDATOR_ALLOWED_MODEL_IDS,
@@ -175,6 +190,8 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
     useAvaliadorContestacaoTool: true,
     useMemoryTools: true,
     useApprovalTool: false,
+    // Tipo B (Analisador): avaliação jurídica → temperature 0.2.
+    temperature: 0.2,
     // Tipo B (Analisador): análise complexa → thinking adaptativo ativado.
     thinkingEnabled: true,
     allowedModelIds: nonReasoningChatModelIds,
@@ -189,6 +206,7 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
     useApprovalTool: true, // Master agent pode executar acções — requer aprovação
     usePipelineTool: true, // Pipeline multi-chamadas para PDFs grandes (>500 pgs)
     useMasterDocumentsTool: true, // Geração DOCX direta + ZIP download
+    useSearchJurisprudenciaTool: true, // Busca súmulas/OJs/acórdãos para fundamentar módulos (M02, M07, M11).
     // Tipo A/F/G (extração/dados): temperature baixa para minimizar variância em campos extraídos.
     temperature: 0.1,
     // Thinking desativado: extração de dados beneficia de determinismo (temperature 0.1).

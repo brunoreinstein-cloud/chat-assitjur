@@ -79,6 +79,7 @@ import { createMemoryTools } from "@/lib/ai/tools/memory";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
 import { runProcessoGates } from "@/lib/ai/tools/run-processo-gates";
 import { createSearchDocumentTool } from "@/lib/ai/tools/search-document";
+import { createSearchJurisprudenciaTool } from "@/lib/ai/tools/search-jurisprudencia";
 import { updateDocument } from "@/lib/ai/tools/update-document";
 import { upsertRiscoVerba } from "@/lib/ai/tools/upsert-risco-verba";
 import { validationToolsForValidate } from "@/lib/ai/tools/validation-tools";
@@ -1467,6 +1468,14 @@ function createStreamExecuteHandler(ctx: StreamExecuteContext) {
             }),
           }
         : {}),
+      // searchJurisprudencia: busca semântica na KB para agentes que fundamentam teses.
+      ...(ctx.agentConfig.useSearchJurisprudenciaTool
+        ? {
+            searchJurisprudencia: createSearchJurisprudenciaTool({
+              userId: ctx.session.user.id,
+            }),
+          }
+        : {}),
     } as {
       getWeather: typeof getWeather;
       createDocument: ReturnType<typeof createDocument>;
@@ -1480,6 +1489,7 @@ function createStreamExecuteHandler(ctx: StreamExecuteContext) {
       runProcessoGates: typeof runProcessoGates;
       upsertRiscoVerba: typeof upsertRiscoVerba;
       buscarNoProcesso?: ReturnType<typeof createSearchDocumentTool>;
+      searchJurisprudencia?: ReturnType<typeof createSearchJurisprudenciaTool>;
       createRevisorDefesaDocuments?: ReturnType<
         typeof createRevisorDefesaDocuments
       >;
@@ -2214,6 +2224,7 @@ async function handleChatPostAuthenticated(
         ? `Rito: ${proc.rito === "sumarissimo" ? "Sumaríssimo" : "Ordinário"}`
         : null,
       proc.fase ? `Fase atual: ${FASE_LABEL[proc.fase] ?? proc.fase}` : null,
+      proc.faseProcessual ? `Fase processual: ${proc.faseProcessual}` : null,
       proc.riscoGlobal
         ? `Risco global: ${RISCO_LABEL[proc.riscoGlobal] ?? proc.riscoGlobal}`
         : null,

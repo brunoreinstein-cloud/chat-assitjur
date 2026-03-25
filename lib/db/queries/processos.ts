@@ -242,6 +242,8 @@ export async function updateProcessoIntake({
     fileHash?: string;
     intakeMetadata?: Record<string, unknown>;
     intakeStatus: string;
+    /** Fase processual judicial detectada automaticamente (detectFaseProcessual). */
+    faseProcessual?: string;
     /** Preenche reclamante/reclamada só se actualmente vazios (auto-fill do intake). */
     reclamante?: string;
     reclamada?: string;
@@ -425,5 +427,26 @@ export async function updatePecaBlobUrl({
     return updated ?? null;
   } catch (err) {
     toDatabaseError(err, "Failed to update peca blob url");
+  }
+}
+
+export async function updatePecaStatus({
+  id,
+  userId,
+  status,
+}: {
+  id: string;
+  userId: string;
+  status: "rascunho" | "aprovado" | "protocolado";
+}): Promise<Peca | null> {
+  try {
+    const [updated] = await getDb()
+      .update(peca)
+      .set({ status })
+      .where(and(eq(peca.id, id), eq(peca.userId, userId)))
+      .returning();
+    return updated ?? null;
+  } catch (err) {
+    toDatabaseError(err, "Failed to update peca status");
   }
 }

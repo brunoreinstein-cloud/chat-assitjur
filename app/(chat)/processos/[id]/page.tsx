@@ -12,10 +12,16 @@ import {
 } from "@/lib/constants/processo";
 import {
   ensureStatementTimeout,
+  getPecasByProcessoId,
   getProcessoById,
   getTaskExecutionsByProcessoId,
 } from "@/lib/db/queries";
-import type { TaskExecution } from "@/lib/db/schema";
+import type { Peca, TaskExecution } from "@/lib/db/schema";
+import { can } from "@/lib/rbac/roles";
+import {
+  PecaStatusBadge,
+  PecaStatusButton,
+} from "./peca-status-button";
 import { isUUID } from "@/lib/utils";
 import { AvancaFaseButton } from "./avanca-fase-button";
 
@@ -171,10 +177,12 @@ async function ProcessoPageContent({
 
   await ensureStatementTimeout();
 
-  const [proc, tasks] = await Promise.all([
+  const [proc, tasks, pecas] = await Promise.all([
     getProcessoById({ id, userId: session.user.id }),
     getTaskExecutionsByProcessoId({ processoId: id }),
+    getPecasByProcessoId({ processoId: id }),
   ]);
+  const canApprove = can(session.user.role ?? null, "peca:approve");
 
   if (!proc) {
     notFound();
@@ -298,6 +306,14 @@ async function ProcessoPageContent({
               <dt className="text-muted-foreground">Fase</dt>
               <dd className="text-foreground dark:text-white/80">
                 {faseLabel}
+              </dd>
+            </>
+          )}
+          {proc.faseProcessual && (
+            <>
+              <dt className="text-muted-foreground">Fase processual</dt>
+              <dd className="text-foreground dark:text-white/80">
+                {proc.faseProcessual}
               </dd>
             </>
           )}
@@ -537,6 +553,61 @@ async function ProcessoPageContent({
                 ))}
               </tbody>
             </table>
+          </div>
+        </section>
+      )}
+
+      {/* Peças Processuais */}
+      {pecas.length > 0 && (
+        <section className="mb-8">
+          <h2 className="mb-3 font-semibold text-[13px] text-muted-foreground uppercase tracking-wide">
+            Peças Processuais
+          </h2>
+          <div className="flex flex-col gap-2">
+            {pecas.map((p: Peca) => (
+              <div
+                key={p.id}
+                className="rounded-md border border-border/60 bg-card px-3 py-2.5 dark:border-white/8 dark:bg-white/3"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-foreground text-sm dark:text-white/90">
+                      {p.titulo}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {p.tipo !== "outro" ? p.tipo : "Peça"} · {formatDate(p.createdAt)}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <PecaStatusBadge status={p.status} />
+                    {p.blobUrl && (
+                      <a
+                        className="rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted/50 dark:border-white/10 dark:hover:bg-white/5"
+                        href={p.blobUrl}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        DOCX ↓
+                      </a>
+                    )}
+                    <PecaStatusButton
+                      canApprove={canApprove}
+                      pecaId={p.id}
+                      processoId={id}
+                      status={p.status}
+                    />
+                    {p.chatId && (
+                      <Link
+                        className="rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted/50 dark:border-white/10 dark:hover:bg-white/5"
+                        href={`/chat/${p.chatId}`}
+                      >
+                        Ver chat →
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </section>
       )}

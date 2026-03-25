@@ -8,6 +8,7 @@ import {
   linkProcessoToChat,
   replaceVerbasByProcessoId,
   savePeca,
+  updatePecaStatus,
   updateProcesso,
 } from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
@@ -119,6 +120,47 @@ export async function savePecaAction(params: {
 
     revalidatePath(`/processos/${params.processoId}`);
     return { success: true, id: created.id };
+  } catch (error) {
+    if (error instanceof RbacError) {
+      return { success: false, error: "forbidden" };
+    }
+    if (error instanceof ChatbotError) {
+      return { success: false, error: error.type ?? "error" };
+    }
+    return { success: false, error: "error" };
+  }
+}
+
+export type AprovaPecaResult =
+  | { success: true }
+  | { success: false; error: string };
+
+/**
+ * Transição de status de uma peça processual.
+ * Fluxo: rascunho → aprovado → protocolado.
+ * Requer permissão peca:approve (adv_senior / socio).
+ */
+export async function aprovaPecaAction({
+  pecaId,
+  status,
+  processoId,
+}: {
+  pecaId: string;
+  status: "aprovado" | "protocolado";
+  processoId: string;
+}): Promise<AprovaPecaResult> {
+  try {
+    const { userId } = await requirePermission("peca:approve");
+
+    await ensureStatementTimeout();
+
+    const updated = await updatePecaStatus({ id: pecaId, userId, status });
+    if (!updated) {
+      return { success: false, error: "not_found" };
+    }
+
+    revalidatePath(`/processos/${processoId}`);
+    return { success: true };
   } catch (error) {
     if (error instanceof RbacError) {
       return { success: false, error: "forbidden" };

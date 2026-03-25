@@ -55,6 +55,7 @@ export type Permission =
   | "processo:delete"
   | "verba:update"
   | "peca:create"
+  | "peca:approve"
   | "passivo:view"
   | "users:manage";
 
@@ -65,6 +66,7 @@ const PERMISSION_MIN_ROLE: Record<Permission, Role> = {
   "processo:delete": "adv_senior",
   "verba:update": "adv_junior",
   "peca:create": "adv_junior",
+  "peca:approve": "adv_senior", // Apenas adv_senior e sócio podem aprovar/protocolar peças.
   "passivo:view": "adv_senior",
   "users:manage": "socio",
 };
