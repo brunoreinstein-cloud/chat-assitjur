@@ -27,6 +27,7 @@ import {
   getProcessoById,
   updateProcessoIntake,
 } from "@/lib/db/queries";
+import { detectFaseProcessual } from "@/lib/ai/document-context";
 import { ChatbotError } from "@/lib/errors";
 
 export const maxDuration = 120;
@@ -277,6 +278,7 @@ export async function POST(request: Request) {
           fileHash,
           intakeMetadata: existing.intakeMetadata ?? undefined,
           intakeStatus: "ready",
+          ...(existing.faseProcessual ? { faseProcessual: existing.faseProcessual } : {}),
         },
       });
       return Response.json({
@@ -287,6 +289,7 @@ export async function POST(request: Request) {
         intakeStatus: "ready",
         cached: true,
         sourceProcessoId: existing.id,
+        faseProcessual: existing.faseProcessual ?? undefined,
       });
     }
 
@@ -308,6 +311,9 @@ export async function POST(request: Request) {
         { status: 422 }
       );
     }
+
+    // Detecta fase processual judicial a partir do texto (sem custo de IA — só keywords)
+    const faseProcessual = detectFaseProcessual(parsedText);
 
     // Extrai metadados via IA
     const meta = await extractIntakeMetadata(parsedText, filename);
@@ -332,6 +338,8 @@ export async function POST(request: Request) {
           valorCausa: meta.valorCausa,
         },
         intakeStatus: "ready",
+        // Fase processual detectada automaticamente (CONHECIMENTO, RECURSAL-TRT, etc.)
+        ...(faseProcessual !== "DESCONHECIDA" ? { faseProcessual } : {}),
         // Auto-fill: só preenche se o processo foi criado com campos em branco
         ...(!proc.reclamante?.trim() && meta.reclamante
           ? { reclamante: meta.reclamante }
@@ -349,6 +357,7 @@ export async function POST(request: Request) {
       totalPages,
       intakeStatus: "ready",
       cached: false,
+      faseProcessual: faseProcessual !== "DESCONHECIDA" ? faseProcessual : undefined,
     });
   } catch (error) {
     if (error instanceof ChatbotError) {

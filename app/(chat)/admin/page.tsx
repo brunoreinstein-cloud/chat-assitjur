@@ -1,4 +1,4 @@
-import { BotIcon, CoinsIcon, ShieldCheckIcon } from "lucide-react";
+import { BarChart2Icon, BotIcon, CoinsIcon, ShieldCheckIcon } from "lucide-react";
 import Link from "next/link";
 
 const adminSections = [
@@ -15,6 +15,13 @@ const adminSections = [
     description:
       "Listar utilizadores com saldo e adicionar créditos a quem precisar.",
     icon: CoinsIcon,
+  },
+  {
+    href: "/admin/costs",
+    title: "Dashboard de Custos LLM",
+    description:
+      "Métricas agregadas de tokens, créditos e latência por agente (Sprint 8).",
+    icon: BarChart2Icon,
   },
   {
     href: "/admin/rbac",

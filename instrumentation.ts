@@ -1,7 +1,46 @@
 import { registerOTel } from "@vercel/otel";
 
+/** Interface mínima compatível com OTel SpanExporter (evita dependência de sdk-trace-base). */
+interface OtelSpanExporter {
+  export(spans: unknown[], resultCallback: (result: { code: number }) => void): void;
+  shutdown(): Promise<void>;
+}
+
 export function register() {
-  registerOTel({ serviceName: "chatbot" });
+  // Langfuse OTel exporter — activo quando LANGFUSE_PUBLIC_KEY está configurada.
+  // Requer pnpm add langfuse-vercel. Se o pacote não estiver instalado, é ignorado silenciosamente.
+  let traceExporter: OtelSpanExporter | undefined;
+  if (
+    process.env.NEXT_RUNTIME !== "edge" &&
+    process.env.LANGFUSE_PUBLIC_KEY &&
+    process.env.LANGFUSE_SECRET_KEY
+  ) {
+    try {
+      // Usar variável para o nome do módulo impede resolução estática pelo bundler
+      // (Turbopack/webpack reportam warning mesmo dentro de try/catch).
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const mod = "langfuse-vercel";
+      const { LangfuseExporter } = require(mod) as {
+        LangfuseExporter: new (opts?: {
+          publicKey?: string;
+          secretKey?: string;
+          baseUrl?: string;
+        }) => OtelSpanExporter;
+      };
+      traceExporter = new LangfuseExporter({
+        publicKey: process.env.LANGFUSE_PUBLIC_KEY,
+        secretKey: process.env.LANGFUSE_SECRET_KEY,
+        baseUrl: process.env.LANGFUSE_HOST,
+      });
+    } catch {
+      // langfuse-vercel não está instalado; continuar sem exporter externo.
+    }
+  }
+
+  registerOTel({
+    serviceName: "chatbot",
+    ...(traceExporter ? { traceExporter } : {}),
+  });
 
   // Previne crash do processo Node.js causado por rejeições não tratadas do
   // postgres.js (ex.: statement timeout 57014 em promises "orphaned" no TLS socket).

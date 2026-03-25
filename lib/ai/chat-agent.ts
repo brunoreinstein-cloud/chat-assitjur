@@ -81,6 +81,7 @@ type BaseToolName = (typeof BASE_TOOL_NAMES)[number];
 type ActiveToolName =
   | BaseToolName
   | "buscarNoProcesso"
+  | "searchJurisprudencia"
   | "createRevisorDefesaDocuments"
   | "createRedatorContestacaoDocument"
   | "analyzeProcessoPipeline"
@@ -97,6 +98,9 @@ export function buildActiveToolNames(opts: {
   return [
     ...BASE_TOOL_NAMES,
     ...(opts.hasDocuments ? (["buscarNoProcesso"] as const) : []),
+    ...(opts.agentConfig.useSearchJurisprudenciaTool
+      ? (["searchJurisprudencia"] as const)
+      : []),
     ...(opts.agentConfig.useRevisorDefesaTools
       ? (["createRevisorDefesaDocuments"] as const)
       : []),
