@@ -111,9 +111,7 @@ export async function extractTextFromExcel(
       const values = Array.isArray(row.values) ? row.values : [];
       const rowValues = values
         .slice(1) // ExcelJS indexa de 1, remover primeiro elemento vazio
-        .map((v: string | number | boolean | null | undefined) =>
-          v != null ? String(v).trim() : ""
-        )
+        .map((v) => (v != null ? String(v).trim() : ""))
         .join("\t");
       if (rowValues?.trim()) {
         lines.push(rowValues);
