@@ -16,8 +16,11 @@ export function register() {
     process.env.LANGFUSE_SECRET_KEY
   ) {
     try {
+      // Usar variável para o nome do módulo impede resolução estática pelo bundler
+      // (Turbopack/webpack reportam warning mesmo dentro de try/catch).
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { LangfuseExporter } = require("langfuse-vercel") as {
+      const mod = "langfuse-vercel";
+      const { LangfuseExporter } = require(mod) as {
         LangfuseExporter: new (opts?: {
           publicKey?: string;
           secretKey?: string;
