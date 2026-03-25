@@ -225,3 +225,35 @@ Prescrição quinquenal
 6) QUADRO DE TESES
 
 Somente gerado quando @bancodetese for fornecido.
+
+
+
+7) CHECKLIST PRÉ-ENTREGA (Validação interna — preenchido pelo sistema)
+
+Item de validação                                    Resultado
+
+Número do processo identificado                      [✅/⚠️/❌]
+
+Partes identificadas (Reclamante + Reclamada)        [✅/⚠️/❌]
+
+Advogados identificados                              [✅/⚠️/❌]
+
+Datas do contrato (admissão / término)               [✅/⚠️/❌]
+
+Motivo da rescisão                                   [✅/⚠️/❌]
+
+Data de ajuizamento (DAJ)                            [✅/⚠️/❌]
+
+Audiência (data e tipo)                              [✅/⚠️/❌]
+
+Pedidos da Petição Inicial mapeados                  [✅/⚠️/❌]
+
+Prescrição calculada (bienal + quinquenal)           [✅/⚠️/❌]
+
+Riscos críticos 🔴 listados                          [✅/⚠️/❌]
+
+Documentos truncados sinalizados                     [✅/⚠️/❌]
+
+Confiança geral                                      [Alta/Média/Baixa]
+
+⚠️ Campos marcados com ⚠️ ou ❌ requerem verificação humana antes do uso.
