@@ -18,7 +18,30 @@
       "Bash(ls C:/Users/bruno/chatbot/app/\\\\\\(chat\\\\\\)/admin/credits/)",
       "Bash(ls C:/Users/bruno/chatbot/app/\\\\\\(chat\\\\\\)/api/admin/)",
       "Bash(npx next:*)",
-      "WebFetch(domain:skills.sh)"
+      "WebFetch(domain:skills.sh)",
+      "Bash(git -C /c/Users/bruno/chatbot/.claude/worktrees/intelligent-cartwright diff --stat HEAD)",
+      "Bash(git -C /c/Users/bruno/chatbot/.claude/worktrees/intelligent-cartwright status --short)",
+      "Bash(node /c/Users/bruno/chatbot/node_modules/.bin/tsc --noEmit)",
+      "Bash(node /c/Users/bruno/chatbot/node_modules/typescript/bin/tsc --noEmit)",
+      "Bash(find /c/Users/bruno/chatbot/node_modules/@vercel/otel -name *.ts)",
+      "Bash(python3 -c \"import sys,json; p=json.load\\(sys.stdin\\); print\\(p.get\\(''''types'''',''''''''\\), p.get\\(''''exports'''',{}\\)\\)\")",
+      "Bash(node -e \"const t = require\\(''@vercel/otel''\\); console.log\\(Object.keys\\(t\\)\\)\")",
+      "Bash(node -e \"const { registerOTel } = require\\(''@vercel/otel''\\); console.log\\(registerOTel.toString\\(\\).slice\\(0,200\\)\\)\")",
+      "Bash(node -e \"require\\(''@opentelemetry/sdk-trace-base''\\); console.log\\(''ok''\\)\")",
+      "Bash(node -e \"const api = require\\(''@opentelemetry/api''\\); console.log\\(Object.keys\\(api\\).filter\\(k => k.toLowerCase\\(\\).includes\\(''span''\\) || k.toLowerCase\\(\\).includes\\(''export''\\)\\)\\)\")",
+      "Bash(node -e \":*)",
+      "Bash(node /c/Users/bruno/chatbot/node_modules/.bin/biome.cmd check --files-ignore-unknown=true instrumentation.ts lib/ai/document-context.ts lib/db/schema.ts lib/db/queries/processos.ts lib/telemetry.ts app/\\\\\\(chat\\\\\\)/api/processos/intake/route.ts)",
+      "Bash(git -C /c/Users/bruno/chatbot remote -v)",
+      "Bash(git -C /c/Users/bruno/chatbot/.claude/worktrees/intelligent-cartwright push assitjur claude/intelligent-cartwright)",
+      "Bash(git -C /c/Users/bruno/chatbot/.claude/worktrees/intelligent-cartwright diff --stat HEAD .claude/launch.json .claude/settings.local.json)",
+      "Bash(git -C /c/Users/bruno/chatbot/.claude/worktrees/intelligent-cartwright diff HEAD .claude/launch.json .claude/settings.local.json)",
+      "Bash(git -C /c/Users/bruno/chatbot/.claude/worktrees/intelligent-cartwright diff HEAD .claude/skills/commit/SKILL.md)",
+      "Bash(git -C /c/Users/bruno/chatbot/.claude/worktrees/intelligent-cartwright diff HEAD -- .claude/rules/patterns.md)",
+      "Bash(git -C /c/Users/bruno/chatbot/.claude/worktrees/intelligent-cartwright add .claude/launch.json)",
+      "Bash(git -C:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(find /c/Users/bruno/chatbot/.claude/worktrees/intelligent-cartwright/lib/ai/modelos -name *.txt)"
     ]
   }
 }
