@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 
 // ─── Data ──────────────────────────────────────────────────────────────────────
 
@@ -112,7 +112,9 @@ function useInView(ref: React.RefObject<HTMLElement | null>, threshold = 0.15) {
   const [visible, setVisible] = useState(false);
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     const obs = new IntersectionObserver(
       ([e]) => {
         if (e.isIntersecting) {
@@ -141,17 +143,21 @@ function useScrollY() {
 function useCountUp(end: number, visible: boolean, duration = 1800) {
   const [value, setValue] = useState(0);
   useEffect(() => {
-    if (!visible) return;
+    if (!visible) {
+      return;
+    }
     const start = performance.now();
     const isDecimal = end % 1 !== 0;
     function tick(now: number) {
       const elapsed = now - start;
       const progress = Math.min(elapsed / duration, 1);
       // ease-out cubic
-      const eased = 1 - Math.pow(1 - progress, 3);
+      const eased = 1 - (1 - progress) ** 3;
       const current = eased * end;
       setValue(isDecimal ? Math.round(current * 10) / 10 : Math.round(current));
-      if (progress < 1) requestAnimationFrame(tick);
+      if (progress < 1) {
+        requestAnimationFrame(tick);
+      }
     }
     requestAnimationFrame(tick);
   }, [end, visible, duration]);
@@ -181,8 +187,8 @@ function FadeIn({
   };
   return (
     <div
-      ref={ref}
       className={className}
+      ref={ref}
       style={{
         opacity: vis ? 1 : 0,
         transform: vis ? "none" : transforms[direction],
@@ -231,7 +237,7 @@ export default function AssistJurLP() {
       );
     };
     tick();
-    const id = setInterval(tick, 30000);
+    const id = setInterval(tick, 30_000);
     return () => clearInterval(id);
   }, []);
 
@@ -620,22 +626,24 @@ export default function AssistJurLP() {
 
       <div className="lp-page">
         {/* ── Animated mesh gradient background ── */}
-        <div className="lp-mesh" aria-hidden="true" />
+        <div aria-hidden="true" className="lp-mesh" />
 
         {/* ════ NAV ════ */}
-        <nav className={`lp-nav ${navScrolled ? "lp-nav--scrolled" : "lp-nav--top"}`}>
-          <a href="#" className="lp-nav-brand">
+        <nav
+          className={`lp-nav ${navScrolled ? "lp-nav--scrolled" : "lp-nav--top"}`}
+        >
+          <Link className="lp-nav-brand" href="/">
             <span className="lp-nav-mark" />
             <span className="lp-nav-name">
               Assist<em>Jur</em>.IA
             </span>
-          </a>
+          </Link>
           <div className="lp-nav-links">
             <a href="#produto">Produto</a>
             <a href="#principios">Princípios</a>
             <a href="#metodo">Método</a>
             <span className="lp-nav-time">{time} BRT</span>
-            <Link href="/login" className="lp-nav-cta">
+            <Link className="lp-nav-cta" href="/login">
               Acessar
             </Link>
           </div>
@@ -665,13 +673,26 @@ export default function AssistJurLP() {
           </FadeIn>
           <FadeIn delay={0.4}>
             <div className="lp-hero-actions">
-              <Link href="/chat" className="lp-btn-primary">
+              <Link className="lp-btn-primary" href="/chat">
                 Acessar o Revisor
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-                  <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <svg
+                  aria-hidden
+                  fill="none"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  width="16"
+                >
+                  <title>Seta</title>
+                  <path
+                    d="M3 8h10M9 4l4 4-4 4"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.5"
+                  />
                 </svg>
               </Link>
-              <Link href="/register" className="lp-btn-secondary">
+              <Link className="lp-btn-secondary" href="/register">
                 Criar conta gratuita
               </Link>
             </div>
@@ -695,7 +716,7 @@ export default function AssistJurLP() {
 
           <div className="lp-cap-grid">
             {CAPABILITIES.map((c, i) => (
-              <FadeIn key={c.area} delay={0.06 * i}>
+              <FadeIn delay={0.06 * i} key={c.area}>
                 <div className="lp-cap-row">
                   <div className="lp-cap-num">
                     {String(i + 1).padStart(2, "0")}
@@ -742,7 +763,7 @@ export default function AssistJurLP() {
 
           <div className="lp-principles-grid">
             {PRINCIPLES.map((p, i) => (
-              <FadeIn key={p.code} delay={0.06 * i}>
+              <FadeIn delay={0.06 * i} key={p.code}>
                 <div className="lp-principle-card">
                   <div className="lp-principle-code">P{p.code}</div>
                   <div className="lp-principle-title">{p.title}</div>
@@ -778,7 +799,7 @@ export default function AssistJurLP() {
               </div>
             </FadeIn>
 
-            <FadeIn direction="right" delay={0.1}>
+            <FadeIn delay={0.1} direction="right">
               <div className="lp-approach-list">
                 {METHOD_STEPS.map((item, i) => (
                   <div className="lp-approach-item" key={item.title}>
@@ -807,9 +828,9 @@ export default function AssistJurLP() {
             <p className="lp-section-prose">
               A AssistJur.IA nasceu dentro da BR Consultoria — uma operação que
               há anos atende escritórios de médio e grande porte no contencioso
-              trabalhista brasileiro. A plataforma não foi desenhada em abstrato.
-              Cada assistente resolve um problema real, testado em volume, com
-              processos reais.
+              trabalhista brasileiro. A plataforma não foi desenhada em
+              abstrato. Cada assistente resolve um problema real, testado em
+              volume, com processos reais.
             </p>
             <div className="lp-thin-rule" />
             <p className="lp-section-prose" style={{ marginTop: 0 }}>
@@ -827,17 +848,31 @@ export default function AssistJurLP() {
               Comece a usar <em>agora</em>
             </h2>
             <p className="lp-cta-body">
-              Acesse o Revisor de Defesas gratuitamente. Envie um processo e veja
-              a análise em minutos — sem compromisso, sem cartão de crédito.
+              Acesse o Revisor de Defesas gratuitamente. Envie um processo e
+              veja a análise em minutos — sem compromisso, sem cartão de
+              crédito.
             </p>
             <div className="lp-cta-actions">
-              <Link href="/chat" className="lp-btn-primary">
+              <Link className="lp-btn-primary" href="/chat">
                 Acessar o Revisor
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-                  <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <svg
+                  aria-hidden
+                  fill="none"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  width="16"
+                >
+                  <title>Seta</title>
+                  <path
+                    d="M3 8h10M9 4l4 4-4 4"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.5"
+                  />
                 </svg>
               </Link>
-              <Link href="/register" className="lp-btn-secondary">
+              <Link className="lp-btn-secondary" href="/register">
                 Criar conta gratuita
               </Link>
             </div>
@@ -849,8 +884,8 @@ export default function AssistJurLP() {
           <div className="lp-footer-left">
             <span className="lp-footer-mark" />
             <span className="lp-footer-text">
-              <a href="#">AssistJur.IA</a> &nbsp;&middot;&nbsp; BR Consultoria
-              &nbsp;&middot;&nbsp; Porto Alegre
+              <Link href="/">AssistJur.IA</Link> &nbsp;&middot;&nbsp; BR
+              Consultoria &nbsp;&middot;&nbsp; Porto Alegre
             </span>
           </div>
           <div className="lp-footer-right">
