@@ -9,7 +9,7 @@ interface OtelSpanExporter {
   shutdown(): Promise<void>;
 }
 
-export function register() {
+export async function register() {
   // Langfuse OTel exporter — activo quando LANGFUSE_PUBLIC_KEY está configurada.
   // Requer pnpm add langfuse-vercel. Se o pacote não estiver instalado, é ignorado silenciosamente.
   let traceExporter: OtelSpanExporter | undefined;
@@ -19,11 +19,9 @@ export function register() {
     process.env.LANGFUSE_SECRET_KEY
   ) {
     try {
-      // Usar variável para o nome do módulo impede resolução estática pelo bundler
-      // (Turbopack/webpack reportam warning mesmo dentro de try/catch).
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const mod = "langfuse-vercel";
-      const { LangfuseExporter } = require(mod) as {
+      const { LangfuseExporter } = (await import(
+        /* webpackIgnore: true */ "langfuse-vercel"
+      )) as {
         LangfuseExporter: new (opts?: {
           publicKey?: string;
           secretKey?: string;
