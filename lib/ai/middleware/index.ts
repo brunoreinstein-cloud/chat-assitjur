@@ -34,3 +34,14 @@ export {
   isAnthropicModel,
   withPromptCaching,
 } from "./prompt-caching";
+export {
+  finishLlmRequestSpan,
+  type LlmRequestSpanAttributes,
+  type LlmRequestSummary,
+  type LlmStepSpanAttributes,
+  type LlmToolSpanAttributes,
+  recordLlmStep,
+  recordToolCall,
+  startLlmRequestSpan,
+  withLlmRequestSpan,
+} from "./tracing";
