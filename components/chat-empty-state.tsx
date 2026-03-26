@@ -15,11 +15,11 @@ import {
 
 const AGENT_CARD_STYLE: Record<AgentId, { emoji: string; bg: string }> = {
   [AGENT_ID_ASSISTENTE_GERAL]: { emoji: "💬", bg: "bg-muted" },
-  [AGENT_ID_REVISOR_DEFESAS]: { emoji: "🔍", bg: "bg-assistjur-gold/15" },
+  [AGENT_ID_REVISOR_DEFESAS]: { emoji: "🔍", bg: "bg-gold-accent/15" },
   [AGENT_ID_REDATOR_CONTESTACAO]: { emoji: "✍️", bg: "bg-primary/15" },
-  [AGENT_ID_AVALIADOR_CONTESTACAO]: { emoji: "📊", bg: "bg-assistjur-gold/15" },
+  [AGENT_ID_AVALIADOR_CONTESTACAO]: { emoji: "📊", bg: "bg-gold-accent/15" },
   /** Master usa gold: produto flagship com 14 módulos — visualmente distinto do Redator (purple). */
-  [AGENT_ID_ASSISTJUR_MASTER]: { emoji: "⚡", bg: "bg-assistjur-gold/15" },
+  [AGENT_ID_ASSISTJUR_MASTER]: { emoji: "⚡", bg: "bg-gold-accent/15" },
 };
 
 interface QuickPrompt {

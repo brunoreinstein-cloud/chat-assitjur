@@ -383,7 +383,7 @@ async function ProcessoPageContent({
                 className={[
                   "rounded-full border px-2.5 py-0.5 font-medium text-[11px]",
                   isAtual
-                    ? "border-assistjur-gold/50 bg-assistjur-gold/10 text-assistjur-gold"
+                    ? "border-gold-accent/50 bg-gold-accent/10 text-gold-accent"
                     : isFutura
                       ? "border-border/40 bg-transparent text-muted-foreground/50 dark:border-white/8"
                       : "border-green-500/30 bg-green-500/8 text-green-600 dark:text-green-400",
@@ -475,7 +475,7 @@ async function ProcessoPageContent({
         <div className="grid grid-cols-2 gap-3">
           {quickTasks.map((t) => (
             <Link
-              className="flex flex-col gap-1 rounded-lg border border-border/60 bg-card p-3.5 transition-colors hover:border-assistjur-gold/30 hover:bg-assistjur-gold/5 dark:border-white/8 dark:bg-white/3 dark:hover:border-assistjur-gold/20 dark:hover:bg-assistjur-gold/8"
+              className="flex flex-col gap-1 rounded-lg border border-border/60 bg-card p-3.5 transition-colors hover:border-gold-accent/30 hover:bg-gold-accent/5 dark:border-white/8 dark:bg-white/3 dark:hover:border-gold-accent/20 dark:hover:bg-gold-accent/8"
               href={t.href}
               key={t.id}
             >

@@ -62,12 +62,48 @@ export default function Page() {
           action={handleSubmit}
           defaultEmail={email}
           passwordAutocomplete="new-password"
+          extraFields={
+            <div className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                id="lgpd-consent"
+                name="lgpdConsent"
+                required
+                className="mt-1 size-4 rounded border-assistjur-purple/30 accent-assistjur-purple-dark"
+              />
+              <label
+                htmlFor="lgpd-consent"
+                className="text-assistjur-gray text-xs leading-relaxed"
+              >
+                Li e aceito a{" "}
+                <a
+                  href="/privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-assistjur-purple-dark underline underline-offset-2 hover:no-underline"
+                >
+                  Política de Privacidade
+                </a>{" "}
+                e os{" "}
+                <a
+                  href="/terms"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-assistjur-purple-dark underline underline-offset-2 hover:no-underline"
+                >
+                  Termos de Uso
+                </a>
+                . Autorizo o tratamento dos meus dados conforme a LGPD (Lei
+                13.709/2018).
+              </label>
+            </div>
+          }
         >
           <SubmitButton isSuccessful={isSuccessful}>Cadastrar</SubmitButton>
           <p className="mt-5 text-center text-assistjur-gray text-sm">
             Já tem uma conta?{" "}
             <Link
-              className="font-semibold text-assistjur-purple-dark underline underline-offset-2 hover:no-underline focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+              className="font-semibold text-assistjur-purple-dark underline underline-offset-2 hover:no-underline focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent focus-visible:ring-offset-2 focus-visible:ring-offset-white"
               href="/login"
             >
               Entrar
@@ -75,7 +111,7 @@ export default function Page() {
             .
           </p>
           <button
-            className="mt-4 flex min-h-[44px] w-full items-center justify-center rounded-xl border-2 border-assistjur-purple-dark/40 bg-transparent font-medium text-assistjur-purple-dark text-sm transition-colors hover:border-assistjur-purple-dark/60 hover:bg-assistjur-purple-dark/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+            className="mt-4 flex min-h-[44px] w-full items-center justify-center rounded-xl border-2 border-assistjur-purple-dark/40 bg-transparent font-medium text-assistjur-purple-dark text-sm transition-colors hover:border-assistjur-purple-dark/60 hover:bg-assistjur-purple-dark/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent focus-visible:ring-offset-2 focus-visible:ring-offset-white"
             onClick={async () => {
               await signOut({ redirect: false });
               globalThis.window.location.href =

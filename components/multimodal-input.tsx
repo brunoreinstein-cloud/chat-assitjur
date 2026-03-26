@@ -140,7 +140,7 @@ const AGENT_INSTRUCTIONS_MAX_LENGTH = 4000;
 /** Dot colorido por agente (mantido em sincronia com chat-topbar.tsx). */
 const AGENT_DOT_CLASS: Record<string, string> = {
   "assistente-geral": "bg-muted-foreground/60",
-  "revisor-defesas": "bg-assistjur-gold",
+  "revisor-defesas": "bg-gold-accent",
   "redator-contestacao": "bg-primary",
   "assistjur-master": "bg-primary",
 };
@@ -271,7 +271,7 @@ function PureMultimodalInput({
     const config = getAgentConfig(agentId);
     return {
       label: config.label,
-      dotClass: AGENT_DOT_CLASS[agentId] ?? "bg-assistjur-gold",
+      dotClass: AGENT_DOT_CLASS[agentId] ?? "bg-gold-accent",
     };
   }, [agentId]);
 

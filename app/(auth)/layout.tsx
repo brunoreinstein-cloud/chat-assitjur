@@ -14,7 +14,7 @@ export default function AuthLayout({
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-center px-4">
           <Link
             aria-label="AssistJur.IA — voltar ao início"
-            className="flex min-h-[44px] min-w-[44px] items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold focus-visible:ring-offset-2 focus-visible:ring-offset-assistjur-purple-darker"
+            className="flex min-h-[44px] min-w-[44px] items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent focus-visible:ring-offset-2 focus-visible:ring-offset-assistjur-purple-darker"
             href="/"
           >
             <AssistJurLogo

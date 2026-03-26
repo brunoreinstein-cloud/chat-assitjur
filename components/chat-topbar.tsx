@@ -35,7 +35,7 @@ interface ChatTopbarProps {
 
 const AGENT_DOTS: Record<string, string> = {
   [AGENT_ID_ASSISTENTE_GERAL]: "bg-muted-foreground/70",
-  [AGENT_ID_REVISOR_DEFESAS]: "bg-assistjur-gold",
+  [AGENT_ID_REVISOR_DEFESAS]: "bg-gold-accent",
   [AGENT_ID_REDATOR_CONTESTACAO]: "bg-primary",
   [AGENT_ID_ASSISTJUR_MASTER]: "bg-primary",
 };
@@ -44,7 +44,7 @@ function getAgentMeta(agentId: string): { label: string; dot: string } {
   const config = getAgentConfig(agentId);
   return {
     label: config.label,
-    dot: AGENT_DOTS[agentId] ?? "bg-assistjur-gold",
+    dot: AGENT_DOTS[agentId] ?? "bg-gold-accent",
   };
 }
 

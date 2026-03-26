@@ -8,7 +8,7 @@ export default function AuthLoading() {
       <div className="flex flex-col items-center gap-4">
         <div
           aria-hidden
-          className="size-8 animate-spin rounded-full border-2 border-assistjur-gold border-t-transparent"
+          className="size-8 animate-spin rounded-full border-2 border-gold-accent border-t-transparent"
         />
         <p className="text-assistjur-gray-light text-sm">A carregar…</p>
       </div>

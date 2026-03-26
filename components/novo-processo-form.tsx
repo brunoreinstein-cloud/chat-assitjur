@@ -70,7 +70,7 @@ const btnSecondary =
   "flex-1 rounded-md border border-border bg-muted px-3 py-1.5 text-[12px] text-muted-foreground transition-colors hover:bg-muted/80 disabled:opacity-40";
 
 const btnPrimary =
-  "flex-1 rounded-md border border-assistjur-gold/40 bg-assistjur-gold/10 px-3 py-1.5 font-medium text-[12px] text-assistjur-gold transition-colors hover:bg-assistjur-gold/20 disabled:cursor-not-allowed disabled:opacity-40";
+  "flex-1 rounded-md border border-gold-accent/40 bg-gold-accent/10 px-3 py-1.5 font-medium text-[12px] text-gold-accent transition-colors hover:bg-gold-accent/20 disabled:cursor-not-allowed disabled:opacity-40";
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -341,10 +341,10 @@ export function NovoProcessoForm({
     >
       {/* Section header */}
       <div className="flex items-center gap-2">
-        <span className="shrink-0 font-semibold text-[9px] text-assistjur-gold uppercase tracking-widest">
+        <span className="shrink-0 font-semibold text-[9px] text-gold-accent uppercase tracking-widest">
           Confirme os dados
         </span>
-        <div className="h-px flex-1 bg-assistjur-gold/20" />
+        <div className="h-px flex-1 bg-gold-accent/20" />
       </div>
 
       {/* Número dos autos */}

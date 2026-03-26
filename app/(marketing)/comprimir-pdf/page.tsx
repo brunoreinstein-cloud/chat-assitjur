@@ -146,8 +146,8 @@ function DropZone({
       <button
         className={`w-full cursor-pointer rounded-2xl border-2 border-dashed p-12 text-center transition-colors duration-200 ${
           isDragging
-            ? "border-assistjur-gold bg-assistjur-gold/10"
-            : "border-assistjur-purple/40 hover:border-assistjur-gold/60"
+            ? "border-gold-accent bg-gold-accent/10"
+            : "border-assistjur-purple/40 hover:border-gold-accent/60"
         }`}
         onClick={() => inputRef.current?.click()}
         onDragLeave={() => setIsDragging(false)}
@@ -167,7 +167,7 @@ function DropZone({
         />
         <svg
           aria-hidden
-          className="mx-auto mb-4 size-12 text-assistjur-gold/70"
+          className="mx-auto mb-4 size-12 text-gold-accent/70"
           fill="none"
           stroke="currentColor"
           strokeLinecap="round"
@@ -196,8 +196,8 @@ function DropZone({
             <button
               className={`rounded-lg border px-3 py-2.5 text-left text-sm transition-colors ${
                 mode === opt.value
-                  ? "border-assistjur-gold bg-assistjur-gold/15 text-white"
-                  : "border-assistjur-purple/30 text-assistjur-gray-light hover:border-assistjur-gold/40"
+                  ? "border-gold-accent bg-gold-accent/15 text-white"
+                  : "border-assistjur-purple/30 text-assistjur-gray-light hover:border-gold-accent/40"
               }`}
               key={opt.value}
               onClick={() => onModeChange(opt.value)}
@@ -216,14 +216,14 @@ function DropZone({
 function ProcessingView({ filename }: Readonly<{ filename: string }>) {
   return (
     <div className="mx-auto max-w-md space-y-6 text-center">
-      <div className="mx-auto size-16 animate-spin rounded-full border-4 border-assistjur-purple/30 border-t-assistjur-gold" />
+      <div className="mx-auto size-16 animate-spin rounded-full border-4 border-assistjur-purple/30 border-t-gold-accent" />
       <div>
         <p className="font-semibold text-lg text-white">Comprimindo...</p>
         <p className="mt-1 text-assistjur-gray-light text-sm">{filename}</p>
       </div>
       <div className="h-2 w-full overflow-hidden rounded-full bg-assistjur-purple-dark">
         <div
-          className="h-full animate-pulse rounded-full bg-assistjur-gold/70"
+          className="h-full animate-pulse rounded-full bg-gold-accent/70"
           style={{ width: "65%" }}
         />
       </div>
@@ -306,7 +306,7 @@ function ResultView({
           <h3 className="mb-4 flex items-center gap-2 font-semibold text-white">
             <svg
               aria-hidden
-              className="size-5 text-assistjur-gold"
+              className="size-5 text-gold-accent"
               fill="none"
               stroke="currentColor"
               strokeLinecap="round"
@@ -388,7 +388,7 @@ function ResultView({
           </label>
           <div className="flex gap-2">
             <input
-              className="flex-1 rounded-lg border border-assistjur-purple/40 bg-assistjur-purple-darker/80 px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-assistjur-gold focus:outline-none focus:ring-1 focus:ring-assistjur-gold"
+              className="flex-1 rounded-lg border border-assistjur-purple/40 bg-assistjur-purple-darker/80 px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-gold-accent focus:outline-none focus:ring-1 focus:ring-gold-accent"
               id="filename"
               onChange={(e) => setFilename(e.target.value)}
               type="text"
@@ -396,7 +396,7 @@ function ResultView({
             />
           </div>
           <button
-            className="landing-cta-hover mt-4 w-full rounded-xl bg-assistjur-gold px-8 py-3.5 font-bold text-assistjur-purple-darker text-base shadow-black/20 shadow-lg transition-[transform,opacity,box-shadow] duration-200 hover:opacity-95 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold active:scale-[0.98]"
+            className="landing-cta-hover mt-4 w-full rounded-xl bg-gold-accent px-8 py-3.5 font-bold text-assistjur-purple-darker text-base shadow-black/20 shadow-lg transition-[transform,opacity,box-shadow] duration-200 hover:opacity-95 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent active:scale-[0.98]"
             onClick={handleDownload}
             type="button"
           >
@@ -406,7 +406,7 @@ function ResultView({
       )}
 
       {/* O que o AssistJur.IA pode fazer com este documento */}
-      <div className="rounded-xl border border-assistjur-gold/20 bg-gradient-to-b from-assistjur-gold/5 to-transparent p-6">
+      <div className="rounded-xl border border-gold-accent/20 bg-gradient-to-b from-gold-accent/5 to-transparent p-6">
         <div className="mb-5 text-center">
           <h3 className="font-bold text-lg text-white">
             O que o AssistJur.IA pode fazer
@@ -425,10 +425,10 @@ function ResultView({
               className="flex gap-3 rounded-lg border border-assistjur-purple/20 bg-assistjur-purple-darker/40 p-4"
               key={cap.title}
             >
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-assistjur-gold/10">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-gold-accent/10">
                 <svg
                   aria-hidden
-                  className="size-5 text-assistjur-gold"
+                  className="size-5 text-gold-accent"
                   fill="none"
                   stroke="currentColor"
                   strokeLinecap="round"
@@ -452,7 +452,7 @@ function ResultView({
 
         <div className="mt-6 text-center">
           <Link
-            className="landing-cta-hover inline-flex min-h-[44px] items-center justify-center rounded-xl bg-assistjur-gold px-8 py-3 font-bold text-assistjur-purple-darker text-base shadow-black/20 shadow-lg transition-[transform,opacity,box-shadow] duration-200 hover:opacity-95 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold active:scale-[0.98]"
+            className="landing-cta-hover inline-flex min-h-[44px] items-center justify-center rounded-xl bg-gold-accent px-8 py-3 font-bold text-assistjur-purple-darker text-base shadow-black/20 shadow-lg transition-[transform,opacity,box-shadow] duration-200 hover:opacity-95 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent active:scale-[0.98]"
             href="/register"
           >
             Experimentar grátis
@@ -544,7 +544,7 @@ export default function ComprimirPdfPage() {
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:h-14">
           <Link
             aria-label="AssistJur.IA — início"
-            className="flex min-h-[44px] min-w-[44px] items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold"
+            className="flex min-h-[44px] min-w-[44px] items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent"
             href="/"
           >
             <AssistJurLogo
@@ -561,7 +561,7 @@ export default function ComprimirPdfPage() {
               Entrar
             </Link>
             <Link
-              className="flex min-h-[44px] items-center justify-center rounded-md bg-assistjur-gold px-4 py-2 font-bold text-assistjur-purple-darker text-sm transition-opacity hover:opacity-90"
+              className="flex min-h-[44px] items-center justify-center rounded-md bg-gold-accent px-4 py-2 font-bold text-assistjur-purple-darker text-sm transition-opacity hover:opacity-90"
               href="/register"
             >
               Cadastrar
@@ -578,7 +578,7 @@ export default function ComprimirPdfPage() {
         <div className="mx-auto w-full max-w-3xl space-y-8">
           {/* Title */}
           <div className="text-center">
-            <p className="mb-4 inline-block rounded-full bg-assistjur-gold/15 px-4 py-1.5 font-semibold text-assistjur-gold text-xs uppercase tracking-wide">
+            <p className="mb-4 inline-block rounded-full bg-gold-accent/15 px-4 py-1.5 font-semibold text-gold-accent text-xs uppercase tracking-wide">
               Ferramenta gratuita
             </p>
             <h1 className="font-bold text-3xl text-white tracking-tight md:text-4xl">

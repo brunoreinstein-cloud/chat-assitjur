@@ -13,10 +13,10 @@ function BenefitCard({
   icon: ReactNode;
 }>) {
   return (
-    <article className="landing-card-hover group rounded-xl border border-assistjur-purple/30 bg-assistjur-purple-dark/40 p-5 transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 hover:border-assistjur-gold/40 hover:shadow-assistjur-purple-darker/50 hover:shadow-lg md:p-6">
+    <article className="landing-card-hover group rounded-xl border border-assistjur-purple/30 bg-assistjur-purple-dark/40 p-5 transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 hover:border-gold-accent/40 hover:shadow-assistjur-purple-darker/50 hover:shadow-lg md:p-6">
       <div
         aria-hidden
-        className="mb-3 inline-flex size-10 items-center justify-center rounded-lg bg-assistjur-gold/15 text-assistjur-gold transition-colors duration-300 group-hover:bg-assistjur-gold/25"
+        className="mb-3 inline-flex size-10 items-center justify-center rounded-lg bg-gold-accent/15 text-gold-accent transition-colors duration-300 group-hover:bg-gold-accent/25"
       >
         {icon}
       </div>
@@ -39,7 +39,7 @@ export default function HomePage() {
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:h-14">
           <Link
             aria-label="AssistJur.IA — início"
-            className="flex min-h-[44px] min-w-[44px] items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold focus-visible:ring-offset-2 focus-visible:ring-offset-assistjur-purple-darker"
+            className="flex min-h-[44px] min-w-[44px] items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent focus-visible:ring-offset-2 focus-visible:ring-offset-assistjur-purple-darker"
             href="/"
           >
             <AssistJurLogo
@@ -53,13 +53,13 @@ export default function HomePage() {
             className="flex items-center gap-1"
           >
             <Link
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md px-4 py-2 font-medium text-sm text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold focus-visible:ring-offset-2 focus-visible:ring-offset-assistjur-purple-darker sm:min-w-0"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md px-4 py-2 font-medium text-sm text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent focus-visible:ring-offset-2 focus-visible:ring-offset-assistjur-purple-darker sm:min-w-0"
               href="/login"
             >
               Entrar
             </Link>
             <Link
-              className="flex min-h-[44px] items-center justify-center rounded-md bg-assistjur-purple-dark px-4 py-2 font-bold text-sm text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold focus-visible:ring-offset-2 focus-visible:ring-offset-assistjur-purple-darker"
+              className="flex min-h-[44px] items-center justify-center rounded-md bg-assistjur-purple-dark px-4 py-2 font-bold text-sm text-white transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent focus-visible:ring-offset-2 focus-visible:ring-offset-assistjur-purple-darker"
               href="/register"
             >
               Cadastrar
@@ -74,11 +74,11 @@ export default function HomePage() {
         tabIndex={-1}
       >
         <div className="mx-auto max-w-2xl space-y-8 text-center">
-          <p className="inline-block rounded-full bg-assistjur-gold px-4 py-2 font-bold text-assistjur-purple-darker text-xs uppercase tracking-wide">
+          <p className="inline-block rounded-full bg-gold-accent px-4 py-2 font-bold text-assistjur-purple-darker text-xs uppercase tracking-wide">
             O Hub de IA Estratégica para Contencioso
           </p>
           <h1 className="text-balance font-bold text-4xl text-white tracking-tight md:text-5xl md:leading-[1.15]">
-            <span className="text-assistjur-gold">
+            <span className="text-gold-accent">
               Inteligência Artificial Estratégica para{" "}
             </span>
             <span className="mt-2 block">
@@ -97,13 +97,13 @@ export default function HomePage() {
           </p>
           <div className="flex flex-col gap-4 pt-2 sm:flex-row sm:justify-center sm:gap-4">
             <Link
-              className="landing-cta-hover inline-flex min-h-[48px] items-center justify-center rounded-xl bg-assistjur-purple-dark px-8 py-3.5 font-bold text-base text-white shadow-black/20 shadow-lg transition-[transform,opacity,box-shadow] duration-200 hover:opacity-95 hover:shadow-black/25 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold focus-visible:ring-offset-2 focus-visible:ring-offset-assistjur-purple-darker active:scale-[0.98]"
+              className="landing-cta-hover inline-flex min-h-[48px] items-center justify-center rounded-xl bg-assistjur-purple-dark px-8 py-3.5 font-bold text-base text-white shadow-black/20 shadow-lg transition-[transform,opacity,box-shadow] duration-200 hover:opacity-95 hover:shadow-black/25 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent focus-visible:ring-offset-2 focus-visible:ring-offset-assistjur-purple-darker active:scale-[0.98]"
               href="/chat"
             >
               Acessar o Revisor
             </Link>
             <Link
-              className="landing-cta-hover inline-flex min-h-[48px] items-center justify-center rounded-xl border-2 border-white bg-white px-8 py-3.5 font-bold text-assistjur-purple-dark text-base transition-[transform,opacity] duration-200 hover:bg-white/95 hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold focus-visible:ring-offset-2 focus-visible:ring-offset-assistjur-purple-darker active:scale-[0.98]"
+              className="landing-cta-hover inline-flex min-h-[48px] items-center justify-center rounded-xl border-2 border-white bg-white px-8 py-3.5 font-bold text-assistjur-purple-dark text-base transition-[transform,opacity] duration-200 hover:bg-white/95 hover:opacity-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent focus-visible:ring-offset-2 focus-visible:ring-offset-assistjur-purple-darker active:scale-[0.98]"
               href="/login"
             >
               Entrar com e-mail
@@ -112,7 +112,7 @@ export default function HomePage() {
           <p className="text-assistjur-gray-light text-sm">
             Não tem conta?{" "}
             <Link
-              className="font-medium text-assistjur-gold underline underline-offset-4 hover:no-underline focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold focus-visible:ring-offset-2 focus-visible:ring-offset-assistjur-purple-darker"
+              className="font-medium text-gold-accent underline underline-offset-4 hover:no-underline focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent focus-visible:ring-offset-2 focus-visible:ring-offset-assistjur-purple-darker"
               href="/register"
             >
               Cadastre-se gratuitamente

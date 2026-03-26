@@ -86,7 +86,7 @@ export function ProcessoCard({
   const linkedDocs = allDocs?.filter((d) => linkedIds.includes(d.id));
 
   const borderClass = isActive
-    ? "border-assistjur-gold/30 bg-assistjur-gold/8"
+    ? "border-gold-accent/30 bg-gold-accent/8"
     : "border-border/60 bg-transparent dark:border-white/6";
 
   return (
@@ -197,7 +197,7 @@ export function ProcessoCard({
 
             {/* Buscador */}
             <input
-              className="mb-1.5 w-full rounded border border-border/60 bg-background px-2 py-1 text-[10px] text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-assistjur-gold/50 dark:border-white/10 dark:bg-white/4"
+              className="mb-1.5 w-full rounded border border-border/60 bg-background px-2 py-1 text-[10px] text-foreground outline-none placeholder:text-muted-foreground/60 focus:border-gold-accent/50 dark:border-white/10 dark:bg-white/4"
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar no KB…"
               ref={searchRef}
@@ -223,7 +223,7 @@ export function ProcessoCard({
                   <button
                     className={`flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-left text-[10px] transition-colors ${
                       linked
-                        ? "bg-assistjur-gold/10 text-foreground dark:text-white/90"
+                        ? "bg-gold-accent/10 text-foreground dark:text-white/90"
                         : "text-muted-foreground hover:bg-muted/50 dark:hover:bg-white/5"
                     } disabled:opacity-40`}
                     disabled={saving}

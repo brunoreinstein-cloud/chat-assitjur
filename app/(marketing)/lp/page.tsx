@@ -24,7 +24,7 @@ function SectionHeading({
   return (
     <div className="mx-auto max-w-2xl text-center">
       {badge && (
-        <p className="mb-4 inline-block rounded-full bg-assistjur-gold/15 px-4 py-1.5 font-semibold text-assistjur-gold text-xs uppercase tracking-wide">
+        <p className="mb-4 inline-block rounded-full bg-gold-accent/15 px-4 py-1.5 font-semibold text-gold-accent text-xs uppercase tracking-wide">
           {badge}
         </p>
       )}
@@ -53,10 +53,10 @@ function FeatureCard({
   description: string;
 }>) {
   return (
-    <article className="landing-card-hover group rounded-xl border border-assistjur-purple/30 bg-assistjur-purple-dark/40 p-5 transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 hover:border-assistjur-gold/40 hover:shadow-assistjur-purple-darker/50 hover:shadow-lg md:p-6">
+    <article className="landing-card-hover group rounded-xl border border-assistjur-purple/30 bg-assistjur-purple-dark/40 p-5 transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 hover:border-gold-accent/40 hover:shadow-assistjur-purple-darker/50 hover:shadow-lg md:p-6">
       <div
         aria-hidden
-        className="mb-3 inline-flex size-10 items-center justify-center rounded-lg bg-assistjur-gold/15 text-assistjur-gold transition-colors duration-300 group-hover:bg-assistjur-gold/25"
+        className="mb-3 inline-flex size-10 items-center justify-center rounded-lg bg-gold-accent/15 text-gold-accent transition-colors duration-300 group-hover:bg-gold-accent/25"
       >
         {icon}
       </div>
@@ -79,7 +79,7 @@ function StepCard({
 }>) {
   return (
     <div className="flex flex-col items-center text-center">
-      <div className="mb-4 flex size-14 items-center justify-center rounded-full bg-assistjur-gold font-bold text-2xl text-assistjur-purple-darker">
+      <div className="mb-4 flex size-14 items-center justify-center rounded-full bg-gold-accent font-bold text-2xl text-assistjur-purple-darker">
         {number}
       </div>
       <h3 className="font-semibold text-lg text-white">{title}</h3>
@@ -107,12 +107,12 @@ function PricingCard({
     <article
       className={`relative flex flex-col rounded-xl border p-6 transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-lg md:p-8 ${
         popular
-          ? "border-assistjur-gold/60 bg-assistjur-purple-dark/60 shadow-assistjur-gold/10 shadow-xl"
+          ? "border-gold-accent/60 bg-assistjur-purple-dark/60 shadow-gold-accent/10 shadow-xl"
           : "border-assistjur-purple/30 bg-assistjur-purple-dark/40"
       }`}
     >
       {popular && (
-        <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-assistjur-gold px-4 py-1 font-bold text-assistjur-purple-darker text-xs uppercase tracking-wide">
+        <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gold-accent px-4 py-1 font-bold text-assistjur-purple-darker text-xs uppercase tracking-wide">
           Mais popular
         </span>
       )}
@@ -133,7 +133,7 @@ function PricingCard({
           >
             <svg
               aria-hidden
-              className="mt-0.5 size-4 shrink-0 text-assistjur-gold"
+              className="mt-0.5 size-4 shrink-0 text-gold-accent"
               fill="none"
               stroke="currentColor"
               strokeWidth={2.5}
@@ -151,9 +151,9 @@ function PricingCard({
         ))}
       </ul>
       <a
-        className={`mt-8 inline-flex min-h-[44px] items-center justify-center rounded-lg px-6 py-3 font-bold text-sm transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold focus-visible:ring-offset-2 focus-visible:ring-offset-assistjur-purple-darker ${
+        className={`mt-8 inline-flex min-h-[44px] items-center justify-center rounded-lg px-6 py-3 font-bold text-sm transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent focus-visible:ring-offset-2 focus-visible:ring-offset-assistjur-purple-darker ${
           popular
-            ? "bg-assistjur-gold text-assistjur-purple-darker"
+            ? "bg-gold-accent text-assistjur-purple-darker"
             : "bg-assistjur-purple-dark text-white"
         }`}
         href="#formulario"
@@ -200,7 +200,7 @@ function LeadForm() {
         </label>
         <input
           autoComplete="name"
-          className="w-full rounded-lg border border-assistjur-purple/40 bg-assistjur-purple-darker/80 px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-assistjur-gold focus:outline-none focus:ring-1 focus:ring-assistjur-gold"
+          className="w-full rounded-lg border border-assistjur-purple/40 bg-assistjur-purple-darker/80 px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-gold-accent focus:outline-none focus:ring-1 focus:ring-gold-accent"
           id="lead-name"
           name="name"
           placeholder="Dr(a). Maria Silva"
@@ -218,7 +218,7 @@ function LeadForm() {
         </label>
         <input
           autoComplete="email"
-          className="w-full rounded-lg border border-assistjur-purple/40 bg-assistjur-purple-darker/80 px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-assistjur-gold focus:outline-none focus:ring-1 focus:ring-assistjur-gold"
+          className="w-full rounded-lg border border-assistjur-purple/40 bg-assistjur-purple-darker/80 px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-gold-accent focus:outline-none focus:ring-1 focus:ring-gold-accent"
           id="lead-email"
           name="email"
           placeholder="maria@escritorio.adv.br"
@@ -236,7 +236,7 @@ function LeadForm() {
         </label>
         <input
           autoComplete="tel"
-          className="w-full rounded-lg border border-assistjur-purple/40 bg-assistjur-purple-darker/80 px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-assistjur-gold focus:outline-none focus:ring-1 focus:ring-assistjur-gold"
+          className="w-full rounded-lg border border-assistjur-purple/40 bg-assistjur-purple-darker/80 px-4 py-3 text-sm text-white placeholder:text-white/40 focus:border-gold-accent focus:outline-none focus:ring-1 focus:ring-gold-accent"
           id="lead-phone"
           name="phone"
           placeholder="(11) 99999-0000"
@@ -252,7 +252,7 @@ function LeadForm() {
           Área de atuação <span className="text-white/50">(opcional)</span>
         </label>
         <select
-          className="w-full rounded-lg border border-assistjur-purple/40 bg-assistjur-purple-darker/80 px-4 py-3 text-sm text-white focus:border-assistjur-gold focus:outline-none focus:ring-1 focus:ring-assistjur-gold"
+          className="w-full rounded-lg border border-assistjur-purple/40 bg-assistjur-purple-darker/80 px-4 py-3 text-sm text-white focus:border-gold-accent focus:outline-none focus:ring-1 focus:ring-gold-accent"
           id="lead-area"
           name="area"
         >
@@ -267,7 +267,7 @@ function LeadForm() {
       </div>
 
       <button
-        className="landing-cta-hover w-full rounded-lg bg-assistjur-gold px-6 py-3.5 font-bold text-assistjur-purple-darker text-base transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold focus-visible:ring-offset-2 focus-visible:ring-offset-assistjur-purple-darker disabled:opacity-50"
+        className="landing-cta-hover w-full rounded-lg bg-gold-accent px-6 py-3.5 font-bold text-assistjur-purple-darker text-base transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent focus-visible:ring-offset-2 focus-visible:ring-offset-assistjur-purple-darker disabled:opacity-50"
         disabled={isPending}
         type="submit"
       >
@@ -404,7 +404,7 @@ export default function LandingPage() {
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:h-14">
           <Link
             aria-label="AssistJur.IA — início"
-            className="flex min-h-[44px] min-w-[44px] items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold focus-visible:ring-offset-2 focus-visible:ring-offset-assistjur-purple-darker"
+            className="flex min-h-[44px] min-w-[44px] items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent focus-visible:ring-offset-2 focus-visible:ring-offset-assistjur-purple-darker"
             href="/"
           >
             <AssistJurLogo
@@ -415,13 +415,13 @@ export default function LandingPage() {
           </Link>
           <nav aria-label="Navegação" className="flex items-center gap-1">
             <Link
-              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md px-4 py-2 font-medium text-sm text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md px-4 py-2 font-medium text-sm text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent"
               href="/login"
             >
               Entrar
             </Link>
             <a
-              className="flex min-h-[44px] items-center justify-center rounded-md bg-assistjur-gold px-4 py-2 font-bold text-assistjur-purple-darker text-sm transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold"
+              className="flex min-h-[44px] items-center justify-center rounded-md bg-gold-accent px-4 py-2 font-bold text-assistjur-purple-darker text-sm transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent"
               href="#formulario"
             >
               Testar grátis
@@ -434,12 +434,12 @@ export default function LandingPage() {
         {/* ── Hero ──────────────────────────────────────────────────────── */}
         <section className="flex flex-col items-center justify-center px-4 py-16 text-center sm:py-20 md:py-28">
           <div className="mx-auto max-w-3xl space-y-6">
-            <p className="inline-block rounded-full bg-assistjur-gold px-4 py-2 font-bold text-assistjur-purple-darker text-xs uppercase tracking-wide">
+            <p className="inline-block rounded-full bg-gold-accent px-4 py-2 font-bold text-assistjur-purple-darker text-xs uppercase tracking-wide">
               IA Estratégica para Advogados
             </p>
             <h1 className="text-balance font-bold text-4xl text-white tracking-tight md:text-5xl md:leading-[1.15]">
               Analise petições e prepare audiências{" "}
-              <span className="text-assistjur-gold">em minutos, não horas</span>
+              <span className="text-gold-accent">em minutos, não horas</span>
             </h1>
             <p className="mx-auto max-w-xl text-pretty text-lg text-white/90 leading-relaxed md:text-xl">
               Agentes de IA especializados em contencioso trabalhista
@@ -448,13 +448,13 @@ export default function LandingPage() {
             </p>
             <div className="flex flex-col gap-4 pt-2 sm:flex-row sm:justify-center">
               <a
-                className="landing-cta-hover inline-flex min-h-[48px] items-center justify-center rounded-xl bg-assistjur-gold px-8 py-3.5 font-bold text-assistjur-purple-darker text-base shadow-black/20 shadow-lg transition-[transform,opacity,box-shadow] duration-200 hover:opacity-95 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold active:scale-[0.98]"
+                className="landing-cta-hover inline-flex min-h-[48px] items-center justify-center rounded-xl bg-gold-accent px-8 py-3.5 font-bold text-assistjur-purple-darker text-base shadow-black/20 shadow-lg transition-[transform,opacity,box-shadow] duration-200 hover:opacity-95 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent active:scale-[0.98]"
                 href="#formulario"
               >
                 Começar agora — grátis
               </a>
               <a
-                className="landing-cta-hover inline-flex min-h-[48px] items-center justify-center rounded-xl border-2 border-white/30 px-8 py-3.5 font-bold text-base text-white transition-[transform,opacity] duration-200 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold active:scale-[0.98]"
+                className="landing-cta-hover inline-flex min-h-[48px] items-center justify-center rounded-xl border-2 border-white/30 px-8 py-3.5 font-bold text-base text-white transition-[transform,opacity] duration-200 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent active:scale-[0.98]"
                 href="#funcionalidades"
               >
                 Ver funcionalidades

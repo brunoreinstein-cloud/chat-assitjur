@@ -382,6 +382,7 @@
   --color-brand-gold-500: var(--assistjur-gold-500);
   --color-brand-gold-600: var(--assistjur-gold-600);
   --color-brand-gold-700: var(--assistjur-gold-700);
+  --color-gold-accent: var(--assistjur-gold);
 
   --color-brand-neutral-50: var(--assistjur-neutral-50);
   --color-brand-neutral-100: var(--assistjur-neutral-100);
@@ -461,6 +462,7 @@
   --color-assistjur-purple-dark: var(--assistjur-purple-dark);
   --color-assistjur-purple-darker: var(--assistjur-purple-darker);
   --color-assistjur-gold: var(--assistjur-gold);
+  --color-gold-accent: var(--assistjur-gold);
   --color-assistjur-gray: var(--assistjur-gray);
   --color-assistjur-gray-light: var(--assistjur-gray-light);
 }

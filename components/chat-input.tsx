@@ -52,7 +52,7 @@ export function ChatInput({
   return (
     <div className="border-border border-t bg-background px-6 pt-4 pb-[18px] dark:border-white/8 dark:bg-[#0d0f12]">
       <form
-        className={`overflow-hidden rounded-xl border border-border bg-muted/50 transition-all focus-within:border-assistjur-gold/40 focus-within:shadow-[0_0_0_3px_rgba(234,179,8,0.08)] dark:border-white/8 dark:bg-[#13161b] dark:focus-within:border-amber-400/35 dark:focus-within:shadow-[0_0_0_3px_rgba(201,168,76,0.06)] ${
+        className={`overflow-hidden rounded-xl border border-border bg-muted/50 transition-all focus-within:border-gold-accent/40 focus-within:shadow-[0_0_0_3px_rgba(234,179,8,0.08)] dark:border-white/8 dark:bg-[#13161b] dark:focus-within:border-amber-400/35 dark:focus-within:shadow-[0_0_0_3px_rgba(201,168,76,0.06)] ${
           disabled ? "cursor-not-allowed opacity-60" : ""
         }`}
         onSubmit={handleSubmit}
@@ -75,7 +75,7 @@ export function ChatInput({
           />
           <button
             aria-label="Enviar mensagem"
-            className="mb-3 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-assistjur-gold transition-all hover:scale-105 hover:bg-assistjur-gold/90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-amber-400 dark:hover:bg-amber-300"
+            className="mb-3 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gold-accent transition-all hover:scale-105 hover:bg-gold-accent/90 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-amber-400 dark:hover:bg-amber-300"
             disabled={disabled || !value.trim()}
             type="submit"
           >

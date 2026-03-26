@@ -64,7 +64,7 @@ export default function Page() {
           <p className="mt-5 text-center text-assistjur-gray text-sm">
             Não tem uma conta?{" "}
             <Link
-              className="font-semibold text-assistjur-purple-dark underline underline-offset-2 hover:no-underline focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+              className="font-semibold text-assistjur-purple-dark underline underline-offset-2 hover:no-underline focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent focus-visible:ring-offset-2 focus-visible:ring-offset-white"
               href="/register"
             >
               Cadastre-se
@@ -72,7 +72,7 @@ export default function Page() {
             gratuitamente.
           </p>
           <button
-            className="mt-4 flex min-h-[44px] w-full items-center justify-center rounded-xl border-2 border-assistjur-purple-dark/40 bg-transparent font-medium text-assistjur-purple-dark text-sm transition-colors hover:border-assistjur-purple-dark/60 hover:bg-assistjur-purple-dark/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-assistjur-gold focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+            className="mt-4 flex min-h-[44px] w-full items-center justify-center rounded-xl border-2 border-assistjur-purple-dark/40 bg-transparent font-medium text-assistjur-purple-dark text-sm transition-colors hover:border-assistjur-purple-dark/60 hover:bg-assistjur-purple-dark/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent focus-visible:ring-offset-2 focus-visible:ring-offset-white"
             onClick={async () => {
               await signOut({ redirect: false });
               globalThis.window.location.href =

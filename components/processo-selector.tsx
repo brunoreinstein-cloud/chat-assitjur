@@ -271,7 +271,7 @@ export function ProcessoSelector({
                   {p.reclamante.split(" ")[0]}
                 </span>
                 {isSelected && (
-                  <span className="shrink-0 font-semibold text-[10px] text-assistjur-gold">
+                  <span className="shrink-0 font-semibold text-[10px] text-gold-accent">
                     ✓
                   </span>
                 )}

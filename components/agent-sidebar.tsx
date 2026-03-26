@@ -28,11 +28,11 @@ import { fetcher, historyFetcher } from "@/lib/utils";
 
 const AGENT_DOTS: Record<AgentId, string> = {
   "assistente-geral": "bg-primary",
-  "revisor-defesas": "bg-assistjur-gold",
+  "revisor-defesas": "bg-gold-accent",
   "redator-contestacao": "bg-primary",
-  "avaliador-contestacao": "bg-assistjur-gold",
+  "avaliador-contestacao": "bg-gold-accent",
   /** Master usa gold — produto flagship, visualmente distinto do Redator (purple). */
-  "assistjur-master": "bg-assistjur-gold",
+  "assistjur-master": "bg-gold-accent",
 };
 
 interface ChatItem {
@@ -161,7 +161,7 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
         </div>
         <Link href="/chat">
           <button
-            className="flex w-full items-center justify-center gap-1.5 rounded-md border border-assistjur-gold/40 bg-assistjur-gold/10 px-3 py-2 font-medium text-[13px] text-assistjur-gold transition-all hover:border-assistjur-gold/60 hover:bg-assistjur-gold/20"
+            className="flex w-full items-center justify-center gap-1.5 rounded-md border border-gold-accent/40 bg-gold-accent/10 px-3 py-2 font-medium text-[13px] text-gold-accent transition-all hover:border-gold-accent/60 hover:bg-gold-accent/20"
             type="button"
           >
             <svg
@@ -187,7 +187,7 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
             <button
               className={`flex-1 py-2 font-medium text-[11px] transition-colors ${
                 sidebarTab === tab
-                  ? "border-assistjur-gold border-b-2 text-assistjur-gold"
+                  ? "border-gold-accent border-b-2 text-gold-accent"
                   : "border-transparent border-b-2 text-muted-foreground hover:text-foreground"
               }`}
               key={tab}
@@ -295,7 +295,7 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
             </p>
             {!showNovoForm && (
               <button
-                className="rounded px-1.5 py-0.5 text-[11px] text-assistjur-gold hover:bg-assistjur-gold/15"
+                className="rounded px-1.5 py-0.5 text-[11px] text-gold-accent hover:bg-gold-accent/15"
                 onClick={() => setShowNovoForm(true)}
                 type="button"
               >
@@ -331,7 +331,7 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
                   Nenhum processo ainda.
                 </p>
                 <button
-                  className="mt-2 text-[11px] text-assistjur-gold hover:underline"
+                  className="mt-2 text-[11px] text-gold-accent hover:underline"
                   onClick={() => setShowNovoForm(true)}
                   type="button"
                 >
@@ -355,7 +355,7 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
       {/* Créditos */}
       <div className="border-border border-t px-3 py-2.5 dark:border-white/8">
         <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-2.5 py-2">
-          <span aria-hidden className="shrink-0 text-assistjur-gold text-sm">
+          <span aria-hidden className="shrink-0 text-gold-accent text-sm">
             ⚡
           </span>
           <div className="min-w-0 flex-1">
@@ -363,14 +363,14 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
               <span className="text-[11px] text-muted-foreground">
                 Créditos disponíveis
               </span>
-              <span className="font-semibold text-[13px] text-assistjur-gold">
+              <span className="font-semibold text-[13px] text-gold-accent">
                 {credits}
               </span>
             </div>
             <div className="mt-1.5 h-[3px] overflow-hidden rounded-full bg-muted dark:bg-white/10">
               <div
                 aria-hidden
-                className="h-full rounded-full bg-assistjur-gold"
+                className="h-full rounded-full bg-gold-accent"
                 style={{ width: `${pct}%` }}
               />
             </div>
