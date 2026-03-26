@@ -19,6 +19,7 @@ export async function register() {
     process.env.LANGFUSE_SECRET_KEY
   ) {
     try {
+      // @ts-expect-error — langfuse-vercel is an optional dependency
       const { LangfuseExporter } = (await import(
         /* webpackIgnore: true */ "langfuse-vercel"
       )) as {
