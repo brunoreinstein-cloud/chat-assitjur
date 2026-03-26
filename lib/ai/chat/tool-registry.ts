@@ -17,7 +17,7 @@ import { createMemoryTools } from "@/lib/ai/tools/memory";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
 import { runProcessoGates } from "@/lib/ai/tools/run-processo-gates";
 import { createSearchDocumentTool } from "@/lib/ai/tools/search-document";
-import { searchJurisprudencia } from "@/lib/ai/tools/search-jurisprudencia";
+import { createSearchJurisprudenciaTool } from "@/lib/ai/tools/search-jurisprudencia";
 import { updateDocument } from "@/lib/ai/tools/update-document";
 import { upsertRiscoVerba } from "@/lib/ai/tools/upsert-risco-verba";
 import type { StreamExecuteContext } from "./types";
@@ -47,7 +47,9 @@ export function buildToolsForAgent(
     requestApproval,
     runProcessoGates,
     upsertRiscoVerba,
-    searchJurisprudencia,
+    searchJurisprudencia: createSearchJurisprudenciaTool({
+      userId: ctx.session.user.id,
+    }),
     // buscarNoProcesso criado com os textos completos em closure
     ...(ctx.documentTexts.size > 0
       ? {
@@ -68,7 +70,7 @@ export function buildToolsForAgent(
     requestApproval: typeof requestApproval;
     runProcessoGates: typeof runProcessoGates;
     upsertRiscoVerba: typeof upsertRiscoVerba;
-    searchJurisprudencia: typeof searchJurisprudencia;
+    searchJurisprudencia: ReturnType<typeof createSearchJurisprudenciaTool>;
     buscarNoProcesso?: ReturnType<typeof createSearchDocumentTool>;
     createRevisorDefesaDocuments?: ReturnType<
       typeof createRevisorDefesaDocuments
