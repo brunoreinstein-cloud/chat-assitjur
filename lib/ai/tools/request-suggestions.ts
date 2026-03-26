@@ -27,7 +27,10 @@ export const requestSuggestions = ({
         ),
     }),
     execute: async ({ documentId }, { abortSignal }) => {
-      const document = await getDocumentById({ id: documentId });
+      const document = await getDocumentById({
+        id: documentId,
+        userId: session.user?.id ?? "",
+      });
 
       if (!document?.content) {
         return {

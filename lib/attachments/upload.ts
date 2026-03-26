@@ -2,13 +2,58 @@
 
 import { upload as uploadToBlob } from "@vercel/blob/client";
 import { toast } from "sonner";
-import type { FileUploadResponse, UploadPhase } from "./types";
+import type {
+  FileUploadResponse,
+  UploadPhase,
+  ZipUploadResponse,
+} from "./types";
 import { buildAttachmentFromUploadResponse } from "./utils";
+
+type BuiltAttachment = ReturnType<typeof buildAttachmentFromUploadResponse>;
+
+export interface UploadResult {
+  /** Single attachment for normal files, array for ZIP. */
+  attachments: BuiltAttachment[];
+  /** ZIP summary info, if applicable. */
+  zipSummary?: ZipUploadResponse["summary"];
+}
+
+function isZipResponse(
+  data: FileUploadResponse | ZipUploadResponse
+): data is ZipUploadResponse {
+  return "zip" in data && data.zip === true;
+}
+
+function handleZipResponse(data: ZipUploadResponse): UploadResult {
+  const attachments: BuiltAttachment[] = [];
+  for (const entry of data.files) {
+    // Build a synthetic File-like object for each ZIP entry
+    const syntheticFile = { name: entry.pathname ?? "documento" } as File;
+    attachments.push(buildAttachmentFromUploadResponse(entry, syntheticFile));
+  }
+  const { summary } = data;
+  const parts: string[] = [];
+  parts.push(`${summary.processed} arquivo(s) extraído(s) do ZIP`);
+  if (summary.failed > 0) {
+    parts.push(`${summary.failed} falha(s)`);
+  }
+  if (summary.skippedUnsupported > 0) {
+    parts.push(`${summary.skippedUnsupported} tipo(s) não suportado(s)`);
+  }
+  if (summary.skippedNestedZips > 0) {
+    parts.push(`${summary.skippedNestedZips} ZIP(s) aninhado(s) ignorado(s)`);
+  }
+  if (summary.skippedTooLarge > 0) {
+    parts.push(`${summary.skippedTooLarge} arquivo(s) grande(s) demais`);
+  }
+  toast.success(parts.join(" · "));
+  return { attachments, zipSummary: summary };
+}
 
 export async function uploadLargeFile(
   file: File,
   onPhase?: (phase: UploadPhase, percent: number) => void
-): Promise<ReturnType<typeof buildAttachmentFromUploadResponse> | undefined> {
+): Promise<UploadResult | undefined> {
   const tokenCheckRes = await fetch("/api/files/upload-token", {
     method: "GET",
   });
@@ -52,9 +97,16 @@ export async function uploadLargeFile(
       return undefined;
     }
     onPhase?.("classifying", 90);
-    const data = (await processRes.json()) as FileUploadResponse;
+    const data = (await processRes.json()) as
+      | FileUploadResponse
+      | ZipUploadResponse;
     onPhase?.("done", 100);
-    return buildAttachmentFromUploadResponse(data, file);
+    if (isZipResponse(data)) {
+      return handleZipResponse(data);
+    }
+    return {
+      attachments: [buildAttachmentFromUploadResponse(data, file)],
+    };
   } catch (directError: unknown) {
     const msg =
       directError instanceof Error
@@ -70,7 +122,7 @@ export async function uploadLargeFile(
 export async function uploadSmallFile(
   file: File,
   onPhase?: (phase: UploadPhase, percent: number) => void
-): Promise<ReturnType<typeof buildAttachmentFromUploadResponse> | undefined> {
+): Promise<UploadResult | undefined> {
   onPhase?.("uploading", 0);
   const formData = new FormData();
   formData.append("file", file);
@@ -104,9 +156,16 @@ export async function uploadSmallFile(
   if (result.ok) {
     onPhase?.("classifying", 90);
     try {
-      const data = JSON.parse(result.body) as FileUploadResponse;
+      const data = JSON.parse(result.body) as
+        | FileUploadResponse
+        | ZipUploadResponse;
       onPhase?.("done", 100);
-      return buildAttachmentFromUploadResponse(data, file);
+      if (isZipResponse(data)) {
+        return handleZipResponse(data);
+      }
+      return {
+        attachments: [buildAttachmentFromUploadResponse(data, file)],
+      };
     } catch {
       toast.error("Resposta inválida do servidor.");
       return undefined;

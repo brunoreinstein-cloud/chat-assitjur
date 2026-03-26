@@ -1,9 +1,8 @@
 "use client";
 
-import { Clock, MoreHorizontal, Scale, Users } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 
 // ——— Tipos ——————————————————————————————————————————————————————————
@@ -47,8 +46,6 @@ export interface CaseCardProps {
   parties?: string;
   /** Texto relativo (ex: "há 2 horas") */
   updatedAt?: string;
-  /** Progresso do caso 0–100 */
-  progress?: number;
   /** Ação principal — geralmente abrir o caso */
   onOpen?: () => void;
   /** Callback do menu de ações */
@@ -65,7 +62,6 @@ export function CaseCard({
   court,
   parties,
   updatedAt,
-  progress,
   onOpen,
   onMenu,
   className,
@@ -76,7 +72,7 @@ export function CaseCard({
         "flex flex-col gap-4 rounded-lg border bg-card p-5 shadow-sm",
         "min-w-[280px] max-w-[400px]",
         "transition-shadow hover:shadow-md",
-        className,
+        className
       )}
     >
       {/* Header */}
@@ -85,54 +81,39 @@ export function CaseCard({
           <h3 className="line-clamp-2 flex-1 font-semibold text-foreground text-xl leading-snug">
             {title}
           </h3>
-          <Badge variant={WORKFLOW_BADGE_VARIANT[status]} className="shrink-0">
+          <Badge className="shrink-0" variant={WORKFLOW_BADGE_VARIANT[status]}>
             {WORKFLOW_LABEL[status]}
           </Badge>
         </div>
-        <p className="font-mono text-muted-foreground text-sm">
+        <p className="font-mono text-muted-foreground text-sm tabular-nums">
           {processNumber}
         </p>
       </div>
 
-      {/* Meta */}
-      <div className="flex flex-col gap-1.5">
-        {court && (
-          <MetaItem icon={<Scale className="h-3.5 w-3.5" />} label="Vara">
-            {court}
-          </MetaItem>
-        )}
-        {parties && (
-          <MetaItem icon={<Users className="h-3.5 w-3.5" />} label="Partes">
-            {parties}
-          </MetaItem>
-        )}
-        {updatedAt && (
-          <MetaItem icon={<Clock className="h-3.5 w-3.5" />} label="Atualizado">
-            {updatedAt}
-          </MetaItem>
-        )}
+      {/* Meta — label + valor textual, sem ícones */}
+      <div className="flex flex-col gap-1.5 text-sm">
+        {court && <MetaItem label="Vara">{court}</MetaItem>}
+        {parties && <MetaItem label="Partes">{parties}</MetaItem>}
+        {updatedAt && <MetaItem label="Atualizado">{updatedAt}</MetaItem>}
       </div>
 
       {/* Footer */}
-      <div className="flex items-center gap-3">
-        {progress !== undefined && (
-          <div className="flex flex-1 flex-col gap-1">
-            <Progress value={progress} className="h-1.5" />
-            <span className="text-muted-foreground text-xs">{progress}% concluído</span>
-          </div>
+      <div className="flex items-center justify-end gap-1.5">
+        {onOpen && (
+          <Button onClick={onOpen} size="sm" variant="outline">
+            Abrir
+          </Button>
         )}
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
-          {onOpen && (
-            <Button size="sm" variant="outline-brand" onClick={onOpen}>
-              Abrir
-            </Button>
-          )}
-          {onMenu && (
-            <Button size="icon-sm" variant="ghost" onClick={onMenu} aria-label="Mais ações">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
+        {onMenu && (
+          <Button
+            aria-label="Mais ações"
+            onClick={onMenu}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -141,18 +122,17 @@ export function CaseCard({
 // ——— Sub-componente interno ——————————————————————————————————————————
 
 function MetaItem({
-  icon,
   label,
   children,
 }: {
-  icon: React.ReactNode;
   label: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
-      <span className="shrink-0 text-muted-foreground/60">{icon}</span>
-      <span className="sr-only">{label}:</span>
+    <div className="flex items-baseline gap-1.5 text-muted-foreground">
+      <span className="shrink-0 font-medium text-foreground/70 text-xs">
+        {label}:
+      </span>
       <span className="truncate">{children}</span>
     </div>
   );

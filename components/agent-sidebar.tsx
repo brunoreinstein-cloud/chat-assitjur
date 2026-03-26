@@ -216,9 +216,7 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
               return (
                 <button
                   className={`flex w-full items-center gap-2 rounded-md px-2.5 py-[7px] font-medium text-[13px] text-foreground transition-colors dark:text-white ${
-                    activeAgent === id
-                      ? "bg-primary/10"
-                      : "hover:bg-muted"
+                    activeAgent === id ? "bg-primary/10" : "hover:bg-muted"
                   }`}
                   key={id}
                   onClick={() => onAgentChange(id)}

@@ -18,12 +18,9 @@ import {
 } from "@/lib/db/queries";
 import type { Peca, TaskExecution } from "@/lib/db/schema";
 import { can } from "@/lib/rbac/roles";
-import {
-  PecaStatusBadge,
-  PecaStatusButton,
-} from "./peca-status-button";
 import { isUUID } from "@/lib/utils";
 import { AvancaFaseButton } from "./avanca-fase-button";
+import { PecaStatusBadge, PecaStatusButton } from "./peca-status-button";
 
 interface TaskTelemetry {
   latencyMs?: number;
@@ -566,8 +563,8 @@ async function ProcessoPageContent({
           <div className="flex flex-col gap-2">
             {pecas.map((p: Peca) => (
               <div
-                key={p.id}
                 className="rounded-md border border-border/60 bg-card px-3 py-2.5 dark:border-white/8 dark:bg-white/3"
+                key={p.id}
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0 flex-1">
@@ -575,7 +572,8 @@ async function ProcessoPageContent({
                       {p.titulo}
                     </p>
                     <p className="text-[11px] text-muted-foreground">
-                      {p.tipo !== "outro" ? p.tipo : "Peça"} · {formatDate(p.createdAt)}
+                      {p.tipo !== "outro" ? p.tipo : "Peça"} ·{" "}
+                      {formatDate(p.createdAt)}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">

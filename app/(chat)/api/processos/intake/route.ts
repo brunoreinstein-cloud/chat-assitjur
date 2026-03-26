@@ -20,6 +20,7 @@ import { pathToFileURL } from "node:url";
 import { generateText, Output } from "ai";
 import { z } from "zod";
 import { auth } from "@/app/(auth)/auth";
+import { detectFaseProcessual } from "@/lib/ai/document-context";
 import { getTitleModel } from "@/lib/ai/providers";
 import {
   ensureStatementTimeout,
@@ -27,7 +28,6 @@ import {
   getProcessoById,
   updateProcessoIntake,
 } from "@/lib/db/queries";
-import { detectFaseProcessual } from "@/lib/ai/document-context";
 import { ChatbotError } from "@/lib/errors";
 
 export const maxDuration = 120;
@@ -278,7 +278,9 @@ export async function POST(request: Request) {
           fileHash,
           intakeMetadata: existing.intakeMetadata ?? undefined,
           intakeStatus: "ready",
-          ...(existing.faseProcessual ? { faseProcessual: existing.faseProcessual } : {}),
+          ...(existing.faseProcessual
+            ? { faseProcessual: existing.faseProcessual }
+            : {}),
         },
       });
       return Response.json({
@@ -357,7 +359,8 @@ export async function POST(request: Request) {
       totalPages,
       intakeStatus: "ready",
       cached: false,
-      faseProcessual: faseProcessual !== "DESCONHECIDA" ? faseProcessual : undefined,
+      faseProcessual:
+        faseProcessual !== "DESCONHECIDA" ? faseProcessual : undefined,
     });
   } catch (error) {
     if (error instanceof ChatbotError) {

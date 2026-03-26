@@ -35,12 +35,18 @@ export async function saveDocument({
   }
 }
 
-export async function getDocumentsById({ id }: { id: string }) {
+export async function getDocumentsById({
+  id,
+  userId,
+}: {
+  id: string;
+  userId: string;
+}) {
   try {
     const documents = await getDb()
       .select()
       .from(document)
-      .where(eq(document.id, id))
+      .where(and(eq(document.id, id), eq(document.userId, userId)))
       .orderBy(asc(document.createdAt));
 
     return documents;
@@ -49,12 +55,18 @@ export async function getDocumentsById({ id }: { id: string }) {
   }
 }
 
-export async function getDocumentById({ id }: { id: string }) {
+export async function getDocumentById({
+  id,
+  userId,
+}: {
+  id: string;
+  userId: string;
+}) {
   try {
     const [selectedDocument] = await getDb()
       .select()
       .from(document)
-      .where(eq(document.id, id))
+      .where(and(eq(document.id, id), eq(document.userId, userId)))
       .orderBy(desc(document.createdAt));
 
     return selectedDocument;
@@ -66,9 +78,11 @@ export async function getDocumentById({ id }: { id: string }) {
 export async function deleteDocumentsByIdAfterTimestamp({
   id,
   timestamp,
+  userId,
 }: {
   id: string;
   timestamp: Date;
+  userId: string;
 }) {
   try {
     await getDb()
@@ -82,7 +96,13 @@ export async function deleteDocumentsByIdAfterTimestamp({
 
     return await getDb()
       .delete(document)
-      .where(and(eq(document.id, id), gt(document.createdAt, timestamp)))
+      .where(
+        and(
+          eq(document.id, id),
+          eq(document.userId, userId),
+          gt(document.createdAt, timestamp)
+        )
+      )
       .returning();
   } catch (err) {
     toDatabaseError(err, "Failed to delete documents by id after timestamp");

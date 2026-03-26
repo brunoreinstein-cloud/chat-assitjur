@@ -10,7 +10,11 @@ import { cn } from "@/lib/utils";
 // ——— Tipos ——————————————————————————————————————————————————————————
 
 export type SourceType = "document" | "jurisprudencia" | "legislacao";
-export type ConfidenceLevel = "source" | "inference" | "needs-review" | "verified";
+export type ConfidenceLevel =
+  | "source-document"
+  | "source-suggested"
+  | "source-review"
+  | "source-verified";
 
 export interface SourceItem {
   id: string;
@@ -33,10 +37,10 @@ export interface SourcePanelProps {
 // ——— Helpers ——————————————————————————————————————————————————————
 
 const CONFIDENCE_LABEL: Record<ConfidenceLevel, string> = {
-  source: "Fonte",
-  inference: "Inferência",
-  "needs-review": "Revisar",
-  verified: "Verificado",
+  "source-document": "Fonte",
+  "source-suggested": "Sugestão",
+  "source-review": "Revisão necessária",
+  "source-verified": "Verificado",
 };
 
 const TYPE_ICON: Record<SourceType, React.ReactNode> = {
@@ -52,17 +56,19 @@ export function SourcePanel({ sources, onClose, className }: SourcePanelProps) {
 
   const byType = (type: SourceType) => sources.filter((s) => s.type === type);
 
-  const totalSources = sources.filter((s) => s.confidence === "source" || s.confidence === "verified").length;
-  const totalInferences = sources.filter((s) => s.confidence === "inference").length;
-  const totalAlerts = sources.filter((s) => s.confidence === "needs-review").length;
+  const totalSources = sources.filter(
+    (s) =>
+      s.confidence === "source-document" || s.confidence === "source-verified"
+  ).length;
+  const totalSuggestions = sources.filter(
+    (s) => s.confidence === "source-suggested"
+  ).length;
+  const totalReviews = sources.filter(
+    (s) => s.confidence === "source-review"
+  ).length;
 
   return (
-    <div
-      className={cn(
-        "flex w-80 flex-col border-l bg-card",
-        className,
-      )}
-    >
+    <div className={cn("flex w-80 flex-col border-l bg-card", className)}>
       {/* Header */}
       <div className="flex items-center justify-between border-b px-4 py-3">
         <h4 className="font-semibold text-foreground text-sm">
@@ -70,10 +76,10 @@ export function SourcePanel({ sources, onClose, className }: SourcePanelProps) {
         </h4>
         {onClose && (
           <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onClose}
             aria-label="Fechar painel"
+            onClick={onClose}
+            size="icon-sm"
+            variant="ghost"
           >
             <X className="h-4 w-4" />
           </Button>
@@ -82,12 +88,12 @@ export function SourcePanel({ sources, onClose, className }: SourcePanelProps) {
 
       {/* Tabs */}
       <Tabs
-        value={activeTab}
-        onValueChange={(v) => setActiveTab(v as SourceType)}
         className="flex flex-1 flex-col overflow-hidden"
+        onValueChange={(v) => setActiveTab(v as SourceType)}
+        value={activeTab}
       >
         <TabsList className="grid w-full grid-cols-3 rounded-none border-b bg-transparent px-2 py-1.5">
-          <TabsTrigger value="document" className="text-xs">
+          <TabsTrigger className="text-xs" value="document">
             Documentos
             {byType("document").length > 0 && (
               <span className="ml-1 rounded-full bg-muted px-1 text-[10px] text-muted-foreground">
@@ -95,7 +101,7 @@ export function SourcePanel({ sources, onClose, className }: SourcePanelProps) {
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="jurisprudencia" className="text-xs">
+          <TabsTrigger className="text-xs" value="jurisprudencia">
             Jurisp.
             {byType("jurisprudencia").length > 0 && (
               <span className="ml-1 rounded-full bg-muted px-1 text-[10px] text-muted-foreground">
@@ -103,7 +109,7 @@ export function SourcePanel({ sources, onClose, className }: SourcePanelProps) {
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="legislacao" className="text-xs">
+          <TabsTrigger className="text-xs" value="legislacao">
             Legislação
             {byType("legislacao").length > 0 && (
               <span className="ml-1 rounded-full bg-muted px-1 text-[10px] text-muted-foreground">
@@ -116,13 +122,13 @@ export function SourcePanel({ sources, onClose, className }: SourcePanelProps) {
         {(["document", "jurisprudencia", "legislacao"] as SourceType[]).map(
           (type) => (
             <TabsContent
+              className="mt-0 flex-1 overflow-y-auto"
               key={type}
               value={type}
-              className="mt-0 flex-1 overflow-y-auto"
             >
               <SourceList items={byType(type)} />
             </TabsContent>
-          ),
+          )
         )}
       </Tabs>
 
@@ -130,13 +136,21 @@ export function SourcePanel({ sources, onClose, className }: SourcePanelProps) {
       <div className="border-t px-4 py-2.5">
         <p className="text-muted-foreground text-xs">
           {totalSources > 0 && (
-            <span>{totalSources} fonte{totalSources !== 1 ? "s" : ""}</span>
+            <span>
+              {totalSources} fonte{totalSources !== 1 ? "s" : ""}
+            </span>
           )}
-          {totalInferences > 0 && (
-            <span> · {totalInferences} inferência{totalInferences !== 1 ? "s" : ""}</span>
+          {totalSuggestions > 0 && (
+            <span>
+              {" "}
+              · {totalSuggestions} sugest{totalSuggestions !== 1 ? "ões" : "ão"}
+            </span>
           )}
-          {totalAlerts > 0 && (
-            <span className="text-confidence-alert"> · {totalAlerts} alerta{totalAlerts !== 1 ? "s" : ""}</span>
+          {totalReviews > 0 && (
+            <span className="text-source-review">
+              {" "}
+              · {totalReviews} revis{totalReviews !== 1 ? "ões" : "ão"}
+            </span>
           )}
           {sources.length === 0 && "Nenhuma fonte ainda"}
         </p>
@@ -161,16 +175,16 @@ function SourceList({ items }: { items: SourceItem[] }) {
       {items.map((item) => (
         <li key={item.id}>
           <button
-            type="button"
-            onClick={item.onClick}
-            disabled={!item.onClick}
             className={cn(
               "flex w-full flex-col gap-1.5 px-4 py-3 text-left",
               "transition-colors",
               item.onClick
-                ? "hover:bg-muted/60 cursor-pointer"
-                : "cursor-default",
+                ? "cursor-pointer hover:bg-muted/60"
+                : "cursor-default"
             )}
+            disabled={!item.onClick}
+            onClick={item.onClick}
+            type="button"
           >
             {/* Tipo + título + página */}
             <div className="flex items-start gap-2">
@@ -182,22 +196,19 @@ function SourceList({ items }: { items: SourceItem[] }) {
                   {item.title}
                 </span>
                 {item.page && (
-                  <span className="font-mono text-muted-foreground text-[10px]">
+                  <span className="font-mono text-[10px] text-muted-foreground">
                     {item.page}
                   </span>
                 )}
               </div>
-              <Badge
-                variant={item.confidence}
-                className="shrink-0 text-[10px]"
-              >
+              <Badge className="shrink-0 text-[10px]" variant={item.confidence}>
                 {CONFIDENCE_LABEL[item.confidence]}
               </Badge>
             </div>
 
             {/* Trecho */}
             {item.excerpt && (
-              <p className="line-clamp-3 pl-6 text-muted-foreground text-[11px] leading-relaxed">
+              <p className="line-clamp-3 pl-6 text-[11px] text-muted-foreground leading-relaxed">
                 {item.excerpt}
               </p>
             )}

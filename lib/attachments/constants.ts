@@ -20,10 +20,10 @@ export const MAX_KNOWLEDGE_SELECT = 50;
 
 /** Tipos MIME aceites para anexos (chat e base de conhecimento). */
 export const ACCEPTED_FILE_ACCEPT =
-  "image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/plain,application/vnd.oasis.opendocument.text";
+  "image/jpeg,image/png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/plain,application/vnd.oasis.opendocument.text,application/zip,application/x-zip-compressed";
 
 export const ACCEPTED_DROP_EXTENSIONS =
-  /\.(docx?|pdf|jpe?g|png|xlsx?|csv|txt|odt)$/i;
+  /\.(docx?|pdf|jpe?g|png|xlsx?|csv|txt|odt|zip)$/i;
 
 /** Quick prompts surfaced in the composer after a document is uploaded (first message only). */
 export const POST_UPLOAD_PROMPTS: {

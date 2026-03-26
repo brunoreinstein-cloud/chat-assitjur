@@ -74,7 +74,10 @@ export function createSearchJurisprudenciaTool(opts: { userId: string }) {
           results: chunks.map((c) => ({
             fonte: c.title,
             documentId: c.knowledgeDocumentId,
-            similaridade: c.similarity !== undefined ? Math.round(c.similarity * 100) / 100 : null,
+            similaridade:
+              c.similarity !== undefined
+                ? Math.round(c.similarity * 100) / 100
+                : null,
             excerto: c.text.slice(0, 2000),
           })),
         };

@@ -69,7 +69,7 @@ export function ChatTopbar({
       {/* Agent selector */}
       <button
         aria-label="Alterar agente"
-        className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-1.5 font-medium text-[13px] text-foreground transition-all hover:bg-muted/80 hover:border-primary/30"
+        className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-1.5 font-medium text-[13px] text-foreground transition-all hover:border-primary/30 hover:bg-muted/80"
         onClick={onAgentToggle}
         type="button"
       >
@@ -181,7 +181,7 @@ function IconBtn({
   return (
     <button
       aria-label={title}
-      className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground transition-all hover:bg-muted/80 hover:text-foreground hover:border-primary/30 [&>svg]:h-3.5 [&>svg]:w-3.5"
+      className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground transition-all hover:border-primary/30 hover:bg-muted/80 hover:text-foreground [&>svg]:h-3.5 [&>svg]:w-3.5"
       onClick={onClick}
       title={title}
       type="button"

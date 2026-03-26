@@ -36,18 +36,12 @@ export async function GET(request: Request) {
     });
   }
 
-  const documents = await getDocumentsById({ id });
+  const documents = await getDocumentsById({ id, userId });
 
   const [document] = documents;
 
   if (!document) {
-    // 404 pode ocorrer brevemente após a tool criar o documento (race com o commit na BD).
-    // O cliente usa documentFetcher com retry (lib/utils.ts) para este caso.
     return new ChatbotError("not_found:document").toResponse();
-  }
-
-  if (document.userId !== userId) {
-    return new ChatbotError("forbidden:document").toResponse();
   }
 
   documentCache.set(userId, id, documents);
@@ -84,14 +78,10 @@ export async function POST(request: Request) {
   }: { content: string; title: string; kind: ArtifactKind } =
     await request.json();
 
-  const documents = await getDocumentsById({ id });
+  const documents = await getDocumentsById({ id, userId: session.user.id });
 
   if (documents.length > 0) {
-    const [doc] = documents;
-
-    if (doc.userId !== session.user.id) {
-      return new ChatbotError("forbidden:document").toResponse();
-    }
+    // userId already filtered in query — doc belongs to session user
   }
 
   const userId = session.user.id;
@@ -134,7 +124,7 @@ export async function DELETE(request: Request) {
     return new ChatbotError("unauthorized:document").toResponse();
   }
 
-  const documents = await getDocumentsById({ id });
+  const documents = await getDocumentsById({ id, userId: session.user.id });
 
   const [document] = documents;
 
@@ -142,13 +132,10 @@ export async function DELETE(request: Request) {
     return new ChatbotError("not_found:document").toResponse();
   }
 
-  if (document.userId !== session.user.id) {
-    return new ChatbotError("forbidden:document").toResponse();
-  }
-
   const documentsDeleted = await deleteDocumentsByIdAfterTimestamp({
     id,
     timestamp: new Date(timestamp),
+    userId: session.user.id,
   });
 
   documentCache.delete(session.user.id, id);

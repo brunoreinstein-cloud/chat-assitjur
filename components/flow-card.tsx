@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, Clock } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -8,9 +8,7 @@ import { cn } from "@/lib/utils";
 // ——— Tipos ——————————————————————————————————————————————————————————
 
 export interface FlowCardProps {
-  /** Ícone ou emoji representativo (ex: "🔍", <FileSearch />) */
-  icon: React.ReactNode;
-  /** Verbo de ação: "Revisar defesa", "Gerar contestação" */
+  /** Verbo de ação: "Revisar defesa", "Redigir contestação" */
   title: string;
   /** 1–2 linhas descritivas */
   description: string;
@@ -18,8 +16,6 @@ export interface FlowCardProps {
   inputs?: string[];
   /** O que o fluxo gera: "relatório de revisão" */
   output?: string;
-  /** Estimativa de tempo: "~3 min" */
-  estimate?: string;
   /** Área jurídica: "Trabalhista", "Cível" */
   area?: string;
   /** Texto do CTA — default: "Iniciar" */
@@ -32,12 +28,10 @@ export interface FlowCardProps {
 // ——— Componente ——————————————————————————————————————————————————————
 
 export function FlowCard({
-  icon,
   title,
   description,
   inputs,
   output,
-  estimate,
   area,
   ctaLabel = "Iniciar",
   onStart,
@@ -47,33 +41,28 @@ export function FlowCard({
   return (
     <div
       className={cn(
-        "group flex flex-col gap-3 rounded-lg border bg-card p-5 shadow-sm",
-        "min-w-[240px] max-w-[320px]",
+        "group flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-sm",
+        "min-w-[220px] max-w-[300px]",
         "transition-all hover:-translate-y-px hover:shadow-md",
         disabled && "opacity-60",
-        className,
+        className
       )}
     >
-      {/* Ícone + área */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-lg">
-          {icon}
-        </div>
-        {area && <Badge variant="brand">{area}</Badge>}
-      </div>
-
-      {/* Título + descrição */}
-      <div className="flex flex-col gap-1">
-        <h4 className="font-semibold text-foreground text-base leading-snug">
+      {/* Título + área */}
+      <div className="flex items-start justify-between gap-2">
+        <h4 className="font-semibold text-foreground text-lg leading-snug">
           {title}
         </h4>
-        <p className="text-muted-foreground text-sm leading-relaxed">
-          {description}
-        </p>
+        {area && <Badge variant="outline">{area}</Badge>}
       </div>
 
-      {/* Meta (inputs / output / estimativa) */}
-      {(inputs || output || estimate) && (
+      {/* Descrição */}
+      <p className="text-muted-foreground text-sm leading-relaxed">
+        {description}
+      </p>
+
+      {/* Meta (inputs / output) */}
+      {(inputs || output) && (
         <div className="flex flex-col gap-1 rounded-md bg-muted/50 px-3 py-2 text-xs">
           {inputs && inputs.length > 0 && (
             <span className="text-muted-foreground">
@@ -83,14 +72,10 @@ export function FlowCard({
           )}
           {output && (
             <span className="text-muted-foreground">
-              <span className="font-medium text-foreground/70">Gera: </span>
+              <span className="font-medium text-foreground/70">
+                Resultado:{" "}
+              </span>
               {output}
-            </span>
-          )}
-          {estimate && (
-            <span className="flex items-center gap-1 text-muted-foreground">
-              <Clock className="h-3 w-3" />
-              {estimate}
             </span>
           )}
         </div>
@@ -98,11 +83,11 @@ export function FlowCard({
 
       {/* CTA */}
       <Button
-        variant="outline-brand"
-        size="sm"
         className="mt-auto w-full"
-        onClick={onStart}
         disabled={disabled}
+        onClick={onStart}
+        size="sm"
+        variant="outline"
       >
         {ctaLabel}
         <ArrowRight className="h-3.5 w-3.5" />

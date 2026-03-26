@@ -7,7 +7,10 @@ import {
 } from "@/lib/ai/agents-registry";
 import { chatModels } from "@/lib/ai/models";
 import { invalidateAgentOverridesCache } from "@/lib/cache/agent-overrides-cache";
-import { upsertBuiltInAgentOverride } from "@/lib/db/queries";
+import {
+  createPromptVersion,
+  upsertBuiltInAgentOverride,
+} from "@/lib/db/queries";
 
 const ADMIN_SECRET = process.env.ADMIN_CREDITS_SECRET;
 
@@ -183,6 +186,34 @@ export async function PATCH(
   }
 
   try {
+    // Snapshot da configuração atual ANTES de aplicar o override
+    const currentConfig = getAgentConfig(agentId);
+    const changeNote =
+      typeof obj?.changeNote === "string" ? obj.changeNote.slice(0, 512) : null;
+    await createPromptVersion({
+      agentId,
+      content: currentConfig.instructions,
+      label: currentConfig.label,
+      modelId: currentConfig.defaultModelId ?? null,
+      toolFlags:
+        currentConfig.useRevisorDefesaTools !== undefined
+          ? {
+              useRevisorDefesaTools: currentConfig.useRevisorDefesaTools,
+              useRedatorContestacaoTool:
+                currentConfig.useRedatorContestacaoTool,
+              useMemoryTools: currentConfig.useMemoryTools ?? false,
+              useApprovalTool: currentConfig.useApprovalTool ?? false,
+              usePipelineTool: currentConfig.usePipelineTool ?? false,
+              useMasterDocumentsTool:
+                currentConfig.useMasterDocumentsTool ?? false,
+            }
+          : null,
+      createdBy: request.headers.get("x-admin-email") ?? "admin",
+      changeNote,
+    }).catch(() => {
+      /* snapshot falha silenciosa — não bloqueia a edição */
+    });
+
     await upsertBuiltInAgentOverride({
       agentId,
       instructions,

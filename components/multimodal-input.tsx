@@ -693,65 +693,75 @@ function PureMultimodalInput({
         const file = uniqueFiles[i];
         const queueId = queueIds[i];
         try {
-          const attachment = await uploadFile(file, queueId);
-          if (attachment !== undefined && typeof attachment.url === "string") {
-            // Preferir tipo pelo nome do ficheiro quando explícito (ex.: "Contestação - RO.pdf") para evitar classificação errada pelo conteúdo
-            const docType =
-              inferDocumentTypeFromFilename(file.name) ??
-              attachment.documentType ??
-              (i === 0 ? preferredTypeForFirst : undefined);
-            const a: Attachment = {
-              name: attachment.name,
-              url: attachment.url,
-              contentType: attachment.contentType,
-              ...(attachment.pathname !== undefined && {
-                pathname: attachment.pathname,
-              }),
-              ...(attachment.extractedText !== undefined && {
-                extractedText: attachment.extractedText,
-              }),
-              ...(docType !== undefined && { documentType: docType }),
-              ...(attachment.extractionFailed === true && {
-                extractionFailed: true,
-              }),
-            };
-            setAttachments((current) =>
-              autoAssignMissingDocumentType([...current, a])
-            );
-            // Intake automático: dispara em background quando há processoId e o ficheiro é PDF
-            const isPdf =
-              attachment.contentType === "application/pdf" ||
-              file.name.toLowerCase().endsWith(".pdf");
-            if (processoId && isPdf) {
-              const intakeToastId = `intake-${processoId}`;
-              toast.loading("Processando documento no processo...", {
-                id: intakeToastId,
-              });
-              fetch("/api/processos/intake", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  processoId,
-                  blobUrl: attachment.url,
-                  filename: file.name,
+          const uploadResult = await uploadFile(file, queueId);
+          if (uploadResult !== undefined) {
+            const newAttachments: Attachment[] = [];
+            for (let j = 0; j < uploadResult.attachments.length; j++) {
+              const attachment = uploadResult.attachments[j];
+              if (typeof attachment.url !== "string") {
+                continue;
+              }
+              // Preferir tipo pelo nome do ficheiro quando explícito (ex.: "Contestação - RO.pdf") para evitar classificação errada pelo conteúdo
+              const docType =
+                inferDocumentTypeFromFilename(attachment.name) ??
+                attachment.documentType ??
+                (i === 0 && j === 0 ? preferredTypeForFirst : undefined);
+              newAttachments.push({
+                name: attachment.name,
+                url: attachment.url,
+                contentType: attachment.contentType,
+                ...(attachment.pathname !== undefined && {
+                  pathname: attachment.pathname,
                 }),
-              })
-                .then((res) => res.json())
-                .then((data: { intakeStatus?: string; titulo?: string }) => {
-                  if (data.intakeStatus === "ready") {
-                    toast.success("Documento processado no processo", {
-                      id: intakeToastId,
-                      description: data.titulo ?? undefined,
-                    });
-                    // Actualiza o ProcessoSelector com os novos dados (titulo, reclamante, etc.)
-                    mutate("/api/processos");
-                  } else {
-                    toast.dismiss(intakeToastId);
-                  }
-                })
-                .catch(() => {
-                  toast.dismiss(intakeToastId);
+                ...(attachment.extractedText !== undefined && {
+                  extractedText: attachment.extractedText,
+                }),
+                ...(docType !== undefined && { documentType: docType }),
+                ...(attachment.extractionFailed === true && {
+                  extractionFailed: true,
+                }),
+              });
+            }
+            if (newAttachments.length > 0) {
+              setAttachments((current) =>
+                autoAssignMissingDocumentType([...current, ...newAttachments])
+              );
+            }
+            // Intake automático: dispara em background quando há processoId e o ficheiro é PDF
+            for (const attachment of uploadResult.attachments) {
+              const isPdf =
+                attachment.contentType === "application/pdf" ||
+                attachment.name.toLowerCase().endsWith(".pdf");
+              if (processoId && isPdf) {
+                const intakeToastId = `intake-${processoId}-${attachment.name}`;
+                toast.loading("Processando documento no processo...", {
+                  id: intakeToastId,
                 });
+                fetch("/api/processos/intake", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    processoId,
+                    blobUrl: attachment.url,
+                    filename: attachment.name,
+                  }),
+                })
+                  .then((res) => res.json())
+                  .then((data: { intakeStatus?: string; titulo?: string }) => {
+                    if (data.intakeStatus === "ready") {
+                      toast.success("Documento processado no processo", {
+                        id: intakeToastId,
+                        description: data.titulo ?? undefined,
+                      });
+                      mutate("/api/processos");
+                    } else {
+                      toast.dismiss(intakeToastId);
+                    }
+                  })
+                  .catch(() => {
+                    toast.dismiss(intakeToastId);
+                  });
+              }
             }
           }
         } finally {
@@ -862,16 +872,31 @@ function PureMultimodalInput({
         // allSettled: se 1 de N uploads falha, os restantes continuam
         const results = await Promise.allSettled(uploadPromises);
         const fulfilled = results.filter(
-          (r): r is PromiseFulfilledResult<Attachment | undefined> =>
-            r.status === "fulfilled"
+          (
+            r
+          ): r is PromiseFulfilledResult<
+            | {
+                attachments: Array<{
+                  url: string;
+                  name: string;
+                  contentType: string;
+                  [key: string]: unknown;
+                }>;
+              }
+            | undefined
+          > => r.status === "fulfilled"
         );
         const failedCount = results.length - fulfilled.length;
-        const successfullyUploadedAttachments = fulfilled
-          .map((r) => r.value)
-          .filter(
-            (attachment): attachment is Attachment =>
-              attachment?.url != null && attachment?.contentType != null
-          );
+        const successfullyUploadedAttachments: Attachment[] = [];
+        for (const r of fulfilled) {
+          if (r.value) {
+            for (const att of r.value.attachments) {
+              if (att?.url != null && att?.contentType != null) {
+                successfullyUploadedAttachments.push(att as Attachment);
+              }
+            }
+          }
+        }
 
         setAttachments((curr) => [...curr, ...successfullyUploadedAttachments]);
 

@@ -1,7 +1,22 @@
 import "server-only";
 
-import { asc, eq, like, not } from "drizzle-orm";
-import { type User, user } from "@/lib/db/schema";
+import { asc, eq, inArray, like, not } from "drizzle-orm";
+import {
+  chat,
+  customAgent,
+  knowledgeDocument,
+  knowledgeFolder,
+  llmUsageRecord,
+  message,
+  processo,
+  stream,
+  type User,
+  user,
+  userCreditBalance,
+  userFile,
+  userMemory,
+  vote,
+} from "@/lib/db/schema";
 import { generateHashedPassword } from "@/lib/db/utils";
 import { ChatbotError } from "@/lib/errors";
 import { generateUUID } from "@/lib/utils";
@@ -130,4 +145,107 @@ export async function ensureUserExistsInDb(
       `Failed to ensure user: ${detail}`
     );
   }
+}
+
+/**
+ * Exporta todos os dados do utilizador para cumprimento LGPD (direito de portabilidade).
+ * Retorna um objeto com todos os registos associados ao userId.
+ */
+export async function exportUserData(userId: string) {
+  const db = getDb();
+
+  const [userData] = await db
+    .select({ id: user.id, email: user.email, role: user.role })
+    .from(user)
+    .where(eq(user.id, userId));
+
+  if (!userData) {
+    throw new ChatbotError("not_found:database", "Utilizador não encontrado.");
+  }
+
+  const userChats = await db.select().from(chat).where(eq(chat.userId, userId));
+
+  const chatIds = userChats.map((c) => c.id);
+
+  const [
+    userMessages,
+    userProcessos,
+    userKnowledgeDocs,
+    userFiles,
+    userMemories,
+    userCredits,
+    userAgents,
+    usageRecords,
+  ] = await Promise.all([
+    chatIds.length > 0
+      ? db.select().from(message).where(inArray(message.chatId, chatIds))
+      : Promise.resolve([]),
+    db.select().from(processo).where(eq(processo.userId, userId)),
+    db
+      .select()
+      .from(knowledgeDocument)
+      .where(eq(knowledgeDocument.userId, userId)),
+    db.select().from(userFile).where(eq(userFile.userId, userId)),
+    db.select().from(userMemory).where(eq(userMemory.userId, userId)),
+    db
+      .select()
+      .from(userCreditBalance)
+      .where(eq(userCreditBalance.userId, userId)),
+    db.select().from(customAgent).where(eq(customAgent.userId, userId)),
+    db.select().from(llmUsageRecord).where(eq(llmUsageRecord.userId, userId)),
+  ]);
+
+  return {
+    exportedAt: new Date().toISOString(),
+    user: userData,
+    chats: userChats,
+    messages: userMessages,
+    processos: userProcessos,
+    knowledgeDocuments: userKnowledgeDocs,
+    files: userFiles,
+    memories: userMemories,
+    creditBalance: userCredits,
+    customAgents: userAgents,
+    usageRecords,
+  };
+}
+
+/**
+ * Apaga permanentemente o utilizador e TODOS os seus dados (cascade).
+ * As tabelas com `onDelete: "cascade"` apagam automaticamente.
+ * Para tabelas filho sem cascade direto (Message, Vote, Stream), apagamos manualmente.
+ */
+export async function deleteUser(
+  userId: string
+): Promise<{ deleted: boolean }> {
+  const db = getDb();
+
+  // Obter chatIds do utilizador para apagar mensagens/votes/streams
+  const userChats = await db
+    .select({ id: chat.id })
+    .from(chat)
+    .where(eq(chat.userId, userId));
+
+  const chatIds = userChats.map((c) => c.id);
+
+  // Apagar dados filho que não têm cascade automático
+  if (chatIds.length > 0) {
+    await Promise.all([
+      db.delete(vote).where(inArray(vote.chatId, chatIds)),
+      db.delete(message).where(inArray(message.chatId, chatIds)),
+      db.delete(stream).where(inArray(stream.chatId, chatIds)),
+    ]);
+  }
+
+  // Apagar folders de knowledge (self-referencing FK, precisa de cascade manual)
+  await db.delete(knowledgeFolder).where(eq(knowledgeFolder.userId, userId));
+
+  // Apagar o utilizador — cascade apaga Chat, Processo, KnowledgeDocument,
+  // UserFile, CustomAgent, UserMemory, UserCreditBalance, LlmUsageRecord, Peca
+  const [deleted] = await db
+    .delete(user)
+    .where(eq(user.id, userId))
+    .returning({ id: user.id });
+
+  return { deleted: !!deleted };
 }

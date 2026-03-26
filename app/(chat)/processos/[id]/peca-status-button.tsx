@@ -4,7 +4,10 @@ import { useTransition } from "react";
 import { toast } from "sonner";
 import { aprovaPecaAction } from "@/app/(chat)/processos/actions";
 
-const STATUS_NEXT: Record<string, { next: "aprovado" | "protocolado"; label: string } | null> = {
+const STATUS_NEXT: Record<
+  string,
+  { next: "aprovado" | "protocolado"; label: string } | null
+> = {
   rascunho: { next: "aprovado", label: "Aprovar" },
   aprovado: { next: "protocolado", label: "Protocolar" },
   protocolado: null,
@@ -28,7 +31,9 @@ const STATUS_BADGE: Record<string, { label: string; className: string }> = {
 export function PecaStatusBadge({ status }: { status: string }) {
   const cfg = STATUS_BADGE[status] ?? STATUS_BADGE.rascunho;
   return (
-    <span className={`rounded-full px-2 py-0.5 font-medium text-[10px] ${cfg.className}`}>
+    <span
+      className={`rounded-full px-2 py-0.5 font-medium text-[10px] ${cfg.className}`}
+    >
       {cfg.label}
     </span>
   );
@@ -48,13 +53,14 @@ export function PecaStatusButton({
   const [isPending, startTransition] = useTransition();
   const transition = STATUS_NEXT[status];
 
-  if (!transition || !canApprove) return null;
+  if (!(transition && canApprove)) {
+    return null;
+  }
 
   return (
     <button
-      type="button"
-      disabled={isPending}
       className="rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted/50 disabled:opacity-50 dark:border-white/10 dark:hover:bg-white/5"
+      disabled={isPending}
       onClick={() => {
         startTransition(async () => {
           const result = await aprovaPecaAction({
@@ -71,6 +77,7 @@ export function PecaStatusButton({
           }
         });
       }}
+      type="button"
     >
       {isPending ? "…" : transition.label}
     </button>

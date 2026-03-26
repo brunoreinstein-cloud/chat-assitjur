@@ -1,4 +1,9 @@
-import { BarChart2Icon, BotIcon, CoinsIcon, ShieldCheckIcon } from "lucide-react";
+import {
+  BarChart2Icon,
+  BotIcon,
+  CoinsIcon,
+  ShieldCheckIcon,
+} from "lucide-react";
 import Link from "next/link";
 
 const adminSections = [

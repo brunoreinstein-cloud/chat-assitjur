@@ -15,7 +15,9 @@ import { taskExecution } from "@/lib/db/schema";
 const ADMIN_SECRET = process.env.ADMIN_CREDITS_SECRET;
 
 function isAdminRequest(request: Request): boolean {
-  if (!ADMIN_SECRET?.length) return false;
+  if (!ADMIN_SECRET?.length) {
+    return false;
+  }
   return request.headers.get("x-admin-key") === ADMIN_SECRET;
 }
 
@@ -35,7 +37,10 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const days = Math.min(Math.max(Number(searchParams.get("days") ?? "30"), 1), 365);
+  const days = Math.min(
+    Math.max(Number(searchParams.get("days") ?? "30"), 1),
+    365
+  );
 
   try {
     const db = getDb();
@@ -48,7 +53,9 @@ export async function GET(request: Request) {
         totalTokens: sql<number>`cast(coalesce(sum(cast(${taskExecution.result}->>'totalTokens' as int)), 0) as int)`,
         inputTokens: sql<number>`cast(coalesce(sum(cast(${taskExecution.result}->>'inputTokens' as int)), 0) as int)`,
         outputTokens: sql<number>`cast(coalesce(sum(cast(${taskExecution.result}->>'outputTokens' as int)), 0) as int)`,
-        latenciaMediaMs: sql<number | null>`cast(avg(cast(${taskExecution.result}->>'latencyMs' as int)) as int)`,
+        latenciaMediaMs: sql<
+          number | null
+        >`cast(avg(cast(${taskExecution.result}->>'latencyMs' as int)) as int)`,
       })
       .from(taskExecution)
       .where(
@@ -57,9 +64,15 @@ export async function GET(request: Request) {
       .groupBy(taskExecution.taskId)
       .orderBy(sql`sum(${taskExecution.creditsUsed}) desc nulls last`);
 
-    return NextResponse.json({ days, rows } satisfies { days: number; rows: CostRow[] });
+    return NextResponse.json({ days, rows } satisfies {
+      days: number;
+      rows: CostRow[];
+    });
   } catch (err) {
     console.error("[admin/costs] query error", err);
-    return NextResponse.json({ error: "Failed to query costs" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to query costs" },
+      { status: 500 }
+    );
   }
 }

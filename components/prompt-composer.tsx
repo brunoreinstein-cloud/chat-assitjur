@@ -58,7 +58,7 @@ export function PromptComposer({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (!disabled && !isLoading && value.trim()) {
+      if (!(disabled || isLoading) && value.trim()) {
         onSubmit();
       }
     }
@@ -78,28 +78,28 @@ export function PromptComposer({
   };
 
   const hasContext = caseName || agentName || docSummary;
-  const canSubmit = !disabled && !isLoading && value.trim().length > 0;
+  const canSubmit = !(disabled || isLoading) && value.trim().length > 0;
 
   return (
     <div
       className={cn(
         "flex flex-col rounded-xl border bg-card shadow-sm",
         "transition-shadow focus-within:shadow-md focus-within:ring-2 focus-within:ring-ring/40",
-        className,
+        className
       )}
     >
       {/* Faixa de contexto */}
       {hasContext && (
         <div className="flex flex-wrap items-center gap-1.5 border-b px-3 py-2">
           {caseName && (
-            <Badge variant="secondary" className="gap-1 text-xs">
+            <Badge className="gap-1 text-xs" variant="secondary">
               <span className="text-muted-foreground">Caso:</span>
               {caseName}
             </Badge>
           )}
           {agentName && (
-            <Badge variant="brand" className="gap-1 text-xs">
-              <span className="opacity-70">Agente:</span>
+            <Badge className="gap-1 text-xs" variant="secondary">
+              <span className="opacity-70">Assistente:</span>
               {agentName}
             </Badge>
           )}
@@ -113,34 +113,34 @@ export function PromptComposer({
 
       {/* Textarea */}
       <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={handleInput}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        disabled={disabled || isLoading}
-        rows={1}
-        style={{ minHeight: "56px", maxHeight: "200px" }}
         className={cn(
           "w-full resize-none bg-transparent px-4 py-3.5",
           "text-foreground text-sm leading-relaxed placeholder:text-muted-foreground",
           "outline-none disabled:cursor-not-allowed disabled:opacity-50",
-          "overflow-y-auto",
+          "overflow-y-auto"
         )}
+        disabled={disabled || isLoading}
+        onChange={handleInput}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        ref={textareaRef}
+        rows={1}
+        style={{ minHeight: "56px", maxHeight: "200px" }}
+        value={value}
       />
 
       {/* Suggestion chips */}
       {suggestions && suggestions.length > 0 && !value && (
-        <div className="flex flex-wrap gap-1.5 px-3 pb-2 pt-0">
+        <div className="flex flex-wrap gap-1.5 px-3 pt-0 pb-2">
           {suggestions.map((s) => (
             <button
-              key={s.label}
-              type="button"
-              onClick={() => handleSuggestion(s.text)}
               className={cn(
                 "rounded-full border bg-muted/60 px-3 py-1 text-muted-foreground text-xs",
-                "transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground",
+                "transition-colors hover:border-primary/40 hover:bg-primary/5 hover:text-foreground"
               )}
+              key={s.label}
+              onClick={() => handleSuggestion(s.text)}
+              type="button"
             >
               {s.label}
             </button>
@@ -152,37 +152,37 @@ export function PromptComposer({
       <div className="flex items-center gap-1.5 border-t px-3 py-2">
         {onAttach && (
           <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onAttach}
-            disabled={disabled || isLoading}
             aria-label="Anexar documento"
+            disabled={disabled || isLoading}
+            onClick={onAttach}
+            size="icon-sm"
+            variant="ghost"
           >
             <Paperclip className="h-4 w-4" />
           </Button>
         )}
         <Button
-          variant="ghost"
-          size="icon-sm"
-          disabled
           aria-label="Ferramentas"
+          disabled
+          size="icon-sm"
           title="Em breve"
+          variant="ghost"
         >
           <Wrench className="h-4 w-4" />
         </Button>
 
         <div className="ml-auto">
           <Button
-            size="icon-sm"
-            onClick={onSubmit}
-            disabled={!canSubmit}
             aria-label="Enviar"
             className={cn(
               "rounded-full",
               canSubmit
                 ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                : "bg-muted text-muted-foreground",
+                : "bg-muted text-muted-foreground"
             )}
+            disabled={!canSubmit}
+            onClick={onSubmit}
+            size="icon-sm"
           >
             <ArrowUp className="h-4 w-4" />
           </Button>

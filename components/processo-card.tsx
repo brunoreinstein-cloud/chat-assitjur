@@ -124,9 +124,7 @@ export function ProcessoCard({
         {/* Linha 2: partes */}
         <div className="mb-1.5 truncate text-[11.5px] text-foreground dark:text-white/80">
           {primeiroNomeReclamante}{" "}
-          <span className="text-muted-foreground">
-            ×
-          </span>{" "}
+          <span className="text-muted-foreground">×</span>{" "}
           {primeiroNomeReclamada}
         </div>
 

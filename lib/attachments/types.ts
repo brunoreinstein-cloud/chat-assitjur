@@ -24,6 +24,19 @@ export interface FileUploadResponse {
   pageCount?: number;
 }
 
+/** Response shape when a ZIP file is uploaded. */
+export interface ZipUploadResponse {
+  zip: true;
+  files: FileUploadResponse[];
+  summary: {
+    processed: number;
+    failed: number;
+    skippedUnsupported: number;
+    skippedNestedZips: number;
+    skippedTooLarge: number;
+  };
+}
+
 export interface DocumentPart {
   type: "document";
   name: string;

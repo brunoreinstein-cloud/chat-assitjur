@@ -2,7 +2,10 @@ import { registerOTel } from "@vercel/otel";
 
 /** Interface mínima compatível com OTel SpanExporter (evita dependência de sdk-trace-base). */
 interface OtelSpanExporter {
-  export(spans: unknown[], resultCallback: (result: { code: number }) => void): void;
+  export(
+    spans: unknown[],
+    resultCallback: (result: { code: number }) => void
+  ): void;
   shutdown(): Promise<void>;
 }
 

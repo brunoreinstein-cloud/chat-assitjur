@@ -56,7 +56,8 @@
     "test:with-dev": "cross-env PLAYWRIGHT=True PLAYWRIGHT_TEST_BASE_URL=http://localhost:3300 pnpm exec playwright test",
     "_test:with-dev-3301": "cross-env PLAYWRIGHT=True PLAYWRIGHT_TEST_BASE_URL=http://localhost:3301 pnpm exec playwright test",
     "_validate:prompt": "tsx lib/prompts/agente-trabalhista/run-validate.ts",
-    "test:unit": "pnpm exec vitest run"
+    "test:unit": "pnpm exec vitest run",
+    "test:coverage": "pnpm exec vitest run --coverage"
   },
   "dependencies": {
     "@ai-sdk/gateway": "^3.0.63",
@@ -170,6 +171,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/word-extractor": "^1.0.6",
+    "@vitest/coverage-v8": "^4.1.1",
     "baseline-browser-mapping": "^2.10.0",
     "cross-env": "^10.1.0",
     "drizzle-kit": "^0.31.10",

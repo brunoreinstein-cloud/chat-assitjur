@@ -15,11 +15,6 @@ const badgeVariants = cva(
         destructive:
           "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
         outline: "text-foreground",
-        // Brand purple pill — para status de agente, categorias jurídicas
-        brand:
-          "border-transparent bg-brand-purple-100 text-brand-purple-800 hover:bg-brand-purple-200 dark:bg-brand-purple-900/50 dark:text-brand-purple-300 dark:hover:bg-brand-purple-800/60",
-        // Gold — para destaques, alertas positivos, tier premium
-        gold: "border-transparent bg-brand-gold-400/20 text-brand-gold-700 hover:bg-brand-gold-400/30 dark:bg-brand-gold-500/20 dark:text-brand-gold-300 dark:hover:bg-brand-gold-500/30",
         // Success / Warning / Error semânticos
         success:
           "border-transparent bg-brand-success-light text-brand-success hover:bg-brand-success-light/80 dark:bg-brand-success/20 dark:text-green-300",
@@ -38,15 +33,15 @@ const badgeVariants = cva(
           "border-transparent bg-workflow-done-bg text-workflow-done hover:bg-workflow-done-bg/80",
         "workflow-blocked":
           "border-transparent bg-workflow-blocked-bg text-workflow-blocked hover:bg-workflow-blocked-bg/80",
-        // Confiança — rastreabilidade de fontes e inferências
-        source:
-          "border-transparent bg-confidence-source-bg text-confidence-source hover:bg-confidence-source-bg/80",
-        inference:
-          "border-transparent bg-confidence-inference-bg text-confidence-inference hover:bg-confidence-inference-bg/80",
-        "needs-review":
-          "border-transparent bg-confidence-alert-bg text-confidence-alert hover:bg-confidence-alert-bg/80",
-        verified:
-          "border-transparent bg-confidence-verified-bg text-confidence-verified hover:bg-confidence-verified-bg/80",
+        // Rastreabilidade — origem de informação (nomenclatura centrada no usuário)
+        "source-document":
+          "border-transparent bg-source-document-bg text-source-document hover:bg-source-document-bg/80",
+        "source-suggested":
+          "border-transparent bg-source-suggested-bg text-source-suggested hover:bg-source-suggested-bg/80",
+        "source-review":
+          "border-transparent bg-source-review-bg text-source-review hover:bg-source-review-bg/80",
+        "source-verified":
+          "border-transparent bg-source-verified-bg text-source-verified hover:bg-source-verified-bg/80",
       },
     },
     defaultVariants: {

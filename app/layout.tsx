@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 
@@ -23,20 +23,20 @@ export const viewport = {
 
 // display: "optional" evita o aviso "preloaded but not used within a few seconds"
 // quando a página demora a renderizar (ex.: BD lenta); a fonte é usada quando disponível.
-const geist = Geist({
+const inter = Inter({
   subsets: ["latin"],
   display: "optional",
-  variable: "--font-geist",
+  variable: "--font-inter",
 });
 
-const geistMono = Geist_Mono({
+const jetbrainsMono = JetBrains_Mono({
   subsets: ["latin"],
   display: "optional",
-  variable: "--font-geist-mono",
+  variable: "--font-jetbrains-mono",
 });
 
 const LIGHT_THEME_COLOR = "hsl(0 0% 100%)";
-const DARK_THEME_COLOR = "hsl(256 32% 5%)";
+const DARK_THEME_COLOR = "hsl(256 20% 6%)";
 const THEME_COLOR_SCRIPT = `\
 (function() {
   var html = document.documentElement;
@@ -62,7 +62,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      className={`${geist.variable} ${geistMono.variable}`}
+      className={`${inter.variable} ${jetbrainsMono.variable}`}
       // `next-themes` injects an extra classname to the body element to avoid
       // visual flicker before hydration. Hence the `suppressHydrationWarning`
       // prop is necessary to avoid the React hydration mismatch warning.

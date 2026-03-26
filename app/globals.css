@@ -15,8 +15,8 @@
    ASSISTJUR DESIGN SYSTEM — Brand Book: docs/DESIGN-SYSTEM.md
    ============================================================
 
-   Conceito: "Legal Intelligence"
-   Stack: Tailwind CSS v4 + shadcn/ui + CSS Custom Properties
+   Conceito: "Plataforma de Trabalho Jurídico" (v3.0)
+   Stack: Tailwind CSS v4 + shadcn/ui + CSS Custom Properties + Inter + JetBrains Mono
 
    Camadas de token:
      1. Primitivos de marca  (--assistjur-*)      → valores brutos
@@ -55,18 +55,18 @@
   --assistjur-gold-700: #a16207;
   --assistjur-gold-800: #854d0e;
 
-  /* Neutral com warm undertone (levemente lilás) */
-  --assistjur-neutral-50: #fafafa;
-  --assistjur-neutral-100: #f4f4f8;
-  --assistjur-neutral-200: #e8e8f0;
-  --assistjur-neutral-300: #d1d1e0;
-  --assistjur-neutral-400: #a0a0b8;
-  --assistjur-neutral-500: #6b6b85;
-  --assistjur-neutral-600: #525268;
-  --assistjur-neutral-700: #3d3d52;
-  --assistjur-neutral-800: #272738;
-  --assistjur-neutral-900: #17172a;
-  --assistjur-neutral-950: #0d0d1a;
+  /* Neutral com warm undertone (stone, não lilás nem zinc) */
+  --assistjur-neutral-50: #fafaf9;
+  --assistjur-neutral-100: #f5f5f4;
+  --assistjur-neutral-200: #e7e5e4;
+  --assistjur-neutral-300: #d6d3d1;
+  --assistjur-neutral-400: #a8a29e;
+  --assistjur-neutral-500: #78716c;
+  --assistjur-neutral-600: #57534e;
+  --assistjur-neutral-700: #44403c;
+  --assistjur-neutral-800: #292524;
+  --assistjur-neutral-900: #1c1917;
+  --assistjur-neutral-950: #0c0a09;
 
   /* Status */
   --assistjur-success: #16a34a;
@@ -79,35 +79,35 @@
   --assistjur-info-light: #dbeafe;
 
   /* Workflow — status de caso/processo */
-  --workflow-draft: hsl(252 15% 60%);
-  --workflow-draft-bg: hsl(252 20% 95%);
+  --workflow-draft: hsl(220 12% 55%);
+  --workflow-draft-bg: hsl(220 14% 96%);
   --workflow-active: hsl(262 83% 57%);
-  --workflow-active-bg: hsl(262 30% 95%);
+  --workflow-active-bg: hsl(262 30% 96%);
   --workflow-review: hsl(38 92% 50%);
-  --workflow-review-bg: hsl(48 96% 95%);
+  --workflow-review-bg: hsl(48 96% 96%);
   --workflow-done: hsl(142 71% 36%);
-  --workflow-done-bg: hsl(142 76% 95%);
+  --workflow-done-bg: hsl(142 76% 96%);
   --workflow-blocked: hsl(0 72% 50%);
-  --workflow-blocked-bg: hsl(0 72% 95%);
+  --workflow-blocked-bg: hsl(0 72% 96%);
 
-  /* Confiança — rastreabilidade de fontes e inferências */
-  --confidence-source: hsl(210 85% 53%);
-  --confidence-source-bg: hsl(210 85% 95%);
-  --confidence-inference: hsl(38 92% 50%);
-  --confidence-inference-bg: hsl(48 96% 95%);
-  --confidence-alert: hsl(0 72% 50%);
-  --confidence-alert-bg: hsl(0 72% 95%);
-  --confidence-verified: hsl(142 71% 36%);
-  --confidence-verified-bg: hsl(142 76% 95%);
+  /* Rastreabilidade — origem de informação (nomenclatura centrada no usuário) */
+  --source-document: hsl(210 85% 53%);
+  --source-document-bg: hsl(210 85% 96%);
+  --source-suggested: hsl(38 80% 52%);
+  --source-suggested-bg: hsl(48 90% 96%);
+  --source-review: hsl(0 72% 50%);
+  --source-review-bg: hsl(0 72% 96%);
+  --source-verified: hsl(142 71% 36%);
+  --source-verified-bg: hsl(142 76% 96%);
 
   /* Superfícies de layout */
-  --surface-workspace: hsl(262 15% 98%);
+  --surface-workspace: hsl(30 4% 98%);
   --surface-panel: hsl(0 0% 100%);
   --surface-artifact: hsl(0 0% 100%);
   --surface-composer: hsl(0 0% 100%);
-  --surface-sidebar-active: hsl(262 30% 93%);
-  --border-subtle: hsl(262 15% 92%);
-  --border-split: hsl(262 20% 88%);
+  --surface-sidebar-active: hsl(262 30% 95%);
+  --border-subtle: hsl(24 5% 93%);
+  --border-split: hsl(24 6% 90%);
 
   /* Atalhos retrocompatíveis (manter para não quebrar usos diretos) */
   --assistjur-purple: var(--assistjur-purple-600);
@@ -128,40 +128,40 @@
    ------------------------------------------------------------ */
 :root {
   /* Superfícies */
-  --background: hsl(0 0% 100%);
-  --foreground: hsl(252 25% 9%); /* near-black c/ warm undertone */
+  --background: hsl(0 0% 100%); /* branco puro — máxima legibilidade */
+  --foreground: hsl(24 10% 10%); /* near-black com warmth sutil */
   --card: hsl(0 0% 100%);
-  --card-foreground: hsl(252 25% 9%);
+  --card-foreground: hsl(24 10% 10%);
   --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(252 25% 9%);
+  --popover-foreground: hsl(24 10% 10%);
 
   /* Brand como primary — botões, focus rings, estados ativos */
   --primary: hsl(262 83% 57%); /* #7c3aed */
   --primary-foreground: hsl(0 0% 100%);
 
-  /* Secondary: wash lilás suave */
-  --secondary: hsl(262 30% 95%);
-  --secondary-foreground: hsl(262 50% 28%);
+  /* Secondary: cinza quente suave (sem lilás) */
+  --secondary: hsl(30 6% 96%);
+  --secondary-foreground: hsl(24 10% 25%);
 
   /* Muted: fundo para elementos desativados / áreas de baixo contraste */
-  --muted: hsl(262 15% 96%);
-  --muted-foreground: hsl(252 15% 45%);
+  --muted: hsl(30 6% 96%);
+  --muted-foreground: hsl(24 6% 45%);
 
   /* Accent: hover em ghost buttons, badges, highlights */
-  --accent: hsl(262 30% 93%);
-  --accent-foreground: hsl(262 60% 25%);
+  --accent: hsl(30 6% 94%);
+  --accent-foreground: hsl(24 10% 10%);
 
   /* Destrutivo */
   --destructive: hsl(0 72% 51%);
   --destructive-foreground: hsl(0 0% 100%);
 
-  /* Bordas e inputs */
-  --border: hsl(262 20% 88%);
-  --input: hsl(262 20% 88%);
+  /* Bordas e inputs — neutras com warmth */
+  --border: hsl(24 6% 90%);
+  --input: hsl(24 6% 90%);
   --ring: hsl(262 83% 57%); /* focus ring = brand purple */
 
-  /* Radius base — 10 px (moderno, não excessivo) */
-  --radius: 0.625rem;
+  /* Radius base — 8px (mais contido, institucional) */
+  --radius: 0.5rem;
 
   /* Charts */
   --chart-1: hsl(262 83% 57%); /* purple */
@@ -170,33 +170,23 @@
   --chart-4: hsl(162 63% 38%); /* green */
   --chart-5: hsl(0 72% 51%); /* red */
 
-  /* Sidebar — painel ligeiramente tingido para separação visual */
-  --sidebar-background: hsl(262 25% 97%);
-  --sidebar-foreground: hsl(252 20% 25%);
+  /* Sidebar — tint quente sutil para separação visual */
+  --sidebar-background: hsl(30 6% 97%);
+  --sidebar-foreground: hsl(24 10% 25%);
   --sidebar-primary: hsl(262 83% 57%);
   --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(262 30% 91%);
-  --sidebar-accent-foreground: hsl(262 55% 28%);
-  --sidebar-border: hsl(262 20% 90%);
+  --sidebar-accent: hsl(30 6% 94%);
+  --sidebar-accent-foreground: hsl(24 10% 25%);
+  --sidebar-border: hsl(24 6% 90%);
   --sidebar-ring: hsl(262 83% 57%);
-  --sidebar: hsl(262 25% 97%);
+  --sidebar: hsl(30 6% 97%);
 
-  /* Sombras — sistema de elevação em 5 níveis */
-  --shadow-xs: 0 1px 2px 0 hsl(252 40% 10% / 0.04);
-  --shadow-sm:
-    0 1px 3px 0 hsl(252 40% 10% / 0.08), 0 1px 2px -1px hsl(252 40% 10% / 0.06);
-  --shadow-md:
-    0 4px 6px -1px hsl(252 40% 10% / 0.08),
-    0 2px 4px -2px hsl(252 40% 10% / 0.05);
-  --shadow-lg:
-    0 10px 15px -3px hsl(252 40% 10% / 0.1),
-    0 4px 6px -4px hsl(252 40% 10% / 0.06);
-  --shadow-xl:
-    0 20px 25px -5px hsl(252 40% 10% / 0.1),
-    0 8px 10px -6px hsl(252 40% 10% / 0.06);
-  /* Glow de foco — anel suave c/ cor de marca */
-  --shadow-brand: 0 0 0 3px hsl(262 83% 57% / 0.18);
-  --shadow-gold: 0 0 0 3px hsl(43 96% 50% / 0.22);
+  /* Sombras — sistema de elevação em 5 níveis (neutras, sem glow de marca) */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.03);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.06);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1);
 }
 
 /* ------------------------------------------------------------
@@ -207,32 +197,32 @@
    ------------------------------------------------------------ */
 .dark {
   /* Superfícies em escala de roxo profundo */
-  --background: hsl(256 32% 5%); /* ~#09061a — quase preto, tom lilás */
-  --foreground: hsl(262 15% 93%); /* near-white c/ warmth */
-  --card: hsl(256 26% 8%); /* card elevado sobre bg */
-  --card-foreground: hsl(262 15% 93%);
-  --popover: hsl(256 28% 7%);
-  --popover-foreground: hsl(262 15% 93%);
+  --background: hsl(256 20% 6%); /* roxo profundo, não preto puro */
+  --foreground: hsl(30 6% 90%); /* near-white com warmth */
+  --card: hsl(256 18% 9%); /* elevado sobre background */
+  --card-foreground: hsl(30 6% 90%);
+  --popover: hsl(256 18% 9%);
+  --popover-foreground: hsl(30 6% 90%);
 
   /* Primary mais claro para contraste sobre fundo escuro */
-  --primary: hsl(262 75% 67%); /* vivid purple legível no dark */
-  --primary-foreground: hsl(256 32% 5%); /* fundo próprio como fg */
+  --primary: hsl(262 70% 65%); /* roxo claro para contraste */
+  --primary-foreground: hsl(0 0% 100%);
 
-  --secondary: hsl(256 22% 14%);
-  --secondary-foreground: hsl(262 20% 85%);
+  --secondary: hsl(256 12% 14%);
+  --secondary-foreground: hsl(30 6% 85%);
 
-  --muted: hsl(256 22% 13%);
-  --muted-foreground: hsl(256 18% 56%);
+  --muted: hsl(256 12% 14%);
+  --muted-foreground: hsl(30 4% 55%);
 
-  --accent: hsl(256 22% 16%);
-  --accent-foreground: hsl(262 20% 88%);
+  --accent: hsl(256 12% 16%);
+  --accent-foreground: hsl(30 6% 88%);
 
   --destructive: hsl(0 65% 48%);
   --destructive-foreground: hsl(0 0% 100%);
 
-  --border: hsl(256 22% 16%);
-  --input: hsl(256 22% 14%);
-  --ring: hsl(262 75% 67%);
+  --border: hsl(256 16% 16%);
+  --input: hsl(256 12% 14%);
+  --ring: hsl(262 70% 65%);
 
   /* Charts ajustados para contraste no escuro */
   --chart-1: hsl(262 70% 68%); /* purple */
@@ -241,30 +231,23 @@
   --chart-4: hsl(162 60% 52%); /* green */
   --chart-5: hsl(0 70% 62%); /* red */
 
-  /* Sidebar: levemente mais escura que bg → efeito "recessed panel" */
-  --sidebar-background: hsl(256 35% 4%);
-  --sidebar-foreground: hsl(262 15% 82%);
-  --sidebar-primary: hsl(262 75% 67%);
-  --sidebar-primary-foreground: hsl(256 32% 5%);
-  --sidebar-accent: hsl(256 22% 11%);
-  --sidebar-accent-foreground: hsl(262 20% 85%);
-  --sidebar-border: hsl(256 22% 12%);
-  --sidebar-ring: hsl(262 75% 67%);
-  --sidebar: hsl(256 35% 4%);
+  /* Sidebar: mais escura que bg → efeito "recessed panel" */
+  --sidebar-background: hsl(256 24% 4%);
+  --sidebar-foreground: hsl(30 6% 82%);
+  --sidebar-primary: hsl(262 70% 65%);
+  --sidebar-primary-foreground: hsl(0 0% 100%);
+  --sidebar-accent: hsl(256 12% 11%);
+  --sidebar-accent-foreground: hsl(30 6% 85%);
+  --sidebar-border: hsl(256 14% 12%);
+  --sidebar-ring: hsl(262 70% 65%);
+  --sidebar: hsl(256 24% 4%);
 
-  /* Sombras no dark — mais sutis, usam tom roxo */
-  --shadow-xs: 0 1px 2px 0 hsl(256 60% 3% / 0.4);
-  --shadow-sm:
-    0 1px 3px 0 hsl(256 60% 3% / 0.5), 0 1px 2px -1px hsl(256 60% 3% / 0.4);
-  --shadow-md:
-    0 4px 6px -1px hsl(256 60% 3% / 0.5), 0 2px 4px -2px hsl(256 60% 3% / 0.35);
-  --shadow-lg:
-    0 10px 15px -3px hsl(256 60% 3% / 0.6), 0 4px 6px -4px hsl(256 60% 3% / 0.4);
-  --shadow-xl:
-    0 20px 25px -5px hsl(256 60% 3% / 0.6),
-    0 8px 10px -6px hsl(256 60% 3% / 0.4);
-  --shadow-brand: 0 0 0 3px hsl(262 75% 67% / 0.22);
-  --shadow-gold: 0 0 0 3px hsl(43 95% 60% / 0.25);
+  /* Sombras no dark — neutras, sem glow colorido */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.5);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.6);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.6);
 
   /* Workflow — dark mode */
   --workflow-draft: hsl(252 15% 50%);
@@ -278,24 +261,24 @@
   --workflow-blocked: hsl(0 70% 58%);
   --workflow-blocked-bg: hsl(0 50% 12%);
 
-  /* Confiança — dark mode */
-  --confidence-source: hsl(210 80% 65%);
-  --confidence-source-bg: hsl(210 60% 12%);
-  --confidence-inference: hsl(38 90% 55%);
-  --confidence-inference-bg: hsl(38 60% 12%);
-  --confidence-alert: hsl(0 70% 58%);
-  --confidence-alert-bg: hsl(0 50% 12%);
-  --confidence-verified: hsl(142 65% 48%);
-  --confidence-verified-bg: hsl(142 50% 10%);
+  /* Rastreabilidade — dark mode */
+  --source-document: hsl(210 80% 65%);
+  --source-document-bg: hsl(210 60% 12%);
+  --source-suggested: hsl(38 90% 55%);
+  --source-suggested-bg: hsl(38 60% 12%);
+  --source-review: hsl(0 70% 58%);
+  --source-review-bg: hsl(0 50% 12%);
+  --source-verified: hsl(142 65% 48%);
+  --source-verified-bg: hsl(142 50% 10%);
 
   /* Superfícies de layout — dark mode */
-  --surface-workspace: hsl(256 28% 6%);
-  --surface-panel: hsl(256 26% 8%);
-  --surface-artifact: hsl(256 24% 9%);
-  --surface-composer: hsl(256 26% 8%);
-  --surface-sidebar-active: hsl(262 30% 12%);
-  --border-subtle: hsl(256 20% 12%);
-  --border-split: hsl(256 22% 16%);
+  --surface-workspace: hsl(256 18% 7%);
+  --surface-panel: hsl(256 16% 10%);
+  --surface-artifact: hsl(256 14% 11%);
+  --surface-composer: hsl(256 16% 10%);
+  --surface-sidebar-active: hsl(262 24% 14%);
+  --border-subtle: hsl(256 14% 13%);
+  --border-split: hsl(256 16% 16%);
 }
 
 /* ------------------------------------------------------------
@@ -304,18 +287,18 @@
    ------------------------------------------------------------ */
 @theme {
   /* Tipografia */
-  --font-sans: var(--font-geist);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains-mono);
 
   /* Breakpoints */
   --breakpoint-toast-mobile: 600px;
 
-  /* Border radius — escala completa derivada do valor base */
-  --radius-xs: calc(var(--radius) - 4px); /* 6px  */
-  --radius-sm: calc(var(--radius) - 2px); /* 8px  */
-  --radius-md: var(--radius); /* 10px */
-  --radius-lg: calc(var(--radius) + 2px); /* 12px */
-  --radius-xl: calc(var(--radius) + 6px); /* 16px */
+  /* Border radius — escala derivada do base (8px) */
+  --radius-xs: calc(var(--radius) - 4px); /* 4px  */
+  --radius-sm: calc(var(--radius) - 2px); /* 6px  */
+  --radius-md: var(--radius); /* 8px  */
+  --radius-lg: calc(var(--radius) + 2px); /* 10px */
+  --radius-xl: calc(var(--radius) + 4px); /* 12px */
   --radius-2xl: calc(var(--radius) + 14px); /* 24px */
   --radius-full: 9999px;
 
@@ -418,15 +401,15 @@
   --color-workflow-blocked: var(--workflow-blocked);
   --color-workflow-blocked-bg: var(--workflow-blocked-bg);
 
-  /* Confiança */
-  --color-confidence-source: var(--confidence-source);
-  --color-confidence-source-bg: var(--confidence-source-bg);
-  --color-confidence-inference: var(--confidence-inference);
-  --color-confidence-inference-bg: var(--confidence-inference-bg);
-  --color-confidence-alert: var(--confidence-alert);
-  --color-confidence-alert-bg: var(--confidence-alert-bg);
-  --color-confidence-verified: var(--confidence-verified);
-  --color-confidence-verified-bg: var(--confidence-verified-bg);
+  /* Rastreabilidade */
+  --color-source-document: var(--source-document);
+  --color-source-document-bg: var(--source-document-bg);
+  --color-source-suggested: var(--source-suggested);
+  --color-source-suggested-bg: var(--source-suggested-bg);
+  --color-source-review: var(--source-review);
+  --color-source-review-bg: var(--source-review-bg);
+  --color-source-verified: var(--source-verified);
+  --color-source-verified-bg: var(--source-verified-bg);
 
   /* Superfícies de layout */
   --color-surface-workspace: var(--surface-workspace);
@@ -501,14 +484,7 @@
   overscroll-behavior: contain;
 }
 
-/* Sombras de marca como utilitários */
-@utility shadow-brand {
-  box-shadow: var(--shadow-brand);
-}
-
-@utility shadow-gold {
-  box-shadow: var(--shadow-gold);
-}
+/* (shadow-brand e shadow-gold removidos na v3.0 — sombras 100% neutras) */
 
 /* ------------------------------------------------------------
    6. BASE — Reset e estilos fundamentais

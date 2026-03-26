@@ -53,9 +53,9 @@ export async function GET(request: Request) {
   const zip = new JSZip();
 
   for (const id of ids) {
-    const doc = await getDocumentById({ id });
+    const doc = await getDocumentById({ id, userId: userId ?? "" });
 
-    if (!doc || doc.userId !== userId || doc.kind !== "text") {
+    if (!doc || doc.kind !== "text") {
       continue;
     }
 

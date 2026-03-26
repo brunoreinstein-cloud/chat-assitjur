@@ -3,8 +3,13 @@ import { NextResponse } from "next/server";
 import { auth } from "@/app/(auth)/auth";
 import { classifyDocumentTypeFromFilename } from "@/lib/upload/classify";
 import { runExtractionAndClassification } from "@/lib/upload/extract";
-import { contentTypeFromFilename } from "@/lib/upload/mime-types";
-import { persistAndRespond } from "@/lib/upload/storage";
+import { extractFilesFromZip } from "@/lib/upload/extract-zip";
+import {
+  contentTypeFromFilename,
+  isZipContentType,
+  needsExtraction,
+} from "@/lib/upload/mime-types";
+import { persistAndRespond, uploadToStorage } from "@/lib/upload/storage";
 
 /** Permite tempo suficiente para descarregar e processar PDFs muito grandes (até 100 MB). */
 export const maxDuration = 300;
@@ -198,6 +203,72 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   try {
+    // --- ZIP handling for large files ---
+    if (isZipContentType(body.contentType)) {
+      const zipResult = await extractFilesFromZip(fetched.buffer);
+      const results = await Promise.allSettled(
+        zipResult.files.map(async (entry) => {
+          const entryBuffer = entry.buffer.slice(0);
+          const extraction = needsExtraction(entry.contentType)
+            ? await runExtractionAndClassification(
+                entry.buffer,
+                entry.contentType
+              )
+            : {
+                extractedText: undefined,
+                extractionFailed: false,
+                documentType: undefined,
+                extractionDetail: undefined,
+              };
+          const uploadResult = await uploadToStorage(
+            session.user.id,
+            entry.filename,
+            entryBuffer,
+            entry.contentType
+          );
+          const documentType =
+            extraction.documentType ??
+            classifyDocumentTypeFromFilename(entry.filename);
+          return {
+            url: uploadResult.url,
+            pathname: uploadResult.pathname,
+            contentType: entry.contentType,
+            ...(typeof extraction.extractedText === "string"
+              ? { extractedText: extraction.extractedText }
+              : {}),
+            ...(extraction.extractionFailed === true
+              ? { extractionFailed: true }
+              : {}),
+            ...(typeof extraction.extractionDetail === "string" &&
+            extraction.extractionDetail.length > 0
+              ? { extractionDetail: extraction.extractionDetail }
+              : {}),
+            ...(documentType ? { documentType } : {}),
+            ...("pageCount" in extraction && extraction.pageCount != null
+              ? { pageCount: extraction.pageCount }
+              : {}),
+          };
+        })
+      );
+      const fulfilled = results.filter(
+        (r) => r.status === "fulfilled"
+      ) as PromiseFulfilledResult<Record<string, unknown>>[];
+      const files = fulfilled.map((r) => r.value);
+      const failedCount = results.length - fulfilled.length;
+      return NextResponse.json({
+        zip: true,
+        files,
+        summary: {
+          processed: files.length,
+          failed: failedCount,
+          skippedUnsupported: zipResult.skippedUnsupported,
+          skippedNestedZips: zipResult.skippedNestedZips,
+          skippedTooLarge: zipResult.skippedTooLarge,
+        },
+      });
+    }
+
+    // --- Normal (non-ZIP) file ---
     // Clone the buffer before extraction — PDF.js may detach the original ArrayBuffer,
     // making it unusable for the subsequent storage upload in persistAndRespond.
     const bufferForStorage = fetched.buffer.slice(0);

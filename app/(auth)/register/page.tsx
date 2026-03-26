@@ -61,35 +61,34 @@ export default function Page() {
         <AuthForm
           action={handleSubmit}
           defaultEmail={email}
-          passwordAutocomplete="new-password"
           extraFields={
             <div className="flex items-start gap-2">
               <input
-                type="checkbox"
+                className="mt-1 size-4 rounded border-assistjur-purple/30 accent-assistjur-purple-dark"
                 id="lgpd-consent"
                 name="lgpdConsent"
                 required
-                className="mt-1 size-4 rounded border-assistjur-purple/30 accent-assistjur-purple-dark"
+                type="checkbox"
               />
               <label
-                htmlFor="lgpd-consent"
                 className="text-assistjur-gray text-xs leading-relaxed"
+                htmlFor="lgpd-consent"
               >
                 Li e aceito a{" "}
                 <a
-                  href="/privacy"
-                  target="_blank"
-                  rel="noopener noreferrer"
                   className="font-semibold text-assistjur-purple-dark underline underline-offset-2 hover:no-underline"
+                  href="/privacy"
+                  rel="noopener noreferrer"
+                  target="_blank"
                 >
                   Política de Privacidade
                 </a>{" "}
                 e os{" "}
                 <a
-                  href="/terms"
-                  target="_blank"
-                  rel="noopener noreferrer"
                   className="font-semibold text-assistjur-purple-dark underline underline-offset-2 hover:no-underline"
+                  href="/terms"
+                  rel="noopener noreferrer"
+                  target="_blank"
                 >
                   Termos de Uso
                 </a>
@@ -98,6 +97,7 @@ export default function Page() {
               </label>
             </div>
           }
+          passwordAutocomplete="new-password"
         >
           <SubmitButton isSuccessful={isSuccessful}>Cadastrar</SubmitButton>
           <p className="mt-5 text-center text-assistjur-gray text-sm">

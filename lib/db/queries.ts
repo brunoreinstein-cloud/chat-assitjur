@@ -14,4 +14,5 @@ export * from "./queries/leads";
 export * from "./queries/memory";
 export * from "./queries/messages";
 export * from "./queries/processos";
+export * from "./queries/prompt-versions";
 export * from "./queries/users";

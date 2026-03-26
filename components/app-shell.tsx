@@ -37,23 +37,23 @@ export function AppShell({
 
   return (
     <div className={cn("flex min-h-screen min-w-[1024px] flex-col", className)}>
-      {/* Topbar Global — h-14, z-30 */}
+      {/* Topbar Global — h-12, z-30 */}
       <header
         className={cn(
-          "sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3",
+          "sticky top-0 z-30 flex h-12 shrink-0 items-center gap-3",
           "border-b bg-background/95 backdrop-blur-sm",
-          "px-4",
+          "px-4"
         )}
       >
         {/* Toggle sidebar */}
         <Button
-          variant="ghost"
-          size="icon-sm"
+          aria-label={collapsed ? "Expandir sidebar" : "Colapsar sidebar"}
           onClick={() => {
             setCollapsed((v) => !v);
             setMobileOpen(false);
           }}
-          aria-label={collapsed ? "Expandir sidebar" : "Colapsar sidebar"}
+          size="icon-sm"
+          variant="ghost"
         >
           <Menu className="h-4 w-4" />
         </Button>
@@ -80,13 +80,13 @@ export function AppShell({
             "relative z-10 flex shrink-0 flex-col border-r bg-sidebar",
             "transition-[width] duration-200 ease-in-out",
             "hidden md:flex",
-            collapsed ? "w-16" : "w-64",
+            collapsed ? "w-14" : "w-60"
           )}
         >
           <div
             className={cn(
               "flex flex-1 flex-col overflow-y-auto overflow-x-hidden",
-              collapsed ? "items-center" : "",
+              collapsed ? "items-center" : ""
             )}
           >
             {sidebarContent}
@@ -97,23 +97,26 @@ export function AppShell({
         {mobileOpen && (
           <>
             <div
+              aria-hidden
               className="fixed inset-0 z-40 bg-background/80 backdrop-blur-sm md:hidden"
               onClick={() => setMobileOpen(false)}
-              aria-hidden
             />
             <aside
               className={cn(
-                "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r bg-sidebar",
-                "md:hidden",
+                "fixed inset-y-0 left-0 z-50 flex w-60 flex-col border-r bg-sidebar",
+                "md:hidden"
               )}
             >
               <div className="flex items-center justify-between border-b px-4 py-3">
-                <AssistJurLogo className="font-semibold text-sm" iconSize={18} />
+                <AssistJurLogo
+                  className="font-semibold text-sm"
+                  iconSize={18}
+                />
                 <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setMobileOpen(false)}
                   aria-label="Fechar sidebar"
+                  onClick={() => setMobileOpen(false)}
+                  size="icon-sm"
+                  variant="ghost"
                 >
                   <X className="h-4 w-4" />
                 </Button>
@@ -127,11 +130,11 @@ export function AppShell({
 
         {/* Mobile topbar toggle */}
         <Button
-          variant="ghost"
-          size="icon-sm"
+          aria-label="Abrir sidebar"
           className="fixed bottom-4 left-4 z-30 shadow-md md:hidden"
           onClick={() => setMobileOpen(true)}
-          aria-label="Abrir sidebar"
+          size="icon-sm"
+          variant="ghost"
         >
           <Menu className="h-4 w-4" />
         </Button>
@@ -180,7 +183,7 @@ export function SplitView({
         className={cn(
           "flex flex-col overflow-hidden border-r",
           classes.left,
-          "transition-[width] duration-200",
+          "transition-[width] duration-200"
         )}
       >
         {left}
@@ -190,7 +193,7 @@ export function SplitView({
           className={cn(
             "flex flex-col overflow-hidden",
             classes.right,
-            "transition-[width] duration-200",
+            "transition-[width] duration-200"
           )}
         >
           {right}

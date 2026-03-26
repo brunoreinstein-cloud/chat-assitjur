@@ -1,5 +1,5 @@
 /**
- * AssistJur Design Tokens — referência JS/TS
+ * AssistJur Design Tokens v3.0 — referência JS/TS
  *
  * Use estes valores quando precisar de cores/tokens em lógica JavaScript
  * (framer-motion, canvas, geração de PDF, e2e tests, etc.).
@@ -24,36 +24,30 @@ export const brand = {
     500: "#8b5cf6",
     600: "#7c3aed", // brand primary
     700: "#6d28d9",
-    800: "#4c1d95",
-    900: "#3f1c6b", // brand dark
+    800: "#5b21b6",
+    900: "#4c1d95",
     950: "#2e1065", // brand darker
-    deepest: "#180a38",
   },
 
   gold: {
-    50: "#fefce8",
-    100: "#fef9c3",
-    200: "#fef08a",
-    300: "#fde047",
     400: "#facc15",
     500: "#eab308", // brand gold
     600: "#ca8a04",
     700: "#a16207",
-    800: "#854d0e",
   },
 
   neutral: {
-    50: "#fafafa",
-    100: "#f4f4f8",
-    200: "#e8e8f0",
-    300: "#d1d1e0",
-    400: "#a0a0b8",
-    500: "#6b6b85",
-    600: "#525268",
-    700: "#3d3d52",
-    800: "#272738",
-    900: "#17172a",
-    950: "#0d0d1a",
+    50: "#fafaf9",
+    100: "#f5f5f4",
+    200: "#e7e5e4",
+    300: "#d6d3d1",
+    400: "#a8a29e",
+    500: "#78716c",
+    600: "#57534e",
+    700: "#44403c",
+    800: "#292524",
+    900: "#1c1917",
+    950: "#0c0a09",
   },
 } as const;
 
@@ -63,13 +57,13 @@ export const brand = {
 
 export const status = {
   success: "#16a34a",
-  successLight: "#dcfce7",
+  successLight: "#f0fdf4",
   warning: "#d97706",
-  warningLight: "#fef3c7",
+  warningLight: "#fffbeb",
   error: "#dc2626",
-  errorLight: "#fee2e2",
+  errorLight: "#fef2f2",
   info: "#2563eb",
-  infoLight: "#dbeafe",
+  infoLight: "#eff6ff",
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -78,17 +72,17 @@ export const status = {
 
 export const light = {
   background: "hsl(0 0% 100%)",
-  foreground: "hsl(252 25% 9%)",
+  foreground: "hsl(24 10% 10%)",
   card: "hsl(0 0% 100%)",
   primary: "hsl(262 83% 57%)",
   primaryFg: "hsl(0 0% 100%)",
-  secondary: "hsl(262 30% 95%)",
-  muted: "hsl(262 15% 96%)",
-  mutedFg: "hsl(252 15% 45%)",
-  accent: "hsl(262 30% 93%)",
-  border: "hsl(262 20% 88%)",
+  secondary: "hsl(30 6% 96%)",
+  muted: "hsl(30 6% 96%)",
+  mutedFg: "hsl(24 6% 45%)",
+  accent: "hsl(30 6% 94%)",
+  border: "hsl(24 6% 90%)",
   ring: "hsl(262 83% 57%)",
-  sidebar: "hsl(262 25% 97%)",
+  sidebar: "hsl(30 6% 97%)",
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -96,18 +90,18 @@ export const light = {
 // ---------------------------------------------------------------------------
 
 export const dark = {
-  background: "hsl(256 32% 5%)",
-  foreground: "hsl(262 15% 93%)",
-  card: "hsl(256 26% 8%)",
-  primary: "hsl(262 75% 67%)",
-  primaryFg: "hsl(256 32% 5%)",
-  secondary: "hsl(256 22% 14%)",
-  muted: "hsl(256 22% 13%)",
-  mutedFg: "hsl(256 18% 56%)",
-  accent: "hsl(256 22% 16%)",
-  border: "hsl(256 22% 16%)",
-  ring: "hsl(262 75% 67%)",
-  sidebar: "hsl(256 35% 4%)",
+  background: "hsl(256 20% 6%)",
+  foreground: "hsl(30 6% 90%)",
+  card: "hsl(256 18% 9%)",
+  primary: "hsl(262 70% 65%)",
+  primaryFg: "hsl(0 0% 100%)",
+  secondary: "hsl(256 12% 14%)",
+  muted: "hsl(256 12% 14%)",
+  mutedFg: "hsl(30 4% 55%)",
+  accent: "hsl(256 12% 16%)",
+  border: "hsl(256 16% 16%)",
+  ring: "hsl(262 70% 65%)",
+  sidebar: "hsl(256 24% 4%)",
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -143,8 +137,8 @@ export const spacing = {
 // ---------------------------------------------------------------------------
 
 export const typography = {
-  fontSans: "var(--font-geist), ui-sans-serif, system-ui, sans-serif",
-  fontMono: "var(--font-geist-mono), ui-monospace, monospace",
+  fontSans: "var(--font-inter), ui-sans-serif, system-ui, sans-serif",
+  fontMono: "var(--font-jetbrains-mono), ui-monospace, monospace",
 
   size: {
     xs: "0.75rem", // 12px
@@ -155,7 +149,6 @@ export const typography = {
     "2xl": "1.5rem", // 24px
     "3xl": "1.875rem", // 30px
     "4xl": "2.25rem", // 36px
-    "5xl": "3rem", // 48px
   },
 
   weight: {
@@ -163,14 +156,13 @@ export const typography = {
     medium: 500,
     semibold: 600,
     bold: 700,
-    extrabold: 800,
   },
 
   leading: {
-    tight: 1.25,
-    snug: 1.375,
+    tight: 1.2,
+    snug: 1.3,
     normal: 1.5,
-    relaxed: 1.625,
+    relaxed: 1.6,
     loose: 2,
   },
 
@@ -178,8 +170,6 @@ export const typography = {
     tight: "-0.025em",
     normal: "0em",
     wide: "0.025em",
-    wider: "0.05em",
-    widest: "0.1em",
   },
 } as const;
 
@@ -189,41 +179,33 @@ export const typography = {
 
 export const radius = {
   none: "0px",
-  xs: "6px",
-  sm: "8px",
-  md: "10px", // base (--radius)
-  lg: "12px",
-  xl: "16px",
-  "2xl": "24px",
+  xs: "4px",
+  sm: "6px",
+  md: "8px", // base (--radius)
+  lg: "10px",
+  xl: "12px",
+  "2xl": "16px",
   full: "9999px",
 } as const;
 
 // ---------------------------------------------------------------------------
-// Elevação / sombras — light
+// Elevação / sombras — neutras (sem glow de marca)
 // ---------------------------------------------------------------------------
 
 export const shadowLight = {
-  xs: "0 1px 2px 0 hsl(252 40% 10% / 0.04)",
-  sm: "0 1px 3px 0 hsl(252 40% 10% / 0.08), 0 1px 2px -1px hsl(252 40% 10% / 0.06)",
-  md: "0 4px 6px -1px hsl(252 40% 10% / 0.08), 0 2px 4px -2px hsl(252 40% 10% / 0.05)",
-  lg: "0 10px 15px -3px hsl(252 40% 10% / 0.1), 0 4px 6px -4px hsl(252 40% 10% / 0.06)",
-  xl: "0 20px 25px -5px hsl(252 40% 10% / 0.1), 0 8px 10px -6px hsl(252 40% 10% / 0.06)",
-  brand: "0 0 0 3px hsl(262 83% 57% / 0.18)",
-  gold: "0 0 0 3px hsl(43 96% 50% / 0.22)",
+  xs: "0 1px 2px 0 rgb(0 0 0 / 0.03)",
+  sm: "0 1px 3px 0 rgb(0 0 0 / 0.06)",
+  md: "0 4px 6px -1px rgb(0 0 0 / 0.07)",
+  lg: "0 10px 15px -3px rgb(0 0 0 / 0.08)",
+  xl: "0 20px 25px -5px rgb(0 0 0 / 0.1)",
 } as const;
 
-// ---------------------------------------------------------------------------
-// Elevação / sombras — dark
-// ---------------------------------------------------------------------------
-
 export const shadowDark = {
-  xs: "0 1px 2px 0 hsl(256 60% 3% / 0.4)",
-  sm: "0 1px 3px 0 hsl(256 60% 3% / 0.5), 0 1px 2px -1px hsl(256 60% 3% / 0.4)",
-  md: "0 4px 6px -1px hsl(256 60% 3% / 0.5), 0 2px 4px -2px hsl(256 60% 3% / 0.35)",
-  lg: "0 10px 15px -3px hsl(256 60% 3% / 0.6), 0 4px 6px -4px hsl(256 60% 3% / 0.4)",
-  xl: "0 20px 25px -5px hsl(256 60% 3% / 0.6), 0 8px 10px -6px hsl(256 60% 3% / 0.4)",
-  brand: "0 0 0 3px hsl(262 75% 67% / 0.22)",
-  gold: "0 0 0 3px hsl(43 95% 60% / 0.25)",
+  xs: "0 1px 2px 0 rgb(0 0 0 / 0.4)",
+  sm: "0 1px 3px 0 rgb(0 0 0 / 0.5)",
+  md: "0 4px 6px -1px rgb(0 0 0 / 0.5)",
+  lg: "0 10px 15px -3px rgb(0 0 0 / 0.6)",
+  xl: "0 20px 25px -5px rgb(0 0 0 / 0.6)",
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -231,31 +213,31 @@ export const shadowDark = {
 // ---------------------------------------------------------------------------
 
 export const workflow = {
-  draft: "hsl(252 15% 60%)",
-  draftBg: "hsl(252 20% 95%)",
+  draft: "hsl(220 12% 55%)",
+  draftBg: "hsl(220 14% 96%)",
   active: "hsl(262 83% 57%)",
-  activeBg: "hsl(262 30% 95%)",
+  activeBg: "hsl(262 30% 96%)",
   review: "hsl(38 92% 50%)",
-  reviewBg: "hsl(48 96% 95%)",
+  reviewBg: "hsl(48 96% 96%)",
   done: "hsl(142 71% 36%)",
-  doneBg: "hsl(142 76% 95%)",
+  doneBg: "hsl(142 76% 96%)",
   blocked: "hsl(0 72% 50%)",
-  blockedBg: "hsl(0 72% 95%)",
+  blockedBg: "hsl(0 72% 96%)",
 } as const;
 
 // ---------------------------------------------------------------------------
-// Confiança — rastreabilidade de fontes e inferências
+// Rastreabilidade — origem de informação (nomenclatura centrada no usuário)
 // ---------------------------------------------------------------------------
 
-export const confidence = {
-  source: "hsl(210 85% 53%)",
-  sourceBg: "hsl(210 85% 95%)",
-  inference: "hsl(38 92% 50%)",
-  inferenceBg: "hsl(48 96% 95%)",
-  alert: "hsl(0 72% 50%)",
-  alertBg: "hsl(0 72% 95%)",
+export const source = {
+  document: "hsl(210 85% 53%)",
+  documentBg: "hsl(210 85% 96%)",
+  suggested: "hsl(38 80% 52%)",
+  suggestedBg: "hsl(48 90% 96%)",
+  review: "hsl(0 72% 50%)",
+  reviewBg: "hsl(0 72% 96%)",
   verified: "hsl(142 71% 36%)",
-  verifiedBg: "hsl(142 76% 95%)",
+  verifiedBg: "hsl(142 76% 96%)",
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -263,13 +245,13 @@ export const confidence = {
 // ---------------------------------------------------------------------------
 
 export const surface = {
-  workspace: "hsl(262 15% 98%)",
+  workspace: "hsl(30 4% 98%)",
   panel: "hsl(0 0% 100%)",
   artifact: "hsl(0 0% 100%)",
   composer: "hsl(0 0% 100%)",
-  sidebarActive: "hsl(262 30% 93%)",
-  borderSubtle: "hsl(262 15% 92%)",
-  borderSplit: "hsl(262 20% 88%)",
+  sidebarActive: "hsl(262 30% 95%)",
+  borderSubtle: "hsl(24 5% 93%)",
+  borderSplit: "hsl(24 6% 90%)",
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -289,8 +271,19 @@ export const breakpoints = {
 // ---------------------------------------------------------------------------
 
 export const sidebar = {
-  width: "16rem", // 256px — desktop
-  widthMobile: "18rem", // 288px — mobile drawer
-  widthIcon: "3rem", // 48px — colapsado
+  width: "15rem", // 240px — desktop
+  widthMobile: "15rem", // 240px — mobile drawer
+  widthIcon: "3.5rem", // 56px — colapsado
   keyboardShortcut: "b",
+} as const;
+
+// ---------------------------------------------------------------------------
+// Motion
+// ---------------------------------------------------------------------------
+
+export const motion = {
+  durationFast: "100ms",
+  durationBase: "150ms",
+  durationSlow: "250ms",
+  durationSlower: "400ms",
 } as const;

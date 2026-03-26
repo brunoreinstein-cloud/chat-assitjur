@@ -36,7 +36,9 @@ export function isAcceptedAttachmentType(
     type === "application/vnd.ms-excel" ||
     type === "text/csv" ||
     type === "text/plain" ||
-    type === "application/vnd.oasis.opendocument.text"
+    type === "application/vnd.oasis.opendocument.text" ||
+    type === "application/zip" ||
+    type === "application/x-zip-compressed"
   ) {
     return true;
   }

@@ -1,512 +1,639 @@
 # Design System — AssistJur
 
-**Conceito:** Legal Intelligence — Mesa de Comando do Contencioso
-**Stack:** Tailwind CSS v4 · shadcn/ui · CSS Custom Properties · Geist
-**Versão:** 2.0
+**Conceito:** Legal Intelligence Platform — Workspace de Contencioso
+**Stack:** Tailwind CSS v4 · shadcn/ui · CSS Custom Properties · Inter + JetBrains Mono
+**Versao:** 3.0
 
 ---
 
-## Índice
+## Indice
 
-1. [Diagnóstico e Evolução](#1-diagnóstico-e-evolução)
-2. [Direção Estética](#2-direção-estética)
-3. [Paleta de Cores](#3-paleta-de-cores)
-4. [Tokens Semânticos](#4-tokens-semânticos)
-5. [Tipografia](#5-tipografia)
-6. [Espaçamento](#6-espaçamento)
-7. [Border Radius](#7-border-radius)
-8. [Sombras / Elevação](#8-sombras--elevação)
-9. [Layout System](#9-layout-system)
-10. [Componentes Primitivos](#10-componentes-primitivos)
-11. [Componentes Compostos](#11-componentes-compostos)
-12. [Padrões de Confiança](#12-padrões-de-confiança)
-13. [Estados de Interação](#13-estados-de-interação)
-14. [Dark / Light Mode](#14-dark--light-mode)
-15. [Iconografia e Ilustração](#15-iconografia-e-ilustração)
-16. [Motion e Animação](#16-motion-e-animação)
-17. [Responsividade](#17-responsividade)
-18. [Guidelines de Consistência](#18-guidelines-de-consistência)
-19. [Escalar o Produto](#19-escalar-o-produto)
+1. [Diagnostico e Evolucao](#1-diagnostico-e-evolucao)
+2. [Direcao Estetica](#2-direcao-estetica)
+3. [Anti-padroes — O que NAO fazer](#3-anti-padroes--o-que-nao-fazer)
+4. [Paleta de Cores](#4-paleta-de-cores)
+5. [Tokens Semanticos](#5-tokens-semanticos)
+6. [Tipografia](#6-tipografia)
+7. [Voz e Linguagem](#7-voz-e-linguagem)
+8. [Espacamento](#8-espacamento)
+9. [Border Radius](#9-border-radius)
+10. [Sombras / Elevacao](#10-sombras--elevacao)
+11. [Layout System](#11-layout-system)
+12. [Componentes Primitivos](#12-componentes-primitivos)
+13. [Componentes Compostos](#13-componentes-compostos)
+14. [Padroes de Rastreabilidade](#14-padroes-de-rastreabilidade)
+15. [Estados de Interacao](#15-estados-de-interacao)
+16. [Dark / Light Mode](#16-dark--light-mode)
+17. [Iconografia](#17-iconografia)
+18. [Motion e Animacao](#18-motion-e-animacao)
+19. [Responsividade](#19-responsividade)
+20. [Guidelines de Consistencia](#20-guidelines-de-consistencia)
+21. [Escalar o Produto](#21-escalar-o-produto)
 
 ---
 
-## 1. Diagnóstico e Evolução
+## 1. Diagnostico e Evolucao
 
-### O que existia (v1.0)
+### v1.0 > v2.0 (revisao anterior)
 
-| Problema | Impacto |
+A v2.0 corrigiu problemas fundamentais: tokens de marca isolados, falta de identidade no dark mode, ausencia de componentes compostos e sistema de confianca. Trouxe a paleta completa, layout AppShell formal, split-view e padroes de rastreabilidade.
+
+### v2.0 > v3.0 (esta revisao)
+
+| Area | Problema na v2.0 | Correcao na v3.0 |
+|---|---|---|
+| **Estetica** | Produto ainda carregava tracos de "feito por IA" — excesso de badges coloridos, icone Sparkles, linguagem tech | Direcao visual mais restrita, institucional. Menos decoracao, mais tipografia e espaco |
+| **Tipografia** | Geist e valido mas associado a ecossistema Vercel/AI | Inter (corpo) + JetBrains Mono (dados). Neutra, legivel, sem associacao com stack de IA |
+| **Iconografia** | Sparkles como indicador de IA. Bot como avatar. Excesso de icones decorativos | Icones utilitarios apenas. IA nao precisa de icone proprio — o produto inteiro e IA |
+| **Tom visual** | Sombras com glow roxo, badges gold chamativos | Sombras neutras, gold reservado a 1 elemento por tela no maximo |
+| **Linguagem** | Misturava jargao de IA ("agente", "inferencia") com termos juridicos | Linguagem 100% juridica voltada ao usuario. IA e infraestrutura, nao feature |
+| **Densidade** | Cards de agente e fluxo competiam visualmente | Hierarquia mais clara: FlowCards sao primarios, AgentCards sao infraestrutura |
+| **Anti-padroes** | Nao documentados | Secao dedicada com exemplos concretos do que evitar |
+
+---
+
+## 2. Direcao Estetica
+
+### Conceito: "Plataforma de trabalho juridico"
+
+O AssistJur deve transmitir a mesma sensacao que uma mesa de trabalho bem organizada: tudo no lugar, sem excesso, cada elemento com funcao clara. O advogado abre o sistema e sabe exatamente onde esta e o que fazer.
+
+**Posicionamento visual:** O produto que um escritorio de advocacia de alto nivel escolheria. Nao por ser bonito, mas por ser serio, rapido e confiavel.
+
+**Referencias de produto:**
+
+| Referencia | O que absorver |
 |---|---|
-| `--primary` era preto genérico (shadcn default) | Botões sem identidade; poderiam ser de qualquer produto |
-| Tokens de marca (`--assistjur-purple`) isolados | Cores usadas só no auth layout e skip link, nunca no produto |
-| Dark mode com fundo `hsl(240 10% 3.9%)` — zinc puro | Sem personalidade; idêntico a N outros apps shadcn |
-| Sidebar dark = cinza escuro genérico | Nenhuma hierarquia visual entre sidebar e conteúdo |
-| Paleta incompleta: só 7 tokens de marca | Impossível escalar sem inventar valores novos a cada componente |
-| Sombras: apenas shadow-sm genérico | Sem sistema de elevação |
-| Sem componentes compostos | Cada tela reinventa cards, painéis e layouts |
-| Sem padrões de layout definidos | AppShell, split-view e 3 colunas eram ad-hoc |
-| Sem sistema de confiança/fontes | IA sem rastreabilidade visível na UI |
+| **Linear** | Clareza tipografica, hierarquia por densidade, nada de excesso |
+| **Notion** | Conforto de uso diario, espaco generoso, composicao limpa |
+| **Superhuman** | Velocidade percebida, atalhos de teclado, foco no poder do usuario |
+| **Bloomberg Terminal** | Densidade informacional com ordem, seriedade institucional |
+| **Claude.ai** | Simplicidade que transmite competencia, interface que sai do caminho |
 
-### O que muda (v2.0)
+**Anti-referencias:**
 
-| Área | Evolução |
+| Anti-referencia | O que evitar |
 |---|---|
-| **Paleta** | Adição de cores de workflow, confiança e status processual |
-| **Tokens** | Novos tokens semânticos para caso, fontes e artefatos |
-| **Layout** | AppShell formal, split-view, grid de 3 colunas, breakpoints definidos |
-| **Componentes** | 12+ componentes compostos: CaseCard, FlowCard, SourcePanel, ArtifactEditor, Timeline, etc. |
-| **Confiança** | Sistema visual de rastreabilidade: fontes, inferência, alertas de revisão |
-| **Conceito** | De "chat com marca" para "workspace jurídico por caso" |
+| Salesforce | Peso visual, excesso de chrome, menus em cascata |
+| ChatGPT / produtos de "AI chat" | Estetica de chat generico, icone de centelha, gradientes roxos |
+| LegalZoom | Corporativo-generico sem personalidade |
+| Lexis Nexis / sistemas juridicos legados | Interface datada, sobrecarga de menus |
+| Landing pages de startups de IA | Gradientes neon, animacoes de particulas, linguagem hype |
+
+### Principios de Design
+
+1. **Tipografia como hierarquia principal.** Peso, tamanho e espacamento fazem o trabalho pesado. Cor e decoracao sao secundarios.
+
+2. **Interface que desaparece.** O produto ideal e aquele onde o advogado esquece que esta usando software. Nenhum elemento deve chamar atencao para si mesmo — so para o conteudo.
+
+3. **Marca presente, nao gritante.** O roxo AssistJur aparece em pontos de interacao (focus ring, item ativo, CTA primario), nao como decoracao de fundo.
+
+4. **Densidade confortavel.** Contexto juridico exige leitura longa e atencao a detalhes. Espacamento generoso, leading 1.6, largura de linha controlada (max 72ch para texto corrido).
+
+5. **Zero ambiguidade de estado.** Focus rings visiveis, hover explicito, disabled claro, loading com skeleton. O usuario nunca deve perguntar "isso esta funcionando?".
+
+6. **Caso como unidade de trabalho.** Toda navegacao dentro do workspace mostra o contexto do caso no header. O chat e ferramenta dentro do caso, nao entidade independente.
+
+7. **Rastreabilidade e parte da interface.** Origem das informacoes, documentos consultados e indicadores de revisao sao componentes visiveis. Confianca nao e marketing — e funcionalidade.
+
+8. **Orientacao em vez de escolha.** Sugerir o proximo passo com base no contexto, em vez de expor catalogo de opcoes. O sistema sabe mais que o usuario sobre o que vem depois.
+
+9. **Sem estetica de IA.** O produto nao precisa lembrar o usuario que usa inteligencia artificial. IA e a infraestrutura — como eletricidade. Nao colocamos icone de raio em cada interruptor.
 
 ---
 
-## 2. Direção Estética
+## 3. Anti-padroes — O que NAO fazer
 
-### Conceito: "Legal Intelligence — Mesa de Comando"
+Esta secao existe para evitar que o produto caia em cliches de "produto de IA". Cada item e um padrao real visto no mercado que deve ser ativamente evitado.
 
-Precisão de ferramenta jurídica + fluidez de SaaS moderno + organização por caso/processo.
+### Visual
 
-**Referências:** Linear (clareza), Vercel (minimalismo premium), Notion (conforto diário), Harvey (seriedade jurídica)
-**Anti-referências:** Salesforce (pesado), LegalZoom (corporativo-genérico), Lexis Nexis (anos 2000), "chat genérico com roupa jurídica"
+| Padrao a evitar | Porque | Alternativa |
+|---|---|---|
+| Icone de centelha/estrela (Sparkles) para indicar IA | Cliche universal de produto AI. Reduz percecao de seriedade | IA nao precisa de icone. O produto inteiro e IA |
+| Gradiente roxo-para-azul em backgrounds | Associacao direta com landing pages de IA | Cores solidas, backgrounds neutros com tint sutil |
+| Icone de robo/bot como avatar de assistente | Infantiliza o produto | Usar marca do AssistJur ou icone neutro do dominio (ex: Scale) |
+| Animacao de "digitando..." com bolinhas pulsantes | Padrao de chatbot generico | Skeleton loading no formato do conteudo esperado, ou indicador de progresso com contexto ("Analisando 4 documentos...") |
+| Halo/glow roxo em botoes e sombras | Over-branding, estetica sci-fi | Sombras neutras com leve warmth |
+| Palavra "magica" ou "magia" em qualquer lugar | Reduz confianca do publico juridico | Descrever a funcao: "analisa", "extrai", "redige", "identifica" |
+| Badge "IA" ou "AI-powered" em componentes | O produto inteiro e IA — redundante | Nao rotular. A inteligencia esta embutida |
+| Animacao de particulas, orbs, nebulosas | Estetica de demo, nao de ferramenta de trabalho | Estatico, limpo, funcional |
+| Excesso de emojis em interface ou copy | Informalidade incompativel com contexto juridico | Sem emojis na interface de produto. Icones Lucide quando necessario |
+| Texto "Powered by Claude/GPT/LLM" na interface | Expoe infraestrutura ao usuario final | O advogado nao precisa saber qual modelo roda por baixo |
 
-### Princípios
+### Linguagem
 
-1. **Marca no produto inteiro** — O roxo da AssistJur é o primary. Quem usa o produto vê a marca a cada clique, focus ring e estado ativo.
-2. **Dark mode profundo, não genérico** — Fundo roxo profundo (`hsl(256 32% 5%)`) cria identidade. Não é black, não é zinc — é AssistJur à noite.
-3. **Gold com parcimônia** — A cor dourada é CTA de destaque. Nunca em áreas grandes. Sempre em par com roxo.
-4. **Densidade informacional confortável** — Chat jurídico requer leitura longa. Espaçamento generoso, linha legível (leading 1.5), fontes médias.
-5. **Zero ambiguidade de estado** — Focus rings vibrantes (roxo da marca), hover explícito, disabled claro.
-6. **Caso antes do chat** — A unidade principal da navegação é o caso/processo. O chat existe dentro do caso.
-7. **Confiança é parte da interface** — Fontes, trechos usados, alertas de revisão e origem das informações são componentes visíveis, não marketing.
-8. **Menos escolha, mais orientação** — Sugerir o próximo melhor passo em vez de expor catálogo infinito de agentes.
+| Padrao a evitar | Alternativa |
+|---|---|
+| "Agente de IA" | "Assistente" ou nome do fluxo ("Revisor de Defesas") |
+| "Inferencia" (para o usuario) | "Sugestao do sistema" ou "Ponto que requer revisao" |
+| "Prompt" | "Instrucao" ou "Descricao do caso" |
+| "Modelo" (no sentido de LLM) | Nao expor. Se necessario, "configuracao do assistente" |
+| "Tokens", "contexto", "embedding" | Nunca expor termos tecnicos de IA ao usuario |
+| "Gerar" (como acao principal) | "Redigir", "Elaborar", "Preparar", "Criar" |
+| "Output" | "Resultado", "Documento", "Peca", "Analise" |
+
+### Interacao
+
+| Padrao a evitar | Alternativa |
+|---|---|
+| Tela inicial com campo de chat vazio | Home com casos, fluxos e acoes claras |
+| Upload sem feedback de proximo passo | Upload sempre seguido de sugestoes contextuais |
+| Lista de agentes sem contexto de uso | Fluxos nomeados por tarefa com input/output claros |
+| Chat como unica interface de interacao | Chat e um dos modos. Formularios guiados, editor de documento e timeline sao igualmente importantes |
 
 ---
 
-## 3. Paleta de Cores
+## 4. Paleta de Cores
 
-### Purple — Cor Dominante
+### Purple — Cor de Marca
+
+Usada em pontos de interacao e identidade, nao como decoracao de superficie.
 
 | Token CSS | Valor | Uso |
 |---|---|---|
-| `--assistjur-purple-50` | `#f5f3ff` | Backgrounds de destaque suave |
-| `--assistjur-purple-100` | `#ede9fe` | Badge brand (light), chips |
-| `--assistjur-purple-200` | `#ddd6fe` | Borders decorativas |
-| `--assistjur-purple-400` | `#a78bfa` | Light purple nos componentes |
-| **`--assistjur-purple-600`** | **`#7c3aed`** | **Brand primary — botões, links, active** |
+| `--assistjur-purple-50` | `#f5f3ff` | Background de destaque suave (hover de lista) |
+| `--assistjur-purple-100` | `#ede9fe` | Badge de marca (light), chip de categoria |
+| `--assistjur-purple-200` | `#ddd6fe` | Border decorativa sutil |
+| `--assistjur-purple-400` | `#a78bfa` | Icones secundarios, placeholder ativo |
+| **`--assistjur-purple-600`** | **`#7c3aed`** | **Brand primary — botoes, links, item ativo, focus ring** |
 | `--assistjur-purple-700` | `#6d28d9` | Hover sobre primary |
-| `--assistjur-purple-900` | `#3f1c6b` | Dark backgrounds decorativos |
-| **`--assistjur-purple-950`** | **`#2e1065`** | **Auth layout, auth backgrounds** |
+| `--assistjur-purple-800` | `#5b21b6` | Texto sobre fundo purple claro |
+| `--assistjur-purple-900` | `#4c1d95` | Dark backgrounds decorativos |
+| **`--assistjur-purple-950`** | **`#2e1065`** | **Auth layout, backgrounds de destaque escuro** |
 
-### Gold — Acento
+### Gold — Acento restrito
+
+Regra fundamental: maximo 1 elemento gold por viewport. Nunca em areas grandes.
 
 | Token CSS | Valor | Uso |
 |---|---|---|
-| `--assistjur-gold-300` | `#fde047` | Highlights suaves |
-| `--assistjur-gold-400` | `#facc15` | Ícones de destaque |
-| **`--assistjur-gold-500`** | **`#eab308`** | **CTAs premium, botão gold** |
+| `--assistjur-gold-400` | `#facc15` | Icones de destaque pontual |
+| **`--assistjur-gold-500`** | **`#eab308`** | **CTA premium unico — ex: "Assinar plano"** |
 | `--assistjur-gold-600` | `#ca8a04` | Hover em elementos gold |
-| `--assistjur-gold-700` | `#a16207` | Textos sobre fundo gold |
+| `--assistjur-gold-700` | `#a16207` | Texto sobre fundo gold |
 
 ### Neutral (warm undertone)
 
 Escala de `--assistjur-neutral-50` a `--assistjur-neutral-950`.
-Tons ligeiramente lilás (não zinc puro) para manter coerência com a paleta.
+Tons com undertone levemente quente (nao zinc puro, nao lilac forcado) para manter coerencia sem artificialidade.
+
+| Token | Valor | Uso |
+|---|---|---|
+| `--assistjur-neutral-50` | `#fafaf9` | Background mais claro |
+| `--assistjur-neutral-100` | `#f5f5f4` | Superficie elevada sutil |
+| `--assistjur-neutral-200` | `#e7e5e4` | Borders leves |
+| `--assistjur-neutral-300` | `#d6d3d1` | Borders de input |
+| `--assistjur-neutral-400` | `#a8a29e` | Placeholder text |
+| `--assistjur-neutral-500` | `#78716c` | Texto terciario |
+| `--assistjur-neutral-600` | `#57534e` | Texto secundario |
+| `--assistjur-neutral-700` | `#44403c` | Texto secundario forte |
+| `--assistjur-neutral-800` | `#292524` | Texto primario (dark mode) |
+| `--assistjur-neutral-900` | `#1c1917` | Background escuro |
+| `--assistjur-neutral-950` | `#0c0a09` | Background mais escuro |
 
 ### Status
 
-| Uso | Cor | Light BG |
+Cores de status seguem convencoes universais. Sem personalizacao.
+
+| Uso | Foreground | Background |
 |---|---|---|
-| Sucesso | `#16a34a` (verde) | `#dcfce7` |
-| Alerta | `#d97706` (âmbar) | `#fef3c7` |
-| Erro | `#dc2626` (vermelho) | `#fee2e2` |
-| Info | `#2563eb` (azul) | `#dbeafe` |
+| Sucesso | `#16a34a` | `#f0fdf4` |
+| Alerta | `#d97706` | `#fffbeb` |
+| Erro | `#dc2626` | `#fef2f2` |
+| Info | `#2563eb` | `#eff6ff` |
 
-### Workflow — Status de Caso/Processo (novo)
+### Workflow — Status Processual
 
-Cores dedicadas para representar estados do fluxo processual.
+Cores dedicadas para estados do fluxo de trabalho no caso.
 
 | Token CSS | Valor | Uso |
 |---|---|---|
-| `--workflow-draft` | `hsl(252 15% 60%)` | Rascunho / em construção |
-| `--workflow-draft-bg` | `hsl(252 20% 95%)` | Background de rascunho |
+| `--workflow-draft` | `hsl(220 12% 55%)` | Rascunho / em construcao |
+| `--workflow-draft-bg` | `hsl(220 14% 96%)` | Background de rascunho |
 | `--workflow-active` | `hsl(262 83% 57%)` | Em andamento (= brand purple) |
-| `--workflow-active-bg` | `hsl(262 30% 95%)` | Background ativo |
-| `--workflow-review` | `hsl(38 92% 50%)` | Aguardando revisão humana (= gold) |
-| `--workflow-review-bg` | `hsl(48 96% 95%)` | Background de revisão |
-| `--workflow-done` | `hsl(142 71% 36%)` | Concluído / aprovado |
-| `--workflow-done-bg` | `hsl(142 76% 95%)` | Background concluído |
-| `--workflow-blocked` | `hsl(0 72% 50%)` | Bloqueado / pendência crítica |
-| `--workflow-blocked-bg` | `hsl(0 72% 95%)` | Background bloqueado |
+| `--workflow-active-bg` | `hsl(262 30% 96%)` | Background ativo |
+| `--workflow-review` | `hsl(38 92% 50%)` | Aguardando revisao humana |
+| `--workflow-review-bg` | `hsl(48 96% 96%)` | Background de revisao |
+| `--workflow-done` | `hsl(142 71% 36%)` | Concluido / aprovado |
+| `--workflow-done-bg` | `hsl(142 76% 96%)` | Background concluido |
+| `--workflow-blocked` | `hsl(0 72% 50%)` | Bloqueado / pendencia critica |
+| `--workflow-blocked-bg` | `hsl(0 72% 96%)` | Background bloqueado |
 
-### Confiança — Rastreabilidade (novo)
+### Rastreabilidade — Origem de Informacao
 
-Cores para o sistema de fontes e evidências.
+Cores para o sistema de fontes e evidencias. Nomenclatura voltada ao advogado, nao ao engenheiro.
 
-| Token CSS | Valor | Uso |
-|---|---|---|
-| `--confidence-source` | `hsl(210 85% 53%)` | Fato extraído de documento |
-| `--confidence-source-bg` | `hsl(210 85% 95%)` | Background de citação de fonte |
-| `--confidence-inference` | `hsl(38 92% 50%)` | Inferência / gerado pela IA |
-| `--confidence-inference-bg` | `hsl(48 96% 95%)` | Background de inferência |
-| `--confidence-alert` | `hsl(0 72% 50%)` | Requer revisão humana obrigatória |
-| `--confidence-alert-bg` | `hsl(0 72% 95%)` | Background de alerta |
-| `--confidence-verified` | `hsl(142 71% 36%)` | Revisado e aprovado pelo advogado |
-| `--confidence-verified-bg` | `hsl(142 76% 95%)` | Background verificado |
+| Token CSS | Valor | Uso | Label para o usuario |
+|---|---|---|---|
+| `--source-document` | `hsl(210 85% 53%)` | Extraido de documento | "Fonte: [nome do doc]" |
+| `--source-document-bg` | `hsl(210 85% 96%)` | Background de citacao | — |
+| `--source-suggested` | `hsl(38 80% 52%)` | Sugestao do sistema (requer conferencia) | "Sugestao — verificar" |
+| `--source-suggested-bg` | `hsl(48 90% 96%)` | Background de sugestao | — |
+| `--source-review` | `hsl(0 72% 50%)` | Requer revisao humana obrigatoria | "Revisao necessaria" |
+| `--source-review-bg` | `hsl(0 72% 96%)` | Background de alerta | — |
+| `--source-verified` | `hsl(142 71% 36%)` | Revisado e aprovado pelo advogado | "Verificado" |
+| `--source-verified-bg` | `hsl(142 76% 96%)` | Background verificado | — |
+
+Nota v3.0: Os tokens anteriores `--confidence-*` foram renomeados para `--source-*`. O termo "confianca" sugere que o sistema avalia a si mesmo — o que pode gerar desconfianca. "Fonte" e "origem" sao mais concretos e profissionais.
 
 ---
 
-## 4. Tokens Semânticos
+## 5. Tokens Semanticos
 
 ### Light Mode
 
-| Token | Valor HSL | Decisão |
+| Token | Valor HSL | Decisao |
 |---|---|---|
-| `--background` | `hsl(0 0% 100%)` | Branco puro — máxima legibilidade |
-| `--foreground` | `hsl(252 25% 9%)` | Near-black c/ warm undertone (não preto frio) |
-| `--primary` | `hsl(262 83% 57%)` | **Brand purple — não preto genérico** |
+| `--background` | `hsl(0 0% 100%)` | Branco puro — maxima legibilidade |
+| `--foreground` | `hsl(24 10% 10%)` | Near-black com warmth sutil |
+| `--primary` | `hsl(262 83% 57%)` | Brand purple — nao preto generico |
 | `--primary-foreground` | `hsl(0 0% 100%)` | Branco sobre roxo |
-| `--secondary` | `hsl(262 30% 95%)` | Lavanda muito suave |
-| `--secondary-foreground` | `hsl(262 50% 28%)` | Roxo escuro legível |
-| `--muted` | `hsl(262 15% 96%)` | Fundo de áreas inativas |
-| `--muted-foreground` | `hsl(252 15% 45%)` | Texto secundário |
-| `--accent` | `hsl(262 30% 93%)` | Hover em ghost buttons |
-| `--border` | `hsl(262 20% 88%)` | Borda levemente lilás (não cinza frio) |
+| `--secondary` | `hsl(30 6% 96%)` | Cinza quente muito suave |
+| `--secondary-foreground` | `hsl(24 10% 25%)` | Texto escuro legivel |
+| `--muted` | `hsl(30 6% 96%)` | Fundo de areas inativas |
+| `--muted-foreground` | `hsl(24 6% 45%)` | Texto secundario |
+| `--accent` | `hsl(30 6% 94%)` | Hover em ghost buttons |
+| `--accent-foreground` | `hsl(24 10% 10%)` | Texto sobre accent |
+| `--border` | `hsl(24 6% 90%)` | Borda padrao — neutra com warmth |
+| `--input` | `hsl(24 6% 90%)` | Borda de inputs |
 | `--ring` | `hsl(262 83% 57%)` | Focus ring = brand purple |
-| `--sidebar-background` | `hsl(262 25% 97%)` | Painel com tint de marca |
+| `--sidebar-background` | `hsl(30 6% 97%)` | Sidebar com tint quente sutil |
 
-#### Tokens de Layout (novo)
+Nota v3.0: Tokens secundarios, muted e accent usam tons neutros quentes em vez de lilac. O roxo fica reservado para interacao (primary, ring, item ativo), nao para superficies de fundo. Isso reduz a saturacao geral e aproxima o produto de ferramentas profissionais como Linear e Notion.
 
-| Token | Valor HSL | Decisão |
+#### Tokens de Layout
+
+| Token | Valor HSL | Decisao |
 |---|---|---|
-| `--surface-workspace` | `hsl(262 15% 98%)` | Background do workspace do caso |
-| `--surface-panel` | `hsl(0 0% 100%)` | Painéis flutuantes (fontes, metadados) |
-| `--surface-artifact` | `hsl(0 0% 100%)` | Fundo do editor de artefato |
-| `--surface-composer` | `hsl(0 0% 100%)` | Fundo do composer de chat |
-| `--surface-sidebar-active` | `hsl(262 30% 93%)` | Item ativo na sidebar |
-| `--border-subtle` | `hsl(262 15% 92%)` | Separadores entre painéis |
-| `--border-split` | `hsl(262 20% 88%)` | Divisor do split-view (drag handle) |
+| `--surface-workspace` | `hsl(30 4% 98%)` | Background do workspace |
+| `--surface-panel` | `hsl(0 0% 100%)` | Paineis flutuantes |
+| `--surface-artifact` | `hsl(0 0% 100%)` | Fundo do editor de documento |
+| `--surface-composer` | `hsl(0 0% 100%)` | Fundo do composer |
+| `--surface-sidebar-active` | `hsl(262 30% 95%)` | Item ativo na sidebar (unico ponto de cor na sidebar) |
+| `--border-subtle` | `hsl(24 5% 93%)` | Separadores entre paineis |
+| `--border-split` | `hsl(24 6% 90%)` | Divisor do split-view |
 
 ### Dark Mode
 
-| Token | Valor HSL | Decisão |
+| Token | Valor HSL | Decisao |
 |---|---|---|
-| `--background` | `hsl(256 32% 5%)` | **Roxo profundo** — não preto |
-| `--foreground` | `hsl(262 15% 93%)` | Near-white c/ warmth |
-| `--card` | `hsl(256 26% 8%)` | Elevado sobre background |
-| `--primary` | `hsl(262 75% 67%)` | Roxo claro — contraste sobre escuro |
-| `--border` | `hsl(256 22% 16%)` | Sutil, mantém hierarquia |
-| `--sidebar-background` | `hsl(256 35% 4%)` | **Mais escuro que bg** → efeito recessed panel |
+| `--background` | `hsl(256 20% 6%)` | Roxo profundo, nao preto puro |
+| `--foreground` | `hsl(30 6% 90%)` | Near-white com warmth |
+| `--card` | `hsl(256 18% 9%)` | Elevado sobre background |
+| `--primary` | `hsl(262 70% 65%)` | Roxo claro para contraste sobre escuro |
+| `--primary-foreground` | `hsl(0 0% 100%)` | Branco |
+| `--secondary` | `hsl(256 12% 14%)` | Superficie elevada |
+| `--secondary-foreground` | `hsl(30 6% 85%)` | Texto claro |
+| `--muted` | `hsl(256 12% 14%)` | Areas inativas |
+| `--muted-foreground` | `hsl(30 4% 55%)` | Texto secundario |
+| `--border` | `hsl(256 16% 16%)` | Borda sutil |
+| `--ring` | `hsl(262 70% 65%)` | Focus ring |
+| `--sidebar-background` | `hsl(256 24% 4%)` | Mais escuro que bg — efeito recessed |
 
-#### Tokens de Layout — Dark (novo)
+#### Tokens de Layout — Dark
 
-| Token | Valor HSL | Decisão |
+| Token | Valor HSL | Decisao |
 |---|---|---|
-| `--surface-workspace` | `hsl(256 28% 6%)` | Background do workspace |
-| `--surface-panel` | `hsl(256 26% 8%)` | Painéis flutuantes |
-| `--surface-artifact` | `hsl(256 24% 9%)` | Fundo do editor de artefato |
-| `--surface-composer` | `hsl(256 26% 8%)` | Fundo do composer |
-| `--surface-sidebar-active` | `hsl(262 30% 12%)` | Item ativo na sidebar |
-| `--border-subtle` | `hsl(256 20% 12%)` | Separadores entre painéis |
-| `--border-split` | `hsl(256 22% 16%)` | Divisor do split-view |
+| `--surface-workspace` | `hsl(256 18% 7%)` | Background workspace |
+| `--surface-panel` | `hsl(256 16% 10%)` | Paineis flutuantes |
+| `--surface-artifact` | `hsl(256 14% 11%)` | Fundo do editor |
+| `--surface-composer` | `hsl(256 16% 10%)` | Fundo do composer |
+| `--surface-sidebar-active` | `hsl(262 24% 14%)` | Item ativo sidebar |
+| `--border-subtle` | `hsl(256 14% 13%)` | Separadores |
+| `--border-split` | `hsl(256 16% 16%)` | Divisor split-view |
 
 ---
 
-## 5. Tipografia
+## 6. Tipografia
 
 ### Fontes
 
-| Família | Uso | CSS Var |
-|---|---|---|
-| **Geist** | Todo texto de interface | `--font-geist` |
-| **Geist Mono** | Código, números técnicos, timestamps, números de processo | `--font-geist-mono` |
+| Familia | Uso | CSS Var | Justificativa |
+|---|---|---|---|
+| **Inter** | Texto de interface, corpo, titulos | `--font-sans` | Legibilidade excelente em todas as densidades. Neutra sem ser invisivel. Sem associacao com ecossistema de IA. Suporte completo a PT-BR. Variable font. |
+| **JetBrains Mono** | Numeros de processo, timestamps, dados tecnicos, tabelas de valores | `--font-mono` | Mais legivel que Geist Mono em contexto de dados. Distingue claramente 0/O, 1/l/I — critico para numeros de processo. |
 
-Geist (Vercel) foi escolhido por: excelente legibilidade em telas, suporte a PT-BR,
-variável (weight dinâmico sem múltiplos arquivos), moderna mas não decorativa.
+Nota v3.0: A mudanca de Geist para Inter e deliberada. Geist esta fortemente associada ao ecossistema Vercel/AI (v0, Claude artifacts, Next.js templates). Inter e uma escolha de engenharia tipografica, nao de stack.
+
+Alternativa aceita: **IBM Plex Sans** como segunda opcao, caso se queira um carater mais institucional. Nunca usar: Arial, Roboto, system-ui generico, Space Grotesk, Geist.
 
 ### Escala de Tamanhos
 
 ```
-xs   = 12px  — labels, metadados, badges, timestamps
-sm   = 14px  — body secundário, descrições, tooltips
-base = 16px  — body principal, mensagens de chat
-lg   = 18px  — body ênfase
-xl   = 20px  — subtítulo de seção, card title
-2xl  = 24px  — título de card, section header
-3xl  = 30px  — título de página, nome do caso
-4xl  = 36px  — headline
-5xl  = 48px  — hero / landing
+xs   = 12px / 0.75rem  — labels, metadados, badges, timestamps
+sm   = 14px / 0.875rem — body secundario, descricoes, tooltips
+base = 16px / 1rem     — body principal, mensagens de chat, formularios
+lg   = 18px / 1.125rem — body com enfase
+xl   = 20px / 1.25rem  — subtitulo de secao, titulo de card
+2xl  = 24px / 1.5rem   — titulo de secao
+3xl  = 30px / 1.875rem — titulo de pagina, nome do caso
+4xl  = 36px / 2.25rem  — headline
 ```
 
-### Hierarquia em componentes
+### Hierarquia Tipografica
 
 ```
-H1 (page title)     → 3xl, weight 700, tracking -0.025em
-H2 (section)        → 2xl, weight 600, tracking -0.025em
-H3 (card title)     → xl,  weight 600
-H4 (subsection)     → lg,  weight 600
-Body                → base, weight 400, leading 1.5
-Body secondary      → sm,  weight 400, leading 1.5
-Caption/Meta        → xs,  weight 500, muted-foreground
-Code inline         → sm,  Geist Mono
-Número de processo  → sm,  Geist Mono, muted-foreground
+H1 (titulo de pagina)   → 3xl / 30px, weight 600, tracking -0.025em, leading 1.2
+H2 (secao)              → 2xl / 24px, weight 600, tracking -0.02em, leading 1.3
+H3 (titulo de card)     → xl  / 20px, weight 600, leading 1.4
+H4 (subsecao)           → lg  / 18px, weight 600, leading 1.4
+Body                    → base / 16px, weight 400, leading 1.6
+Body secondary          → sm  / 14px, weight 400, leading 1.5
+Caption / Meta          → xs  / 12px, weight 500, text-muted-foreground
+Mono inline             → sm  / 14px, JetBrains Mono, text-muted-foreground
+Numero de processo      → sm  / 14px, JetBrains Mono, tabular-nums
 ```
+
+### Largura de Linha
+
+| Contexto | Max-width | Tailwind |
+|---|---|---|
+| Texto corrido (chat, descricoes) | 72ch | `max-w-prose` customizado |
+| Editor de documento (artifact) | 80ch | Padding lateral generoso |
+| Cards e componentes | Sem restricao (segue grid) | — |
+| Titulos | 48ch | Evitar titulos que quebram em 3+ linhas |
 
 ---
 
-## 6. Espaçamento
+## 7. Voz e Linguagem
 
-Grid de **4px**. Use exclusivamente valores Tailwind (`p-4` = 16px, `gap-6` = 24px, etc.).
+### Principio
 
-| Uso | Valor |
-|---|---|
-| Intra-componente (ícone + texto) | 8px (`gap-2`) |
-| Padding de card pequeno | 16px (`p-4`) |
-| Padding de card padrão | 24px (`p-6`) |
-| Gap entre cards | 16px ou 24px |
-| Margem de seção | 32px–48px |
-| Container padding lateral (mobile) | 16px |
-| Container padding lateral (desktop) | 24px–32px |
-| Gap entre painéis do split-view | 1px (border) ou 8px (com handle) |
-| Padding interno de painel lateral | 16px (`p-4`) |
-| Padding do composer | 16px–24px |
-| Padding do artifact editor | 32px–48px lateral (simula papel) |
+O AssistJur fala como um colega de escritorio competente: direto, preciso, sem jargao desnecessario. Nunca como um assistente de IA tentando ser util.
+
+### Tom
+
+| Atributo | Sim | Nao |
+|---|---|---|
+| **Direto** | "Contestacao pronta para revisao" | "Seu documento foi gerado com sucesso!" |
+| **Concreto** | "3 pontos requerem verificacao" | "Alguns itens podem precisar de atencao" |
+| **Profissional** | "Analisando documentos do caso" | "Estou lendo seus arquivos agora..." |
+| **Neutro** | "Identificamos divergencia na data" | "Ops! Parece que ha um erro na data" |
+| **Funcional** | "Revisar defesa trabalhista" | "Usar agente revisor de defesas" |
+
+### Rotulos de Interface
+
+| Contexto | Usar | Nao usar |
+|---|---|---|
+| Botao primario | "Redigir contestacao" | "Gerar contestacao" |
+| Botao secundario | "Abrir caso" | "Iniciar novo caso" |
+| Placeholder | "Descreva o caso ou envie documentos" | "Pergunte qualquer coisa ao assistente..." |
+| Status de processamento | "Analisando 4 documentos (120 paginas)" | "O agente esta processando..." |
+| Conclusao | "Contestacao pronta — 3 pontos para revisar" | "Pronto! Sua contestacao foi gerada com sucesso!" |
+| Erro | "Falha ao processar documento. Tente novamente." | "Desculpe, algo deu errado..." |
+| Vazio | "Nenhum caso aberto. Criar caso" | "Voce ainda nao tem casos. Que tal criar um?" |
+
+### Regras
+
+1. Nunca usar exclamacao em mensagens de sistema.
+2. Nunca usar "voce" ou segunda pessoa em status e alertas. Usar forma impessoal ou terceira pessoa.
+3. Nunca expor nomes de modelos de IA (Claude, GPT, etc.) na interface.
+4. Nunca usar termos de IA: prompt, token, embedding, modelo, agente, inferencia, output.
+5. Numeros de processo sempre em JetBrains Mono com tabular-nums.
+6. Datas sempre no formato juridico brasileiro: "12 mar. 2025" ou "12/03/2025".
+7. Valores monetarios com formato brasileiro: "R$ 1.234.567,89".
 
 ---
 
-## 7. Border Radius
+## 8. Espacamento
+
+Grid de **4px**. Exclusivamente valores Tailwind.
+
+| Uso | Valor | Tailwind |
+|---|---|---|
+| Intra-componente (icone + texto) | 8px | `gap-2` |
+| Padding de card pequeno | 16px | `p-4` |
+| Padding de card padrao | 24px | `p-6` |
+| Gap entre cards | 16px | `gap-4` |
+| Gap entre secoes | 32px | `gap-8` |
+| Margem de secao | 32px a 48px | `my-8` a `my-12` |
+| Container padding lateral (mobile) | 16px | `px-4` |
+| Container padding lateral (desktop) | 24px a 32px | `px-6` a `px-8` |
+| Gap entre paineis do split-view | 1px (border) ou 8px (com handle) | — |
+| Padding interno de painel lateral | 16px | `p-4` |
+| Padding do composer | 16px a 24px | `p-4` a `p-6` |
+| Padding do artifact editor | 48px a 64px lateral | `px-12` a `px-16` (simula margem de documento impresso) |
+
+---
+
+## 9. Border Radius
 
 | Classe | Valor | Uso |
 |---|---|---|
-| `rounded-xs` | 6px | Badges pequenos, chips, confidence tags |
-| `rounded-sm` | 8px | Inputs, dropdowns |
-| `rounded-md` | 10px | **Base** — botões, cards menores |
-| `rounded-lg` | 12px | Cards padrão, modais, painéis |
-| `rounded-xl` | 16px | Cards grandes, painéis de caso |
-| `rounded-2xl` | 24px | Sheets, overlays maiores |
-| `rounded-full` | 9999px | Avatares, pílulas de badge, status dots |
+| `rounded-xs` | 4px | Badges pequenos, tags |
+| `rounded-sm` | 6px | Chips, code inline |
+| `rounded-md` | 8px | **Base** — botoes, inputs, dropdowns |
+| `rounded-lg` | 10px | Cards padrao, paineis |
+| `rounded-xl` | 12px | Cards grandes, modais |
+| `rounded-2xl` | 16px | Sheets, overlays |
+| `rounded-full` | 9999px | Avatares, status dots |
 
-Base: `--radius: 0.625rem` (10px). Ligeiramente maior que o padrão shadcn (8px) — mais
-moderno sem parecer "bubbly".
+Base: `--radius: 0.5rem` (8px). Mais contido que a v2.0 (que usava 10px). Reducao deliberada — bordas mais retas transmitem mais seriedade institucional.
 
 ---
 
-## 8. Sombras / Elevação
+## 10. Sombras / Elevacao
 
-Sistema de 5 níveis. Sombras com undertone roxo (coerentes com a paleta).
+Sombras neutras. Sem glow de marca. Sem undertone colorido.
 
-| Classe | Uso |
-|---|---|
-| `shadow-xs` | Separação sutil (sidebar items, inputs) |
-| `shadow-sm` | Cards em repouso, painéis base |
-| `shadow-md` | Cards com hover, dropdowns, painéis flutuantes |
-| `shadow-lg` | Modais, sidesheets, painel de fontes expandido |
-| `shadow-xl` | Toasts, alertas flutuantes, command palette |
-| `shadow-brand` | Glow de focus/hover em elementos de marca |
-| `shadow-gold` | Glow em elementos gold / CTAs |
+| Classe | Valor | Uso |
+|---|---|---|
+| `shadow-xs` | `0 1px 2px 0 rgb(0 0 0 / 0.03)` | Separacao sutil (inputs) |
+| `shadow-sm` | `0 1px 3px 0 rgb(0 0 0 / 0.06)` | Cards em repouso |
+| `shadow-md` | `0 4px 6px -1px rgb(0 0 0 / 0.07)` | Cards hover, dropdowns |
+| `shadow-lg` | `0 10px 15px -3px rgb(0 0 0 / 0.08)` | Modais, sidesheets |
+| `shadow-xl` | `0 20px 25px -5px rgb(0 0 0 / 0.1)` | Command palette, toasts |
 
-### Hierarquia de elevação no layout
+Nota v3.0: Removidos `shadow-brand` (glow roxo) e `shadow-gold` (glow dourado) da v2.0. Sombras com cor sao decoracao, nao funcionalidade.
+
+### Hierarquia de Elevacao (z-index)
 
 ```
 z-0   — Background do workspace
-z-10  — Sidebar, painéis fixos
-z-20  — Cards de caso, artefatos
-z-30  — Painéis flutuantes (fontes, metadados)
+z-10  — Sidebar, paineis fixos
+z-20  — Cards, artefatos
+z-30  — Topbar (fixo)
 z-40  — Dropdowns, popovers, tooltips
 z-50  — Modais, dialogs
 z-60  — Command palette
-z-70  — Toasts, notificações
+z-70  — Toasts, notificacoes
 ```
 
 ---
 
-## 9. Layout System
+## 11. Layout System
 
-### 9.1 AppShell
-
-O shell principal da aplicação. Tudo dentro dele.
-
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│ Topbar Global (h-14, z-30)                                          │
-├──────────┬───────────────────────────────────────────────────────────┤
-│ Sidebar  │ Main Content Area                                        │
-│ (w-64)   │                                                          │
-│          │                                                          │
-│          │                                                          │
-│          │                                                          │
-│          │                                                          │
-│          │                                                          │
-└──────────┴───────────────────────────────────────────────────────────┘
-```
-
-**Tokens de dimensão:**
-
-| Elemento | Dimensão | Tailwind | Colapsado |
-|---|---|---|---|
-| Topbar | height: 56px | `h-14` | — |
-| Sidebar | width: 256px | `w-64` | `w-16` (64px, ícones only) |
-| Main content | `flex-1` | — | — |
-| Min-width global | 1024px | `min-w-[1024px]` | — |
-
-**Sidebar:**
-- Estado expandido: logo + texto + ícones. `w-64`.
-- Estado colapsado: apenas ícones e tooltips. `w-16`.
-- Toggle via botão no topbar.
-- Em mobile: overlay (sheet) com backdrop.
-
-### 9.2 Workspace do Caso (Split-View)
-
-Layout central quando o advogado está trabalhando dentro de um caso.
-
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│ Case Header (nome do caso, nº processo, status, ações)              │
-├────────────────────────────┬─────────────────────────────────────────┤
-│ Painel Esquerdo            │ Painel Direito                         │
-│ (Chat + Fluxos)            │ (Artifact / Editor)                    │
-│                            │                                        │
-│ ┌────────────────────────┐ │ ┌─────────────────────────────────────┐│
-│ │ Chat contextual        │ │ │ Documento editável                 ││
-│ │ ou                     │ │ │ com painel de fontes               ││
-│ │ Fluxo guiado ativo     │ │ │                                    ││
-│ │                        │ │ │                                    ││
-│ │                        │ │ │                                    ││
-│ ├────────────────────────┤ │ │                                    ││
-│ │ Composer               │ │ │                                    ││
-│ └────────────────────────┘ │ └─────────────────────────────────────┘│
-└────────────────────────────┴─────────────────────────────────────────┘
-```
-
-**Proporções do split-view:**
-
-| Estado | Esquerda | Direita | Quando |
-|---|---|---|---|
-| Chat dominante | 60% | 40% | Conversando, sem artefato aberto |
-| Split equilibrado | 50% | 50% | Chat + artefato ativo |
-| Artifact dominante | 35% | 65% | Revisando/editando peça |
-| Artifact full | 0% | 100% | Modo foco de edição |
-| Chat full | 100% | 0% | Sem artefato, interação livre |
-
-- Divisor arrastável (`border-split`) entre painéis.
-- Double-click no divisor → volta ao 50/50.
-- Atalho de teclado para alternar modos.
-
-### 9.3 Painel de Metadados (3ª Coluna)
-
-Coluna retrátil à direita do workspace para contexto do processo.
-
-```
-┌────────────────────┬──────────────────────────┬─────────────┐
-│ Chat / Fluxo       │ Artifact / Editor        │ Metadados   │
-│                    │                          │ do Caso     │
-│                    │                          │             │
-│                    │                          │ - Nº proc.  │
-│                    │                          │ - Tribunal  │
-│                    │                          │ - Partes    │
-│                    │                          │ - Teses     │
-│                    │                          │ - Docs      │
-│                    │                          │ - Timeline  │
-└────────────────────┴──────────────────────────┴─────────────┘
-```
-
-| Elemento | Dimensão | Comportamento |
-|---|---|---|
-| Painel de metadados | `w-80` (320px) | Retrátil via toggle |
-| Painel de fontes | `w-80` (320px) | Substitui metadados quando ativo |
-
-Nunca exibir metadados E fontes simultaneamente — alternar entre eles.
-
-### 9.4 Home / Casos
-
-Layout da tela inicial. **Nunca abre em estado de chat vazio.**
+### 11.1 AppShell
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ Header: Busca global + "Criar caso" + "Subir documentos"    │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│ [Seção: Continue de onde parou]                               │
-│   CaseCard  CaseCard  CaseCard                               │
-│                                                              │
-│ [Seção: Fluxos rápidos]                                      │
-│   FlowCard  FlowCard  FlowCard  FlowCard                    │
-│                                                              │
-│ [Seção: Todos os casos]                                      │
-│   Lista ou grid de CaseCards com filtros                     │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
+│ Topbar (h-12, z-30, border-bottom)                           │
+├──────────┬───────────────────────────────────────────────────┤
+│ Sidebar  │ Main Content Area                                 │
+│ (w-60)   │                                                   │
+│          │                                                   │
+│          │                                                   │
+│          │                                                   │
+│          │                                                   │
+└──────────┴───────────────────────────────────────────────────┘
 ```
 
-**Grid de cards:**
+| Elemento | Dimensao | Tailwind | Colapsado |
+|---|---|---|---|
+| Topbar | 48px | `h-12` | — |
+| Sidebar | 240px | `w-60` | `w-14` (56px, icones only) |
+| Main content | `flex-1` | — | — |
+| Min-width global | 1024px | `min-w-[1024px]` | — |
 
-| Contexto | Colunas | Gap |
+Nota v3.0: Topbar reduzida de 56px para 48px. Sidebar reduzida de 256px para 240px. Menos chrome, mais espaco para conteudo. A reducao da topbar aproxima o visual de ferramentas como Linear e Superhuman.
+
+### 11.2 Workspace do Caso (Split-View)
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ Case Header (h-14): nome | numero | status | acoes           │
+├──────────────────────────┬───────────────────────────────────┤
+│ Painel Esquerdo          │ Painel Direito                    │
+│ (Chat + Fluxos)          │ (Documento / Editor)              │
+│                          │                                   │
+│ ┌──────────────────────┐ │ ┌───────────────────────────────┐│
+│ │ Chat contextual      │ │ │ Documento editavel            ││
+│ │ ou                   │ │ │                               ││
+│ │ Fluxo guiado ativo   │ │ │                               ││
+│ │                      │ │ │                               ││
+│ ├──────────────────────┤ │ │                               ││
+│ │ Composer             │ │ │                               ││
+│ └──────────────────────┘ │ └───────────────────────────────┘│
+└──────────────────────────┴───────────────────────────────────┘
+```
+
+**Proporcoes do split-view:**
+
+| Estado | Esquerda | Direita | Quando |
+|---|---|---|---|
+| Chat dominante | 55% | 45% | Conversando, sem documento aberto |
+| Equilibrado | 50% | 50% | Chat + documento ativo |
+| Documento dominante | 35% | 65% | Revisando/editando peca |
+| Documento full | 0% | 100% | Modo foco de edicao |
+| Chat full | 100% | 0% | Sem documento, interacao livre |
+
+Divisor arrastavel. Double-click no divisor volta ao 50/50. Atalho de teclado para alternar modos.
+
+### 11.3 Painel de Contexto (3a Coluna)
+
+```
+┌──────────────────┬────────────────────────┬───────────┐
+│ Chat / Fluxo     │ Documento / Editor     │ Contexto  │
+│                  │                        │           │
+│                  │                        │ Numero    │
+│                  │                        │ Tribunal  │
+│                  │                        │ Partes    │
+│                  │                        │ Teses     │
+│                  │                        │ Docs      │
+│                  │                        │ Fontes    │
+└──────────────────┴────────────────────────┴───────────┘
+```
+
+| Elemento | Dimensao | Comportamento |
 |---|---|---|
-| Home — CaseCards | 3 em desktop, 2 em tablet, 1 em mobile | `gap-4` |
-| Home — FlowCards | 4 em desktop, 2 em tablet, 1 em mobile | `gap-4` |
-| Biblioteca de fluxos | 3 em desktop, 2 em tablet, 1 em mobile | `gap-6` |
+| Painel de contexto | `w-72` (288px) | Retratil via toggle |
+
+Nota v3.0: Na v2.0, metadados e fontes eram paineis separados que se alternavam. Na v3.0, sao abas dentro do mesmo painel de contexto. Mais simples.
+
+### 11.4 Home / Casos
+
+**Nunca abre em estado de chat vazio.**
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ Header: Busca + "Criar caso" + "Subir documentos"        │
+├──────────────────────────────────────────────────────────┤
+│                                                          │
+│ [Secao: Continue de onde parou]                           │
+│   CaseCard  CaseCard  CaseCard                           │
+│                                                          │
+│ [Secao: Fluxos frequentes]                               │
+│   FlowCard  FlowCard  FlowCard  FlowCard                │
+│                                                          │
+│ [Secao: Todos os casos]                                  │
+│   Lista/grid de CaseCards com filtros e busca             │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
+```
+
+| Contexto | Colunas (desktop / tablet / mobile) | Gap |
+|---|---|---|
+| CaseCards | 3 / 2 / 1 | `gap-4` |
+| FlowCards | 4 / 2 / 1 | `gap-3` |
+| Biblioteca de fluxos | 3 / 2 / 1 | `gap-4` |
 
 ---
 
-## 10. Componentes Primitivos
+## 12. Componentes Primitivos
 
 ### Button
 
 ```tsx
-// Variantes disponíveis:
-<Button variant="default">       // brand purple — ação primária
-<Button variant="secondary">     // lavanda suave — ação secundária
+// Variantes:
+<Button variant="default">       // brand purple — acao primaria
+<Button variant="secondary">     // cinza neutro — acao secundaria
 <Button variant="outline">       // borda + transparente
-<Button variant="outline-brand"> // borda purple, texto purple
 <Button variant="ghost">         // sem borda, hover sutil
-<Button variant="gold">          // dourado — CTA premium / destaque
-<Button variant="destructive">   // vermelho — ações irreversíveis
+<Button variant="destructive">   // vermelho — acoes irreversiveis
 <Button variant="link">          // texto com underline
 
 // Tamanhos:
-<Button size="sm">       // h-9, 36px
-<Button size="default">  // h-10, 40px
-<Button size="lg">       // h-11, 44px
-<Button size="icon">     // 40×40px
-<Button size="icon-sm">  // 32×32px
+<Button size="sm">       // h-8, 32px
+<Button size="default">  // h-9, 36px
+<Button size="lg">       // h-10, 40px
+<Button size="icon">     // 36x36px
+<Button size="icon-sm">  // 28x28px
 ```
 
-**Regras de uso:**
-- Máximo 1 `default` (purple) por seção visual
-- `gold` exclusivamente para ações de conversão / destaques únicos
-- `destructive` sempre com confirmação (dialog)
-- Ícone + texto: sempre `gap-2`, SVG com `size-4`
+**Regras:**
+- Maximo 1 `default` (purple) por secao visual.
+- `destructive` sempre com confirmacao (dialog).
+- Icone + texto: `gap-2`, SVG com `size-4`.
+- Sem variante `gold` como botao padrao. Gold so aparece em contextos de upgrade/assinatura e com moderacao extrema.
+- Sem variante `outline-brand`. Se precisa de enfase, use `default`. Se nao, use `outline` ou `ghost`.
+
+Nota v3.0: Botoes menores que na v2.0 (h-9 padrao vs h-10). Reducao de variantes de 8 para 6. Menos opcoes = mais consistencia.
 
 ### Badge
 
 ```tsx
-<Badge variant="default">       // purple
-<Badge variant="secondary">     // lavanda
-<Badge variant="brand">         // purple pill (estados de agente, categorias)
-<Badge variant="gold">          // dourado (tier, destaque)
+<Badge variant="default">       // purple — identidade
+<Badge variant="secondary">     // cinza neutro
+<Badge variant="outline">       // so borda
 <Badge variant="success">       // verde
-<Badge variant="warning">       // âmbar
-<Badge variant="error">         // vermelho
-<Badge variant="outline">       // só borda
-<Badge variant="destructive">   // vermelho forte
+<Badge variant="warning">       // ambar
+<Badge variant="destructive">   // vermelho
 
-// Novas variantes (v2.0):
-<Badge variant="workflow-draft">    // rascunho
-<Badge variant="workflow-active">   // em andamento
-<Badge variant="workflow-review">   // aguardando revisão
-<Badge variant="workflow-done">     // concluído
-<Badge variant="workflow-blocked">  // bloqueado
-<Badge variant="source">            // fonte de documento
-<Badge variant="inference">         // inferência da IA
-<Badge variant="needs-review">      // requer revisão humana
+// Workflow:
+<Badge variant="workflow-draft">
+<Badge variant="workflow-active">
+<Badge variant="workflow-review">
+<Badge variant="workflow-done">
+<Badge variant="workflow-blocked">
+
+// Rastreabilidade:
+<Badge variant="source-document">   // azul — extraido de documento
+<Badge variant="source-suggested">  // ambar — sugestao do sistema
+<Badge variant="source-review">     // vermelho — revisao necessaria
+<Badge variant="source-verified">   // verde — verificado pelo advogado
 ```
+
+Nota v3.0: Removidas variantes `brand` e `gold` de badge. Badges de rastreabilidade renomeados de `source`/`inference`/`needs-review` para nomenclatura centrada no usuario.
 
 ### Card
 
 ```tsx
-<Card> // bg-card, rounded-lg, border, shadow-sm
+<Card>   // bg-card, rounded-lg, border, shadow-sm
   <CardHeader>
     <CardTitle />
     <CardDescription />
-    <CardAction /> {/* ações no canto superior direito */}
+    <CardAction />
   </CardHeader>
   <CardContent />
   <CardFooter />
@@ -515,270 +642,224 @@ Layout da tela inicial. **Nunca abre em estado de chat vazio.**
 
 ### Input / Textarea
 
-Focus ring: `ring-ring` = brand purple. Altura padrão `h-10`. Border `border-input`.
+Focus ring: `ring-ring` = brand purple. Altura padrao `h-9`. Border `border-input`. Border radius `rounded-md`.
 
 ---
 
-## 11. Componentes Compostos
+## 13. Componentes Compostos
 
-Componentes de domínio que compõem as telas principais do AssistJur.
-Cada um usa exclusivamente tokens semânticos e componentes primitivos.
-
-### 11.1 CaseCard
-
-Card que representa um caso/processo na home e listas.
+### 13.1 CaseCard
 
 ```tsx
 <CaseCard>
   <CaseCardHeader>
-    <CaseCardTitle />          {/* Nome do caso — H3 */}
-    <CaseCardNumber />         {/* Nº do processo — Geist Mono, muted */}
-    <WorkflowBadge />          {/* Status: rascunho | ativo | revisão | concluído */}
+    <CaseCardTitle />           {/* Nome do caso — H3 */}
+    <CaseCardNumber />          {/* N. do processo — JetBrains Mono, muted */}
+    <WorkflowBadge />           {/* Status: rascunho | ativo | revisao | concluido */}
   </CaseCardHeader>
   <CaseCardMeta>
-    <MetaItem icon={Scale} label="Vara" value="2ª Vara do Trabalho" />
-    <MetaItem icon={Users} label="Partes" value="Fulano vs Empresa X" />
-    <MetaItem icon={Clock} label="Atualizado" value="há 2 horas" />
+    <MetaItem label="Vara" value="2a Vara do Trabalho" />
+    <MetaItem label="Partes" value="Fulano vs Empresa X" />
+    <MetaItem label="Atualizado" value="ha 2 horas" />
   </CaseCardMeta>
   <CaseCardFooter>
-    <CaseCardProgress />       {/* Barra de progresso do caso */}
-    <CaseCardActions />        {/* Botões: Abrir, Menu */}
+    <CaseCardActions />         {/* Botoes: Abrir, Menu */}
   </CaseCardFooter>
 </CaseCard>
 ```
 
-**Anatomia visual:**
-
 | Elemento | Tipografia | Cor |
 |---|---|---|
-| Nome do caso | xl, weight 600 | `text-foreground` |
-| Nº do processo | sm, Geist Mono | `text-muted-foreground` |
-| Metadados | sm | `text-muted-foreground` |
-| Badge de status | xs, weight 500 | Token de workflow correspondente |
+| Nome do caso | xl / 20px, weight 600 | `text-foreground` |
+| Numero do processo | sm / 14px, JetBrains Mono, tabular-nums | `text-muted-foreground` |
+| Metadados | sm / 14px | `text-muted-foreground` |
+| Badge de status | xs / 12px, weight 500 | Token de workflow |
 
-**Dimensões:** min-width 280px, max-width 400px, padding `p-5`.
+Dimensoes: min-width 280px, max-width 400px, padding `p-5`.
 
-### 11.2 FlowCard
+Nota v3.0: Removido icone por metadado (Scale, Users, Clock da v2.0). Metadados usam label + valor textual. Menos icones = visual mais limpo. Removida barra de progresso — estado processual ja comunicado pelo badge.
 
-Card que representa um fluxo/tarefa jurídica guiada.
+### 13.2 FlowCard
+
+Componente primario de descoberta. Representa uma tarefa juridica concreta.
 
 ```tsx
 <FlowCard>
-  <FlowCardIcon />            {/* Ícone representativo — 40×40 com bg circle */}
-  <FlowCardTitle />            {/* Verbo de ação: "Revisar defesa" — H4 */}
-  <FlowCardDescription />      {/* 1-2 linhas descritivas — Body secondary */}
+  <FlowCardHeader>
+    <FlowCardTitle />           {/* Verbo de acao: "Revisar defesa" — H4 */}
+    <FlowCardBadge />           {/* Area: "Trabalhista" — badge outline */}
+  </FlowCardHeader>
+  <FlowCardDescription />       {/* 1-2 linhas — Body secondary */}
   <FlowCardMeta>
-    <FlowInputs />             {/* "Requer: petição inicial, defesa" */}
-    <FlowOutput />             {/* "Gera: relatório de revisão" */}
-    <FlowEstimate />           {/* "~3 min" */}
+    <FlowInputs />              {/* "Requer: peticao inicial, defesa" */}
+    <FlowOutput />              {/* "Resultado: relatorio de revisao" */}
   </FlowCardMeta>
-  <FlowCardCTA />              {/* Botão: "Iniciar revisão" — outline-brand */}
+  <FlowCardCTA />               {/* "Iniciar revisao" — outline */}
 </FlowCard>
 ```
 
-**Regras de uso:**
-- Títulos como **verbos de ação**, não substantivos. "Revisar defesa" em vez de "Revisor".
-- Badges de área do direito: `<Badge variant="brand">Trabalhista</Badge>`.
-- CTA específico ao fluxo: "Iniciar revisão", "Gerar contestação", "Extrair cronologia".
-- Nunca "Usar agente" como CTA — abstrato demais.
+**Regras:**
+- Titulos como verbos de acao: "Revisar defesa", "Redigir contestacao", "Extrair cronologia".
+- CTA especifico ao fluxo: "Iniciar revisao", "Redigir contestacao". Nunca "Usar agente".
+- Sem icone de 40x40 com circulo de background (removido da v2.0). Titulo e badge sao suficientes.
+- Dimensoes: min-width 220px, max-width 300px, padding `p-4`.
 
-**Dimensões:** min-width 240px, max-width 320px, padding `p-5`.
-
-### 11.3 AgentCard
-
-Card de agente para a grid de descoberta (home state, sem caso aberto).
-
-```tsx
-<AgentCard>
-  <AgentCardAvatar />          {/* Ícone/avatar do agente — 48×48 */}
-  <AgentCardName />            {/* Nome — H3 */}
-  <AgentCardRole />            {/* "Analisa PDFs extensos" — Body secondary */}
-  <AgentCardCapabilities>
-    <CapabilityChip />         {/* "Revisão", "Extração", "Redação" */}
-  </AgentCardCapabilities>
-  <AgentCardCTA />             {/* outline-brand ou ghost */}
-</AgentCard>
-```
-
-**Diferença entre FlowCard e AgentCard:**
-- `FlowCard` = tarefa específica com input/output definidos. Aparece na Biblioteca de Fluxos e no workspace do caso.
-- `AgentCard` = agente genérico com capacidades. Aparece na home como "catálogo", mas é secundário aos FlowCards.
-
-### 11.4 PromptComposer
-
-O compositor de chat — principal componente operacional.
+### 13.3 PromptComposer
 
 ```tsx
 <PromptComposer>
-  <ComposerContext>            {/* Faixa superior: "No caso: Ygor × CBD | Agente: Revisor" */}
-    <ContextCaseBadge />
-    <ContextAgentBadge />
-    <ContextDocCount />        {/* "4 PDFs · 120 páginas" */}
+  <ComposerContext>             {/* Barra superior: "Caso: Ygor x CBD | 4 documentos" */}
+    <ContextCaseName />
+    <ContextDocCount />         {/* "4 documentos · 120 paginas" */}
   </ComposerContext>
   <ComposerInput>
-    <TextareaAutosize />       {/* Campo principal — cresce com conteúdo */}
+    <TextareaAutosize />        {/* Campo principal — cresce com conteudo */}
   </ComposerInput>
   <ComposerToolbar>
-    <AttachButton />           {/* Anexar documento */}
-    <ToolButton />             {/* Selecionar ferramenta */}
-    <SuggestionChips />        {/* Sugestões rápidas clicáveis */}
-    <AgentSelector />          {/* Dropdown do agente ativo */}
-    <SendButton />             {/* brand purple, ícone Arrow */}
+    <AttachButton />            {/* Anexar documento */}
+    <SuggestionChips />         {/* Sugestoes rapidas contextuais */}
+    <SendButton />              {/* brand purple, icone ArrowUp */}
   </ComposerToolbar>
 </PromptComposer>
 ```
 
-**Regras de uso:**
-- Placeholder específico ao contexto: "Descreva o caso, envie documentos ou peça uma minuta…"
-- `ContextDocCount` atualiza em tempo real conforme documentos são processados.
-- `SuggestionChips` mudam com base no agente ativo e estágio do caso.
+**Regras:**
+- Placeholder: "Descreva o caso, envie documentos ou peca uma analise..."
+- `ContextDocCount` atualiza em tempo real.
+- `SuggestionChips` mudam com base no estagio do caso e documentos disponiveis.
 - Background: `surface-composer`. Border: `border`. Shadow: `shadow-sm`.
-- Altura mínima: 56px. Máxima: 200px (scrollable depois).
+- Altura minima: 48px. Maxima: 180px (scrollable).
 
-### 11.5 SourcePanel
+Nota v3.0: Removidos `ToolButton` e `AgentSelector` do composer (v2.0). Seletor de ferramenta gera confusao. Seletor de agente e desnecessario se o fluxo ja define o agente. Simplificacao deliberada.
 
-Painel lateral de fontes e evidências.
+### 13.4 SourcePanel
+
+Painel de fontes e evidencias — aba dentro do Painel de Contexto.
 
 ```tsx
 <SourcePanel>
   <SourcePanelHeader>
-    <Title />                  {/* "Fontes e Evidências" — H4 */}
-    <CloseButton />
+    <Title />                   {/* "Fontes" — H4 */}
+    <SourceStats />             {/* "12 fontes · 3 sugestoes · 1 revisao" */}
   </SourcePanelHeader>
   <SourcePanelTabs>
     <Tab>Documentos</Tab>
-    <Tab>Jurisprudência</Tab>
-    <Tab>Legislação</Tab>
+    <Tab>Jurisprudencia</Tab>
+    <Tab>Legislacao</Tab>
   </SourcePanelTabs>
   <SourceList>
     <SourceItem>
-      <SourceIcon />           {/* Tipo: PDF, decisão, lei */}
-      <SourceTitle />          {/* Nome do documento */}
-      <SourcePage />           {/* "p. 47, §3" — Geist Mono */}
-      <ConfidenceBadge />      {/* source | inference | needs-review */}
-      <SourceExcerpt />        {/* Trecho relevante — max 3 linhas */}
+      <SourceTitle />           {/* Nome do documento */}
+      <SourceLocation />        {/* "p. 47, par. 3" — JetBrains Mono */}
+      <SourceBadge />           {/* source-document | source-suggested | source-review */}
+      <SourceExcerpt />         {/* Trecho relevante — max 3 linhas */}
     </SourceItem>
   </SourceList>
-  <SourcePanelFooter>
-    <SourceStats />            {/* "12 fontes · 3 inferências · 2 alertas" */}
-  </SourcePanelFooter>
 </SourcePanel>
 ```
 
-**Regras de uso:**
-- Width: `w-80` (320px), retrátil.
-- Cada `SourceItem` deve ser clicável → abre o documento na posição exata.
-- Badges de confiança: azul (fonte direta), âmbar (inferência), vermelho (requer revisão).
-- Nunca esconder fontes atrás de mais de 1 clique.
+**Regras:**
+- Cada `SourceItem` clicavel — abre documento na posicao exata.
+- Badges: azul (fonte direta), ambar (sugestao), vermelho (revisao obrigatoria).
+- Nunca esconder fontes atras de mais de 1 clique.
+- Sem icone por tipo de documento (removido da v2.0). Titulo e localizacao sao suficientes.
 
-### 11.6 ArtifactEditor
+### 13.5 ArtifactEditor
 
-Editor de documento/peça jurídica em painel dedicado.
+Editor de documento/peca juridica.
 
 ```tsx
 <ArtifactEditor>
   <ArtifactToolbar>
-    <ArtifactTitle />          {/* "Contestação — Caso Ygor × CBD" — H3 */}
-    <VersionSelector />        {/* "v3 (atual)" dropdown */}
+    <ArtifactTitle />           {/* "Contestacao — Caso Ygor x CBD" — H3 */}
+    <VersionSelector />         {/* "v3 (atual)" — dropdown */}
     <ArtifactActions>
-      <ExportButton />         {/* Exportar .docx */}
-      <CompareButton />        {/* Comparar versões */}
-      <FullscreenButton />     {/* Modo foco */}
+      <ExportButton />          {/* Exportar .docx */}
+      <CompareButton />         {/* Comparar versoes */}
+      <FullscreenButton />      {/* Modo foco */}
     </ArtifactActions>
   </ArtifactToolbar>
   <ArtifactBody>
-    <Editor />                 {/* Rich text editor — ProseMirror ou similar */}
+    <Editor />                  {/* Rich text — ProseMirror ou similar */}
     <InlineAnnotations>
-      <AIComment />            {/* Balão lateral da IA — confiança, sugestão */}
-      <SourceHighlight />      {/* Trecho vinculado a fonte */}
-      <ReviewFlag />           {/* Marcador "requer revisão" */}
+      <SystemNote />            {/* Nota lateral: sugestao, ponto de revisao */}
+      <SourceHighlight />       {/* Trecho vinculado a fonte */}
+      <ReviewMarker />          {/* Marcador de revisao necessaria */}
     </InlineAnnotations>
   </ArtifactBody>
   <ArtifactFooter>
     <WordCount />
     <LastSaved />
-    <ConfidenceSummary />      {/* "14 fontes · 2 inferências · 1 alerta" */}
+    <SourceSummary />           {/* "14 fontes · 2 sugestoes · 1 revisao" */}
   </ArtifactFooter>
 </ArtifactEditor>
 ```
 
-**Regras de uso:**
-- Background: `surface-artifact`. Padding lateral generoso (`px-8` a `px-12`) para simular documento.
-- `AIComment` renderiza na margem direita, alinhado ao parágrafo. Background: `confidence-inference-bg`.
-- `SourceHighlight`: underline pontilhado azul. Hover → popover com dados da fonte.
-- `ReviewFlag`: ícone âmbar na margem com tooltip. Clicável → abre SourcePanel filtrado.
+**Regras:**
+- Background: `surface-artifact`. Padding lateral `px-12` a `px-16` para simular documento.
+- `SystemNote` renderiza na margem direita, alinhado ao paragrafo. Background: `source-suggested-bg`. Sem icone de centelha — usa icone `MessageSquare` ou sem icone.
+- `SourceHighlight`: underline pontilhado azul. Hover abre popover com dados da fonte.
+- `ReviewMarker`: indicador ambar na margem. Clicavel — filtra SourcePanel.
 
-### 11.7 CaseTimeline
+Nota v3.0: `AIComment` renomeado para `SystemNote`. `ReviewFlag` renomeado para `ReviewMarker`. Nomenclatura neutra, sem referencia explicita a IA.
 
-Timeline visual de eventos do caso.
+### 13.6 CaseTimeline
 
 ```tsx
 <CaseTimeline>
   <TimelineItem>
-    <TimelineDot status="done" />     {/* Cor do workflow */}
-    <TimelineDate />                   {/* "12 mar 2025" — xs, Geist Mono */}
+    <TimelineDot status="done" />
+    <TimelineDate />            {/* "12 mar. 2025" — xs, JetBrains Mono */}
     <TimelineContent>
-      <TimelineTitle />                {/* "Petição inicial recebida" */}
-      <TimelineDescription />          {/* Detalhes opcionais */}
-      <TimelineAttachments />          {/* Docs vinculados */}
+      <TimelineTitle />         {/* "Peticao inicial recebida" */}
+      <TimelineDescription />
+      <TimelineAttachments />   {/* Docs vinculados */}
     </TimelineContent>
   </TimelineItem>
-  <TimelineConnector />                {/* Linha vertical entre items */}
+  <TimelineConnector />         {/* Linha vertical, 1px, border-subtle */}
 </CaseTimeline>
 ```
 
-**Regras de uso:**
-- Orientação vertical, mais recente no topo.
-- `TimelineDot` usa cores de workflow: `done` = verde, `active` = roxo, `review` = gold, `blocked` = vermelho.
-- `TimelineConnector`: 2px, `border-subtle`.
-- Clicável: cada item pode abrir o documento ou artefato associado.
+Orientacao vertical, mais recente no topo. `TimelineDot` usa cores de workflow. Clicavel.
 
-### 11.8 CaseHeader
-
-Cabeçalho persistente dentro do workspace do caso.
+### 13.7 CaseHeader
 
 ```tsx
 <CaseHeader>
   <CaseHeaderLeft>
-    <BackButton />                     {/* Voltar para Home / Casos */}
-    <CaseTitle />                      {/* Nome — H2 */}
-    <CaseNumber />                     {/* Nº processo — Geist Mono, muted */}
+    <BackButton />
+    <CaseTitle />               {/* H2 */}
+    <CaseNumber />              {/* JetBrains Mono, muted */}
     <WorkflowBadge />
   </CaseHeaderLeft>
   <CaseHeaderRight>
-    <CaseActions>
-      <Button variant="outline-brand">Subir documentos</Button>
-      <Button variant="default">Iniciar fluxo</Button>
-      <MoreMenu />                     {/* Editar, Arquivar, Exportar */}
-    </CaseActions>
+    <Button variant="outline">Subir documentos</Button>
+    <Button variant="default">Iniciar fluxo</Button>
+    <MoreMenu />
   </CaseHeaderRight>
 </CaseHeader>
 ```
 
-**Dimensões:** height: 64px (`h-16`). Background: `surface-workspace`. Border-bottom: `border`.
+Height: 56px (`h-14`). Background: `surface-workspace`. Border-bottom: `border`.
 
-### 11.9 UploadZone
-
-Componente de upload de documentos com feedback ativo.
+### 13.8 UploadZone
 
 ```tsx
 <UploadZone>
-  <DropArea>                           {/* Drag-and-drop zone */}
-    <UploadIcon />
-    <UploadTitle />                    {/* "Arraste documentos do processo" */}
-    <UploadSubtitle />                 {/* "PDF, DOCX · Até 50MB" */}
-    <UploadButton />                   {/* "Escolher arquivos" — outline */}
+  <DropArea>
+    <UploadTitle />             {/* "Arraste documentos do processo" */}
+    <UploadSubtitle />          {/* "PDF, DOCX — ate 50MB por arquivo" */}
+    <UploadButton />            {/* "Escolher arquivos" — outline */}
   </DropArea>
   <UploadList>
     <UploadItem>
-      <FileIcon />
       <FileName />
       <FileSize />
-      <ProcessingStatus />            {/* Barra de progresso ou ✓ */}
-      <FileTypeTag />                  {/* Auto-detectado: "Petição inicial" */}
+      <ProcessingStatus />      {/* Barra de progresso ou icone de check */}
+      <FileTypeTag />           {/* Auto-detectado: "Peticao inicial" */}
     </UploadItem>
   </UploadList>
-  <UploadSuggestions>                  {/* Pós-upload: próximos passos */}
+  <UploadSuggestions>           {/* Pos-upload: proximos passos */}
     <SuggestionChip>Resumir documentos</SuggestionChip>
     <SuggestionChip>Extrair cronologia</SuggestionChip>
     <SuggestionChip>Revisar defesa</SuggestionChip>
@@ -786,254 +867,257 @@ Componente de upload de documentos com feedback ativo.
 </UploadZone>
 ```
 
-**Regras de uso:**
+**Regras:**
 - Estado drag-over: border `border-primary`, bg `primary/5`.
-- Após upload: nunca estado morto. Sempre mostrar `UploadSuggestions` com próximos passos.
-- `FileTypeTag` sugere automaticamente o tipo de documento com opção de corrigir.
+- Apos upload: nunca estado morto. Sempre mostrar `UploadSuggestions`.
+- `FileTypeTag` sugere automaticamente o tipo com opcao de corrigir.
+- Sem icone grande centralizado na area de drop. Texto e suficiente.
 
-### 11.10 CommandPalette
-
-Busca global / atalho rápido.
+### 13.9 CommandPalette
 
 ```tsx
-<CommandPalette>               {/* Dialog central, shadow-xl */}
-  <CommandInput />             {/* Busca — autofocus */}
+<CommandPalette>                {/* Dialog central, shadow-xl */}
+  <CommandInput />              {/* Busca — autofocus */}
   <CommandGroups>
     <CommandGroup title="Casos">
-      <CommandItem />          {/* Caso + nº processo + status */}
+      <CommandItem />           {/* Caso + numero + status */}
     </CommandGroup>
     <CommandGroup title="Fluxos">
-      <CommandItem />          {/* Nome do fluxo + ícone */}
+      <CommandItem />           {/* Nome do fluxo */}
     </CommandGroup>
     <CommandGroup title="Documentos">
-      <CommandItem />          {/* Nome do doc + caso associado */}
+      <CommandItem />           {/* Doc + caso associado */}
     </CommandGroup>
-    <CommandGroup title="Ações">
-      <CommandItem />          {/* "Novo caso", "Subir documento" */}
+    <CommandGroup title="Acoes">
+      <CommandItem />           {/* "Novo caso", "Subir documento" */}
     </CommandGroup>
   </CommandGroups>
 </CommandPalette>
 ```
 
-**Atalho:** `Cmd+K` / `Ctrl+K`.
-**Dimensões:** max-width 640px, max-height 400px, centrado, shadow-xl, z-60.
+Atalho: `Cmd+K` / `Ctrl+K`. Max-width 560px. Max-height 380px. Centrado. z-60.
 
-### 11.11 SmartTemplate
+### 13.10 SmartTemplate
 
-Modal de fluxo guiado — substitui prompt livre por formulário contextual.
+Modal de fluxo guiado — substitui prompt livre por formulario contextual.
 
 ```tsx
 <SmartTemplate>
   <TemplateHeader>
-    <TemplateIcon />
-    <TemplateTitle />              {/* "Gerar Contestação" */}
-    <TemplateDescription />        {/* "Preencha os dados e o sistema gera o rascunho" */}
+    <TemplateTitle />           {/* "Redigir contestacao" */}
+    <TemplateDescription />     {/* "Preencha os dados do caso" */}
   </TemplateHeader>
   <TemplateForm>
     <TemplateField label="Valor da causa" type="currency" />
-    <TemplateField label="Houve perícia?" type="boolean" />
+    <TemplateField label="Houve pericia?" type="boolean" />
     <TemplateField label="Teses principais" type="textarea" />
     <TemplateField label="Documentos" type="file-select" />
   </TemplateForm>
   <TemplateFooter>
     <Button variant="ghost">Cancelar</Button>
-    <TemplateEstimate />           {/* "~4 min · Gera contestação em artifact" */}
-    <Button variant="default">Gerar contestação</Button>
+    <Button variant="default">Redigir contestacao</Button>
   </TemplateFooter>
 </SmartTemplate>
 ```
 
-**Regras de uso:**
-- Nunca mais de 6 campos por template — mínimo viável para a IA agir.
-- Campos opcionais visualmente distintos dos obrigatórios.
-- Após submit: transição direta para workspace com artifact abrindo.
+**Regras:**
+- Maximo 6 campos por template.
+- Campos opcionais visualmente distintos.
+- Apos submit: transicao direta para workspace com documento abrindo.
+- Sem icone no header (removido da v2.0). Titulo e descricao sao suficientes.
+- Removido `TemplateEstimate` ("~4 min"). Estimativa de tempo gera expectativa e frustacao. Usar indicador de progresso real durante processamento.
 
-### 11.12 AgentStatus
+### 13.11 ProcessingIndicator
 
-Indicador de atividade do agente de IA.
+Substitui o `AgentStatus` da v2.0. Indicador de atividade do sistema.
 
 ```tsx
-<AgentStatus>
-  <AgentStatusDot />               {/* Animado quando ativo */}
-  <AgentStatusLabel />             {/* "Revisor analisando 4 PDFs · 120 páginas" */}
-  <AgentStatusProgress />          {/* Barra ou spinner — opcional */}
-</AgentStatus>
+<ProcessingIndicator>
+  <ProcessingLabel />           {/* "Analisando 4 documentos (120 paginas)" */}
+  <ProcessingProgress />        {/* Barra de progresso — opcional */}
+</ProcessingIndicator>
 ```
 
-**Estados visuais:**
+| Estado | Label | Visual |
+|---|---|---|
+| Idle | — | Nao exibido |
+| Processando | "Analisando documentos..." | Barra de progresso ou spinner discreto |
+| Redigindo | "Redigindo contestacao..." | Texto aparecendo em streaming |
+| Concluido | "Contestacao pronta — 3 pontos para revisar" | Texto estatico, desaparece apos 5s |
+| Erro | "Falha ao processar. Tente novamente." | Texto + botao de retry |
 
-| Estado | Dot | Label | Animação |
-|---|---|---|---|
-| Idle | `muted` | "Pronto" | Nenhuma |
-| Processing | `brand purple` | "Analisando…" | `animate-pulse` no dot |
-| Generating | `brand purple` | "Gerando contestação…" | Progress bar |
-| Done | `workflow-done` | "Concluído" | Fade para idle após 3s |
-| Error | `destructive` | "Erro — tentar novamente" | Nenhuma |
+Nota v3.0: Removido o `AgentStatusDot` animado com cor de marca e `animate-pulse`. Pulsacao colorida e padrao de chatbot. Usar barra de progresso ou spinner nativo, discreto, sem cor de marca.
 
 ---
 
-## 12. Padrões de Confiança
+## 14. Padroes de Rastreabilidade
 
-O sistema de confiança é um pilar da UX do AssistJur. Cada output jurídico deve comunicar
-visualmente a origem e o grau de certeza das informações.
+Sistema de rastreabilidade — pilar de UX. Cada resultado deve comunicar a origem das informacoes.
 
-### 12.1 Tipos de confiança
+### 14.1 Tipos
 
-| Tipo | Cor | Ícone | Significado |
+| Tipo | Cor | Significado | Label |
 |---|---|---|---|
-| **Fonte direta** | `confidence-source` (azul) | `FileText` | Extraído literalmente de documento |
-| **Inferência** | `confidence-inference` (âmbar) | `Sparkles` | Gerado pela IA com base no contexto |
-| **Alerta** | `confidence-alert` (vermelho) | `AlertTriangle` | Requer conferência humana obrigatória |
-| **Verificado** | `confidence-verified` (verde) | `CheckCircle` | Revisado e aprovado pelo advogado |
+| **Fonte direta** | `source-document` (azul) | Extraido literalmente de documento | "Fonte: [doc], p. [X]" |
+| **Sugestao** | `source-suggested` (ambar) | Elaborado pelo sistema com base no contexto | "Sugestao — verificar" |
+| **Revisao obrigatoria** | `source-review` (vermelho) | Ponto critico que exige conferencia humana | "Revisao necessaria" |
+| **Verificado** | `source-verified` (verde) | Conferido e aprovado pelo advogado | "Verificado" |
 
-### 12.2 Aplicação no ArtifactEditor
+### 14.2 No Editor de Documento
 
-Dentro do texto da peça gerada:
+- **Trecho com fonte:** underline pontilhado azul. Hover abre popover com documento, pagina e paragrafo de origem.
+- **Sugestao do sistema:** highlight ambar suave no background. Nota lateral na margem (sem icone de centelha).
+- **Revisao obrigatoria:** highlight vermelho suave + marcador na margem. Click abre SourcePanel filtrado.
+- **Verificado:** indicador discreto na margem apos aprovacao do advogado.
 
-- **Trecho com fonte:** underline pontilhado azul. Hover → popover com documento, página e parágrafo de origem.
-- **Trecho inferido:** highlight âmbar suave no background. Margem: ícone `Sparkles`.
-- **Trecho com alerta:** highlight vermelho suave + ícone na margem. Click → SourcePanel filtrado.
-- **Trecho verificado:** check discreto na margem após aprovação do advogado.
-
-### 12.3 Aplicação no Chat
-
-Mensagens do agente podem conter inline:
+### 14.3 No Chat
 
 ```tsx
 <ChatMessage role="assistant">
   <p>
-    O prazo para contestação vence em
-    <SourceTag doc="Petição Inicial" page="3">15 dias úteis</SourceTag>,
+    O prazo para contestacao vence em
+    <SourceTag doc="Peticao Inicial" page="3">15 dias uteis</SourceTag>,
     contados da
-    <InferenceTag>data de juntada do AR</InferenceTag>.
-    <ReviewAlert>Verificar se houve prorrogação por convenção coletiva.</ReviewAlert>
+    <SuggestedTag>data de juntada do AR</SuggestedTag>.
+    <ReviewTag>Verificar se houve prorrogacao por convencao coletiva.</ReviewTag>
   </p>
 </ChatMessage>
 ```
 
-### 12.4 Resumo de confiança
+Nota v3.0: Tags renomeadas de `InferenceTag` para `SuggestedTag`, de `ReviewAlert` para `ReviewTag`. Linguagem centrada no usuario.
 
-Sempre que um artefato ou resposta longa é gerada, exibir resumo:
+### 14.4 Resumo de Rastreabilidade
+
+Aparece no footer do editor e no final de respostas longas:
 
 ```tsx
-<ConfidenceSummary>
-  <ConfidenceCount type="source" count={14} />      {/* "14 fontes" */}
-  <ConfidenceCount type="inference" count={3} />     {/* "3 inferências" */}
-  <ConfidenceCount type="alert" count={1} />         {/* "1 alerta" */}
-</ConfidenceSummary>
+<SourceSummary>
+  <SourceCount type="document" count={14} />    {/* "14 fontes" */}
+  <SourceCount type="suggested" count={3} />     {/* "3 sugestoes" */}
+  <SourceCount type="review" count={1} />        {/* "1 revisao" */}
+</SourceSummary>
 ```
 
-Posicionar no footer do `ArtifactEditor` e no final de respostas longas do chat.
-
 ---
 
-## 13. Estados de Interação
+## 15. Estados de Interacao
 
-| Estado | Implementação |
+| Estado | Implementacao |
 |---|---|
 | **Default** | Conforme tokens base |
-| **Hover** | `hover:bg-*/90` ou `hover:bg-accent` — explícito, sem ambiguidade |
-| **Focus** | `focus-visible:ring-2 focus-visible:ring-ring` — anel roxo nítido |
-| **Active** | `active:bg-*/95` — leve escurecimento para feedback tátil |
-| **Disabled** | `opacity-50 pointer-events-none` — 50% opacity, sem cursor |
-| **Loading** | Skeleton com `animate-pulse` + `bg-foreground/20` |
+| **Hover** | `hover:bg-accent` ou opacity shift — sutil, sem salto |
+| **Focus** | `focus-visible:ring-2 focus-visible:ring-ring ring-offset-2` — anel roxo nitido |
+| **Active** | `active:scale-[0.98]` ou leve escurecimento |
+| **Disabled** | `opacity-50 pointer-events-none` |
+| **Loading** | Skeleton com `animate-pulse` + `bg-muted` |
 | **Error** | Border `border-destructive`, texto `text-destructive` |
-| **Success** | Border `border-brand-success`, ícone verde |
-
-### Estados adicionais (v2.0)
-
-| Estado | Implementação |
-|---|---|
 | **Selected (sidebar)** | `bg-surface-sidebar-active`, `text-primary`, `font-medium` |
-| **Drag-over (upload)** | `border-primary`, `bg-primary/5`, `ring-2 ring-primary/30` |
-| **Processing (agent)** | `animate-pulse` no dot + label de progresso |
-| **Generating** | Streaming text + cursor piscante + progress bar |
-| **Split-resize** | Cursor `col-resize`, highlight na `border-split` |
+| **Drag-over (upload)** | `border-primary`, `bg-primary/5` |
+| **Processing** | Barra de progresso ou spinner + label textual |
+| **Generating** | Texto em streaming + cursor piscante |
+| **Split-resize** | Cursor `col-resize`, highlight em `border-split` |
 
 ---
 
-## 14. Dark / Light Mode
+## 16. Dark / Light Mode
 
 **Ambos suportados.** Default: `light`.
 
-- Toggle via `next-themes` com atributo `class` em `<html>`
-- Script inline no `<head>` previne FOUC
-- Theme color meta tag atualizado dinamicamente
+- Toggle via `next-themes` com atributo `class` em `<html>`.
+- Script inline no `<head>` previne FOUC.
+- Theme color meta tag atualizado dinamicamente.
 
-**Guideline:**
-- Light mode: UI de trabalho diurno — branco, limpo, bordas suaves
-- Dark mode: Premium "noturno" — roxo profundo, não preto zinc
+**Diretrizes:**
+- Light mode: trabalho diurno. Branco, limpo, bordas suaves, espacamento generoso.
+- Dark mode: noturno premium. Fundo roxo profundo (nao preto zinc, nao preto puro). Identidade da marca aparece no background escuro.
 
-**Nunca use cores hardcoded** em componentes. Sempre `text-foreground`, `bg-card`, etc.
-Para cores de marca, use `text-brand-purple-*` ou `text-primary`.
+**Nunca usar cores hardcoded** em componentes. Sempre tokens semanticos.
 
-**Tokens de confiança e workflow** funcionam em ambos os modos — valores ajustados
-automaticamente via CSS custom properties no seletor `.dark`.
+Tokens de rastreabilidade e workflow funcionam em ambos os modos via CSS custom properties em `.dark`.
 
 ---
 
-## 15. Iconografia e Ilustração
+## 17. Iconografia
 
 ### Biblioteca
 
-**Lucide React** como fonte primária. Estilo: outline, 24×24 (default), stroke-width 1.5.
+**Lucide React**. Estilo outline. Tamanho padrao: 20px. Stroke-width: 1.5.
 
-### Ícones por domínio
+### Mapeamento por Dominio
 
-| Domínio | Ícones principais |
+| Dominio | Icones |
 |---|---|
 | Caso / Processo | `Briefcase`, `Scale`, `Gavel` |
-| Documentos | `FileText`, `Files`, `Upload` |
-| Chat / Agente | `MessageSquare`, `Bot`, `Sparkles` |
-| Fluxos / Tarefas | `Workflow`, `ListChecks`, `Play` |
-| Confiança | `ShieldCheck`, `AlertTriangle`, `CheckCircle` |
-| Navegação | `Home`, `Search`, `Settings`, `ChevronRight` |
-| Status | `Clock`, `Check`, `X`, `Loader` |
+| Documentos | `FileText`, `Files`, `Upload`, `Download` |
+| Chat | `MessageSquare`, `Send` |
+| Fluxos / Tarefas | `ListChecks`, `Play`, `ArrowRight` |
+| Rastreabilidade | `ShieldCheck`, `AlertTriangle`, `CheckCircle`, `FileSearch` |
+| Navegacao | `Home`, `Search`, `Settings`, `ChevronRight`, `ArrowLeft` |
+| Status | `Clock`, `Check`, `X`, `Loader2` |
+| Editor | `Bold`, `Italic`, `List`, `Undo`, `Redo` |
 
-### Regras
+### Icones removidos (v3.0)
 
-- Em botões: `size-4` (16px), `gap-2` com texto.
-- Em cards: `size-5` (20px) ou `size-6` (24px) para ícones principais.
+| Icone | Motivo |
+|---|---|
+| `Sparkles` | Cliche de IA. O sistema nao precisa sinalizar que "e IA" |
+| `Bot` | Infantiliza. Avatar do sistema usa marca ou icone de dominio |
+| `Wand2` / `Zap` | Associacao com "magia" / efeito instantaneo |
+| `Brain` | Referencia explicita a IA/ML |
+
+### Regras de Uso
+
+- Em botoes: `size-4` (16px), `gap-2` com texto.
+- Em cards: `size-5` (20px).
 - Em badges: `size-3` (12px).
-- Cor: herda do texto pai (`currentColor`), nunca cor fixa.
+- Cor: herda do texto pai (`currentColor`). Nunca cor fixa.
+- Maximo 1 icone por label. Se o texto e claro, icone e opcional.
 
 ---
 
-## 16. Motion e Animação
+## 18. Motion e Animacao
 
-### Princípio
+### Principio
 
-Animações devem comunicar estado e direcionalidade. Nunca decorativas.
+Animacoes comunicam estado e direcionalidade. Nunca decorativas. Nunca chamam atencao para si mesmas.
 
-### Tokens de duração
+### Duracoes
 
 | Token | Valor | Uso |
 |---|---|---|
 | `--duration-fast` | `100ms` | Hover, focus |
-| `--duration-base` | `200ms` | Transições de estado, toggle |
-| `--duration-slow` | `300ms` | Abertura de painel, expand/collapse |
-| `--duration-slower` | `500ms` | Entrada de modal, overlay |
+| `--duration-base` | `150ms` | Transicoes de estado, toggle |
+| `--duration-slow` | `250ms` | Abertura de painel, expand/collapse |
+| `--duration-slower` | `400ms` | Entrada de modal, overlay |
+
+Nota v3.0: Duracoes reduzidas em relacao a v2.0 (200ms > 150ms base, 300ms > 250ms slow). Interface mais responsiva.
 
 ### Easing
 
-`ease-out` para entradas. `ease-in` para saídas. `ease-in-out` para toggle.
+`ease-out` para entradas. `ease-in` para saidas. `ease-in-out` para toggles.
 
-### Animações recorrentes
+### Animacoes por Componente
 
-| Componente | Animação |
+| Componente | Animacao |
 |---|---|
 | Sidebar collapse | Slide + fade, `duration-slow` |
-| Split-view resize | Resize fluido sem animação (instant) |
-| Modal / dialog | Scale-up + fade, `duration-slower` |
-| Toast | Slide-in from right, `duration-slow` |
-| Agent processing dot | `animate-pulse` |
-| Skeleton loading | `animate-pulse`, `bg-foreground/20` |
+| Split-view resize | Instantaneo (sem animacao) |
+| Modal / dialog | Scale-up (`0.98 > 1`) + fade, `duration-slower` |
+| Toast | Slide-in from top-right, `duration-slow` |
+| Skeleton loading | `animate-pulse`, `bg-muted` |
 | Command palette | Scale-up + fade, `duration-base` |
-| Confidence highlight | Background fade-in, `duration-base` |
+| Streaming de texto | Aparecimento caractere a caractere, sem animacao adicional |
+
+### O que NAO animar
+
+- Dots pulsantes coloridos (padrao chatbot).
+- Glow ou halo em elementos.
+- Transicoes de cor em background de superficie.
+- Rotacao de icones durante loading (usar `Loader2` com `animate-spin` apenas).
 
 ---
 
-## 17. Responsividade
+## 19. Responsividade
 
 ### Breakpoints
 
@@ -1042,149 +1126,153 @@ Animações devem comunicar estado e direcionalidade. Nunca decorativas.
 | `sm` | 640px | Mobile landscape |
 | `md` | 768px | Tablet portrait |
 | `lg` | 1024px | Tablet landscape / desktop pequeno |
-| `xl` | 1280px | Desktop padrão |
+| `xl` | 1280px | Desktop padrao |
 | `2xl` | 1536px | Desktop grande |
 
-### Comportamento por breakpoint
+### Comportamento por Breakpoint
 
-| Componente | < `lg` | `lg`–`xl` | > `xl` |
+| Componente | < `lg` | `lg` a `xl` | > `xl` |
 |---|---|---|---|
-| Sidebar | Sheet overlay | Colapsada (`w-16`) | Expandida (`w-64`) |
-| Split-view | Stack vertical (artifact abaixo do chat) | Split 50/50 | Split ajustável |
-| Painel de metadados | Hidden (acesso via tab) | Hidden (acesso via toggle) | Visível (`w-80`) |
-| Home grid | 1 coluna | 2 colunas | 3–4 colunas |
-| Command palette | Fullscreen | Centered, 80% width | Centered, 640px |
+| Sidebar | Sheet overlay | Colapsada (`w-14`) | Expandida (`w-60`) |
+| Split-view | Stack vertical | Split 50/50 | Split ajustavel |
+| Painel de contexto | Hidden (acesso via tab) | Hidden (toggle) | Visivel (`w-72`) |
+| Home grid | 1 coluna | 2 colunas | 3 colunas |
+| Command palette | Fullscreen | Centrado, 80% width | Centrado, 560px |
 | Composer | Full-width, fixo no bottom | Dentro do painel esquerdo | Dentro do painel esquerdo |
 
-### Prioridade mobile
+### Prioridade Mobile
 
-O AssistJur é desktop-first (advogados trabalham em telas grandes), mas mobile deve permitir:
+Desktop-first. Mobile permite:
 - Consultar caso e status
-- Ler artefato
-- Enviar mensagem rápida no chat
+- Ler documento
+- Enviar mensagem
 - Ver fontes
 
-Não é prioritário em mobile: editar artefatos, usar split-view completo, drag-and-drop de upload.
+Nao prioritario em mobile: editar documentos, split-view completo, drag-and-drop.
 
 ---
 
-## 18. Guidelines de Consistência
+## 20. Guidelines de Consistencia
 
-### Hierarquia de uso de cores
+### Hierarquia de Uso de Cores
 
 ```
-1. Tokens semânticos (bg-background, text-foreground)     ← sempre preferir
-2. Tokens de layout (bg-surface-workspace, border-split)  ← para estrutura
-3. Tokens de workflow/confiança (workflow-active, etc.)    ← para estados de domínio
-4. Tokens de marca via Tailwind (bg-brand-purple-100)     ← para elementos decorativos
-5. Primitivos da marca (--assistjur-purple-600)            ← só em CSS global / animações
-6. Valores hardcoded (#7c3aed)                             ← NUNCA em componentes
+1. Tokens semanticos (bg-background, text-foreground)       ← sempre preferir
+2. Tokens de layout (bg-surface-workspace, border-split)    ← para estrutura
+3. Tokens de workflow/rastreabilidade (workflow-active, etc) ← para estados de dominio
+4. Tokens de marca via Tailwind (bg-brand-purple-100)       ← decorativos, com parcimonia
+5. Primitivos (--assistjur-purple-600)                       ← so em CSS global
+6. Valores hardcoded (#7c3aed)                               ← NUNCA em componentes
 ```
 
-### Regras invioláveis
+### Regras Inviolaveis
 
-1. **`--primary` é roxo** — jamais sobrescreva para preto/cinza em componentes de produto.
-2. **Gold é escasso** — máximo 1 elemento gold por viewport.
-3. **Sidebar mais escura no dark** — preserva profundidade do layout.
-4. **Focus ring sempre visível** — não remova outline/ring sem substituto.
-5. **Seleção de texto usa cor de marca** — `::selection` definida no globals.css.
-6. **Scrollbar consistente** — 6px, cor `var(--border)`, não customize por componente.
-7. **Caso é a entidade principal** — toda tela dentro do workspace exibe o contexto do caso no header.
-8. **Upload nunca é estado morto** — sempre seguido de sugestões de próximos passos.
-9. **Fontes a 1 clique** — painel de fontes nunca escondido atrás de mais de 1 interação.
-10. **Linguagem jurídica, não técnica** — labels em PT-BR jurídico, sem jargão de IA.
+1. **`--primary` e roxo.** Nunca sobrescrever para preto/cinza.
+2. **Gold e escasso.** Maximo 1 elemento gold por viewport. Preferencialmente zero.
+3. **Sidebar mais escura no dark mode.** Preserva profundidade.
+4. **Focus ring sempre visivel.** Nunca remover outline/ring sem substituto.
+5. **Selecao de texto usa cor de marca.** `::selection` definida no globals.css.
+6. **Scrollbar consistente.** 6px, cor `var(--border)`.
+7. **Caso e entidade principal.** Toda tela dentro do workspace exibe contexto do caso no header.
+8. **Upload nunca e estado morto.** Sempre seguido de sugestoes.
+9. **Fontes a 1 clique.** Painel de fontes nunca escondido atras de mais de 1 interacao.
+10. **Linguagem juridica, nunca tecnica.** Labels em PT-BR juridico. Sem jargao de IA.
+11. **Sem emojis na interface.** Icones Lucide quando necessario. Emojis sao informais demais para contexto juridico.
+12. **Sem referencia explicita a IA.** O produto e a ferramenta. IA e infraestrutura.
 
-### Escala de responsabilidade dos arquivos
+### Escala de Responsabilidade dos Arquivos
 
 | Arquivo | O que define |
 |---|---|
-| `app/globals.css` | Todos os tokens CSS, utilidades globais, base layer |
+| `app/globals.css` | Tokens CSS, utilidades globais, base layer |
 | `lib/design-tokens.ts` | Mesmos valores para uso em JS/TS |
-| `components/ui/button.tsx` | Variantes de botão com CVA |
-| `components/ui/badge.tsx` | Variantes de badge com CVA (incl. workflow + confidence) |
-| `components/ui/*.tsx` | Cada componente primitivo — só usa tokens |
+| `components/ui/button.tsx` | Variantes de botao (CVA) |
+| `components/ui/badge.tsx` | Variantes de badge (CVA) — workflow + rastreabilidade |
+| `components/ui/*.tsx` | Primitivos — so usam tokens |
 | `components/case/*.tsx` | CaseCard, CaseHeader, CaseTimeline |
 | `components/flow/*.tsx` | FlowCard, SmartTemplate |
-| `components/artifact/*.tsx` | ArtifactEditor, InlineAnnotations |
-| `components/source/*.tsx` | SourcePanel, SourceItem, ConfidenceBadge |
-| `components/chat/*.tsx` | PromptComposer, ChatMessage, AgentStatus |
+| `components/document/*.tsx` | ArtifactEditor, InlineAnnotations |
+| `components/source/*.tsx` | SourcePanel, SourceItem, SourceBadge |
+| `components/chat/*.tsx` | PromptComposer, ChatMessage, ProcessingIndicator |
 | `components/layout/*.tsx` | AppShell, SplitView, Sidebar |
-| `docs/DESIGN-SYSTEM.md` | Este arquivo — fonte da verdade do design |
+| `docs/DESIGN-SYSTEM.md` | Este arquivo — fonte da verdade |
 
-### Como adicionar uma nova variante de componente
+Nota v3.0: `components/artifact/` renomeado para `components/document/`. "Artefato" e jargao tecnico. "Documento" e o que o advogado entende.
+
+### Como Adicionar Variante
 
 ```tsx
-// 1. Adicione no cva() do componente
+// 1. No cva() do componente
 variant: {
-  "minha-variante": "bg-brand-purple-100 text-brand-purple-800 hover:bg-brand-purple-200",
+  "minha-variante": "bg-secondary text-secondary-foreground hover:bg-secondary/80",
 }
 
-// 2. Use tokens — nunca valores hardcoded
-// ✅ bg-brand-purple-100
-// ❌ bg-[#ede9fe]
+// 2. Sempre tokens — nunca hardcoded
+// Correto:  bg-secondary
+// Errado:   bg-[#f5f5f4]
 
-// 3. Suporte dark mode embutido via dark: prefix
-"dark:bg-brand-purple-900/50 dark:text-brand-purple-300"
+// 3. Dark mode via prefix
+"dark:bg-neutral-800 dark:text-neutral-200"
 ```
 
-### Como adicionar uma nova cor ao sistema
+### Como Adicionar Cor
 
 ```css
-/* 1. Em globals.css — seção "Primitivos de marca" */
+/* 1. Em globals.css — primitivos de marca */
 :root {
   --assistjur-minha-cor: #xxxxxx;
 }
 
-/* 2. No @theme block — para disponibilizar como classe Tailwind */
+/* 2. Em @theme — para Tailwind */
 @theme {
   --color-brand-minha-cor: var(--assistjur-minha-cor);
 }
 
-/* 3. Em lib/design-tokens.ts — para uso em JS */
+/* 3. Em lib/design-tokens.ts — para JS */
 export const brand = {
   minhaCor: "#xxxxxx",
 }
 ```
 
-### Como adicionar um componente composto
+### Como Adicionar Componente Composto
 
 ```tsx
-// 1. Criar em components/{domínio}/meu-componente.tsx
-// 2. Usar APENAS primitivos do design system (Button, Badge, Card, etc.)
-// 3. Usar APENAS tokens semânticos para cores/espaçamento
-// 4. Documentar anatomia e regras neste DESIGN-SYSTEM.md
-// 5. Nunca importar cores hardcoded ou estilos ad-hoc
+// 1. Criar em components/{dominio}/meu-componente.tsx
+// 2. Usar APENAS primitivos do design system (Button, Badge, Card)
+// 3. Usar APENAS tokens semanticos
+// 4. Documentar anatomia neste DESIGN-SYSTEM.md
+// 5. Nunca importar cores hardcoded
+// 6. Nunca usar emojis ou icones de IA (Sparkles, Bot, Brain, Wand)
+// 7. Labels em portugues juridico
 ```
 
 ---
 
-## 19. Escalar o Produto
+## 21. Escalar o Produto
 
-### Componentes a sistematizar (próximas fases)
+### Proximas Fases
 
 **P1 — Muito importante:**
-- `<DataTable>` — tabela jurídica com filtros, paginação, row actions
-- `<DocumentViewer>` — visualização de PDF/DOCX com highlighting de fonte
-- `<LegalHighlight>` — destaque de trecho jurídico com tooltip de contexto
-- `<VersionDiff>` — comparação visual entre versões de artefato
+- `<DataTable>` — tabela juridica com filtros, paginacao, acoes por linha
+- `<DocumentViewer>` — visualizacao de PDF com highlighting de fonte
+- `<LegalHighlight>` — destaque de trecho juridico com tooltip de contexto
+- `<VersionDiff>` — comparacao entre versoes de documento
 - `<OnboardingFlow>` — wizard de primeiro acesso com caso-exemplo
 
-**P2 — Expansão:**
-- `<TestimonyMap>` — mapa de testemunhas com roteiro de perguntas
-- `<ROIDashboard>` — painel de produtividade e valor gerado
-- `<CollaborationPanel>` — atividade de membros do escritório no caso
-- `<GovernanceLog>` — trilha de auditoria de ações da IA
+**P2 — Expansao:**
+- `<WitnessMap>` — mapa de testemunhas com roteiro
+- `<ProductivityDashboard>` — metricas de trabalho por caso
+- `<CollaborationPanel>` — atividade da equipe no caso
+- `<AuditLog>` — trilha de auditoria
 - `<CustomFlowBuilder>` — construtor de fluxos personalizados
 
-### Padrão de componente novo
+### Padrao de Componente Novo
 
 ```tsx
-// components/{domínio}/meu-componente.tsx
 import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const componentVariants = cva(
-  // base classes — sem cores hardcoded
   "inline-flex items-center rounded-md border font-medium text-sm transition-colors",
   {
     variants: {

@@ -19,6 +19,11 @@ export const ACCEPTED_TXT_TYPE = "text/plain" as const;
 /** OpenDocument Text (.odt) */
 export const ACCEPTED_ODT_TYPE =
   "application/vnd.oasis.opendocument.text" as const;
+/** ZIP archive */
+export const ACCEPTED_ZIP_TYPE = "application/zip" as const;
+/** Alias que alguns browsers enviam para ZIP */
+export const ACCEPTED_ZIP_COMPRESSED_TYPE =
+  "application/x-zip-compressed" as const;
 export const OCTET_STREAM = "application/octet-stream";
 export const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
@@ -27,7 +32,7 @@ export const MAX_EXTRACTED_TEXT_LENGTH = 1_500_000; // ~1.5M chars — processos
 export const MAX_OCR_PAGES = 50;
 
 /** Extensões aceites para fallback quando o browser envia type vazio ou octet-stream (comum em produção). */
-const ACCEPTED_EXTENSIONS = /\.(docx?|pdf|jpe?g|png|xlsx?|csv|txt|odt)$/i;
+const ACCEPTED_EXTENSIONS = /\.(docx?|pdf|jpe?g|png|xlsx?|csv|txt|odt|zip)$/i;
 
 export function contentTypeFromFilename(filename: string): string {
   const lower = filename.toLowerCase();
@@ -61,6 +66,9 @@ export function contentTypeFromFilename(filename: string): string {
   if (lower.endsWith(".odt")) {
     return ACCEPTED_ODT_TYPE;
   }
+  if (lower.endsWith(".zip")) {
+    return ACCEPTED_ZIP_TYPE;
+  }
   return OCTET_STREAM;
 }
 
@@ -77,7 +85,9 @@ export function isAcceptedFileType(file: Blob): boolean {
     type === ACCEPTED_XLS_TYPE ||
     type === ACCEPTED_CSV_TYPE ||
     type === ACCEPTED_TXT_TYPE ||
-    type === ACCEPTED_ODT_TYPE
+    type === ACCEPTED_ODT_TYPE ||
+    type === ACCEPTED_ZIP_TYPE ||
+    type === ACCEPTED_ZIP_COMPRESSED_TYPE
   ) {
     return true;
   }
@@ -109,5 +119,12 @@ export function needsExtraction(contentType: string): boolean {
 export function isImageContentType(contentType: string): boolean {
   return ACCEPTED_IMAGE_TYPES.includes(
     contentType as (typeof ACCEPTED_IMAGE_TYPES)[number]
+  );
+}
+
+export function isZipContentType(contentType: string): boolean {
+  return (
+    contentType === ACCEPTED_ZIP_TYPE ||
+    contentType === ACCEPTED_ZIP_COMPRESSED_TYPE
   );
 }

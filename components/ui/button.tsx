@@ -20,18 +20,13 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
-        // Gold — para CTAs de destaque / ações premium
-        gold: "bg-brand-gold-500 font-semibold text-brand-purple-950 hover:bg-brand-gold-400 active:bg-brand-gold-600",
-        // Outline da marca — borda purple, sem fill
-        "outline-brand":
-          "border border-primary bg-transparent text-primary hover:bg-primary/8 active:bg-primary/12",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3",
-        lg: "h-11 rounded-md px-8",
-        icon: "h-10 w-10",
-        "icon-sm": "h-8 w-8",
+        default: "h-9 px-4 py-2",
+        sm: "h-8 rounded-md px-3",
+        lg: "h-10 rounded-md px-8",
+        icon: "h-9 w-9",
+        "icon-sm": "h-7 w-7",
       },
     },
     defaultVariants: {

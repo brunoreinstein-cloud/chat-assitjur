@@ -58,14 +58,10 @@ export async function GET(request: Request) {
     });
   }
 
-  const doc = await getDocumentById({ id });
+  const doc = await getDocumentById({ id, userId: userId ?? "" });
 
   if (!doc) {
     return new ChatbotError("not_found:document").toResponse();
-  }
-
-  if (doc.userId !== userId) {
-    return new ChatbotError("forbidden:document").toResponse();
   }
 
   if (doc.kind !== "text") {

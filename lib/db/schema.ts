@@ -557,6 +557,40 @@ export type BuiltInAgentOverride = InferSelectModel<
 >;
 
 /**
+ * Histórico de versões de prompts/configurações de agentes.
+ * Cada edição no admin cria um snapshot da versão anterior.
+ */
+export const promptVersion = pgTable(
+  "PromptVersion",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    agentId: varchar("agentId", { length: 64 }).notNull(),
+    version: integer("version").notNull(),
+    /** Snapshot do conteúdo das instruções */
+    content: text("content").notNull(),
+    /** Snapshot do label do agente */
+    label: varchar("label", { length: 256 }),
+    /** Snapshot do modelo padrão */
+    modelId: varchar("modelId", { length: 128 }),
+    /** Snapshot das tool flags (JSON) */
+    toolFlags: json("toolFlags").$type<Record<string, boolean>>(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    /** Email do utilizador que fez a edição, ou 'system' */
+    createdBy: varchar("createdBy", { length: 256 }),
+    /** Nota opcional descrevendo a alteração */
+    changeNote: varchar("changeNote", { length: 512 }),
+  },
+  (table) => ({
+    agentVersionIdx: uniqueIndex("prompt_version_agent_version_idx").on(
+      table.agentId,
+      table.version
+    ),
+  })
+);
+
+export type PromptVersion = InferSelectModel<typeof promptVersion>;
+
+/**
  * Saldo de créditos por utilizador (consumo de LLM).
  * 1 crédito = 1000 tokens (input+output). Ver docs/SPEC-CREDITOS-LLM.md.
  * Limite: integer ~2.1e9; se a granularidade mudar (ex.: 1 crédito = 1 token), considerar bigint.

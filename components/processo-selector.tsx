@@ -205,9 +205,7 @@ export function ProcessoSelector({
                 <span className="text-muted-foreground">
                   {truncate(currentProcesso.numeroAutos, MAX_AUTOS_LEN)}
                 </span>
-                <span className="text-muted-foreground/40">
-                  ·
-                </span>
+                <span className="text-muted-foreground/40">·</span>
                 <span className="text-foreground dark:text-white/80">
                   {currentProcesso.reclamante.split(" ")[0]}
                 </span>
@@ -218,9 +216,7 @@ export function ProcessoSelector({
                   aria-hidden
                   className="h-3 w-3 text-muted-foreground"
                 />
-                <span className="text-muted-foreground">
-                  Processo
-                </span>
+                <span className="text-muted-foreground">Processo</span>
               </>
             )}
             <svg
