@@ -12,6 +12,7 @@ import { createRevisorDefesaDocuments } from "@/lib/ai/tools/create-revisor-defe
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import { requestApproval } from "@/lib/ai/tools/human-in-the-loop";
 import { improvePromptTool } from "@/lib/ai/tools/improve-prompt";
+import { createIntakeProcessoTool } from "@/lib/ai/tools/intake-processo";
 import { createMemoryTools } from "@/lib/ai/tools/memory";
 import { requestSuggestions } from "@/lib/ai/tools/request-suggestions";
 import { runProcessoGates } from "@/lib/ai/tools/run-processo-gates";
@@ -77,6 +78,7 @@ export function buildToolsForAgent(
     >;
     analyzeProcessoPipeline?: ReturnType<typeof analyzeProcessoPipeline>;
     createMasterDocuments?: ReturnType<typeof createMasterDocuments>;
+    intakeProcesso?: ReturnType<typeof createIntakeProcessoTool>;
   };
   if (ctx.agentConfig.useRevisorDefesaTools) {
     tools.createRevisorDefesaDocuments = createRevisorDefesaDocuments({
@@ -101,6 +103,15 @@ export function buildToolsForAgent(
       session: ctx.session,
       dataStream,
     });
+  }
+
+  // intakeProcesso: só disponível quando chat não está vinculado a processo
+  if (!ctx.processoId) {
+    (tools as Record<string, unknown>).intakeProcesso =
+      createIntakeProcessoTool({
+        session: ctx.session,
+        chatId: ctx.id,
+      });
   }
 
   // Injetar MCP tools (Gmail, Drive, Notion, etc.) — já carregadas antes do stream.
