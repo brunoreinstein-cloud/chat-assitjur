@@ -17,8 +17,11 @@
  */
 
 export {
+  detectSystemPromptLeak,
   type GuardrailResult,
+  IP_LOCK_RESPONSE,
   validateUserMessage,
+  wrapUserDocument,
 } from "./guardrails";
 
 export {
