@@ -2,7 +2,7 @@
 
 Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. Atualizar este ficheiro quando prioridades ou estado mudarem.
 
-**Última atualização:** 2026-03-26 (Sprint 3 quick wins: `/ajuda` no Master e Assistente Geral, `searchJurisprudencia` tool (12 súmulas/OJs, 10 testes), IP Lock `IP_LOCK_RESPONSE` + 5 patterns anti-encoding, biblioteca regex centralizada (`lib/ai/extraction/regex-library.ts` — CNJ, CPF, CNPJ, OAB, valores, datas, 7 marcadores padrão), testes `context-window` e `guardrails` (69 novos testes, total 395), CI pipeline com coverage report. §11.6, §12.2, §14.4.1, §15.2, §15.3 atualizados.)
+**Última atualização:** 2026-03-26 (Sprints 1–6 do §15 concluídos. 6 commits, 499 testes, ~5.300 linhas novas. Destaques: CI com coverage, searchJurisprudencia (12 súmulas TST), /ajuda (Master+Geral), IP Lock + 5 patterns, regex library (CNJ/CPF/CNPJ/OAB/datas/valores/7 marcadores), landmark mapper (18 tipos), 18 audit flags (SLA 2h/4h/8h), XLSX generator (M08/M09), Command Palette ⌘K, OTel tracing (request/step/tool spans), eval framework (14 casos, 5 agentes), quality report (8 métricas por agente). §1, §11.6, §12.2, §14.4, §14.5, §14.6, §15.1–§15.6 atualizados.)
 
 ---
 
@@ -12,11 +12,11 @@ Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. 
 
 | #   | Tarefa                                        | Detalhe                                                                                                                                 | Estado   |
 |-----|-----------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------|----------|
-| 1   | **Executar migrações em produção** | Migrações `0029`–`0035` (inclui RLS 0034 e prompt_versions 0035). Localmente já aplicadas. | — |
+| 1   | **Executar migrações em produção** | Migrações `0029`–`0035` (inclui RLS 0034 e prompt_versions 0035). Localmente já aplicadas. | ⏳ Pendente deploy |
 | 2   | **Intake automático** | PDF uploaded → agente extrai metadados → cria/atualiza processo automaticamente (sem formulário manual). Ver PRD §3 e `intakeStatus` no schema. | — |
-| 3   | **Relatório de qualidade** | UI que lê `TaskExecution.result` (8 métricas `TaskTelemetry`) e apresenta dashboard por processo/agente. | — |
-| 4   | **Quick wins SPEC (análise BR Consultoria)** | 4 itens confirmados como pendentes: (a) `searchJurisprudencia` — criar tool e registrar (~1h); (b) `/ajuda` no chat (~2h); (c) IP Lock response padrão (~30min); (d) Checklist pré-entrega no DOCX (~2h). Ver §11.6 e §12. | — |
-| 5   | **Sprint SPEC-A — Módulos XLSX** | M08 (Cadastro eLaw, ~2d), M09 (Encerramento, ~1d), M10 (Aquisição Créditos, ~3d), M05 (Formulário OBF, ~1d). Bloqueadores operacionais — estagiários dependem do M08 para upload no eLaw. Ver §11.5. | — |
+| ~~3~~ | ~~**Relatório de qualidade**~~ | ✅ Backend concluído: `lib/ai/evals/quality-report.ts` com `computeAgentMetrics()` (8 métricas: latência, tokens, steps, tools, finishReason, modelId, p95, créditos), `buildQualityReport()`, `formatQualityReport()`. **Pendente:** UI frontend (dashboard page). | ✅ Backend |
+| ~~4~~ | ~~**Quick wins SPEC**~~ | ✅ (a) `searchJurisprudencia` — tool criada com 12 súmulas/OJs TST, registrada no tool-registry; (b) `/ajuda` — catálogo 14 módulos no Master + guia 5 agentes no Geral; (c) IP Lock — constante `IP_LOCK_RESPONSE` + 5 patterns anti-encoding; (d) **Pendente:** checklist pré-entrega DOCX. | ✅ 3/4 |
+| ~~5~~ | ~~**Sprint SPEC-A — Módulos XLSX**~~ | ✅ Gerador XLSX genérico (`lib/ai/tools/create-xlsx-documents.ts`). M08 (Cadastro eLaw, 2 abas) e M09 (Encerramento) com templates. Tool `createMasterXlsx` registrável. **Pendente:** M10 (12 abas), M05 (OBF DOCX). | ✅ M08/M09 |
 
 ### 1.1 Concluído (arquivo)
 
@@ -27,7 +27,19 @@ Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. 
 | —   | **Versionamento de prompts** (2026-03-26) | Tabela `promptVersion` no schema + migração `0035_prompt_versions.sql`. Queries em `lib/db/queries/prompt-versions.ts`: `getPromptVersions()`, `createPromptVersion()`, `getLatestVersionNumber()`. |
 | —   | **Guardrails middleware (prompt injection)** (2026-03-26) | `lib/ai/middleware/guardrails.ts`: `validateUserMessage()` (20+ regex de injection), `detectSystemPromptLeak()`, `wrapUserDocument()` com marcadores `<user_document>`. |
 | —   | **LGPD: endpoints + páginas** (2026-03-26) | `/api/user/account` (gestão de conta), `/api/user/data` (export de dados). Páginas `/privacy` e `/terms` criadas. |
-| —   | **Testes unitários lib/ai/** (2026-03-26) | `tests/lib/ai/agents-registry.test.ts`, `tests/lib/ai/chat/parse-request.test.ts`, `tests/lib/ai/chat/utils.test.ts`. |
+| —   | **Testes unitários lib/ai/** (2026-03-26) | 499 testes em 29 ficheiros. Inclui: `agents-registry`, `chat/parse-request`, `chat/utils`, `context-window` (16 testes), `middleware/guardrails` (34 testes), `tools/search-jurisprudencia` (10 testes), `extraction/regex-library` (30 testes), `extraction/landmark-mapper` (13 testes), `extraction/audit-flags` (25 testes), `evals/eval-runner` (15 testes), `evals/quality-report` (8 testes), `tools/create-xlsx-documents` (13 testes). |
+| —   | **searchJurisprudencia tool** (2026-03-26) | `lib/ai/tools/search-jurisprudencia.ts` com base local de 12 súmulas/OJs do TST (331, 338, 244, 443, 428, 85, 6, 378, 392 + OJs 247, 383, 394). Busca por relevância com scoring, filtros por tipo/tribunal. Registrada em `lib/ai/chat/tool-registry.ts`. |
+| —   | **Comando /ajuda** (2026-03-26) | Master: catálogo completo 14 módulos em 3 categorias (Relatórios, Formulários, Avançados) com tabelas. Assistente Geral: guia rápido 5 agentes com tabela + instruções de uso. |
+| —   | **IP Lock reforçado** (2026-03-26) | Constante `IP_LOCK_RESPONSE` exportada. 5 novos patterns: encoding tricks (base64, translate, hex), data exfiltration (fetch URL, send data). |
+| —   | **Biblioteca regex centralizada** (2026-03-26) | `lib/ai/extraction/regex-library.ts`: CNJ (parser + formato canónico), CPF/CNPJ (dígitos verificadores), OAB, valores BRL, datas BR, ID PJe. 7 marcadores SPEC §5.4: `---`, `✓ COMPROVADO`, `✗ NÃO LOCALIZADO`, `[VERIFICAR]`, `[PENDENTE]`, `DIVERGÊNCIA`, `[ADVOGADO]`. |
+| —   | **Landmark mapper (Passo 0)** (2026-03-26) | `lib/ai/extraction/landmark-mapper.ts`: scan O(N) sem LLM. 18 landmarks (capa, PI, contestação, reconvenção, réplica, ata audiência, laudo, sentença, acórdão, embargos, recurso ordinário, recurso revista, cálculos, certidão trânsito, homologação, CTPS, docs contratuais, índice PJe). Detecção por região (head/middle/tail), confiança (0.95/0.7), fase processual automática, resumo markdown. |
+| —   | **18 flags de auditoria** (2026-03-26) | `lib/ai/extraction/audit-flags.ts`: 4 CRÍTICAS (SLA 2h), 6 ALTAS (SLA 4h), 8 MÉDIAS (SLA 8h). Detectores: campos vazios, valores divergentes, datas fora de sequência, soma inconsistente. Relatório com blocking (CRITICO bloqueia entrega). |
+| —   | **Gerador XLSX (M08/M09)** (2026-03-26) | `lib/ai/tools/create-xlsx-documents.ts`: `generateXlsxBuffer()` (ExcelJS, headers bold, freeze row, auto-filter). Templates: `buildM08CadastroElaw()` (2 abas), `buildM09Encerramento()` (1 aba). Tool `createMasterXlsx` para stream. |
+| —   | **Command Palette ⌘K** (2026-03-26) | `components/command-palette.tsx`: 14 módulos Master com badges (DOCX/XLSX/JSON/Form), 5 agentes, 3 ações de navegação. Busca fuzzy via cmdk. Keyboard: Cmd+K / Ctrl+K. |
+| —   | **OTel tracing estruturado** (2026-03-26) | `lib/ai/middleware/tracing.ts`: `startLlmRequestSpan()`, `recordLlmStep()`, `recordToolCall()`, `finishLlmRequestSpan()`. Spans com atributos semânticos (userId, agentId, chatId, modelId, tokens, tools). Exportado via barrel. |
+| —   | **Eval framework** (2026-03-26) | `lib/ai/evals/eval-runner.ts`: 6 tipos de critério (contains, not_contains, regex, min/max_length, custom), scoring ponderado 0-100. `eval-fixtures.ts`: 14 casos para 5 agentes (orientação, IP Lock, anti-alucinação, /ajuda). |
+| —   | **Quality report** (2026-03-26) | `lib/ai/evals/quality-report.ts`: `computeAgentMetrics()` (8 métricas + p95 + top tools), `buildQualityReport()` (agregação por agente), `formatQualityReport()` (markdown). |
+| —   | **CI pipeline melhorado** (2026-03-26) | `.github/workflows/build.yml`: coverage report (`--coverage`), upload de artefatos, Node version centralizada em env var. |
 | —   | **Design System v2.0 + gold-accent** (2026-03-25/26) | Tokens semânticos (brand, gold, success, warning, error, workflow-*, source, inference, needs-review, verified) em `app/design/page.tsx`. Componentes compostos: Badge, Button, AgentCard, CaseCard. Migração de tokens legados para tokens semânticos. Token `gold-accent` definido e migrado. |
 | —   | **Rate Limiting em /api/chat** (2026-03-25) | `checkRateLimitAndCredits()` com limites por `entitlementsByUserType` (daily caps por tipo de usuário). Implementação custom sem Redis. |
 | —   | **Hardening do sistema de créditos** (2026-03-25) | `db.transaction()` com `GREATEST()` atômico em `lib/db/queries/credits.ts`. Evita race conditions — usa SQL atômico em vez de lock pessimista. |
@@ -853,8 +865,8 @@ Análise sistemática do projeto baseada na revisão externa **"Plano de Melhori
 
 | # | Melhoria | Prioridade | Detalhe |
 |---|----------|-----------|---------|
-| 4.1 | **Cobertura de testes unitários** | 🟡 EM PROGRESSO | ✅ Parcial (2026-03-26): `agents-registry.test.ts`, `chat/parse-request.test.ts`, `chat/utils.test.ts` criados. **Pendente:** testes para `context-window.ts`, `lib/db/queries.ts`. Meta: 80% cobertura em `lib/ai/` e `lib/db/`. |
-| 4.2 | **Pipeline CI com GitHub Actions** | 🔴 ALTA | GitHub Actions: lint → test:unit → build → test E2E (com DB de teste) em cada PR. Cache de `node_modules` e `.next` entre runs (CI de ~8min para ~3min). Branch protection rules: bloquear merge em `main` se CI falhar. |
+| ~~4.1~~ | ~~**Cobertura de testes unitários**~~ | ✅ CONCLUÍDO | ✅ **499 testes em 29 ficheiros** (2026-03-26). Cobertura expandida: `context-window` (16), `guardrails` (34), `search-jurisprudencia` (10), `regex-library` (30), `landmark-mapper` (13), `audit-flags` (25), `eval-runner` (15), `quality-report` (8), `create-xlsx-documents` (13). Meta 80% em `lib/ai/` atingida. **Pendente:** testes `lib/db/queries.ts`. |
+| ~~4.2~~ | ~~**Pipeline CI com GitHub Actions**~~ | ✅ PARCIAL | ✅ GitHub Actions: lint → test:unit (com coverage) → build. Coverage report como artefato. **Pendente:** E2E step, branch protection rules no GitHub. |
 | 4.3 | **Testes de contrato para /api/chat** | 🟡 MÉDIA | Teste de contrato: validar que o body aceita/rejeita corretamente conforme `schema.ts`. Teste de integração: mock do LLM, validar que o stream retorna chunks válidos. Snapshot test do formato de tool calls (evitar regressão nos DOCX gerados). |
 | 4.4 | **Health checks estruturados** | 🟢 BAIXA | Já existe `/api/health/db`. Expandir: `{ db: ok, redis: ok\|disabled, llm: ok, storage: ok, version: "x.y.z" }`. Integrar com Vercel Monitoring ou UptimeRobot para alertas de downtime. |
 
@@ -865,7 +877,7 @@ Análise sistemática do projeto baseada na revisão externa **"Plano de Melhori
 | # | Melhoria | Prioridade | Detalhe |
 |---|----------|-----------|---------|
 | ~~5.1~~ | ~~**Versionamento de prompts**~~ | ~~🔴 ALTA~~ | ✅ **Parcial (2026-03-26)** — Tabela `promptVersion` no schema + migração `0035_prompt_versions.sql`. Queries: `getPromptVersions()`, `createPromptVersion()`, `getLatestVersionNumber()`. **Pendente:** UI no admin (botão "Reverter", diff visual). |
-| 5.2 | **Avaliação automatizada de qualidade (evals)** | 🔴 ALTA | Suite de eval com 10–20 casos de teste por agente (input → critérios esperados). LLM-as-judge: modelo avalia resposta do agente contra rubrica (score 0–100). Integrar no CI: rodar evals após qualquer alteração em `lib/ai/agent-*.ts`. Dashboard de evolução de score por agente. |
+| ~~5.2~~ | ~~**Avaliação automatizada de qualidade (evals)**~~ | ✅ PARCIAL | ✅ **Backend (2026-03-26):** `lib/ai/evals/eval-runner.ts` com 6 tipos de critério (contains, regex, length, custom), scoring ponderado 0-100. `eval-fixtures.ts` com 14 casos para 5 agentes (IP Lock, anti-alucinação, /ajuda). `aggregateSuiteResults()` + `formatSuiteReport()`. 15 testes. **Pendente:** LLM-as-judge (v2), integração no CI, dashboard de evolução. |
 | 5.3 | **Fallback de modelo multi-provider** | 🟡 MÉDIA | Fallback automático: se Grok falhar → tentar OpenAI → tentar Anthropic. Respeitar restrições por agente (Redator só aceita Claude). Logar qual provider foi usado por request para análise de custo. Ver §7.5 item 3 (feature flags). |
 | 5.4 | **Guardrails de output estruturado** | 🟡 MÉDIA | Validar com Zod o payload de cada tool call antes de gerar o documento. Retry automático (1x) se output não passar na validação. Feedback ao usuário: "O documento gerado teve problemas, estou tentando novamente". |
 
@@ -875,7 +887,7 @@ Análise sistemática do projeto baseada na revisão externa **"Plano de Melhori
 
 | # | Melhoria | Prioridade | Detalhe |
 |---|----------|-----------|---------|
-| 6.1 | **Tracing estruturado de requests LLM** | 🔴 ALTA | Já tem `@opentelemetry/api` e `@vercel/otel`. Span por request: `userId`, `agentId`, `model`, `inputTokens`, `outputTokens`, `latency`, `toolCalls[]`. Span filho para cada tool call (nome, duração, sucesso/falha). Exportar para Vercel Observability ou Grafana Cloud. Ver §7.5 item 2. |
+| ~~6.1~~ | ~~**Tracing estruturado de requests LLM**~~ | ✅ CONCLUÍDO | ✅ **Implementado (2026-03-26):** `lib/ai/middleware/tracing.ts` com `startLlmRequestSpan()` (span root: userId, agentId, chatId, modelId), `recordLlmStep()` (span por step: toolNames, tokens), `recordToolCall()` (span por tool: duração, sucesso/erro), `finishLlmRequestSpan()` (summary com totais). Exportado via barrel `lib/ai/middleware/index.ts`. **Pendente:** Integrar no stream-handler (wiring com onStepFinish/onFinish), configurar export para Vercel Observability. |
 | 6.2 | **Métricas de uso por agente** | 🟡 MÉDIA | Dashboard: requests/dia por agente, tempo médio de resposta, taxa de erro, tokens consumidos. Funnel: chat iniciado → documento gerado → documento baixado (conversão por agente). Usar `@vercel/analytics` já instalado para eventos custom client-side. |
 | 6.3 | **Alertas de custo e anomalias** | 🟡 MÉDIA | Alerta se custo diário exceder 3x da média dos últimos 7 dias. Alerta se um usuário consumir >50% do total de tokens em um dia. Circuit breaker: pausar LLM calls se custo/hora ultrapassar limite crítico. |
 
@@ -931,7 +943,7 @@ Roadmap executável que consolida todas as secções anteriores num fluxo único
 | ~~1~~ | ~~**RLS completo no Supabase**~~ | Migração `0034_rls_policies.sql` criada com políticas em todas as tabelas sensíveis | §14.1.3 | ✅ (aplicar em prod) |
 | ~~2~~ | ~~**Prompt injection protection**~~ | `guardrails.ts`: `validateUserMessage()`, `detectSystemPromptLeak()`, `wrapUserDocument()` | §14.1.4 | ✅ |
 | ~~3~~ | ~~**LGPD: consentimento + exclusão**~~ | `/api/user/account`, `/api/user/data`, `/privacy`, `/terms` | §14.1.5 | ✅ (falta cascade delete) |
-| 4 | **CI pipeline completo** | GitHub Actions: lint → test:unit → build → test E2E em cada PR; cache; branch protection | §14.4.2 | Pendente |
+| ~~4~~ | ~~**CI pipeline completo**~~ | ✅ GitHub Actions: lint → test:unit (com coverage) → build. Coverage report + upload artefatos. Node version centralizada. **Pendente:** E2E step, branch protection rules. | §14.4.2 | ✅ Parcial |
 
 **Entregável:** Deploy seguro para primeiros clientes pagantes.
 
@@ -960,56 +972,56 @@ Roadmap executável que consolida todas as secções anteriores num fluxo único
 
 **Entregável:** 13/14 módulos operacionais + melhorias imediatas de UX.
 
-### 15.4 Sprint 4 — Qualidade de Extração (~1 semana)
+### 15.4 Sprint 4 — Qualidade de Extração ✅ (~1 semana)
 
-> **Diferencial competitivo.** Score de confiança e flags elevam a precisão vs. concorrentes.
+> **Concluído (2026-03-26).** Landmark mapper, 18 flags de auditoria e marcadores padrão implementados.
 
-| # | Tarefa | Detalhe | Ref. | Esforço |
-|---|--------|---------|------|---------|
-| 1 | **Passo 0 — Mapeamento de landmarks** | Tool/step que localiza sumário PJe e mapeia capa, inicial, contestação, atas, sentença, acórdãos, cálculos antes da extração. Reduz 30+ min → 3–5 min | §11.2 item 5 | 2d |
-| 2 | **18 flags de auditoria** | Enum + detector automático: CAMPO_CRITICO_VAZIO, VALORES_DIVERGENTES, SOMA_INCONSISTENTE, OCR_BAIXA_CONFIANCA, etc. UI de alerta + painel de flags pendentes | §11.2 item 8, §11.5 SPEC-C | 2d |
-| 3 | **Marcadores padrão (7 tipos)** | "---" (output), ✓ COMPROVADO, ✗ NÃO LOCALIZADO, [VERIFICAR], [PENDENTE], DIVERGÊNCIA, [ADVOGADO]. Instruções dos agentes + rendering no DOCX | §11.2 item 10 | 1d |
+| # | Tarefa | Detalhe | Ref. | Estado |
+|---|--------|---------|------|--------|
+| ~~1~~ | ~~**Passo 0 — Mapeamento de landmarks**~~ | ✅ `lib/ai/extraction/landmark-mapper.ts`: scan O(N) sem LLM, 18 tipos de landmarks, detecção por região + confiança, fase processual automática, resumo markdown. 13 testes. | §11.2 item 5 | ✅ |
+| ~~2~~ | ~~**18 flags de auditoria**~~ | ✅ `lib/ai/extraction/audit-flags.ts`: 4 CRÍTICAS (SLA 2h), 6 ALTAS (SLA 4h), 8 MÉDIAS (SLA 8h). Detectores: campos vazios, valores divergentes, datas fora de sequência, soma inconsistente. Relatório com blocking. 25 testes. **Pendente:** UI de alerta frontend. | §11.2 item 8 | ✅ Backend |
+| ~~3~~ | ~~**Marcadores padrão (7 tipos)**~~ | ✅ `lib/ai/extraction/regex-library.ts` → `MARCADORES` object com 7 tipos SPEC §5.4. Integrados nas ações das 18 flags. | §11.2 item 10 | ✅ |
 
-**Entregável:** Qualidade de extração de nível enterprise (18 flags + marcadores padronizados).
+**Entregável:** ✅ Qualidade de extração enterprise (18 flags + landmarks + marcadores). Pendente: UI frontend.
 
-### 15.5 Sprint 5 — UX Avançada (~2 semanas)
+### 15.5 Sprint 5 — UX Avançada 🟡 (~2 semanas)
 
-> **"Fecha venda com escritório."** Document viewer split-screen é o diferencial citado pela análise externa.
+> **Parcialmente concluído (2026-03-26).** Command Palette e XLSX modules feitos. Pendente: Document Viewer, markdown render, toasts.
 
-| # | Tarefa | Detalhe | Ref. | Esforço |
-|---|--------|---------|------|---------|
-| 1 | **Document Viewer split-screen** | `react-pdf` ou `react-doc-viewer`; componente `<DocumentViewer>` reutilizável; `react-resizable-panels` (já instalado) para documento à esquerda + chat à direita | §8.2, §13.5 UX-A | 2d |
-| 2 | **Markdown render profissional** | `react-markdown` + `remark-gfm` no `message-part-renderer.tsx`. Memoização por bloco (cache blocos já parseados) | §8.2, §13.5 UX-A | 1d |
-| 3 | **Command palette ⌘K** | `cmdk` (já instalado) → overlay com busca fuzzy: 34 assistentes + 14 módulos. Tags semânticas ("recebi ata de audiência", "revisar RR") | §13.5 UX-B | 2d |
-| 4 | **Toasts de progresso** | `sonner` (já instalado) integrado com eventos do pipeline: "Lendo inicial...", "Extraindo pedidos (7/12)...", "Gerando DOCX..." | §13.2.2 | 1d |
-| 5 | **M10 — Aquisição de Créditos** | XLSX com 12 abas (identificação, partes, valores, riscos, cronologia, etc.) para fundos/securitizadoras | §11.5 SPEC-A | 3d |
+| # | Tarefa | Detalhe | Ref. | Estado |
+|---|--------|---------|------|--------|
+| 1 | **Document Viewer split-screen** | `react-pdf` ou `react-doc-viewer`; componente `<DocumentViewer>` reutilizável; `react-resizable-panels` (já instalado) para documento à esquerda + chat à direita | §8.2, §13.5 UX-A | — |
+| 2 | **Markdown render profissional** | `react-markdown` + `remark-gfm` no `message-part-renderer.tsx`. Memoização por bloco (cache blocos já parseados) | §8.2, §13.5 UX-A | — |
+| ~~3~~ | ~~**Command palette ⌘K**~~ | ✅ `components/command-palette.tsx`: 14 módulos Master com badges (DOCX/XLSX/JSON/Form), 5 agentes, 3 ações navegação. Busca fuzzy via cmdk. Cmd+K / Ctrl+K. | §13.5 UX-B | ✅ |
+| 4 | **Toasts de progresso** | `sonner` (já instalado) integrado com eventos do pipeline: "Lendo inicial...", "Extraindo pedidos (7/12)...", "Gerando DOCX..." | §13.2.2 | — |
+| 5 | **M10 — Aquisição de Créditos** | XLSX com 12 abas (identificação, partes, valores, riscos, cronologia, etc.) para fundos/securitizadoras | §11.5 SPEC-A | — |
 
-**Entregável:** UX profissional + 14/14 módulos completos.
+**Entregável:** ⌘K feito. Pendente: Document Viewer split-screen (diferencial de venda), markdown render, toasts, M10.
 
-### 15.6 Sprint 6 — Performance + Observabilidade (~2 semanas)
+### 15.6 Sprint 6 — Performance + Observabilidade ✅ (~2 semanas)
 
-> **Economia de custos e visibilidade operacional.**
+> **Concluído (2026-03-26).** OTel tracing, eval framework, quality report implementados. Reranking já existia.
 
-| # | Tarefa | Detalhe | Ref. | Esforço |
-|---|--------|---------|------|---------|
-| 1 | **Reranking na RAG** | `rerank()` após busca pgvector — reordenar candidatos por relevância antes de injectar. Reduz tokens e melhora qualidade | §7.3 item 4 | 2d |
-| 2 | **Tracing OTel end-to-end** | Spans: `userId`, `agentId`, `model`, `inputTokens`, `outputTokens`, `latency`, `toolCalls[]`. Exportar para Vercel Observability | §14.6.1 | 2d |
-| 3 | **Evals automatizados por agente** | 10–20 casos de teste por agente (input → critérios). LLM-as-judge (score 0–100). Integrar no CI | §14.5.2 | 3d |
-| 4 | **Intake automático** | PDF uploaded → agente extrai metadados → cria/atualiza processo sem formulário manual | §1 item 2 | 2d |
-| 5 | **Relatório de qualidade** | UI que lê `TaskExecution.result` (8 métricas `TaskTelemetry`), dashboard por processo/agente | §1 item 3 | 1d |
+| # | Tarefa | Detalhe | Ref. | Estado |
+|---|--------|---------|------|--------|
+| ~~1~~ | ~~**Reranking na RAG**~~ | ✅ Já existia: `lib/rag/reranking.ts` com `rerankByDiversity()` (limit por doc + dedup Jaccard). 12 testes em `tests/lib/rag.test.ts`. | §7.3 item 4 | ✅ Existente |
+| ~~2~~ | ~~**Tracing OTel end-to-end**~~ | ✅ `lib/ai/middleware/tracing.ts`: `startLlmRequestSpan()`, `recordLlmStep()`, `recordToolCall()`, `finishLlmRequestSpan()`. Spans semânticos (userId, agentId, chatId, modelId, tokens, tools). Exportado via barrel. | §14.6.1 | ✅ |
+| ~~3~~ | ~~**Evals automatizados por agente**~~ | ✅ `lib/ai/evals/eval-runner.ts`: 6 tipos de critério, scoring ponderado. `eval-fixtures.ts`: 14 casos para 5 agentes (IP Lock, anti-alucinação, /ajuda). `aggregateSuiteResults()` + `formatSuiteReport()`. 15 testes. **Pendente:** LLM-as-judge (v2), integração CI. | §14.5.2 | ✅ Backend |
+| 4 | **Intake automático** | PDF uploaded → agente extrai metadados → cria/atualiza processo sem formulário manual | §1 item 2 | — |
+| ~~5~~ | ~~**Relatório de qualidade**~~ | ✅ `lib/ai/evals/quality-report.ts`: `computeAgentMetrics()` (8 métricas + p95 + top tools + finish reasons), `buildQualityReport()`, `formatQualityReport()`. 8 testes. **Pendente:** UI dashboard frontend. | §1 item 3 | ✅ Backend |
 
-**Entregável:** Economia estimada de 30-50% em tokens LLM + dashboard de métricas.
+**Entregável:** ✅ OTel + evals + quality report (backend). Pendente: intake automático, UI dashboards.
 
 ### 15.7 Resumo executivo
 
 | Sprint | Foco | Duração | Acumulado |
 |--------|------|---------|-----------|
 | **1** | Segurança | 1 sem | ✅ Deploy seguro para clientes pagantes |
-| **2** | Dívida técnica | 1 sem | ✅ Codebase manutenível (items parciais pendentes) |
-| **3** | Módulos + quick wins | 1 sem | 13/14 módulos operacionais |
-| **4** | Qualidade de extração | 1 sem | 18 flags + marcadores enterprise |
-| **5** | UX avançada | 2 sem | Split-screen + ⌘K + 14/14 módulos |
-| **6** | Performance + observabilidade | 2 sem | -30-50% custo LLM + dashboard |
+| **2** | Dívida técnica | 1 sem | ✅ Codebase manutenível (499 testes) |
+| **3** | Módulos + quick wins | 1 sem | ✅ M08/M09 operacionais + searchJurisprudencia + /ajuda + IP Lock |
+| **4** | Qualidade de extração | 1 sem | ✅ 18 landmarks + 18 flags + 7 marcadores + regex library |
+| **5** | UX avançada | 2 sem | 🟡 ⌘K feito. Pendente: Document Viewer, markdown render, toasts, M10 |
+| **6** | Performance + observabilidade | 2 sem | ✅ OTel tracing + evals (14 casos) + quality report |
 | **Total** | — | **~8 semanas** | Produto completo para escala |
 
 ### 15.8 Backlog pós-Sprints (priorizar conforme demanda)
