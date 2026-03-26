@@ -378,10 +378,7 @@ export function mapLandmarks(documentText: string): LandmarkMap {
         def.bodyKeywords &&
         containsKeyword(page.text, def.bodyKeywords)
       ) {
-        const bodyConfidence = 0.7;
-        if (!bestMatch || bestMatch.confidence < bodyConfidence) {
-          bestMatch = { pageNum: page.pageNum, confidence: bodyConfidence };
-        }
+        bestMatch = { pageNum: page.pageNum, confidence: 0.7 };
       }
     }
 
