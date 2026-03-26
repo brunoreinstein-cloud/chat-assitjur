@@ -180,7 +180,47 @@ REGRAS DE INFERÊNCIA:
 
 ### 0.6 Comando `/ajuda`
 
-Ao receber `/ajuda`, apresentar o catálogo de módulos com breve descrição de cada um.
+Ao receber `/ajuda` (ou variantes: "ajuda", "help", "o que você faz", "quais comandos"), apresentar o catálogo completo no seguinte formato:
+
+```
+## 🧭 AssistJur Master — Guia de Módulos
+
+**14 módulos disponíveis.** Envie o comando ou descreva o que precisa.
+
+### 📋 Relatórios e Análises
+| Comando | Módulo | Saída | Descrição |
+|---------|--------|-------|-----------|
+| `/relatorio-processual` | M01 | DOCX | Relatório processual genérico |
+| `/carta-prognostico` | M02 | DOCX | Carta de prognóstico com avaliação de risco |
+| `/relatorio-master` | M03 | DOCX | Relatório processual master (20 secções) |
+| `/relatorio-dpsp` | M04 | DOCX | Template DPSP (Drogaria São Paulo) |
+| `/analise-tst` | M11 | DOCX | Análise estratégica para recurso TST |
+
+### 📝 Formulários e Cadastros
+| Comando | Módulo | Saída | Descrição |
+|---------|--------|-------|-----------|
+| `/obf` | M05 | DOCX | Formulário Obrigação de Fazer (GPA) |
+| `/ficha-apolice` | M06 | DOCX | Ficha de apólice de seguro |
+| `/cadastro-elaw` | M08 | XLSX | Cadastro para upload no eLaw (2 abas) |
+| `/encerramento` | M09 | XLSX | Classificação de encerramento |
+
+### 📊 Módulos Avançados
+| Comando | Módulo | Saída | Descrição |
+|---------|--------|-------|-----------|
+| `/auditoria` | M07 | DOCX+XLSX | Auditoria corporativa |
+| `/aquisicao-creditos` | M10 | XLSX+MD | Due diligence para fundos/securitizadoras |
+| `/modelo-br` | M12 | DOCX | Modelo simplificado BR (~50 campos) |
+| `/completo` | M13 | DOCX | Relatório completo A-P (~250 campos) |
+| `/extracao-calculos` | M14 | JSON | Extração de cálculos de liquidação |
+
+### 💡 Como usar
+1. **Anexe o PDF do processo** (PI, contestação, sentença)
+2. **Envie o comando** do módulo desejado (ex.: `/relatorio-master`)
+3. **Aguarde a análise** — o sistema extrai dados e gera o documento
+4. **Baixe o arquivo** gerado (DOCX, XLSX ou JSON)
+
+Dica: Não sabe qual módulo usar? Descreva o que precisa e eu recomendo o mais adequado.
+```
 
 ### 0.7 Localização e referência de templates (DOCX)
 

@@ -2,7 +2,7 @@
 
 Documento de referência para alinhar tarefas imediatas, curto prazo e roadmap. Atualizar este ficheiro quando prioridades ou estado mudarem.
 
-**Última atualização:** 2026-03-26 (Grande avanço em Sprint 1 e 2 do §15: RLS migration criada (0034), route.ts refatorado de ~2376→410 linhas em módulos (`lib/ai/chat/`), prompt versions (schema + queries + migration 0035), guardrails middleware (prompt injection + leak detection), LGPD endpoints + páginas Privacy/Terms, testes unitários em `lib/ai/`. Design System gold-accent token. Itens 0c, 1, 2.1, 2.3, 14.1.3, 14.1.4, 14.1.5, 14.4.1, 14.5.1 atualizados.)
+**Última atualização:** 2026-03-26 (Sprint 3 quick wins: `/ajuda` no Master e Assistente Geral, `searchJurisprudencia` tool (12 súmulas/OJs, 10 testes), IP Lock `IP_LOCK_RESPONSE` + 5 patterns anti-encoding, biblioteca regex centralizada (`lib/ai/extraction/regex-library.ts` — CNJ, CPF, CNPJ, OAB, valores, datas, 7 marcadores padrão), testes `context-window` e `guardrails` (69 novos testes, total 395), CI pipeline com coverage report. §11.6, §12.2, §14.4.1, §15.2, §15.3 atualizados.)
 
 ---
 
@@ -544,11 +544,11 @@ Revisão completa do projeto contra a **SPEC_ASSISTJUR_MASTER_v2.docx** (Março 
 
 | # | Melhoria | Esforço | Impacto | Estado |
 |---|----------|---------|---------|--------|
-| 1 | **Comando /ajuda no chat** | ~2h | UX — guia rápido dos 14 módulos e funcionalidades | — |
+| ~~1~~ | ~~**Comando /ajuda no chat**~~ | ~~2h~~ | ~~UX — guia rápido dos 14 módulos e funcionalidades~~ | ✅ Feito (2026-03-26) — Instruções do Master com catálogo completo (tabela 14 módulos, categorias, como usar). Assistente Geral com guia rápido dos 5 agentes. |
 | 2 | **Temperatura variável por módulo no Master** | ~1h | Qualidade — Tipo A (0.1), Tipo B (0.1), Tipo C (0.1–0.2), Tipo E (0.2–0.3) | — |
-| 3 | **Registrar searchJurisprudencia no route.ts** | ~30min | Tool ainda não existe em `lib/ai/tools/` — criar e registrar | — |
+| ~~3~~ | ~~**Registrar searchJurisprudencia no route.ts**~~ | ~~30min~~ | ~~Tool criada e registrada~~ | ✅ Feito (2026-03-26) — `lib/ai/tools/search-jurisprudencia.ts` com base local de 12 súmulas/OJs do TST. Registrada em `lib/ai/chat/tool-registry.ts`. |
 | 4 | **Atualizar instruções CRAI vs CRRO vs CRRR** | ~1h | Precisão — garantir que Redator distingue corretamente as 3 peças | — |
-| 5 | **IP Lock response padrão** | ~30min | Segurança — resposta “⚠️ Acesso restrito” para tentativas de vazamento de prompt | — |
+| ~~5~~ | ~~**IP Lock response padrão**~~ | ~~30min~~ | ~~Segurança~~ | ✅ Feito (2026-03-26) — Constante `IP_LOCK_RESPONSE` exportada em `lib/ai/middleware/guardrails.ts`. 5 novos patterns (encoding tricks, exfiltração). |
 | 6 | **Checklist pré-entrega no DOCX** | ~2h | Qualidade — 7 validações obrigatórias como seção final do relatório | — |
 | 7 | **Zero texto analítico no chat (C05)** | ~1h | UX — reforçar que output é SEMPRE arquivo, chat só tem link + flags + pendências | — |
 | ~~8~~ | ~~**React.memo() no Response**~~ | ~~30min~~ | ~~Performance~~ | ✅ Feito |
@@ -585,7 +585,7 @@ Documento externo gerado em Março/2026 com diagnóstico independente do projeto
 | `lib/ai/middleware/` inexistente | "Criar diretório" como dívida crítica | ✅ **Já existe** — `prompt-caching.ts`, `logging.ts`, `guardrails.ts`, `index.ts` |
 | Response sem memoização | "React.memo() ~30min" | ✅ **Já feito** — `response.tsx:91` |
 | Provider Registry ausente | "customProvider com aliases" | ✅ **Já feito** — `providers.ts` usa `customProvider` |
-| `searchJurisprudencia` não ativada | "Tool criada mas não ativada" | ❌ **Tool nem criada** — não existe em `lib/ai/tools/` (2026-03-26: confirmado pendente) |
+| ~~`searchJurisprudencia` não ativada~~ | ~~"Tool criada mas não ativada"~~ | ✅ **Criada e registrada (2026-03-26)** — `lib/ai/tools/search-jurisprudencia.ts` com base local de 12 súmulas/OJs TST. Registrada em `tool-registry.ts`. 10 testes. |
 | 4 módulos XLSX (M05, M08, M09, M10) | Bloqueadores operacionais | ❌ **Pendente** |
 | Prompt caching ativo | "Middleware cacheControl" | ✅ **Implementado** — `lib/ai/middleware/prompt-caching.ts` |
 
@@ -942,7 +942,7 @@ Roadmap executável que consolida todas as secções anteriores num fluxo único
 | # | Tarefa | Detalhe | Ref. | Estado |
 |---|--------|---------|------|--------|
 | ~~1~~ | ~~**Refatorar route.ts em módulos**~~ | `route.ts` ~2376 → ~410 linhas. 8 módulos em `lib/ai/chat/` | §10.1 | ✅ |
-| 2 | **Testes unitários lib/ai/ e lib/db/** | ✅ Parcial: `agents-registry.test.ts`, `chat/parse-request.test.ts`, `chat/utils.test.ts`. Pendente: `context-window.ts`, `queries.ts` | §14.4.1 | 🟡 Parcial |
+| ~~2~~ | ~~**Testes unitários lib/ai/ e lib/db/**~~ | ✅ Parcial: `agents-registry`, `chat/parse-request`, `chat/utils`, `context-window`, `middleware/guardrails`, `tools/search-jurisprudencia`. 395 testes passando. | §14.4.1 | ✅ Parcial (cobertura expandida 2026-03-26) |
 | 3 | **Versionamento de prompts** | ✅ Schema + migração `0035` + queries. Pendente: UI admin (Reverter, diff visual) | §14.5.1 | 🟡 Parcial |
 
 **Entregável:** Codebase manutenível e testável.
@@ -956,7 +956,7 @@ Roadmap executável que consolida todas as secções anteriores num fluxo único
 | 1 | **M08 — Cadastro eLaw** | XLSX 2 abas: (1) dados processuais, (2) verbas/pedidos. Campos de `Processo` + `VerbaProcesso` | §11.5 SPEC-A | 2d |
 | 2 | **M09 — Encerramento** | XLSX classificação de resultado (procedente, improcedente, acordo) + valores finais | §11.5 SPEC-A | 1d |
 | 3 | **M05 — Formulário OBF** | DOCX formulário estruturado para GPA (obrigação de fazer: reintegração, CTPS) | §11.5 SPEC-A | 1d |
-| 4 | **Quick wins** | (a) Comando `/ajuda` no chat (~2h); (b) `searchJurisprudencia` tool — criar e registrar (~30min); (c) IP Lock response padrão (~30min); (d) Checklist pré-entrega no DOCX (~2h) | §11.6 itens 1-6 | 1d |
+| ~~4~~ | ~~**Quick wins**~~ | ✅ (a) `/ajuda` no Master (catálogo 14 módulos) + Assistente Geral (guia 5 agentes); (b) `searchJurisprudencia` tool + 12 súmulas/OJs + 10 testes; (c) IP Lock `IP_LOCK_RESPONSE` + 5 patterns; (d) Biblioteca regex centralizada (`lib/ai/extraction/regex-library.ts`) com CNJ, CPF, CNPJ, OAB, valores, datas, marcadores padrão; (e) Pendente: checklist pré-entrega DOCX | §11.6 itens 1-6 | ✅ Parcial |
 
 **Entregável:** 13/14 módulos operacionais + melhorias imediatas de UX.
 
