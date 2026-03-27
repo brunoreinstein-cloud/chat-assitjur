@@ -215,8 +215,8 @@ describe("agents-registry", () => {
   });
 
   describe("constants", () => {
-    it("AGENT_IDS has 5 agents", () => {
-      expect(AGENT_IDS.length).toBe(5);
+    it("AGENT_IDS has 6 agents", () => {
+      expect(AGENT_IDS.length).toBe(6);
     });
 
     it("DEFAULT_AGENT_ID_WHEN_EMPTY is assistente-geral", () => {

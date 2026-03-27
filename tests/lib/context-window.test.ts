@@ -42,12 +42,12 @@ describe("estimateTokensFromText", () => {
 // Constantes exportadas
 // ---------------------------------------------------------------------------
 describe("constantes de truncagem", () => {
-  it("MAX_CHARS_PER_DOCUMENT = 92_000", () => {
-    expect(MAX_CHARS_PER_DOCUMENT).toBe(92_000);
+  it("MAX_CHARS_PER_DOCUMENT = 130_000", () => {
+    expect(MAX_CHARS_PER_DOCUMENT).toBe(130_000);
   });
 
-  it("MAX_TOTAL_DOC_CHARS = 200_000", () => {
-    expect(MAX_TOTAL_DOC_CHARS).toBe(200_000);
+  it("MAX_TOTAL_DOC_CHARS = 350_000", () => {
+    expect(MAX_TOTAL_DOC_CHARS).toBe(350_000);
   });
 
   it("capacidade da janela = 200k tokens", () => {
@@ -188,30 +188,30 @@ describe("lógica de cap do indicador de contexto", () => {
   it("doc grande (3M chars) é limitado a MAX_CHARS_PER_DOCUMENT", () => {
     const text = "x".repeat(3_000_000);
     const tokens = calcAttachmentTokens([{ extractedText: text }]);
-    // Capped a 92K chars → 23K tokens
-    expect(tokens).toBe(23_000);
+    // Capped a 130K chars → 32.5K tokens
+    expect(tokens).toBe(32_500);
   });
 
   it("múltiplos docs respeitam MAX_TOTAL_DOC_CHARS", () => {
-    // 3 docs de 100K cada, cap por doc = 92K, cap total = 200K
+    // 3 docs de 100K cada, cap por doc = 130K, cap total = 350K
     const docs = Array.from({ length: 3 }, () => ({
       extractedText: "x".repeat(100_000),
     }));
     const tokens = calcAttachmentTokens(docs);
-    // doc1: min(100K, 92K, 200K) = 92K → total=92K
-    // doc2: min(100K, 92K, 108K) = 92K → total=184K
-    // doc3: min(100K, 92K,  16K) = 16K → total=200K
-    // Total chars: 200K → 50K tokens
-    expect(tokens).toBe(50_000);
+    // doc1: min(100K, 130K, 350K) = 100K → total=100K
+    // doc2: min(100K, 130K, 250K) = 100K → total=200K
+    // doc3: min(100K, 130K, 150K) = 100K → total=300K
+    // Total chars: 300K → 75K tokens
+    expect(tokens).toBe(75_000);
   });
 
   it("PDF 1868 págs (~3.1M chars) mostra uso razoável, não 900%", () => {
     const text = "x".repeat(3_142_616); // simulando o PDF real
     const tokens = calcAttachmentTokens([{ extractedText: text }]);
     const pct = Math.round((tokens / CONTEXT_WINDOW_INPUT_TARGET_TOKENS) * 100);
-    // 92K chars → 23K tokens → 23K/195K ≈ 12%
-    expect(pct).toBeLessThanOrEqual(15);
-    expect(pct).toBeGreaterThan(5);
+    // 130K chars → 32.5K tokens → 32.5K/195K ≈ 17%
+    expect(pct).toBeLessThanOrEqual(20);
+    expect(pct).toBeGreaterThan(10);
   });
 
   it("sem extractedText retorna 0 tokens", () => {

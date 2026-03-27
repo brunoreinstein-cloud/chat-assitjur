@@ -20,6 +20,7 @@ import { modelReasoningType, modelSupportsVision } from "@/lib/ai/models";
 import { type RequestHints, systemPrompt } from "@/lib/ai/prompts";
 import { getLanguageModel } from "@/lib/ai/providers";
 import { analyzeProcessoPipeline } from "@/lib/ai/tools/analyze-processo-pipeline";
+import { createAutuoriaDocuments } from "@/lib/ai/tools/create-autuoria-documents";
 import { createAvaliadorContestacaoDocument } from "@/lib/ai/tools/create-avaliador-contestacao-document";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { createMasterDocuments } from "@/lib/ai/tools/create-master-documents";
@@ -290,7 +291,8 @@ function createStreamExecuteHandler(
       | "createRedatorContestacaoDocument"
       | "createAvaliadorContestacaoDocument"
       | "analyzeProcessoPipeline"
-      | "createMasterDocuments";
+      | "createMasterDocuments"
+      | "createAutuoriaDocuments";
     const activeToolNames: ActiveToolName[] = ctx.isReasoningModel
       ? []
       : [
@@ -313,6 +315,9 @@ function createStreamExecuteHandler(
             : []),
           ...(ctx.agentConfig.useMasterDocumentsTool
             ? (["createMasterDocuments"] as const)
+            : []),
+          ...(ctx.agentConfig.useAutuoriaTools
+            ? (["createAutuoriaDocuments"] as const)
             : []),
         ];
 
@@ -360,6 +365,7 @@ function createStreamExecuteHandler(
       >;
       analyzeProcessoPipeline?: ReturnType<typeof analyzeProcessoPipeline>;
       createMasterDocuments?: ReturnType<typeof createMasterDocuments>;
+      createAutuoriaDocuments?: ReturnType<typeof createAutuoriaDocuments>;
     };
     if (ctx.agentConfig.useRevisorDefesaTools) {
       tools.createRevisorDefesaDocuments = createRevisorDefesaDocuments({
@@ -390,6 +396,12 @@ function createStreamExecuteHandler(
     }
     if (ctx.agentConfig.useMasterDocumentsTool) {
       tools.createMasterDocuments = createMasterDocuments({
+        session: ctx.session,
+        dataStream,
+      });
+    }
+    if (ctx.agentConfig.useAutuoriaTools) {
+      tools.createAutuoriaDocuments = createAutuoriaDocuments({
         session: ctx.session,
         dataStream,
       });

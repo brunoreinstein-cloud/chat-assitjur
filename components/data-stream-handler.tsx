@@ -6,6 +6,12 @@ import { useSWRConfig } from "swr";
 import { unstable_serialize } from "swr/infinite";
 import type { PipelineDashboardData } from "@/components/pipeline-quality-dashboard";
 import { initialArtifactData, useArtifact } from "@/hooks/use-artifact";
+import { storeAutuoriaDoc } from "@/lib/autuoria-content-store";
+import {
+  resetAutuoriaProgress,
+  setAutuoriaCompletedCount,
+  setAutuoriaStarted,
+} from "@/lib/autuoria-progress-store";
 import { storeMasterDoc } from "@/lib/master-content-store";
 import {
   resetMasterProgress,
@@ -38,6 +44,11 @@ let _docContent = "";
 let _mdocId = "";
 let _mdocTitle = "";
 let _mdocContent = "";
+
+// Acumuladores de conteúdo do stream para o autuoria-content-store
+let _autuoriaDocId = "";
+let _autuoriaDocTitle = "";
+let _autuoriaDocContent = "";
 
 export function DataStreamHandler() {
   const { dataStream, setDataStream } = useDataStream();
@@ -128,6 +139,52 @@ export function DataStreamHandler() {
       if (delta.type === "data-rdocDone") {
         continue; // Apenas sinalização — tratamento no UI component
       }
+
+      // Acumulação de conteúdo para o autuoria-content-store.
+      // Usa prefixo autuoria — estes eventos NÃO activam o painel artifact.
+      if (delta.type === "data-autuoriaId") {
+        _autuoriaDocId = delta.data as string;
+        continue;
+      }
+      if (delta.type === "data-autuoriaTitle") {
+        _autuoriaDocTitle = delta.data as string;
+        continue;
+      }
+      if (delta.type === "data-autuoriaKind") {
+        continue; // ignorar kind (sempre "text")
+      }
+      if (delta.type === "data-autuoriaClear") {
+        _autuoriaDocContent = "";
+        continue;
+      }
+      if (delta.type === "data-autuoriaDelta") {
+        _autuoriaDocContent += delta.data as string;
+        continue;
+      }
+      if (delta.type === "data-autuoriaFinish") {
+        if (_autuoriaDocId) {
+          storeAutuoriaDoc(_autuoriaDocId, _autuoriaDocTitle, _autuoriaDocContent);
+        }
+        _autuoriaDocId = "";
+        _autuoriaDocContent = "";
+        continue;
+      }
+      if (delta.type === "data-autuoriaStart") {
+        setAutuoriaStarted();
+        continue;
+      }
+      if (delta.type === "data-autuoriaDone") {
+        continue; // Apenas sinalização — tratamento no UI component
+      }
+      if (delta.type === "data-autuoriaProgress") {
+        const completedCount = delta.data as number;
+        if (completedCount === 1) {
+          resetAutuoriaProgress();
+        }
+        setAutuoriaCompletedCount(completedCount);
+        continue;
+      }
+
       if (delta.type === "data-masterTitle") {
         try {
           const { index, title } = JSON.parse(delta.data as string) as {

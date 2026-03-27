@@ -33,6 +33,8 @@ const AGENT_DOTS: Record<AgentId, string> = {
   "avaliador-contestacao": "bg-gold-accent",
   /** Master usa gold — produto flagship, visualmente distinto do Redator (purple). */
   "assistjur-master": "bg-gold-accent",
+  /** AutuorIA usa gold — auditor cirúrgico, destaque visual. */
+  "autuoria-revisor": "bg-gold-accent",
 };
 
 interface ChatItem {

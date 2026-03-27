@@ -112,7 +112,7 @@ export async function POST(request: Request): Promise<NextResponse> {
             ACCEPTED_DOC_TYPE,
             ACCEPTED_DOCX_TYPE,
           ],
-          addRandomSuffix: false,
+          addRandomSuffix: true,
           pathname: serverPathname,
           tokenPayload: JSON.stringify({ userId }),
         };

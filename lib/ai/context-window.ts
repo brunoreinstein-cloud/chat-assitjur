@@ -20,15 +20,17 @@ export const CONTEXT_WINDOW_CAPACITY_TOKENS = 200_000;
  * sem desperdiçar chars em páginas de assinatura ou conteúdo irrelevante.
  * @see lib/ai/document-context.ts buildSmartDocumentContext
  */
-export const MAX_CHARS_PER_DOCUMENT = 92_000;
+export const MAX_CHARS_PER_DOCUMENT = 130_000;
 
 /**
  * Limite total de caracteres de todos os documentos combinados.
- * Aumentado de 180K → 200K para acomodar o novo limite por documento
- * e casos com múltiplos documentos (ex: PI + Contestação separados).
- * Claude suporta 200K tokens de input; 200K chars ≈ 50K tokens (4 chars/token).
+ * Aumentado de 200K → 350K para o caso AutuorIA (PI + Contestação inteiros).
+ * PI grande pode extrair 130K chars + Contestação 130K = 260K mínimo necessário.
+ * 350K chars ≈ 87.5K tokens = 44% da janela disponível para docs — margem segura
+ * mesmo com histórico de conversa longo e system prompt extenso do AutuorIA.
+ * Claude suporta 200K tokens de input; docs não devem exceder 50% do budget.
  */
-export const MAX_TOTAL_DOC_CHARS = 200_000;
+export const MAX_TOTAL_DOC_CHARS = 350_000;
 
 /**
  * Margem reservada para a resposta do modelo (maxOutputTokens ~8k) e overhead.

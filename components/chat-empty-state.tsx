@@ -6,6 +6,7 @@ import type { AgentId } from "@/lib/ai/agents-registry-metadata";
 import {
   AGENT_ID_ASSISTENTE_GERAL,
   AGENT_ID_ASSISTJUR_MASTER,
+  AGENT_ID_AUTUORIA_REVISOR,
   AGENT_ID_AVALIADOR_CONTESTACAO,
   AGENT_ID_REDATOR_CONTESTACAO,
   AGENT_ID_REVISOR_DEFESAS,
@@ -20,6 +21,7 @@ const AGENT_CARD_STYLE: Record<AgentId, { emoji: string; bg: string }> = {
   [AGENT_ID_AVALIADOR_CONTESTACAO]: { emoji: "📊", bg: "bg-gold-accent/15" },
   /** Master usa gold: produto flagship com 14 módulos — visualmente distinto do Redator (purple). */
   [AGENT_ID_ASSISTJUR_MASTER]: { emoji: "⚡", bg: "bg-gold-accent/15" },
+  [AGENT_ID_AUTUORIA_REVISOR]: { emoji: "🔎", bg: "bg-gold-accent/15" },
 };
 
 interface QuickPrompt {
@@ -98,6 +100,24 @@ const QUICK_PROMPTS_BY_AGENT: Record<AgentId, QuickPrompt[]> = {
     {
       label: "📄 Gerar relatório DOCX",
       text: "Elabore o relatório de avaliação da contestação em DOCX com notas e recomendações.",
+    },
+  ],
+  [AGENT_ID_AUTUORIA_REVISOR]: [
+    {
+      label: "🔎 Auditar contestação",
+      text: "Audite esta contestação contra a petição inicial. Segue em anexo a PI e a Contestação.",
+    },
+    {
+      label: "📋 Quadro de Correções",
+      text: "Gere o Quadro de Correções e a Contestação Revisada para os documentos anexados.",
+    },
+    {
+      label: "⚠️ Verificar lacunas",
+      text: "Identifique lacunas e pedidos sem impugnação na contestação anexada.",
+    },
+    {
+      label: "📝 Correções de escrita",
+      text: "Revise a contestação anexada e aponte erros de português e inconsistências.",
     },
   ],
   [AGENT_ID_ASSISTJUR_MASTER]: [

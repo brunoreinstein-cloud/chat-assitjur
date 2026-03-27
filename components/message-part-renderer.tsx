@@ -19,6 +19,10 @@ import { MessageReasoning } from "./message-reasoning";
 import { MessageRequestSuggestionsTool } from "./message-request-suggestions-tool";
 import { MessageWeatherTool } from "./message-weather-tool";
 import {
+  type AutuoriaDocumentsOutput,
+  AutuoriaDocumentsResult,
+} from "./autuoria-documents-result";
+import {
   type RevisorDefesaDocumentsOutput,
   RevisorDefesaDocumentsResult,
 } from "./revisor-defesa-documents-result";
@@ -217,6 +221,15 @@ function renderToolPart(
       />
     );
   }
+  if (type === "tool-createAutuoriaDocuments") {
+    return (
+      <AutuoriaDocumentsResult
+        isReadonly={ctx.isReadonly}
+        key={part.toolCallId}
+        output={part.output as AutuoriaDocumentsOutput}
+      />
+    );
+  }
   if (type === "tool-createMasterDocuments") {
     return (
       <MasterDocumentsResult
@@ -286,6 +299,7 @@ function renderPartByType(
     type === "tool-createDocument" ||
     type === "tool-updateDocument" ||
     type === "tool-createRevisorDefesaDocuments" ||
+    type === "tool-createAutuoriaDocuments" ||
     type === "tool-createMasterDocuments" ||
     type === "tool-createRedatorContestacaoDocument" ||
     type === "tool-requestSuggestions"
