@@ -123,17 +123,43 @@ export async function prepareModelMessagesForStream(
   try {
     modelMessages = await convertToModelMessages(messagesToSend);
   } catch (convertError) {
-    if (isDev) {
-      console.warn(
-        "[chat] convertToModelMessages falhou (partes inválidas?), a usar apenas a última mensagem:",
-        convertError
-      );
-    }
+    console.warn(
+      "[chat] convertToModelMessages falhou, a usar apenas a última mensagem:",
+      convertError
+    );
     const fallbackMessages =
       message?.role === "user"
         ? normalizeMessageParts([message as ChatMessage], visionEnabled)
         : normalizedMessages.slice(-1);
-    modelMessages = await convertToModelMessages(fallbackMessages);
+    try {
+      modelMessages = await convertToModelMessages(fallbackMessages);
+    } catch (fallbackError) {
+      console.error(
+        "[chat] convertToModelMessages fallback também falhou:",
+        fallbackError,
+        "fallbackMessages:",
+        JSON.stringify(
+          fallbackMessages.map((m) => ({
+            role: m.role,
+            partsCount: (m.parts ?? []).length,
+            partTypes: (m.parts ?? []).map(
+              (p) => (p as { type?: string }).type
+            ),
+          }))
+        )
+      );
+      // Último recurso: mensagem de texto puro para não crashar com messages: undefined
+      modelMessages = [
+        {
+          role: "user" as const,
+          content:
+            message?.parts
+              ?.filter((p) => (p as { type?: string }).type === "text")
+              .map((p) => (p as { text?: string }).text ?? "")
+              .join("\n") || "Analisar documentos anexados.",
+        },
+      ];
+    }
   }
   debugTracker.phase("contextConvert", t5);
   logTiming(
