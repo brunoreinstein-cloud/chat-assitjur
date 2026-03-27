@@ -1,7 +1,13 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+
+const AnimatedLogo = dynamic(() => import("@/components/animated-logo"), {
+  ssr: false,
+  loading: () => <div style={{ width: "100%", aspectRatio: "280/260" }} />,
+});
 
 // ─── Data ──────────────────────────────────────────────────────────────────────
 
@@ -349,9 +355,16 @@ export default function AssistJurLP() {
 
         /* ── HERO ── */
         .lp-hero {
-          min-height:100vh; display:flex; flex-direction:column; justify-content:center;
+          min-height:100vh; display:grid; grid-template-columns:1fr 1fr;
+          align-items:center; gap:40px;
           padding:0 clamp(32px, 8vw, 120px); position:relative; z-index:1;
         }
+        .lp-hero-content { display:flex; flex-direction:column; justify-content:center; }
+        .lp-hero-visual {
+          display:flex; align-items:center; justify-content:center;
+          position:relative;
+        }
+        .lp-hero-visual svg { max-width:520px; width:100%; }
         .lp-hero-tag {
           font-family:var(--lp-mono); font-size:11px; color:var(--lp-gold); letter-spacing:2.5px;
           text-transform:uppercase; margin-bottom:40px; opacity:0.8;
@@ -413,6 +426,7 @@ export default function AssistJurLP() {
           font-size:11px; color:var(--lp-t3); letter-spacing:1.5px; text-transform:uppercase;
           display:flex; flex-direction:column; align-items:center; gap:10px;
           animation: lp-scroll-hint 2.5s ease-in-out infinite;
+          grid-column:1 / -1;
         }
         .lp-hero-scroll-line {
           width:1px; height:32px;
@@ -611,6 +625,8 @@ export default function AssistJurLP() {
           .lp-numbers-row { grid-template-columns:1fr 1fr; }
           .lp-principles-grid { grid-template-columns:1fr; }
           .lp-approach-split { grid-template-columns:1fr; gap:48px; }
+          .lp-hero { grid-template-columns:1fr; }
+          .lp-hero-visual { order:-1; max-width:320px; margin:0 auto; }
           .lp-nav-links { display:none; }
           .lp-footer { flex-direction:column; gap:16px; text-align:center; }
           .lp-hero-actions { flex-direction:column; }
@@ -651,51 +667,56 @@ export default function AssistJurLP() {
 
         {/* ════ HERO ════ */}
         <section className="lp-hero">
-          <FadeIn>
-            <div className="lp-hero-tag">
-              BR Consultoria &middot; Contencioso Trabalhista
-            </div>
-          </FadeIn>
-          <FadeIn delay={0.12}>
-            <h1 className="lp-hero-title">
-              Inteligência documental
-              <br />
-              para quem <em>defende</em>
-            </h1>
-          </FadeIn>
-          <FadeIn delay={0.28}>
-            <p className="lp-hero-body">
-              Trinta e quatro assistentes especializados que leem processos
-              inteiros, extraem os dados que importam e produzem documentos
-              prontos para revisão. Sem atalhos. Sem invenção. Cada campo
-              rastreado até a página do PDF.
-            </p>
-          </FadeIn>
-          <FadeIn delay={0.4}>
-            <div className="lp-hero-actions">
-              <Link className="lp-btn-primary" href="/chat">
-                Acessar o Revisor
-                <svg
-                  aria-hidden
-                  fill="none"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  width="16"
-                >
-                  <title>Seta</title>
-                  <path
-                    d="M3 8h10M9 4l4 4-4 4"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="1.5"
-                  />
-                </svg>
-              </Link>
-              <Link className="lp-btn-secondary" href="/register">
-                Criar conta gratuita
-              </Link>
-            </div>
+          <div className="lp-hero-content">
+            <FadeIn>
+              <div className="lp-hero-tag">
+                BR Consultoria &middot; Contencioso Trabalhista
+              </div>
+            </FadeIn>
+            <FadeIn delay={0.12}>
+              <h1 className="lp-hero-title">
+                Inteligência documental
+                <br />
+                para quem <em>defende</em>
+              </h1>
+            </FadeIn>
+            <FadeIn delay={0.28}>
+              <p className="lp-hero-body">
+                Trinta e quatro assistentes especializados que leem processos
+                inteiros, extraem os dados que importam e produzem documentos
+                prontos para revisão. Sem atalhos. Sem invenção. Cada campo
+                rastreado até a página do PDF.
+              </p>
+            </FadeIn>
+            <FadeIn delay={0.4}>
+              <div className="lp-hero-actions">
+                <Link className="lp-btn-primary" href="/chat">
+                  Acessar o Revisor
+                  <svg
+                    aria-hidden
+                    fill="none"
+                    height="16"
+                    viewBox="0 0 16 16"
+                    width="16"
+                  >
+                    <title>Seta</title>
+                    <path
+                      d="M3 8h10M9 4l4 4-4 4"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.5"
+                    />
+                  </svg>
+                </Link>
+                <Link className="lp-btn-secondary" href="/register">
+                  Criar conta gratuita
+                </Link>
+              </div>
+            </FadeIn>
+          </div>
+          <FadeIn className="lp-hero-visual" delay={0.2}>
+            <AnimatedLogo />
           </FadeIn>
           <div className="lp-hero-scroll">
             <span>Rolar</span>
