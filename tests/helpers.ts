@@ -17,32 +17,30 @@ function isConnectionError(e: unknown): boolean {
 }
 
 /**
- * Abre /chat quando a sessão de visitante já está nos cookies (ex.: storageState).
- * Use nos testes do projeto e2e-guest. Para login completo use ensureChatPageWithGuest.
+ * Abre /chat quando a sessão já está nos cookies (ex.: storageState).
  */
 export async function gotoChatPage(
   page: Page,
   timeout = 60_000
 ): Promise<void> {
-  // Timeout de navegação maior quando a BD está lenta (E2E)
   await page.goto("/chat", { waitUntil: "load", timeout: 35_000 });
   const input = page.getByTestId("multimodal-input");
   await input.waitFor({ state: "visible", timeout });
 }
 
-/** Abre /chat com sessão visitante. Usa GET /api/auth/guest?redirectUrl=/chat (auto-POST + redirect) para ser fiável em E2E/produção. */
-export async function ensureChatPageWithGuest(
+/**
+ * Faz login com credenciais de teste e navega para /chat.
+ * Requer que o utilizador de teste exista na BD.
+ */
+export async function ensureChatPageWithLogin(
   page: Page,
+  email: string,
+  password: string,
   timeout = 60_000
 ): Promise<void> {
-  const settleTimeout = 15_000;
   try {
-    // "load" garante que falhas de rede (ex.: servidor em baixo) falham no goto em vez de no waitForURL
-    await page.goto("/api/auth/guest?redirectUrl=%2Fchat", {
-      waitUntil: "load",
-      timeout: 15_000,
-    });
-    // Se já estamos numa página de erro, falhar de imediato sem chamar waitForURL (evita ERR_CONNECTION_REFUSED no waitForURL).
+    await page.goto("/login", { waitUntil: "load", timeout: 15_000 });
+
     const urlAfterGoto = page.url();
     const isErrorAlready =
       urlAfterGoto.startsWith("chrome-error:") ||
@@ -53,19 +51,14 @@ export async function ensureChatPageWithGuest(
         `Não foi possível carregar a app (URL: ${urlAfterGoto}). O servidor não está a correr. ${SERVER_DOWN_MSG}`
       );
     }
-    // Esperar que a URL estabilize: ou /chat (sucesso) ou página de erro (servidor em baixo).
-    await page.waitForURL(
-      (url) => {
-        const path = url.pathname;
-        const isChat = /^\/chat(\/|$)/.test(path);
-        const isError =
-          url.href.startsWith("chrome-error:") ||
-          url.href.startsWith("edge-error:") ||
-          url.href === "about:blank";
-        return isChat || isError;
-      },
-      { timeout: settleTimeout }
-    );
+
+    await page.fill('input[name="email"]', email);
+    await page.fill('input[name="password"]', password);
+    await page.click('button[type="submit"]');
+
+    await page.waitForURL((url) => /^\/chat(\/|$)/.test(url.pathname), {
+      timeout: 30_000,
+    });
   } catch (e) {
     if (isConnectionError(e)) {
       throw new Error(
@@ -74,16 +67,7 @@ export async function ensureChatPageWithGuest(
     }
     throw e;
   }
-  const currentUrl = page.url();
-  const isErrorPage =
-    currentUrl.startsWith("chrome-error:") ||
-    currentUrl.startsWith("edge-error:") ||
-    currentUrl.startsWith("about:blank");
-  if (isErrorPage) {
-    throw new Error(
-      `Não foi possível carregar a app (URL: ${currentUrl}). O servidor não está a correr. ${SERVER_DOWN_MSG}`
-    );
-  }
+
   const input = page.getByTestId("multimodal-input");
   await input.waitFor({ state: "visible", timeout });
 }

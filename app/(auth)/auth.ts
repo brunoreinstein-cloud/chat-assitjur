@@ -3,17 +3,17 @@ import NextAuth, { type DefaultSession } from "next-auth";
 import type { DefaultJWT } from "next-auth/jwt";
 import Credentials from "next-auth/providers/credentials";
 import { DUMMY_PASSWORD } from "@/lib/constants";
-import { createGuestUser, getUser } from "@/lib/db/queries";
+import { getUser } from "@/lib/db/queries";
 import { authConfig } from "./auth.config";
 
-export type UserType = "guest" | "regular";
+export type UserType = "regular";
 
 declare module "next-auth" {
   interface Session extends DefaultSession {
     user: {
       id: string;
       type: UserType;
-      /** Perfil RBAC; null = sem perfil (guest ou utilizador sem role atribuído). */
+      /** Perfil RBAC; null = utilizador sem role atribuído. */
       role: string | null;
     } & DefaultSession["user"];
   }
@@ -100,21 +100,6 @@ export const {
         } catch (err) {
           if (process.env.NODE_ENV === "development") {
             console.error("[auth] authorize (credentials) failed:", err);
-          }
-          return null;
-        }
-      },
-    }),
-    Credentials({
-      id: "guest",
-      credentials: {},
-      async authorize() {
-        try {
-          const [guestUser] = await createGuestUser();
-          return { ...guestUser, type: "guest", role: null };
-        } catch (err) {
-          if (process.env.NODE_ENV === "development") {
-            console.error("[auth] authorize (guest) failed:", err);
           }
           return null;
         }

@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { auth } from "@/app/(auth)/auth";
@@ -10,7 +11,6 @@ import {
 } from "@/lib/ai/agents-registry";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 import { generateUUID } from "@/lib/utils";
-import { GuestGate } from "./guest-gate";
 
 type PageProps = Readonly<{ searchParams: Promise<{ agent?: string }> }>;
 
@@ -25,7 +25,7 @@ export default function NewChatRoute({ searchParams }: PageProps) {
 async function NewChatPage({ searchParams }: PageProps) {
   const session = await auth();
   if (!session) {
-    return <GuestGate />;
+    redirect("/login");
   }
 
   const resolved = await searchParams;

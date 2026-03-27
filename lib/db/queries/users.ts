@@ -19,7 +19,6 @@ import {
 } from "@/lib/db/schema";
 import { generateHashedPassword } from "@/lib/db/utils";
 import { ChatbotError } from "@/lib/errors";
-import { generateUUID } from "@/lib/utils";
 import { getDb } from "../connection";
 
 export async function getUser(email: string): Promise<User[]> {
@@ -48,25 +47,6 @@ export async function createUser(email: string, password: string) {
     throw new ChatbotError(
       "bad_request:database",
       `Failed to create user: ${detail}`
-    );
-  }
-}
-
-export async function createGuestUser() {
-  const email = `guest-${Date.now()}`;
-  const password = generateHashedPassword(generateUUID());
-
-  try {
-    return await getDb().insert(user).values({ email, password }).returning({
-      id: user.id,
-      email: user.email,
-    });
-  } catch (err) {
-    const detail =
-      err instanceof Error ? err.message : "Unknown database error";
-    throw new ChatbotError(
-      "bad_request:database",
-      `Failed to create guest user: ${detail}`
     );
   }
 }

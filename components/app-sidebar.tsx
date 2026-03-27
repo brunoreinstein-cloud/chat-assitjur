@@ -49,13 +49,7 @@ import {
 } from "./ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 
-export function AppSidebar({
-  user,
-  isGuest = false,
-}: {
-  user: User | undefined;
-  isGuest?: boolean;
-}) {
+export function AppSidebar({ user }: { user: User | undefined }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -199,20 +193,6 @@ export function AppSidebar({
               Administração
             </Link>
           </div>
-          {isGuest && (
-            <div className="border-border/60 border-t px-3 py-2">
-              <p className="text-muted-foreground text-xs">
-                Está a usar como visitante. Ao sair, o histórico é apagado.{" "}
-                <Link
-                  className="font-medium text-foreground underline underline-offset-2 outline-none hover:no-underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  href="/register"
-                >
-                  Crie uma conta
-                </Link>{" "}
-                para guardar.
-              </p>
-            </div>
-          )}
           {user && <SidebarUserNav user={user} />}
         </SidebarFooter>
       </Sidebar>

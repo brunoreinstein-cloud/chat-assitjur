@@ -8,8 +8,6 @@ export const isTestEnvironment = Boolean(
     process.env.CI_PLAYWRIGHT
 );
 
-export const guestRegex = /^guest-\d+$/;
-
 /** N.º máximo de mensagens carregadas ao abrir uma conversa (evita statement timeout). */
 export const CHAT_PAGE_MESSAGES_LIMIT = 300;
 

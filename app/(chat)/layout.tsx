@@ -17,7 +17,7 @@ export default function Layout({
       <DbWarmup />
       <Script
         src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"
-        strategy="beforeInteractive"
+        strategy="afterInteractive"
       />
       <DataStreamProvider>
         <DbFallbackProvider>
@@ -36,11 +36,9 @@ async function SidebarWrapper({
   const [session, cookieStore] = await Promise.all([auth(), cookies()]);
   const isCollapsed = cookieStore.get("sidebar_state")?.value !== "true";
 
-  const isGuest = session?.user?.type === "guest";
-
   return (
     <SidebarProvider defaultOpen={!isCollapsed}>
-      <ChatSidebar isGuest={isGuest} user={session?.user} />
+      <ChatSidebar user={session?.user} />
       <SidebarInset>{children}</SidebarInset>
     </SidebarProvider>
   );

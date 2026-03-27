@@ -3,7 +3,6 @@
 import { ChevronUp, CoinsIcon, HelpCircleIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import type { User } from "next-auth";
 import { signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
@@ -20,27 +19,18 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { guestRegex } from "@/lib/constants";
 
 interface SidebarUserNavProps {
   readonly user: User;
-  /** Passado pelo layout (server); evita GET /api/auth/session no cliente. */
-  readonly isGuest?: boolean;
 }
 
-export function SidebarUserNav({
-  user,
-  isGuest: isGuestProp,
-}: Readonly<SidebarUserNavProps>) {
-  const router = useRouter();
+export function SidebarUserNav({ user }: Readonly<SidebarUserNavProps>) {
   const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  const isGuest = isGuestProp ?? guestRegex.test(user?.email ?? "");
 
   let themeToggleLabel = "Alternar tema";
   if (mounted) {
@@ -67,7 +57,7 @@ export function SidebarUserNav({
                 width={24}
               />
               <span className="truncate" data-testid="user-email">
-                {isGuest ? "Visitante" : user?.email}
+                {user?.email}
               </span>
               <ChevronUp className="ml-auto" />
             </SidebarMenuButton>
@@ -106,57 +96,17 @@ export function SidebarUserNav({
               </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            {isGuest ? (
-              <>
-                <DropdownMenuItem
-                  asChild
-                  data-testid="user-nav-item-guest-restart"
-                >
-                  <button
-                    className="w-full cursor-pointer"
-                    onClick={async () => {
-                      const { deleteAllMyChats } = await import(
-                        "@/app/(chat)/actions"
-                      );
-                      await deleteAllMyChats();
-                      await signOut({ redirect: false });
-                      globalThis.window.location.href =
-                        "/api/auth/guest?redirectUrl=/chat";
-                    }}
-                    type="button"
-                  >
-                    Reiniciar como visitante
-                  </button>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild data-testid="user-nav-item-auth">
-                  <button
-                    className="w-full cursor-pointer"
-                    onClick={async () => {
-                      const { deleteAllMyChats } = await import(
-                        "@/app/(chat)/actions"
-                      );
-                      await deleteAllMyChats();
-                      router.push("/login");
-                    }}
-                    type="button"
-                  >
-                    Entrar na sua conta
-                  </button>
-                </DropdownMenuItem>
-              </>
-            ) : (
-              <DropdownMenuItem asChild data-testid="user-nav-item-auth">
-                <button
-                  className="w-full cursor-pointer"
-                  onClick={() => {
-                    signOut({ redirectTo: "/" });
-                  }}
-                  type="button"
-                >
-                  Sair
-                </button>
-              </DropdownMenuItem>
-            )}
+            <DropdownMenuItem asChild data-testid="user-nav-item-auth">
+              <button
+                className="w-full cursor-pointer"
+                onClick={() => {
+                  signOut({ redirectTo: "/" });
+                }}
+                type="button"
+              >
+                Sair
+              </button>
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>

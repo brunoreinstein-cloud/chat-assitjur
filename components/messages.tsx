@@ -155,7 +155,7 @@ function PureMessages({
     messages.length === 0 && onAgentSelect != null && onQuickPrompt != null;
 
   return (
-    <div className="relative flex-1 bg-background dark:bg-[#0d0f12] dark:dark-mesh-bg">
+    <div className="dark:dark-mesh-bg relative flex-1 bg-background dark:bg-[#0d0f12]">
       <div
         className="absolute inset-0 touch-pan-y overflow-y-auto"
         ref={messagesContainerRef}

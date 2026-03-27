@@ -1,4 +1,4 @@
-import { auth, type UserType } from "@/app/(auth)/auth";
+import { auth } from "@/app/(auth)/auth";
 import { entitlementsByUserType } from "@/lib/ai/entitlements";
 import { creditsCache } from "@/lib/cache/credits-cache";
 import {
@@ -63,14 +63,11 @@ function parseUsageLimit(searchParams: URLSearchParams): number {
   return parsed;
 }
 
-function getInitialCreditsAndThreshold(user: { type?: string }): {
+function getInitialCreditsAndThreshold(): {
   initialCredits: number;
   lowBalanceThreshold: number;
 } {
-  const rawType = user.type;
-  const userType: UserType =
-    rawType === "guest" || rawType === "regular" ? rawType : "regular";
-  const initialCredits = entitlementsByUserType[userType].initialCredits;
+  const initialCredits = entitlementsByUserType.regular.initialCredits;
   const lowBalanceThreshold = Math.max(10, Math.ceil(initialCredits * 0.2));
   return { initialCredits, lowBalanceThreshold };
 }
@@ -120,9 +117,8 @@ export async function GET(request: Request) {
     return creditsJsonResponse(cached);
   }
 
-  const { initialCredits, lowBalanceThreshold } = getInitialCreditsAndThreshold(
-    session.user
-  );
+  const { initialCredits, lowBalanceThreshold } =
+    getInitialCreditsAndThreshold();
   const isDev = process.env.NODE_ENV === "development";
   const t0 = Date.now();
 

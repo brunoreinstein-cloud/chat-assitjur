@@ -536,17 +536,18 @@
        translateY(-2px) + shadow-md (contido, institucional)
    ------------------------------------------------------------ */
 @utility card-interactive {
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-              border-color 0.25s ease;
+  transition:
+    transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.25s ease;
 }
 
 /* ------------------------------------------------------------
    5D. TOPBAR GLASS — backdrop-filter blur no scroll
    ------------------------------------------------------------ */
 @utility topbar-glass {
-  backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 
 /* ------------------------------------------------------------
@@ -555,9 +556,21 @@
    ------------------------------------------------------------ */
 @utility dark-mesh-bg {
   background:
-    radial-gradient(ellipse at 15% 50%, hsla(262, 83%, 57%, 0.03) 0%, transparent 50%),
-    radial-gradient(ellipse at 85% 20%, hsla(262, 60%, 40%, 0.02) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 90%, hsla(262, 50%, 30%, 0.015) 0%, transparent 50%);
+    radial-gradient(
+      ellipse at 15% 50%,
+      hsla(262, 83%, 57%, 0.03) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse at 85% 20%,
+      hsla(262, 60%, 40%, 0.02) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse at 50% 90%,
+      hsla(262, 50%, 30%, 0.015) 0%,
+      transparent 50%
+    );
 }
 
 /* ------------------------------------------------------------

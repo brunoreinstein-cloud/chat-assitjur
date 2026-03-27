@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signOut, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useActionState, useEffect, useState } from "react";
 
 import { AuthForm } from "@/components/auth-form";
@@ -110,17 +110,6 @@ export default function Page() {
             </Link>
             .
           </p>
-          <button
-            className="mt-4 flex min-h-[44px] w-full items-center justify-center rounded-xl border-2 border-assistjur-purple-dark/40 bg-transparent font-medium text-assistjur-purple-dark text-sm transition-colors hover:border-assistjur-purple-dark/60 hover:bg-assistjur-purple-dark/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-            onClick={async () => {
-              await signOut({ redirect: false });
-              globalThis.window.location.href =
-                "/api/auth/guest?redirectUrl=/chat";
-            }}
-            type="button"
-          >
-            Continuar como visitante
-          </button>
         </AuthForm>
       </div>
     </div>

@@ -62,28 +62,15 @@ export default defineConfig({
   /* Configure projects */
   projects: [
     {
-      name: "guest-setup",
-      testMatch: /e2e\/guest-setup\.test\.ts/,
-      use: { ...devices["Desktop Chrome"] },
-      fullyParallel: false,
-      workers: 1,
-    },
-    {
-      name: "e2e-guest",
+      name: "e2e",
       testMatch: /e2e\/(chat|api|model-selector)\.test\.ts/,
-      use: {
-        ...devices["Desktop Chrome"],
-        storageState: ".auth/guest.json",
-      },
-      dependencies: ["guest-setup"],
-      /* Retry quando a BD está fria ou a UI re-renderiza (element detached); em local também para reduzir falhas intermitentes */
+      use: { ...devices["Desktop Chrome"] },
       retries: 1,
     },
     {
       name: "e2e-auth",
       testMatch: /e2e\/auth\.test\.ts/,
       use: { ...devices["Desktop Chrome"] },
-      /* Retry quando POST /api/auth/guest devolve 503 (GuestSignInTimeout) por BD lenta */
       retries: 1,
     },
   ],

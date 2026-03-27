@@ -10,10 +10,6 @@ const isDev = process.env.NODE_ENV === "development";
 const initialCreditsDefault = isDev ? 1000 : 100;
 
 export const entitlementsByUserType: Record<UserType, Entitlements> = {
-  guest: {
-    maxMessagesPerDay: 50,
-    initialCredits: initialCreditsDefault,
-  },
   regular: {
     maxMessagesPerDay: 150,
     initialCredits: initialCreditsDefault,

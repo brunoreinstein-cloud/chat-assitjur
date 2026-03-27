@@ -281,7 +281,7 @@ function MasterModulesGrid({ onSelect }: MasterModulesGridProps) {
       <div className="grid grid-cols-2 gap-2">
         {visible.map((mod, idx) => (
           <button
-            className={`group flex flex-col gap-1.5 rounded-[10px] border border-border bg-card p-3 text-left shadow-sm card-interactive hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/5 hover:shadow-md animate-fade-in-up ${idx < 6 ? `stagger-${idx + 1}` : ""}`}
+            className={`group card-interactive flex animate-fade-in-up flex-col gap-1.5 rounded-[10px] border border-border bg-card p-3 text-left shadow-sm hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/5 hover:shadow-md ${idx < 6 ? `stagger-${idx + 1}` : ""}`}
             key={mod.id}
             onClick={() => onSelect(mod.command)}
             type="button"
@@ -364,14 +364,14 @@ export function ChatEmptyState({
 
       <div className="relative z-10 flex w-full max-w-[520px] flex-col items-center">
         {/* Logo */}
-        <div className="mb-5 flex h-16 items-center justify-center animate-fade-in-up">
+        <div className="mb-5 flex h-16 animate-fade-in-up items-center justify-center">
           <AssistJurLogo className="font-semibold text-[22px]" iconSize={48} />
         </div>
 
-        <h1 className="mb-2.5 text-center font-semibold text-[28px] text-foreground tracking-tight animate-fade-in-up stagger-1">
+        <h1 className="stagger-1 mb-2.5 animate-fade-in-up text-center font-semibold text-[28px] text-foreground tracking-tight">
           {isMaster ? "AssistJur Master" : "Como posso ajudar hoje?"}
         </h1>
-        <p className="mb-8 text-center text-[14px] text-muted-foreground leading-relaxed animate-fade-in-up stagger-2">
+        <p className="stagger-2 mb-8 animate-fade-in-up text-center text-[14px] text-muted-foreground leading-relaxed">
           {isMaster ? (
             "Geração de documentos jurídicos com IA. Selecione um módulo abaixo ou descreva o que precisa."
           ) : (
@@ -397,7 +397,7 @@ export function ChatEmptyState({
               const staggerClass = idx < 6 ? `stagger-${idx + 1}` : "";
               return (
                 <button
-                  className={`group flex flex-col gap-2 rounded-[10px] border border-border bg-card p-3.5 text-left shadow-sm card-interactive hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/5 hover:shadow-md animate-fade-in-up ${staggerClass}`}
+                  className={`group card-interactive flex animate-fade-in-up flex-col gap-2 rounded-[10px] border border-border bg-card p-3.5 text-left shadow-sm hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/5 hover:shadow-md ${staggerClass}`}
                   key={id}
                   onClick={() => onAgentSelect(id)}
                   type="button"
@@ -444,7 +444,7 @@ export function ChatEmptyState({
           )}
           {quickPrompts.map((q, idx) => (
             <button
-              className={`whitespace-nowrap rounded-full border border-border bg-muted/80 px-3 py-1.5 text-[12px] text-muted-foreground transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-foreground animate-fade-in-up stagger-${Math.min(idx + 3, 6)}`}
+              className={`animate-fade-in-up whitespace-nowrap rounded-full border border-border bg-muted/80 px-3 py-1.5 text-[12px] text-muted-foreground transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-foreground stagger-${Math.min(idx + 3, 6)}`}
               key={q.label}
               onClick={() => onQuickPrompt(q.text)}
               type="button"

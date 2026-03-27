@@ -82,10 +82,9 @@ function groupChats(chats: Chat[]): ChatItem[] {
 
 interface AgentSidebarProps {
   readonly user: User | undefined;
-  readonly isGuest?: boolean;
 }
 
-export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
+export function AgentSidebar({ user }: AgentSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -120,7 +119,7 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
   // Lazy: só busca quando a aba Processos está activa para não desperdiçar
   // bandwidth em sessões que nunca abrem essa aba.
   const { data: processos } = useSWR<ProcessoComVerbas[]>(
-    user && !isGuest && sidebarTab === "processos" ? "/api/processos" : null,
+    user && sidebarTab === "processos" ? "/api/processos" : null,
     fetcher
   );
 
@@ -181,27 +180,25 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
       </div>
 
       {/* Tabs: Conversas | Processos */}
-      {!isGuest && (
-        <div className="flex border-border border-b dark:border-white/8">
-          {(["conversas", "processos"] as const).map((tab) => (
-            <button
-              className={`flex-1 py-2 font-medium text-[11px] transition-colors ${
-                sidebarTab === tab
-                  ? "border-gold-accent border-b-2 text-gold-accent"
-                  : "border-transparent border-b-2 text-muted-foreground hover:text-foreground"
-              }`}
-              key={tab}
-              onClick={() => {
-                setSidebarTab(tab);
-                setShowNovoForm(false);
-              }}
-              type="button"
-            >
-              {tab === "conversas" ? "Conversas" : "Processos"}
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="flex border-border border-b dark:border-white/8">
+        {(["conversas", "processos"] as const).map((tab) => (
+          <button
+            className={`flex-1 py-2 font-medium text-[11px] transition-colors ${
+              sidebarTab === tab
+                ? "border-gold-accent border-b-2 text-gold-accent"
+                : "border-transparent border-b-2 text-muted-foreground hover:text-foreground"
+            }`}
+            key={tab}
+            onClick={() => {
+              setSidebarTab(tab);
+              setShowNovoForm(false);
+            }}
+            type="button"
+          >
+            {tab === "conversas" ? "Conversas" : "Processos"}
+          </button>
+        ))}
+      </div>
 
       {/* ── ABA CONVERSAS ── */}
       {sidebarTab === "conversas" && (
@@ -393,22 +390,7 @@ export function AgentSidebar({ user, isGuest = false }: AgentSidebarProps) {
         </div>
       </div>
 
-      {isGuest && (
-        <div className="border-border border-t px-3 py-2 dark:border-white/8">
-          <p className="text-muted-foreground text-xs">
-            Está a usar como visitante. Ao sair, o histórico é apagado.{" "}
-            <Link
-              className="font-medium text-foreground underline underline-offset-2 outline-none hover:no-underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              href="/register"
-            >
-              Crie uma conta
-            </Link>{" "}
-            para guardar.
-          </p>
-        </div>
-      )}
-
-      {user && <SidebarUserNav isGuest={isGuest} user={user} />}
+      {user && <SidebarUserNav user={user} />}
     </aside>
   );
 }
