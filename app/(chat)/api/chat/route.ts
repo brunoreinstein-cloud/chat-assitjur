@@ -117,9 +117,10 @@ async function handleChatPostAuthenticated(
   }
   const authenticatedSession = session as Session;
 
-  const userType: UserType = authenticatedSession.user.type;
+  const userType: UserType = authenticatedSession.user.type ?? "regular";
   const isToolApprovalFlow = Boolean(messages);
-  const initialCredits = entitlementsByUserType[userType].initialCredits;
+  const entitlements = entitlementsByUserType[userType] ?? entitlementsByUserType.regular;
+  const initialCredits = entitlements.initialCredits;
 
   const messageText =
     message?.parts?.map((p) => ("text" in p ? p.text : "")).join(" ") ?? "";
