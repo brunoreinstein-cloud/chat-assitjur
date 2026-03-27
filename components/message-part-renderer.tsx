@@ -6,6 +6,10 @@ import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { ChatMessage } from "@/lib/types";
 import { cn, sanitizeText } from "@/lib/utils";
+import {
+  type AutuoriaDocumentsOutput,
+  AutuoriaDocumentsResult,
+} from "./autuoria-documents-result";
 import { DocumentToolResult } from "./document";
 import { MessageContent } from "./elements/message";
 import { Response } from "./elements/response";
@@ -18,10 +22,6 @@ import { MessageEditor } from "./message-editor";
 import { MessageReasoning } from "./message-reasoning";
 import { MessageRequestSuggestionsTool } from "./message-request-suggestions-tool";
 import { MessageWeatherTool } from "./message-weather-tool";
-import {
-  type AutuoriaDocumentsOutput,
-  AutuoriaDocumentsResult,
-} from "./autuoria-documents-result";
 import {
   type RevisorDefesaDocumentsOutput,
   RevisorDefesaDocumentsResult,

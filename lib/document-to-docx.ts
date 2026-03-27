@@ -137,7 +137,11 @@ function getBulletText(line: string): string | null {
 }
 
 /** Layout de export DOCX: default (simples), assistjur-master (paleta cinza/dourado), ou autuoria-* (AutuorIA). */
-export type DocxLayout = "default" | "assistjur-master" | "autuoria-quadro" | "autuoria-revisada";
+export type DocxLayout =
+  | "default"
+  | "assistjur-master"
+  | "autuoria-quadro"
+  | "autuoria-revisada";
 
 function paragraphH1Assistjur(text: string): Paragraph {
   return new Paragraph({
