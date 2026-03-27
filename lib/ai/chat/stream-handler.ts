@@ -247,10 +247,21 @@ export function createStreamExecuteHandler(ctx: StreamExecuteContext) {
       hasDocuments: ctx.documentTexts.size > 0,
     };
 
+    // Guard: ensure messages is never empty/undefined (causes AI_InvalidPromptError)
+    let messagesForAgent = ctx.messagesForModel as Awaited<
+      ReturnType<typeof convertToModelMessages>
+    >;
+    if (!messagesForAgent || messagesForAgent.length === 0) {
+      console.error(
+        "[chat] messagesForModel is empty/undefined before agent.stream — using text fallback."
+      );
+      messagesForAgent = [
+        { role: "user" as const, content: "Analisar documentos anexados." },
+      ];
+    }
+
     const result = await agent.stream({
-      messages: ctx.messagesForModel as Awaited<
-        ReturnType<typeof convertToModelMessages>
-      >,
+      messages: messagesForAgent,
       abortSignal: AbortSignal.timeout(270_000),
       options: callOptions,
     });
