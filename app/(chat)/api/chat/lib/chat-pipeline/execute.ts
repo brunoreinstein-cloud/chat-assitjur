@@ -192,6 +192,19 @@ async function prepareModelMessagesForStream(
     hasDocuments: params.documentTexts.size > 0,
   });
   const messagesToSend = applyContextEditing(normalizedMessages);
+  if (isDev) {
+    console.info(
+      "[chat-debug] prepareModelMessages:",
+      "normalizedMessages:",
+      normalizedMessages.length,
+      "messagesToSend:",
+      messagesToSend.length,
+      "roles:",
+      messagesToSend.map((m) => m.role),
+      "partsPerMsg:",
+      messagesToSend.map((m) => (m.parts ?? []).length)
+    );
+  }
   const estimatedInputTokens = estimateInputTokens(
     systemStrForEstimate.length,
     messagesToSend
@@ -214,17 +227,43 @@ async function prepareModelMessagesForStream(
   try {
     modelMessages = await convertToModelMessages(messagesToSend);
   } catch (convertError) {
-    if (isDev) {
-      console.warn(
-        "[chat] convertToModelMessages falhou (partes inválidas?), a usar apenas a última mensagem:",
-        convertError
-      );
-    }
+    console.warn(
+      "[chat] convertToModelMessages falhou (partes inválidas?), a usar apenas a última mensagem:",
+      convertError
+    );
     const fallbackMessages =
       message?.role === "user"
         ? normalizeMessageParts([message as ChatMessage], visionEnabled)
         : normalizedMessages.slice(-1);
-    modelMessages = await convertToModelMessages(fallbackMessages);
+    try {
+      modelMessages = await convertToModelMessages(fallbackMessages);
+    } catch (fallbackError) {
+      console.error(
+        "[chat] convertToModelMessages fallback também falhou:",
+        fallbackError,
+        "fallbackMessages:",
+        JSON.stringify(
+          fallbackMessages.map((m) => ({
+            role: m.role,
+            partsCount: (m.parts ?? []).length,
+            partTypes: (m.parts ?? []).map(
+              (p) => (p as { type?: string }).type
+            ),
+          }))
+        )
+      );
+      // Último recurso: mensagem de texto simples para não crashar
+      modelMessages = [
+        {
+          role: "user" as const,
+          content:
+            message?.parts
+              ?.filter((p) => (p as { type?: string }).type === "text")
+              .map((p) => (p as { text?: string }).text ?? "")
+              .join("\n") || "Analisar documentos anexados.",
+        },
+      ];
+    }
   }
   debugTracker.phase("contextConvert", t5);
   logTiming(
