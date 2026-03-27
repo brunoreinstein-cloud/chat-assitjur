@@ -450,6 +450,37 @@ function createStreamExecuteHandler(
       Object.assign(tools, ctx.mcpTools);
     }
 
+    // Guard: ensure messagesForModel is never empty/undefined
+    let messagesForStream = ctx.messagesForModel as Awaited<
+      ReturnType<typeof convertToModelMessages>
+    >;
+    if (!messagesForStream || messagesForStream.length === 0) {
+      console.error(
+        "[CRITICAL] messagesForModel is empty/undefined in createStreamExecuteHandler.",
+        "agentId:", ctx.agentId,
+        "effectiveModel:", ctx.effectiveModel,
+      );
+      messagesForStream = [
+        { role: "user" as const, content: "Analisar documentos anexados." },
+      ];
+    }
+
+    const sysPrompt = systemPrompt({
+      selectedChatModel: ctx.effectiveModel,
+      requestHints: ctx.requestHints,
+      agentInstructions: effectiveAgentInstructions,
+      knowledgeContext: ctx.knowledgeContext,
+      processoContext: ctx.processoContext,
+      hasDocuments: ctx.documentTexts.size > 0,
+    });
+
+    // Log always (not only isDev) to diagnose production issues
+    console.info(
+      "[chat-guard] streamText params check:",
+      "system:", typeof sysPrompt, sysPrompt?.length ?? 0,
+      "messages:", Array.isArray(messagesForStream), messagesForStream?.length ?? 0,
+    );
+
     const result = streamText({
       model: getLanguageModel(ctx.effectiveModel),
       // temperature não é suportado quando thinking está activo (adaptive ou extended).
@@ -458,17 +489,8 @@ function createStreamExecuteHandler(
         ? {}
         : { temperature: 0.2 }),
       maxOutputTokens: ctx.agentConfig.maxOutputTokens ?? 8192,
-      system: systemPrompt({
-        selectedChatModel: ctx.effectiveModel,
-        requestHints: ctx.requestHints,
-        agentInstructions: effectiveAgentInstructions,
-        knowledgeContext: ctx.knowledgeContext,
-        processoContext: ctx.processoContext,
-        hasDocuments: ctx.documentTexts.size > 0,
-      }),
-      messages: ctx.messagesForModel as Awaited<
-        ReturnType<typeof convertToModelMessages>
-      >,
+      system: sysPrompt,
+      messages: messagesForStream,
       // Permite múltiplos steps: step 1 = model chama tool; step 2 = model gera texto após tool result (entrega).
       // Sem isto (default stepCountIs(1)) o stream encerra após a tool e o utilizador não vê mensagem.
       // Master com pipeline pode precisar: pipeline → createDocument → resposta (7 steps).

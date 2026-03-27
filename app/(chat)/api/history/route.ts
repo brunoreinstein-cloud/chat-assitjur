@@ -44,13 +44,15 @@ export async function GET(request: NextRequest) {
       return new ChatbotError("unauthorized:chat").toResponse();
     }
 
-    await ensureStatementTimeout();
-    const chats = await getChatsByUserId({
-      id: session.user.id,
-      limit,
-      startingAfter,
-      endingBefore,
-    });
+    const [, chats] = await Promise.all([
+      ensureStatementTimeout(),
+      getChatsByUserId({
+        id: session.user.id,
+        limit,
+        startingAfter,
+        endingBefore,
+      }),
+    ]);
 
     return Response.json(chats, {
       headers: {
@@ -100,8 +102,10 @@ export async function DELETE() {
       return new ChatbotError("unauthorized:chat").toResponse();
     }
 
-    await ensureStatementTimeout();
-    const result = await deleteAllChatsByUserId({ userId: session.user.id });
+    const [, result] = await Promise.all([
+      ensureStatementTimeout(),
+      deleteAllChatsByUserId({ userId: session.user.id }),
+    ]);
 
     return Response.json(result, { status: 200 });
   } catch (error) {

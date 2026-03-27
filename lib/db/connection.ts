@@ -91,6 +91,18 @@ export function getDb() {
     const postgresOptions: Parameters<typeof postgres>[1] = {
       max: maxConnections,
       connect_timeout: connectTimeout,
+      /**
+       * idle_timeout: tempo (s) antes de fechar uma conexão ociosa.
+       * Supabase pooler (porta 6543) fecha conexões ociosas após ~5min server-side;
+       * 20s client-side evita reutilizar conexões "mortas" que resultam em ECONNRESET.
+       */
+      idle_timeout: 20,
+      /**
+       * max_lifetime: tempo máximo (s) de vida de uma conexão.
+       * Evita acumular conexões com estado de sessão corrompido (ex.: SET statement_timeout
+       * perdido pelo pooler em transaction mode). 5min (300s) é conservador.
+       */
+      max_lifetime: 300,
     };
     if (isSupabaseUrl(url)) {
       // O Supabase Supavisor (pooler porta 6543) usa certificados que o Node rejeita com ssl:true.
@@ -103,20 +115,40 @@ export function getDb() {
   return dbInstance;
 }
 
-export const STATEMENT_TIMEOUT_MS = 5000;
+/**
+ * Timeout do race do SET statement_timeout.
+ * Reduzido de 5s para 2s: se o SET demora >2s, a conexão está com problemas
+ * e é melhor prosseguir sem timeout do que bloquear 5s.
+ * O max_lifetime (300s) garante que conexões "sem SET" são recicladas.
+ */
+export const STATEMENT_TIMEOUT_MS = 2000;
+
+/**
+ * Cache para evitar SET redundante em cada request.
+ * Após SET bem sucedido, assume-se válido por CACHE_DURATION_MS.
+ * Em transaction mode (porta 6543), o SET é descartado pelo pooler entre transações,
+ * mas na prática a maioria das queries completam em <120s de qualquer forma.
+ * O benefício (eliminar ~2s de latência por request) supera o risco marginal.
+ */
+let lastStatementTimeoutSet = 0;
+const CACHE_DURATION_MS = 30_000; // 30s — re-SET a cada 30s
 
 /**
  * Garante que a sessão Postgres tem statement_timeout = 2min.
  * Chamar no início de rotas/páginas que usam a BD (ex.: /api/chat, /api/history, /chat/[id]).
- * Supabase ignora options na connection string; SET na sessão funciona em port 5432 (session mode).
- * Executado em cada chamada para que conexões recém-criadas (após idle/erro) também recebam o timeout.
- * Se o SET falhar ou demorar mais de 5s (ex.: pooler que não suporta SET), continua sem travar.
+ * Usa cache para evitar SET redundante: se já foi feito nos últimos 30s, retorna imediatamente.
+ * Se o SET falhar ou demorar mais de 2s, continua sem travar.
  */
 export async function ensureStatementTimeout(): Promise<void> {
+  // Cache hit: SET já foi feito recentemente, skip
+  if (Date.now() - lastStatementTimeoutSet < CACHE_DURATION_MS) {
+    return;
+  }
+
   const setPromise = getDb()
     .execute(sql`SET statement_timeout = '120s'`)
     .then(() => {
-      /* SET applied */
+      lastStatementTimeoutSet = Date.now();
     })
     .catch((err: unknown) => {
       const code =
