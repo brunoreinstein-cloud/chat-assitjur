@@ -457,8 +457,10 @@ function createStreamExecuteHandler(
     if (!messagesForStream || messagesForStream.length === 0) {
       console.error(
         "[CRITICAL] messagesForModel is empty/undefined in createStreamExecuteHandler.",
-        "agentId:", ctx.agentId,
-        "effectiveModel:", ctx.effectiveModel,
+        "agentId:",
+        ctx.agentId,
+        "effectiveModel:",
+        ctx.effectiveModel
       );
       messagesForStream = [
         { role: "user" as const, content: "Analisar documentos anexados." },
@@ -477,8 +479,12 @@ function createStreamExecuteHandler(
     // Log always (not only isDev) to diagnose production issues
     console.info(
       "[chat-guard] streamText params check:",
-      "system:", typeof sysPrompt, sysPrompt?.length ?? 0,
-      "messages:", Array.isArray(messagesForStream), messagesForStream?.length ?? 0,
+      "system:",
+      typeof sysPrompt,
+      sysPrompt?.length ?? 0,
+      "messages:",
+      Array.isArray(messagesForStream),
+      messagesForStream?.length ?? 0
     );
 
     const result = streamText({
