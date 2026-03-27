@@ -9,9 +9,24 @@ interface Entitlements {
 const isDev = process.env.NODE_ENV === "development";
 const initialCreditsDefault = isDev ? 1000 : 100;
 
-export const entitlementsByUserType: Record<UserType, Entitlements> = {
-  regular: {
-    maxMessagesPerDay: 150,
-    initialCredits: initialCreditsDefault,
-  },
+const regularEntitlements: Entitlements = {
+  maxMessagesPerDay: 150,
+  initialCredits: initialCreditsDefault,
 };
+
+export const entitlementsByUserType: Record<UserType, Entitlements> = {
+  regular: regularEntitlements,
+};
+
+/**
+ * Devolve os entitlements para um userType, com fallback para "regular"
+ * quando o tipo é undefined/null (utilizadores criados antes do campo existir).
+ */
+export function getEntitlements(
+  userType: UserType | undefined | null
+): Entitlements {
+  if (userType && userType in entitlementsByUserType) {
+    return entitlementsByUserType[userType];
+  }
+  return regularEntitlements;
+}

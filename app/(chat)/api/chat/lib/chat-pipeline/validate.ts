@@ -3,7 +3,7 @@ import type { UserType } from "@/app/(auth)/auth";
 import type { AgentConfig } from "@/lib/ai/agents-registry";
 import { DEFAULT_AGENT_ID_WHEN_EMPTY } from "@/lib/ai/agents-registry";
 import { MIN_CREDITS_TO_START_CHAT } from "@/lib/ai/credits";
-import { entitlementsByUserType } from "@/lib/ai/entitlements";
+import { getEntitlements } from "@/lib/ai/entitlements";
 import { getCachedBuiltInAgentOverrides } from "@/lib/cache/agent-overrides-cache";
 import { creditsCache } from "@/lib/cache/credits-cache";
 import {
@@ -421,7 +421,7 @@ export async function checkRateLimitAndCredits(
   }
   if (
     process.env.NODE_ENV !== "development" &&
-    messageCount > entitlementsByUserType[userType].maxMessagesPerDay
+    messageCount > getEntitlements(userType).maxMessagesPerDay
   ) {
     return new ChatbotError("rate_limit:chat").toResponse();
   }
