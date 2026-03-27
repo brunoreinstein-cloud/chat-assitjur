@@ -86,7 +86,13 @@ export function getDb() {
      * transaction mode) cada invocação serverless pode ter pedidos concorrentes
      * (ex.: Promise.all de ensureStatementTimeout + queries); max:1 forçava fila.
      */
-    const maxConnections = 3;
+    /**
+     * Em dev usa-se 5 conexões para reduzir contenção: o processo único serve
+     * chat pipeline (7 queries paralelas), sidebar (credits, history, processos),
+     * e warmup. 3 conexões causava filas de ~30s com BD remota (Supabase US East).
+     * Em produção usa-se 3 — cada serverless invocation é isolada.
+     */
+    const maxConnections = process.env.NODE_ENV === "production" ? 3 : 5;
     const connectTimeout = process.env.NODE_ENV === "production" ? 25 : 10;
     const postgresOptions: Parameters<typeof postgres>[1] = {
       max: maxConnections,
