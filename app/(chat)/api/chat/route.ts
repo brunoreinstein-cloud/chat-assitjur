@@ -41,7 +41,7 @@ import {
   logChatDebug,
 } from "@/lib/ai/chat-debug";
 import { extractDocumentTextsFromAllMessages } from "@/lib/ai/document-context";
-import { entitlementsByUserType } from "@/lib/ai/entitlements";
+import { getEntitlements } from "@/lib/ai/entitlements";
 import { getAllMcpTools } from "@/lib/ai/mcp-config";
 import type { RequestHints } from "@/lib/ai/prompts";
 import {
@@ -133,8 +133,7 @@ async function handleChatPostAuthenticated(
 
   const userType: UserType = authenticatedSession.user.type ?? "regular";
   const isToolApprovalFlow = Boolean(messages);
-  const entitlements =
-    entitlementsByUserType[userType] ?? entitlementsByUserType.regular;
+  const entitlements = getEntitlements(userType);
   const initialCredits = entitlements.initialCredits;
 
   const messageText =

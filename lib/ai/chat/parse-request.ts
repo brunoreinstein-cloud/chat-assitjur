@@ -16,7 +16,7 @@ import {
   MAX_TOTAL_DOC_CHARS,
 } from "@/lib/ai/context-window";
 import { MIN_CREDITS_TO_START_CHAT } from "@/lib/ai/credits";
-import { entitlementsByUserType } from "@/lib/ai/entitlements";
+import { getEntitlements } from "@/lib/ai/entitlements";
 import {
   extractStructuredFields,
   formatStructuredFieldsAsHeader,
@@ -380,7 +380,7 @@ export async function checkRateLimitAndCredits(
   }
   if (
     process.env.NODE_ENV !== "development" &&
-    messageCount > entitlementsByUserType[userType].maxMessagesPerDay
+    messageCount > getEntitlements(userType).maxMessagesPerDay
   ) {
     return new ChatbotError("rate_limit:chat").toResponse();
   }
