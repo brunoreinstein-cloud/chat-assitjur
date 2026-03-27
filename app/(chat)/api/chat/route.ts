@@ -92,6 +92,20 @@ async function handleChatPostAuthenticated(
       agentId,
       ")"
     );
+    console.info(
+      "[chat-debug] body keys:",
+      Object.keys(requestBody),
+      "hasMessage:",
+      Boolean(message),
+      "messageParts:",
+      message?.parts?.length,
+      "partTypes:",
+      message?.parts?.map((p) => (p as { type?: string }).type),
+      "hasMessages:",
+      Boolean(messages),
+      "messagesLen:",
+      messages?.length
+    );
   }
   if (isChatDebugEnabled()) {
     logChatDebug("request", {
@@ -117,9 +131,11 @@ async function handleChatPostAuthenticated(
   }
   const authenticatedSession = session as Session;
 
-  const userType: UserType = authenticatedSession.user.type;
+  const userType: UserType = authenticatedSession.user.type ?? "regular";
   const isToolApprovalFlow = Boolean(messages);
-  const initialCredits = entitlementsByUserType[userType].initialCredits;
+  const entitlements =
+    entitlementsByUserType[userType] ?? entitlementsByUserType.regular;
+  const initialCredits = entitlements.initialCredits;
 
   const messageText =
     message?.parts?.map((p) => ("text" in p ? p.text : "")).join(" ") ?? "";

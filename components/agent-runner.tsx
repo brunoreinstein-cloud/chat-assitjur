@@ -3,6 +3,10 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useCallback, useRef, useState } from "react";
+import {
+  type DataStreamState,
+  useDataStream,
+} from "@/components/data-stream-provider";
 import { RunnerExecutionPhase } from "@/components/runner-execution-phase";
 import { RunnerUploadPhase } from "@/components/runner-upload-phase";
 import { RunnerValidationPhase } from "@/components/runner-validation-phase";
@@ -33,11 +37,18 @@ export function AgentRunner({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [chatId] = useState(() => generateUUID());
   const modelRef = useRef(initialModel);
+  const { setDataStream } = useDataStream();
 
   const { messages, sendMessage, status } = useChat<ChatMessage>({
     id: chatId,
     messages: [],
     generateId: generateUUID,
+    onData: (dataPart) => {
+      setDataStream(
+        (ds) =>
+          (ds ? [...ds, dataPart] : [dataPart]) as unknown as DataStreamState
+      );
+    },
     transport: new DefaultChatTransport({
       api: "/api/chat",
       prepareSendMessagesRequest(request) {
