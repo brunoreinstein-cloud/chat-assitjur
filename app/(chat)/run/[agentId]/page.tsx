@@ -5,10 +5,7 @@ import { Suspense } from "react";
 import { auth } from "@/app/(auth)/auth";
 import { AgentRunner } from "@/components/agent-runner";
 import { DataStreamHandler } from "@/components/data-stream-handler";
-import {
-  AGENT_IDS,
-  getAgentConfig,
-} from "@/lib/ai/agents-registry-metadata";
+import { AGENT_IDS, getAgentConfig } from "@/lib/ai/agents-registry-metadata";
 import { DEFAULT_CHAT_MODEL } from "@/lib/ai/models";
 
 type PageProps = Readonly<{ params: Promise<{ agentId: string }> }>;
@@ -46,13 +43,13 @@ async function RunAgentPage({ params }: PageProps) {
   return (
     <>
       <AgentRunner
+        agentDescription={agentMeta.description ?? ""}
         agentId={agentId}
         agentLabel={agentMeta.label}
-        agentDescription={agentMeta.description ?? ""}
-        requiredDocumentTypes={agentMeta.requiredDocumentTypes ?? []}
-        minDocuments={agentMeta.minDocuments}
         allowedModelIds={agentMeta.allowedModelIds}
         initialModel={initialModel}
+        minDocuments={agentMeta.minDocuments}
+        requiredDocumentTypes={agentMeta.requiredDocumentTypes ?? []}
       />
       <DataStreamHandler />
     </>

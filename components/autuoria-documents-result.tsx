@@ -2,6 +2,11 @@
 
 import { Archive, Download, FileText, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { getAutuoriaDoc, getAutuoriaDocs } from "@/lib/autuoria-content-store";
+import {
+  getAutuoriaStartedAt,
+  useAutuoriaCompletedCount,
+} from "@/lib/autuoria-progress-store";
 import {
   type DocxLayout,
   downloadDocxFromGet,
@@ -9,15 +14,12 @@ import {
   downloadZipFromGet,
   downloadZipFromPost,
 } from "@/lib/document-download-utils";
-import { getAutuoriaDoc, getAutuoriaDocs } from "@/lib/autuoria-content-store";
-import {
-  getAutuoriaStartedAt,
-  useAutuoriaCompletedCount,
-} from "@/lib/autuoria-progress-store";
 import { Button } from "./ui/button";
 
 function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return s > 0 ? `${m}m ${s}s` : `${m}m`;
@@ -39,10 +41,7 @@ interface AutuoriaDocumentsResultProps {
 const DOC_LABELS = ["Quadro de Correções", "Contestação Revisada"] as const;
 const DOC_LAYOUTS: DocxLayout[] = ["autuoria-quadro", "autuoria-revisada"];
 
-async function downloadAutuoriaDocx(
-  id: string,
-  index: number
-): Promise<void> {
+async function downloadAutuoriaDocx(id: string, index: number): Promise<void> {
   const layout = DOC_LAYOUTS[index];
   const doc = getAutuoriaDoc(id);
   if (doc) {
@@ -88,7 +87,9 @@ export function AutuoriaDocumentsResult({
       timerRef.current = null;
     }
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
     };
   }, [isLoading, completedCount]);
 
@@ -100,7 +101,7 @@ export function AutuoriaDocumentsResult({
 
     return (
       <div className="flex flex-col gap-3 rounded-xl border p-4">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 text-muted-foreground text-sm">
           <Loader2 className="h-4 w-4 animate-spin" />
           <span>
             AutuorIA gerando documentos ({completedCount}/{AUTUORIA_TOTAL})
@@ -110,15 +111,17 @@ export function AutuoriaDocumentsResult({
         </div>
         {Array.from({ length: AUTUORIA_TOTAL }).map((_, i) => (
           <div
-            key={`skeleton-${DOC_LABELS[i]}`}
             className={`flex items-center gap-2 rounded-lg border p-3 ${
-              i < completedCount ? "border-green-500/30 bg-green-50/50 dark:bg-green-950/20" : ""
+              i < completedCount
+                ? "border-green-500/30 bg-green-50/50 dark:bg-green-950/20"
+                : ""
             }`}
+            key={`skeleton-${DOC_LABELS[i]}`}
           >
             <FileText className="h-4 w-4 shrink-0" />
             <span className="text-sm">{DOC_LABELS[i]}</span>
             {i < completedCount && (
-              <span className="ml-auto text-xs text-green-600">Pronto</span>
+              <span className="ml-auto text-green-600 text-xs">Pronto</span>
             )}
           </div>
         ))}
@@ -130,15 +133,15 @@ export function AutuoriaDocumentsResult({
   return (
     <div className="flex flex-col gap-3 rounded-xl border p-4">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">
+        <span className="font-medium text-sm">
           AutuorIA — {AUTUORIA_TOTAL} documentos gerados
         </span>
         {!isReadonly && ids.length > 1 && (
           <Button
-            variant="outline"
-            size="sm"
             className="gap-1.5"
             onClick={() => downloadAutuoriaZip(ids)}
+            size="sm"
+            variant="outline"
           >
             <Archive className="h-3.5 w-3.5" />
             ZIP
@@ -148,15 +151,15 @@ export function AutuoriaDocumentsResult({
 
       {ids.map((id, i) => (
         <div
-          key={id}
           className="flex items-center justify-between rounded-lg border p-3"
+          key={id}
         >
           <div className="flex items-center gap-2">
             <FileText className="h-4 w-4 shrink-0" />
             <div className="flex flex-col">
-              <span className="text-sm font-medium">{DOC_LABELS[i]}</span>
+              <span className="font-medium text-sm">{DOC_LABELS[i]}</span>
               {titles[i] && (
-                <span className="text-xs text-muted-foreground truncate max-w-[300px]">
+                <span className="max-w-[300px] truncate text-muted-foreground text-xs">
                   {titles[i]}
                 </span>
               )}
@@ -164,10 +167,10 @@ export function AutuoriaDocumentsResult({
           </div>
           {!isReadonly && (
             <Button
-              variant="outline"
-              size="sm"
               className="gap-1.5"
               onClick={() => downloadAutuoriaDocx(id, i)}
+              size="sm"
+              variant="outline"
             >
               <Download className="h-3.5 w-3.5" />
               DOCX

@@ -1,16 +1,14 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
-
+import { DefaultChatTransport } from "ai";
+import { useCallback, useRef, useState } from "react";
+import { RunnerExecutionPhase } from "@/components/runner-execution-phase";
 import { RunnerUploadPhase } from "@/components/runner-upload-phase";
 import { RunnerValidationPhase } from "@/components/runner-validation-phase";
-import { RunnerExecutionPhase } from "@/components/runner-execution-phase";
-import type { ChatMessage, ChatMessagePart } from "@/lib/types";
-import type { Attachment } from "@/lib/types";
-import type { RunnerPhase, DocumentType } from "@/lib/runner/types";
 import { buildAttachmentParts } from "@/lib/attachments/utils";
+import type { DocumentType, RunnerPhase } from "@/lib/runner/types";
+import type { Attachment, ChatMessage, ChatMessagePart } from "@/lib/types";
 import { generateUUID } from "@/lib/utils";
 
 interface AgentRunnerProps {
@@ -50,8 +48,12 @@ export function AgentRunner({
               id: lastMsg.id,
               role: lastMsg.role,
               parts: lastMsg.parts.map((p) => {
-                if (p.type === "text") return { type: "text", text: (p as { text: string }).text };
-                if (p.type === "file") return p;
+                if (p.type === "text") {
+                  return { type: "text", text: (p as { text: string }).text };
+                }
+                if (p.type === "file") {
+                  return p;
+                }
                 // document parts
                 return p;
               }),
@@ -70,7 +72,7 @@ export function AgentRunner({
     }),
   });
 
-  const handleExecute = useCallback(async () => {
+  const handleExecute = useCallback(() => {
     setPhase("execute");
 
     const parts = buildAttachmentParts(attachments);
@@ -78,7 +80,10 @@ export function AgentRunner({
       role: "user",
       parts: [
         ...(parts as ChatMessagePart[]),
-        { type: "text" as const, text: "Executar análise dos documentos anexados." },
+        {
+          type: "text" as const,
+          text: "Executar análise dos documentos anexados.",
+        },
       ],
     });
   }, [attachments, sendMessage]);
@@ -92,13 +97,13 @@ export function AgentRunner({
     <div className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col items-center px-4 py-10">
       {phase === "upload" && (
         <RunnerUploadPhase
-          agentLabel={agentLabel}
           agentDescription={agentDescription}
-          requiredDocumentTypes={requiredDocumentTypes}
-          minDocuments={minDocuments}
+          agentLabel={agentLabel}
           attachments={attachments}
-          setAttachments={setAttachments}
+          minDocuments={minDocuments}
           onReady={() => setPhase("validate")}
+          requiredDocumentTypes={requiredDocumentTypes}
+          setAttachments={setAttachments}
         />
       )}
 
@@ -106,8 +111,8 @@ export function AgentRunner({
         <RunnerValidationPhase
           agentLabel={agentLabel}
           attachments={attachments}
-          onExecute={handleExecute}
           onBack={() => setPhase("upload")}
+          onExecute={handleExecute}
         />
       )}
 
@@ -116,8 +121,8 @@ export function AgentRunner({
           agentId={agentId}
           chatId={chatId}
           messages={messages}
-          status={status}
           onReset={handleReset}
+          status={status}
         />
       )}
     </div>
