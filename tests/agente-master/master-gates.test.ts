@@ -161,13 +161,14 @@ describe("AssistJur.IA Master — ferramenta createMasterDocuments", () => {
 });
 
 describe("AssistJur.IA Master — consistência com agents-registry-metadata", () => {
-  it("AGENT_IDS exporta exatamente 5 agentes", () => {
-    expect(AGENT_IDS).toHaveLength(5);
+  it("AGENT_IDS exporta exatamente 6 agentes", () => {
+    expect(AGENT_IDS).toHaveLength(6);
     expect(AGENT_IDS).toContain(AGENT_ID_ASSISTENTE_GERAL);
     expect(AGENT_IDS).toContain(AGENT_ID_REVISOR_DEFESAS);
     expect(AGENT_IDS).toContain(AGENT_ID_REDATOR_CONTESTACAO);
     expect(AGENT_IDS).toContain(AGENT_ID_AVALIADOR_CONTESTACAO);
     expect(AGENT_IDS).toContain(AGENT_ID_ASSISTJUR_MASTER);
+    expect(AGENT_IDS).toContain("autuoria-revisor");
   });
 
   it("todos os 5 agentes têm descrição não-vazia e única no metadata", async () => {

@@ -5,6 +5,7 @@
 
 import { AGENTE_ASSISTENTE_GERAL_INSTRUCTIONS } from "@/lib/ai/agent-assistente-geral";
 import { AGENTE_ASSISTJUR_MASTER_INSTRUCTIONS } from "@/lib/ai/agent-assistjur-master";
+import { AGENTE_AUTUORIA_REVISOR_INSTRUCTIONS } from "@/lib/ai/agent-autuoria-revisor";
 import { AGENTE_AVALIADOR_CONTESTACAO_INSTRUCTIONS } from "@/lib/ai/agent-avaliador-contestacao";
 import { AGENTE_REDATOR_CONTESTACAO_INSTRUCTIONS } from "@/lib/ai/agent-redator-contestacao";
 import { AGENTE_REVISOR_DEFESAS_INSTRUCTIONS } from "@/lib/ai/agent-revisor-defesas";
@@ -15,6 +16,7 @@ export const AGENT_ID_REVISOR_DEFESAS = "revisor-defesas";
 export const AGENT_ID_REDATOR_CONTESTACAO = "redator-contestacao";
 export const AGENT_ID_AVALIADOR_CONTESTACAO = "avaliador-contestacao";
 export const AGENT_ID_ASSISTJUR_MASTER = "assistjur-master";
+export const AGENT_ID_AUTUORIA_REVISOR = "autuoria-revisor";
 
 /** Id usado pela API quando o cliente não envia agentId (chat sem agente selecionado). */
 export const DEFAULT_AGENT_ID_WHEN_EMPTY = AGENT_ID_ASSISTENTE_GERAL;
@@ -25,6 +27,7 @@ export const AGENT_IDS = [
   AGENT_ID_REDATOR_CONTESTACAO,
   AGENT_ID_AVALIADOR_CONTESTACAO,
   AGENT_ID_ASSISTJUR_MASTER,
+  AGENT_ID_AUTUORIA_REVISOR,
 ] as const;
 
 export type AgentId = (typeof AGENT_IDS)[number];
@@ -46,6 +49,8 @@ export interface AgentToolFlags {
   usePipelineTool?: boolean;
   /** Geração de Relatórios Master (DOCX/XLSX/JSON) + ZIP download */
   useMasterDocumentsTool?: boolean;
+  /** AutuorIA: Quadro de Correções (paisagem) + Contestação Revisada (marcações coloridas + comentários Word) */
+  useAutuoriaTools?: boolean;
 }
 
 export interface AgentConfig {
@@ -91,6 +96,13 @@ export interface AgentConfig {
    */
   useMasterDocumentsTool?: boolean;
   /**
+   * Habilitar AutuorIA (createAutuoriaDocuments).
+   * Quando true, o agente gera Quadro de Correções (paisagem) + Contestação Revisada
+   * com marcações coloridas e comentários Word.
+   * Default: false — activar apenas no AutuorIA - Revisor de Defesa.
+   */
+  useAutuoriaTools?: boolean;
+  /**
    * Temperature do modelo para este agente.
    * Playbook v9.0: Tipo A/F/G (extração/dados) → 0.1; Tipo B/C/D/E (análise/redação) → 0.2.
    * Se omitido, usa 0.2 como default global.
@@ -127,6 +139,23 @@ export interface AgentConfig {
    * Definido via admin override — não existe nas configs do código.
    */
   defaultModelId?: string;
+  /**
+   * Quando true, o agente suporta o modo Runner (execução single-shot em /run/[agentId]).
+   * O Runner apresenta um fluxo linear upload → validar → executar → download,
+   * sem interação conversacional.
+   */
+  supportsRunnerMode?: boolean;
+  /**
+   * Tipos de documento obrigatórios para o modo Runner.
+   * O frontend mostra um checklist e só habilita "Executar" quando todos estão presentes.
+   * Array vazio = aceita qualquer documento (ex.: Master).
+   */
+  requiredDocumentTypes?: Array<"pi" | "contestacao" | "sentenca" | "laudo">;
+  /**
+   * Número mínimo de documentos para o Runner (defaults para requiredDocumentTypes.length).
+   * Útil quando requiredDocumentTypes é vazio mas o agente precisa de pelo menos 1 doc.
+   */
+  minDocuments?: number;
 }
 
 /** Modelos Claude Sonnet/Opus (recomendados para redação jurídica longa). */
@@ -166,6 +195,8 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
     thinkingEnabled: true,
     /** Apenas modelos sem extended thinking: ferramentas ativas e primeira resposta rápida. */
     allowedModelIds: nonReasoningChatModelIds,
+    supportsRunnerMode: true,
+    requiredDocumentTypes: ["pi", "contestacao"],
   },
   [AGENT_ID_REDATOR_CONTESTACAO]: {
     id: AGENT_ID_REDATOR_CONTESTACAO,
@@ -219,6 +250,30 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
      *  Reasoning models (sufixo -thinking/-reasoning) desactivam tools no route.ts
      *  → createMasterDocuments nunca é chamado → sem documento gerado. */
     allowedModelIds: nonReasoningChatModelIds,
+    supportsRunnerMode: true,
+    requiredDocumentTypes: [],
+    minDocuments: 1,
+  },
+  [AGENT_ID_AUTUORIA_REVISOR]: {
+    id: AGENT_ID_AUTUORIA_REVISOR,
+    label: "AutuorIA - Revisor de Defesa",
+    instructions: AGENTE_AUTUORIA_REVISOR_INSTRUCTIONS,
+    useRevisorDefesaTools: false,
+    useRedatorContestacaoTool: false,
+    useAutuoriaTools: true,
+    useMemoryTools: true,
+    useApprovalTool: false,
+    useSearchJurisprudenciaTool: true, // Consulta INSTRUÇÃO_CONSOLIDADA e jurisprudência via RAG.
+    // Tipo B (Analisador cirúrgico): auditoria + edição de peças → temperature 0.1 (determinístico).
+    temperature: 0.1,
+    // Thinking adaptativo ativado: análise cruzada PI × Contestação requer raciocínio complexo.
+    thinkingEnabled: true,
+    // 16000 tokens: tool call com Quadro JSON + Contestação completa com marcações.
+    maxOutputTokens: 16_000,
+    /** Apenas modelos sem extended thinking: ferramentas ativas. */
+    allowedModelIds: nonReasoningChatModelIds,
+    supportsRunnerMode: true,
+    requiredDocumentTypes: ["pi", "contestacao"],
   },
 };
 

@@ -136,8 +136,8 @@ function getBulletText(line: string): string | null {
   return m ? (m[1] ?? null) : null;
 }
 
-/** Layout de export DOCX: default (simples) ou assistjur-master (paleta cinza/dourado, header/footer). */
-export type DocxLayout = "default" | "assistjur-master";
+/** Layout de export DOCX: default (simples), assistjur-master (paleta cinza/dourado), ou autuoria-* (AutuorIA). */
+export type DocxLayout = "default" | "assistjur-master" | "autuoria-quadro" | "autuoria-revisada";
 
 function paragraphH1Assistjur(text: string): Paragraph {
   return new Paragraph({
@@ -458,6 +458,18 @@ export async function createDocxBuffer(
   content: string,
   layout: DocxLayout = "default"
 ): Promise<Buffer> {
+  // Layouts AutuorIA são gerados pelo módulo dedicado lib/autuoria-docx.ts.
+  // Quando chamados via export route, o content contém JSON (quadro) ou texto com marcadores (revisada).
+  if (layout === "autuoria-quadro") {
+    const { createQuadroDocxBuffer } = await import("@/lib/autuoria-docx");
+    const data = JSON.parse(content);
+    return createQuadroDocxBuffer(data);
+  }
+  if (layout === "autuoria-revisada") {
+    const { createRevisadaDocxBuffer } = await import("@/lib/autuoria-docx");
+    return createRevisadaDocxBuffer(content, title);
+  }
+
   const bodyChildren = contentToChildren(content ?? "", layout);
   const hasTitle = title.trim().length > 0;
   const children: FileChild[] = hasTitle

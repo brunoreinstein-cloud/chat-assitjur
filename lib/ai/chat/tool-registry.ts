@@ -8,6 +8,7 @@ import { analyzeProcessoPipeline } from "@/lib/ai/tools/analyze-processo-pipelin
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { createMasterDocuments } from "@/lib/ai/tools/create-master-documents";
 import { createRedatorContestacaoDocument } from "@/lib/ai/tools/create-redator-contestacao-document";
+import { createAutuoriaDocuments } from "@/lib/ai/tools/create-autuoria-documents";
 import { createRevisorDefesaDocuments } from "@/lib/ai/tools/create-revisor-defesa-documents";
 import { getWeather } from "@/lib/ai/tools/get-weather";
 import { requestApproval } from "@/lib/ai/tools/human-in-the-loop";
@@ -80,6 +81,7 @@ export function buildToolsForAgent(
     >;
     analyzeProcessoPipeline?: ReturnType<typeof analyzeProcessoPipeline>;
     createMasterDocuments?: ReturnType<typeof createMasterDocuments>;
+    createAutuoriaDocuments?: ReturnType<typeof createAutuoriaDocuments>;
     intakeProcesso?: ReturnType<typeof createIntakeProcessoTool>;
   };
   if (ctx.agentConfig.useRevisorDefesaTools) {
@@ -102,6 +104,12 @@ export function buildToolsForAgent(
   }
   if (ctx.agentConfig.useMasterDocumentsTool) {
     tools.createMasterDocuments = createMasterDocuments({
+      session: ctx.session,
+      dataStream,
+    });
+  }
+  if (ctx.agentConfig.useAutuoriaTools) {
+    tools.createAutuoriaDocuments = createAutuoriaDocuments({
       session: ctx.session,
       dataStream,
     });

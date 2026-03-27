@@ -33,7 +33,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com",
       "img-src 'self' data: blob: https://avatar.vercel.sh https://*.public.blob.vercel-storage.com https://*.supabase.co",
-      "connect-src 'self' https://*.supabase.co https://*.vercel-storage.com https://cdn.jsdelivr.net",
+      "connect-src 'self' https://*.supabase.co https://*.vercel-storage.com https://cdn.jsdelivr.net https://vercel.com",
       "worker-src 'self' blob:",
       "frame-ancestors 'none'",
     ].join("; "),
@@ -46,9 +46,9 @@ const nextConfig: NextConfig = {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },
   experimental: {
-    proxyClientMaxBodySize: "22mb",
+    proxyClientMaxBodySize: "35mb",
     serverActions: {
-      bodySizeLimit: "21mb",
+      bodySizeLimit: "34mb",
     },
   },
   outputFileTracingIncludes: {
