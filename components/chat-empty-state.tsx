@@ -279,9 +279,9 @@ function MasterModulesGrid({ onSelect }: MasterModulesGridProps) {
         O que queres gerar hoje?
       </p>
       <div className="grid grid-cols-2 gap-2">
-        {visible.map((mod) => (
+        {visible.map((mod, idx) => (
           <button
-            className="group flex flex-col gap-1.5 rounded-[10px] border border-border bg-card p-3 text-left shadow-sm transition-all hover:-translate-y-px hover:border-primary/30 hover:bg-primary/5 hover:shadow-md"
+            className={`group flex flex-col gap-1.5 rounded-[10px] border border-border bg-card p-3 text-left shadow-sm card-interactive hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/5 hover:shadow-md animate-fade-in-up ${idx < 6 ? `stagger-${idx + 1}` : ""}`}
             key={mod.id}
             onClick={() => onSelect(mod.command)}
             type="button"
@@ -364,14 +364,14 @@ export function ChatEmptyState({
 
       <div className="relative z-10 flex w-full max-w-[520px] flex-col items-center">
         {/* Logo */}
-        <div className="mb-5 flex h-16 items-center justify-center">
+        <div className="mb-5 flex h-16 items-center justify-center animate-fade-in-up">
           <AssistJurLogo className="font-semibold text-[22px]" iconSize={48} />
         </div>
 
-        <h1 className="mb-2.5 text-center font-semibold text-[28px] text-foreground tracking-tight">
+        <h1 className="mb-2.5 text-center font-semibold text-[28px] text-foreground tracking-tight animate-fade-in-up stagger-1">
           {isMaster ? "AssistJur Master" : "Como posso ajudar hoje?"}
         </h1>
-        <p className="mb-8 text-center text-[14px] text-muted-foreground leading-relaxed">
+        <p className="mb-8 text-center text-[14px] text-muted-foreground leading-relaxed animate-fade-in-up stagger-2">
           {isMaster ? (
             "Geração de documentos jurídicos com IA. Selecione um módulo abaixo ou descreva o que precisa."
           ) : (
@@ -391,12 +391,13 @@ export function ChatEmptyState({
         ) : (
           /* Agent cards — visíveis quando não está no Master */
           <div className="mb-6 grid w-full grid-cols-3 gap-2.5">
-            {AGENT_IDS.map((id) => {
+            {AGENT_IDS.map((id, idx) => {
               const config = getAgentConfig(id);
               const style = AGENT_CARD_STYLE[id];
+              const staggerClass = idx < 6 ? `stagger-${idx + 1}` : "";
               return (
                 <button
-                  className="group flex flex-col gap-2 rounded-[10px] border border-border bg-card p-3.5 text-left shadow-sm transition-all hover:-translate-y-px hover:border-primary/30 hover:bg-primary/5 hover:shadow-md"
+                  className={`group flex flex-col gap-2 rounded-[10px] border border-border bg-card p-3.5 text-left shadow-sm card-interactive hover:-translate-y-0.5 hover:border-primary/30 hover:bg-primary/5 hover:shadow-md animate-fade-in-up ${staggerClass}`}
                   key={id}
                   onClick={() => onAgentSelect(id)}
                   type="button"
@@ -441,9 +442,9 @@ export function ChatEmptyState({
               ou descreve em linguagem natural:
             </p>
           )}
-          {quickPrompts.map((q) => (
+          {quickPrompts.map((q, idx) => (
             <button
-              className="whitespace-nowrap rounded-full border border-border bg-muted/80 px-3 py-1.5 text-[12px] text-muted-foreground transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-foreground"
+              className={`whitespace-nowrap rounded-full border border-border bg-muted/80 px-3 py-1.5 text-[12px] text-muted-foreground transition-all hover:border-primary/30 hover:bg-primary/5 hover:text-foreground animate-fade-in-up stagger-${Math.min(idx + 3, 6)}`}
               key={q.label}
               onClick={() => onQuickPrompt(q.text)}
               type="button"

@@ -71,7 +71,7 @@ export function CaseCard({
       className={cn(
         "flex flex-col gap-4 rounded-lg border bg-card p-5 shadow-sm",
         "min-w-[280px] max-w-[400px]",
-        "transition-shadow hover:shadow-md",
+        "card-interactive hover:-translate-y-0.5 hover:border-primary/20 hover:shadow-md",
         className
       )}
     >

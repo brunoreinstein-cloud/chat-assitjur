@@ -39,7 +39,7 @@ export function AgentCard({
     <div
       className={cn(
         "group flex flex-col gap-3 rounded-lg border bg-card p-4 shadow-sm",
-        "transition-all hover:-translate-y-px hover:border-primary/30 hover:shadow-md",
+        "card-interactive hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md",
         isActive && "border-primary/40 bg-primary/5 ring-1 ring-primary/20",
         className
       )}

@@ -64,7 +64,7 @@ export function ChatTopbar({
   const meta = getAgentMeta(activeAgent);
 
   return (
-    <header className="flex h-[52px] shrink-0 items-center gap-2.5 border-border border-b bg-background px-5">
+    <header className="flex h-[52px] shrink-0 items-center gap-2.5 border-border border-b bg-background/90 topbar-glass px-5">
       <SidebarToggle className="border-border bg-muted text-foreground hover:bg-muted/80" />
       {/* Agent selector */}
       <button

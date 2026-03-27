@@ -487,6 +487,80 @@
 /* (shadow-brand e shadow-gold removidos na v3.0 — sombras 100% neutras) */
 
 /* ------------------------------------------------------------
+   5B. STAGGERED FADE-IN — entrada orquestrada para listas/cards
+       Inspirado em Claude Cookbooks: "one well-orchestrated page load
+       with staggered reveals > scattered micro-interactions"
+   ------------------------------------------------------------ */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@utility animate-fade-in-up {
+  opacity: 0;
+  animation: fadeInUp 0.4s ease forwards;
+}
+
+@utility stagger-1 {
+  animation-delay: 0.04s;
+}
+
+@utility stagger-2 {
+  animation-delay: 0.08s;
+}
+
+@utility stagger-3 {
+  animation-delay: 0.12s;
+}
+
+@utility stagger-4 {
+  animation-delay: 0.16s;
+}
+
+@utility stagger-5 {
+  animation-delay: 0.2s;
+}
+
+@utility stagger-6 {
+  animation-delay: 0.24s;
+}
+
+/* ------------------------------------------------------------
+   5C. INTERACTIVE CARD — hover elevation sutil
+       translateY(-2px) + shadow-md (contido, institucional)
+   ------------------------------------------------------------ */
+@utility card-interactive {
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.25s ease;
+}
+
+/* ------------------------------------------------------------
+   5D. TOPBAR GLASS — backdrop-filter blur no scroll
+   ------------------------------------------------------------ */
+@utility topbar-glass {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ------------------------------------------------------------
+   5E. DARK MESH GRADIENT — profundidade sutil no workspace
+       Radial gradients quase imperceptíveis da cor da marca
+   ------------------------------------------------------------ */
+@utility dark-mesh-bg {
+  background:
+    radial-gradient(ellipse at 15% 50%, hsla(262, 83%, 57%, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 85% 20%, hsla(262, 60%, 40%, 0.02) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 90%, hsla(262, 50%, 30%, 0.015) 0%, transparent 50%);
+}
+
+/* ------------------------------------------------------------
    6. BASE — Reset e estilos fundamentais
    ------------------------------------------------------------ */
 @layer utilities {
@@ -520,9 +594,15 @@
     overflow-x: hidden;
   }
 
-  /* Tipografia base — hierarquia headings */
+  /* Tipografia base — hierarquia headings com contraste de peso
+     h1-h2: 700 para impacto, h3-h6: 600 para conteúdo */
   h1,
-  h2,
+  h2 {
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.035em;
+  }
+
   h3,
   h4,
   h5,
@@ -530,6 +610,12 @@
     font-weight: 600;
     line-height: 1.25;
     letter-spacing: -0.025em;
+  }
+
+  /* Focus ring uniforme — 2px brand purple, offset consistente */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
   }
 
   /* Seleção de texto — usa cor da marca */
@@ -658,6 +744,16 @@
   .landing-card-hover,
   .landing-cta-hover {
     transition: none;
+  }
+
+  /* Desabilita staggered fade-in e hover elevation para motion-sensitive */
+  .animate-fade-in-up {
+    opacity: 1 !important;
+    animation: none !important;
+  }
+
+  .card-interactive {
+    transition: none !important;
   }
 }
 
