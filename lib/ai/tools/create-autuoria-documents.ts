@@ -180,14 +180,21 @@ export const createAutuoriaDocuments = ({
           "Filename for Revisada: CONTESTACAO_REVISADA_-_[RECLAMANTE]_x_[EMPRESA]_-_[Nº]"
         ),
     }),
-    execute: async ({ quadroData, revisadaContent, quadroTitle, revisadaTitle }) => {
+    execute: async ({
+      quadroData,
+      revisadaContent,
+      quadroTitle,
+      revisadaTitle,
+    }) => {
       const ids = [generateUUID(), generateUUID()];
       const titles = [quadroTitle, revisadaTitle];
       const userId = session?.user?.id;
 
       // Warm up DB connection
       if (userId) {
-        pingDatabase().catch(() => {});
+        pingDatabase().catch(() => {
+          /* intentional noop */
+        });
       }
 
       // Signal: 2 documents incoming
@@ -218,22 +225,52 @@ export const createAutuoriaDocuments = ({
 
       // Stream Quadro document info
       const docs = [
-        { id: ids[0], title: titles[0], content: quadroContentJson, buffer: quadroBuffer },
-        { id: ids[1], title: titles[1], content: revisadaContentText, buffer: revisadaBuffer },
+        {
+          id: ids[0],
+          title: titles[0],
+          content: quadroContentJson,
+          buffer: quadroBuffer,
+        },
+        {
+          id: ids[1],
+          title: titles[1],
+          content: revisadaContentText,
+          buffer: revisadaBuffer,
+        },
       ];
 
       for (let i = 0; i < docs.length; i++) {
         const doc = docs[i];
 
-        dataStream.write({ type: "data-autuoriaId", data: doc.id, transient: true });
-        dataStream.write({ type: "data-autuoriaTitle", data: doc.title, transient: true });
-        dataStream.write({ type: "data-autuoriaKind", data: "text", transient: true });
-        dataStream.write({ type: "data-autuoriaClear", data: null, transient: true });
+        dataStream.write({
+          type: "data-autuoriaId",
+          data: doc.id,
+          transient: true,
+        });
+        dataStream.write({
+          type: "data-autuoriaTitle",
+          data: doc.title,
+          transient: true,
+        });
+        dataStream.write({
+          type: "data-autuoriaKind",
+          data: "text",
+          transient: true,
+        });
+        dataStream.write({
+          type: "data-autuoriaClear",
+          data: null,
+          transient: true,
+        });
 
         // Stream content in chunks (text representation)
         const textContent = doc.content;
         const CHUNK_SIZE = 400;
-        for (let offset = 0; offset < textContent.length; offset += CHUNK_SIZE) {
+        for (
+          let offset = 0;
+          offset < textContent.length;
+          offset += CHUNK_SIZE
+        ) {
           dataStream.write({
             type: "data-autuoriaDelta",
             data: textContent.slice(offset, offset + CHUNK_SIZE),
@@ -241,7 +278,11 @@ export const createAutuoriaDocuments = ({
           });
         }
 
-        dataStream.write({ type: "data-autuoriaFinish", data: null, transient: true });
+        dataStream.write({
+          type: "data-autuoriaFinish",
+          data: null,
+          transient: true,
+        });
 
         // Save to DB in background
         if (userId) {

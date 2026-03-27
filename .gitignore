@@ -53,3 +53,5 @@ yarn-error.log*
 
 # Integração experimental em docs — não versionar .claude (launch, worktrees, etc.)
 docs/pdf-compressor/**/.claude/
+
+.env*.local

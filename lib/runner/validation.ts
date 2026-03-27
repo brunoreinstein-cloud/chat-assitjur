@@ -56,7 +56,7 @@ export function validateRunnerDocuments(
 
   // Check text extraction is complete for all docs
   const pendingExtraction = attachments.filter(
-    (a) => !a.extractedText && !a.extractionFailed
+    (a) => !(a.extractedText || a.extractionFailed)
   );
   if (pendingExtraction.length > 0) {
     return {

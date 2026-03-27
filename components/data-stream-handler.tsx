@@ -163,7 +163,11 @@ export function DataStreamHandler() {
       }
       if (delta.type === "data-autuoriaFinish") {
         if (_autuoriaDocId) {
-          storeAutuoriaDoc(_autuoriaDocId, _autuoriaDocTitle, _autuoriaDocContent);
+          storeAutuoriaDoc(
+            _autuoriaDocId,
+            _autuoriaDocTitle,
+            _autuoriaDocContent
+          );
         }
         _autuoriaDocId = "";
         _autuoriaDocContent = "";

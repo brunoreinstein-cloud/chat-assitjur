@@ -2,7 +2,11 @@
 
 import { toast } from "sonner";
 
-export type DocxLayout = "default" | "assistjur-master" | "autuoria-quadro" | "autuoria-revisada";
+export type DocxLayout =
+  | "default"
+  | "assistjur-master"
+  | "autuoria-quadro"
+  | "autuoria-revisada";
 
 /**
  * Dispara download de um Blob no browser.

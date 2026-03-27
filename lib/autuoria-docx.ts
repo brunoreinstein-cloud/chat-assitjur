@@ -116,9 +116,15 @@ function sectionTitle(text: string): Paragraph {
 
 /** Mapeia emoji de criticidade para cor. */
 function critColor(crit: string): string {
-  if (crit.includes("🔴")) return COLORS.red;
-  if (crit.includes("🟡")) return COLORS.yellow;
-  if (crit.includes("🟢")) return COLORS.green;
+  if (crit.includes("🔴")) {
+    return COLORS.red;
+  }
+  if (crit.includes("🟡")) {
+    return COLORS.yellow;
+  }
+  if (crit.includes("🟢")) {
+    return COLORS.green;
+  }
   return COLORS.gray;
 }
 
@@ -220,10 +226,7 @@ function buildCabecalho(cab: QuadroCabecalho): Table {
   if (cab.posicaoProcessual) {
     rows.push(["Posição Processual", cab.posicaoProcessual]);
   }
-  rows.push([
-    "Tese Central",
-    `${cab.teseCentral} ${cab.teseCentralStatus}`,
-  ]);
+  rows.push(["Tese Central", `${cab.teseCentral} ${cab.teseCentralStatus}`]);
 
   return new Table({
     rows: rows.map(
@@ -272,7 +275,11 @@ function buildPrescricao(items: QuadroPrescricao[]): Table {
           cell(p.tipo, 20),
           cell(p.calculo, 30),
           cell(p.dataLimite, 25),
-          cell(p.status, 25, p.status.includes("consumada") ? COLORS.red : undefined),
+          cell(
+            p.status,
+            25,
+            p.status.includes("consumada") ? COLORS.red : undefined
+          ),
         ],
       })
   );
@@ -437,11 +444,7 @@ function buildResumoIntervencoes(items: QuadroResumoIntervencao[]): Table {
   const dataRows = items.map(
     (r) =>
       new TableRow({
-        children: [
-          cell(r.tipo, 40),
-          cell(String(r.qtd), 15),
-          cell(r.obs, 45),
-        ],
+        children: [cell(r.tipo, 40), cell(String(r.qtd), 15), cell(r.obs, 45)],
       })
   );
   return new Table({
@@ -524,9 +527,7 @@ export async function createQuadroDocxBuffer(
         spacing: { before: 120, after: 60 },
       })
     );
-    children.push(
-      buildDocsReclamanteImpugnados(data.docsReclamanteImpugnados)
-    );
+    children.push(buildDocsReclamanteImpugnados(data.docsReclamanteImpugnados));
   }
 
   // 7. Resumo de Intervenções
@@ -563,8 +564,8 @@ export async function createQuadroDocxBuffer(
         properties: {
           page: {
             size: {
-              width: 16838,
-              height: 11906,
+              width: 16_838,
+              height: 11_906,
               orientation: PageOrientation.LANDSCAPE,
             },
             margin: {
@@ -667,7 +668,10 @@ export function parseRevisadaMarkers(content: string): RevisadaParagraph[] {
 
   for (const line of lines) {
     if (line.trim().length === 0) {
-      paragraphs.push({ segments: [{ type: "original", text: "" }], comments: [] });
+      paragraphs.push({
+        segments: [{ type: "original", text: "" }],
+        comments: [],
+      });
       continue;
     }
 
@@ -701,13 +705,13 @@ export function parseRevisadaMarkers(content: string): RevisadaParagraph[] {
       const commentIdx = remaining.indexOf("[COMMENT ");
 
       const indices = [
-        insIdx >= 0 ? insIdx : Infinity,
-        delIdx >= 0 ? delIdx : Infinity,
-        commentIdx >= 0 ? commentIdx : Infinity,
+        insIdx >= 0 ? insIdx : Number.POSITIVE_INFINITY,
+        delIdx >= 0 ? delIdx : Number.POSITIVE_INFINITY,
+        commentIdx >= 0 ? commentIdx : Number.POSITIVE_INFINITY,
       ];
       const minIdx = Math.min(...indices);
 
-      if (minIdx === Infinity) {
+      if (minIdx === Number.POSITIVE_INFINITY) {
         // No more markers — rest is original text
         if (remaining.length > 0) {
           segments.push({ type: "original", text: remaining });
@@ -751,7 +755,7 @@ export function parseRevisadaMarkers(content: string): RevisadaParagraph[] {
         // Parse [COMMENT id=N]...[/COMMENT]
         const idMatch = /^\[COMMENT\s+id=(\d+)\]/.exec(remaining);
         if (idMatch) {
-          const commentId = parseInt(idMatch[1], 10);
+          const commentId = Number.parseInt(idMatch[1], 10);
           remaining = remaining.slice(idMatch[0].length);
           const closeIdx = remaining.indexOf("[/COMMENT]");
           if (closeIdx === -1) {
@@ -833,7 +837,12 @@ export async function createRevisadaDocxBuffer(
   const bodyChildren: FileChild[] = [];
 
   for (const p of parsed) {
-    const runs: (TextRun | CommentRangeStart | CommentRangeEnd | CommentReference)[] = [];
+    const runs: (
+      | TextRun
+      | CommentRangeStart
+      | CommentRangeEnd
+      | CommentReference
+    )[] = [];
 
     // Determine if this paragraph has comments
     const paraComments = p.comments;
@@ -847,7 +856,9 @@ export async function createRevisadaDocxBuffer(
     }
 
     for (const seg of p.segments) {
-      if (seg.text.length === 0 && seg.type === "original") continue;
+      if (seg.text.length === 0 && seg.type === "original") {
+        continue;
+      }
 
       switch (seg.type) {
         case "original":
@@ -872,6 +883,8 @@ export async function createRevisadaDocxBuffer(
             })
           );
           break;
+        default:
+          break;
       }
     }
 
@@ -892,14 +905,16 @@ export async function createRevisadaDocxBuffer(
               : p.headingLevel === 2
                 ? HeadingLevel.HEADING_2
                 : HeadingLevel.HEADING_3,
-          children: runs.length > 0 ? runs : [new TextRun({ text: "", ...run })],
+          children:
+            runs.length > 0 ? runs : [new TextRun({ text: "", ...run })],
           spacing: { after: SPACING_AFTER },
         })
       );
     } else {
       bodyChildren.push(
         new Paragraph({
-          children: runs.length > 0 ? runs : [new TextRun({ text: "", ...run })],
+          children:
+            runs.length > 0 ? runs : [new TextRun({ text: "", ...run })],
           spacing: { after: 60 },
         })
       );
