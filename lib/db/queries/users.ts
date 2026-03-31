@@ -1,6 +1,6 @@
 import "server-only";
 
-import { asc, eq, inArray, like, not } from "drizzle-orm";
+import { asc, desc, eq, inArray, like, not, sql } from "drizzle-orm";
 import {
   chat,
   customAgent,
@@ -23,7 +23,11 @@ import { getDb } from "../connection";
 
 export async function getUser(email: string): Promise<User[]> {
   try {
-    return await getDb().select().from(user).where(eq(user.email, email));
+    return await getDb()
+      .select()
+      .from(user)
+      .where(eq(user.email, email))
+      .orderBy(desc(sql`("User"."password" IS NOT NULL)::int`));
   } catch (err) {
     const detail =
       err instanceof Error ? err.message : "Unknown database error";

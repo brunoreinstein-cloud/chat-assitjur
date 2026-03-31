@@ -114,17 +114,43 @@ function sectionTitle(text: string): Paragraph {
   });
 }
 
-/** Mapeia emoji de criticidade para cor. */
+/** Display maps: converte identificadores de texto em emoji para renderização DOCX. */
+const CRITICIDADE_DISPLAY: Record<string, string> = {
+  critico: "🔴",
+  medio: "🟡",
+  baixo: "🟢",
+  informativo: "⚪",
+};
+
+const STATUS_DISPLAY: Record<string, string> = {
+  ok: "✅",
+  falha: "❌",
+  atencao: "⚠️",
+};
+
+const CHECKLIST_STATUS_DISPLAY: Record<string, string> = {
+  ok: "✅",
+  falha: "❌",
+  desnecessaria: "Desnecessária",
+};
+
+const TESE_STATUS_DISPLAY: Record<string, string> = {
+  adequada: "✅",
+  parcial: "⚠️",
+  inadequada: "❌",
+};
+
+const PRESENTE_DISPLAY: Record<string, string> = {
+  presente: "✅",
+  ausente: "❌",
+  parcial: "⚠️",
+};
+
+/** Mapeia identificador de criticidade para cor de célula. */
 function critColor(crit: string): string {
-  if (crit.includes("🔴")) {
-    return COLORS.red;
-  }
-  if (crit.includes("🟡")) {
-    return COLORS.yellow;
-  }
-  if (crit.includes("🟢")) {
-    return COLORS.green;
-  }
+  if (crit === "critico") return COLORS.red;
+  if (crit === "medio") return COLORS.yellow;
+  if (crit === "baixo") return COLORS.green;
   return COLORS.gray;
 }
 
@@ -226,7 +252,10 @@ function buildCabecalho(cab: QuadroCabecalho): Table {
   if (cab.posicaoProcessual) {
     rows.push(["Posição Processual", cab.posicaoProcessual]);
   }
-  rows.push(["Tese Central", `${cab.teseCentral} ${cab.teseCentralStatus}`]);
+  rows.push([
+    "Tese Central",
+    `${cab.teseCentral} ${TESE_STATUS_DISPLAY[cab.teseCentralStatus] ?? cab.teseCentralStatus}`,
+  ]);
 
   return new Table({
     rows: rows.map(
@@ -313,8 +342,12 @@ function buildCorrecoes(items: QuadroCorrecao[]): Table {
           cell(c.pedido, 18),
           cell(c.secaoDefesa, 16),
           cell(c.impugnado, 8),
-          cell(c.status, 7),
-          cell(c.criticidade, 5, critColor(c.criticidade)),
+          cell(STATUS_DISPLAY[c.status] ?? c.status, 7),
+          cell(
+            CRITICIDADE_DISPLAY[c.criticidade] ?? c.criticidade,
+            5,
+            critColor(c.criticidade),
+          ),
           cell(c.tipo, 12),
           cell(c.acaoRecomendada, 30),
         ],
@@ -340,7 +373,11 @@ function buildChecklist(items: QuadroChecklistItem[]): Table {
   const dataRows = items.map(
     (c) =>
       new TableRow({
-        children: [cell(c.defesa, 35), cell(c.status, 15), cell(c.obs, 50)],
+        children: [
+        cell(c.defesa, 35),
+        cell(CHECKLIST_STATUS_DISPLAY[c.status] ?? c.status, 15),
+        cell(c.obs, 50),
+      ],
       })
   );
   return new Table({
@@ -393,7 +430,7 @@ function buildDocumentosDefesa(items: QuadroDocumento[]): Table {
         children: [
           cell(d.assunto, 30),
           cell(d.documento, 50),
-          cell(d.presente, 20),
+          cell(PRESENTE_DISPLAY[d.presente] ?? d.presente, 20),
         ],
       })
   );

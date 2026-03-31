@@ -182,9 +182,9 @@ export function DataStreamHandler() {
       }
       if (delta.type === "data-autuoriaProgress") {
         const completedCount = delta.data as number;
-        if (completedCount === 1) {
-          resetAutuoriaProgress();
-        }
+        // Não resetar progresso no meio da geração — reset ocorre em data-autuoriaStart.
+        // Bug anterior: resetAutuoriaProgress() em completedCount===1 zerava startedAt,
+        // quebrando o timer/ETA no componente de progresso.
         setAutuoriaCompletedCount(completedCount);
         continue;
       }

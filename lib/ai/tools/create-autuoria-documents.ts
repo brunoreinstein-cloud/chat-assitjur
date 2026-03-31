@@ -92,7 +92,9 @@ export const createAutuoriaDocuments = ({
           daj: z.string(),
           posicaoProcessual: z.string().optional(),
           teseCentral: z.string(),
-          teseCentralStatus: z.string(),
+          teseCentralStatus: z
+            .enum(["adequada", "parcial", "inadequada"])
+            .describe("adequada=✅, parcial=⚠️, inadequada=❌"),
         }),
         prescricao: z.array(
           z.object({
@@ -107,9 +109,15 @@ export const createAutuoriaDocuments = ({
             numero: z.number(),
             pedido: z.string(),
             secaoDefesa: z.string(),
-            impugnado: z.string(),
-            status: z.string(),
-            criticidade: z.string(),
+            impugnado: z
+              .enum(["S", "NÃO", "PARCIAL"])
+              .describe("S=Sim, NÃO=Não, PARCIAL=Parcial"),
+            status: z
+              .enum(["ok", "falha", "atencao"])
+              .describe("ok=✅, falha=❌, atencao=⚠️"),
+            criticidade: z
+              .enum(["critico", "medio", "baixo", "informativo"])
+              .describe("critico=🔴, medio=🟡, baixo=🟢, informativo=⚪"),
             tipo: z.string(),
             acaoRecomendada: z.string(),
           })
@@ -117,7 +125,9 @@ export const createAutuoriaDocuments = ({
         checklist: z.array(
           z.object({
             defesa: z.string(),
-            status: z.string(),
+            status: z
+              .enum(["ok", "falha", "desnecessaria"])
+              .describe("ok=✅, falha=❌, desnecessaria=Desnecessária"),
             obs: z.string(),
           })
         ),
@@ -135,9 +145,11 @@ export const createAutuoriaDocuments = ({
           z.object({
             assunto: z.string(),
             documento: z.string(),
-            presente: z.string(),
+            presente: z
+              .enum(["presente", "ausente", "parcial"])
+              .describe("presente=✅, ausente=❌, parcial=⚠️"),
           })
-        ),
+        ).default([]),
         docsReclamanteImpugnados: z
           .array(
             z.object({
@@ -153,7 +165,7 @@ export const createAutuoriaDocuments = ({
             qtd: z.number(),
             obs: z.string(),
           })
-        ),
+        ).default([]),
         ajustesPeca: z
           .array(
             z.object({

@@ -130,6 +130,7 @@ interface StreamOnFinishContext {
   requestStart: number;
   session: ChatStreamParams["session"];
   id: string;
+  agentId: string;
   effectiveModel: string;
   isToolApprovalFlow: boolean;
   uiMessages: ChatMessage[];
@@ -487,6 +488,8 @@ function createStreamExecuteHandler(
       messagesForStream?.length ?? 0
     );
 
+    const maxTokens = ctx.agentConfig.maxOutputTokens ?? 8192;
+
     const result = streamText({
       model: getLanguageModel(ctx.effectiveModel),
       // temperature não é suportado quando thinking está activo (adaptive ou extended).
@@ -494,7 +497,7 @@ function createStreamExecuteHandler(
       ...(ctx.isReasoningModel || ctx.isAdaptiveThinking
         ? {}
         : { temperature: 0.2 }),
-      maxOutputTokens: ctx.agentConfig.maxOutputTokens ?? 8192,
+      maxOutputTokens: maxTokens,
       system: sysPrompt,
       messages: messagesForStream,
       // Permite múltiplos steps: step 1 = model chama tool; step 2 = model gera texto após tool result (entrega).
@@ -555,6 +558,31 @@ function createStreamOnFinishHandler(
       "onFinish (stream terminou) total request",
       onFinishStart - ctx.requestStart
     );
+
+    // Alerta quando agentes com tools obrigatórias não as chamam
+    const toolNames = finishedMessages
+      .flatMap((m) => m.parts)
+      .filter(
+        (p): p is { type: "tool-invocation"; toolName?: string } =>
+          typeof p === "object" &&
+          p !== null &&
+          (p as { type?: unknown }).type === "tool-invocation",
+      )
+      .map((p) => p.toolName);
+    const expectedToolMap: Record<string, string> = {
+      "autuoria-revisor": "createAutuoriaDocuments",
+      "revisor-defesas": "createRevisorDefesaDocuments",
+      "redator-contestacao": "createRedatorContestacaoDocument",
+      "assistjur-master": "createMasterDocuments",
+    };
+    const expectedTool = expectedToolMap[ctx.agentId];
+    if (expectedTool && !toolNames.includes(expectedTool)) {
+      console.warn(
+        `[chat-warn] ⚠️ Agente "${ctx.agentId}" NÃO chamou a ferramenta esperada "${expectedTool}".`,
+        "Possíveis causas: maxOutputTokens insuficiente, prompt não seguido, schema validation failure.",
+        "model:", ctx.effectiveModel,
+      );
+    }
 
     try {
       const logOnFinishDbError = (label: string, err: unknown) => {
@@ -832,6 +860,7 @@ function buildStreamAndResponse(
     requestStart,
     session,
     id,
+    agentId: agentConfig.id,
     effectiveModel,
     isToolApprovalFlow,
     uiMessages,

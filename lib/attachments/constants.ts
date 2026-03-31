@@ -12,8 +12,13 @@ export const PHASE_LABELS: Record<UploadPhase, string> = {
 /** Tamanho a partir do qual mostra label estendida na extração (10 MB). */
 export const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024;
 
-/** Limite do body em produção (Vercel). Ficheiros maiores usam upload direto para Blob. */
-export const BODY_SIZE_LIMIT_BYTES = 4.5 * 1024 * 1024;
+/**
+ * Limite do body em produção (Vercel). Ficheiros maiores usam upload direto para Blob.
+ * Em dev, Next.js aceita até 34 MB (next.config.ts), então usamos upload server-side
+ * para todos os ficheiros, evitando a necessidade de tunnel para o callback do Blob.
+ */
+export const BODY_SIZE_LIMIT_BYTES =
+  process.env.NODE_ENV === "production" ? 4.5 * 1024 * 1024 : 32 * 1024 * 1024;
 
 /** Máximo de documentos da base de conhecimento selecionáveis no popover @ e no formulário de agente. */
 export const MAX_KNOWLEDGE_SELECT = 50;

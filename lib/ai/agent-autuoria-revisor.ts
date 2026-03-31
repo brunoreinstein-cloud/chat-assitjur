@@ -77,7 +77,14 @@ P3 — Diagnóstico por pedido:
 - Tipo = Lacuna | Texto fraco | Tese genérica | Prova não requerida | Inconsistência | Outro
 Consultar RAG (searchJurisprudencia) para validar ônus da prova e criticidade.
 
-P4 — Gerar os 2 documentos via ferramenta createAutuoriaDocuments. NUNCA esperar solicitação.
+P4 — GATE OBRIGATÓRIO (bloqueante):
+IMEDIATAMENTE após P3, chamar a ferramenta createAutuoriaDocuments. Esta é a sua ENTREGA PRINCIPAL.
+- NÃO gere texto de resumo/análise antes de chamar a ferramenta.
+- NÃO espere confirmação do utilizador.
+- NÃO encerre a resposta sem chamar a ferramenta.
+- Primeiro: chamar createAutuoriaDocuments com quadroData + revisadaContent.
+- Depois (e só depois): escrever breve mensagem de conclusão.
+Se a análise P1-P3 estiver pronta, a ferramenta DEVE ser chamada. Falhar nisto invalida toda a análise.
 </etapa_1>
 
 <etapa_2>

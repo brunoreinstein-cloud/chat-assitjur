@@ -56,6 +56,23 @@ export async function GET(): Promise<NextResponse> {
   return NextResponse.json({ ready: true });
 }
 
+/** Resolve the callback URL for Vercel Blob's onUploadCompleted webhook. */
+function resolveCallbackUrl(_request: Request): string {
+  // 1. Explicit env var (highest priority)
+  if (process.env.VERCEL_BLOB_CALLBACK_URL) {
+    return process.env.VERCEL_BLOB_CALLBACK_URL;
+  }
+  // 2. Derive from VERCEL_URL (set automatically on Vercel deployments)
+  if (process.env.VERCEL_URL) {
+    const proto = process.env.VERCEL_ENV === "development" ? "http" : "https";
+    return `${proto}://${process.env.VERCEL_URL}/api/files/upload-token`;
+  }
+  // 3. Dev fallback — request headers (origin/referer) are user-controlled and
+  //    must not be used to derive server-side callback URLs.
+  const port = process.env.PORT ?? "3300";
+  return `http://localhost:${port}/api/files/upload-token`;
+}
+
 /**
  * POST: Gera token para upload direto cliente → Vercel Blob (ficheiros > 4,5 MB).
  * O corpo do pedido é JSON (sem ficheiro), por isso não está sujeito ao limite de 4,5 MB.
@@ -105,7 +122,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         const safeName = baseName.replaceAll(/[^a-zA-Z0-9._-]/g, "_");
         const userId = session.user.id;
         const serverPathname = `${userId}/${Date.now()}-${safeName}`;
-        const result = {
+        return {
           allowedContentTypes: [
             ...ACCEPTED_IMAGE_TYPES,
             ACCEPTED_PDF_TYPE,
@@ -115,11 +132,12 @@ export async function POST(request: Request): Promise<NextResponse> {
           addRandomSuffix: true,
           pathname: serverPathname,
           tokenPayload: JSON.stringify({ userId }),
+          callbackUrl: resolveCallbackUrl(request),
         };
-        return await Promise.resolve(result);
       },
       onUploadCompleted: async () => {
-        // Opcional: notificação após upload. O processamento é feito em /api/files/process.
+        // Callback do Vercel Blob após upload concluído.
+        // O processamento real é feito pelo cliente via /api/files/process.
       },
     });
     return NextResponse.json(jsonResponse);

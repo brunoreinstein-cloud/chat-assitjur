@@ -285,7 +285,9 @@ export function createChatAgent<TOOLS extends ToolSet>(
 
       return {
         model: languageModel,
-        system: systemPrompt({
+        // ToolLoopAgent expects `instructions` (mapped to system internally)
+        // and `messages` must be passed through from callParams.
+        instructions: systemPrompt({
           selectedChatModel: options.effectiveModel,
           requestHints: options.requestHints as RequestHints,
           agentInstructions: options.agentInstructions,
@@ -293,6 +295,7 @@ export function createChatAgent<TOOLS extends ToolSet>(
           processoContext: options.processoContext,
           hasDocuments: options.hasDocuments,
         }),
+        messages: callParams.messages,
         maxOutputTokens: agentConfig.maxOutputTokens ?? 8192,
         activeTools: buildActiveToolNames({
           isReasoningModel: options.isReasoningModel,

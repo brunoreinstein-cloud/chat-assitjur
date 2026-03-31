@@ -1,5 +1,4 @@
 import { cookies } from "next/headers";
-import Script from "next/script";
 import { Suspense } from "react";
 import { ChatSidebar } from "@/components/chat-sidebar";
 import { DataStreamProvider } from "@/components/data-stream-provider";
@@ -15,10 +14,6 @@ export default function Layout({
   return (
     <>
       <DbWarmup />
-      <Script
-        src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"
-        strategy="afterInteractive"
-      />
       <DataStreamProvider>
         <DbFallbackProvider>
           <Suspense fallback={<PageLoading />}>

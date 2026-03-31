@@ -268,8 +268,9 @@ const AGENT_CONFIGS: Record<AgentId, AgentConfig> = {
     temperature: 0.1,
     // Thinking adaptativo ativado: análise cruzada PI × Contestação requer raciocínio complexo.
     thinkingEnabled: true,
-    // 16000 tokens: tool call com Quadro JSON + Contestação completa com marcações.
-    maxOutputTokens: 16_000,
+    // 24000 tokens: análise (4K) + tool call JSON quadro (3K) + revisadaContent (10-14K).
+    // 16K era insuficiente — LLM esgotava tokens na análise P1-P3 antes de chamar a tool P4.
+    maxOutputTokens: 24_000,
     /** Apenas modelos sem extended thinking: ferramentas ativas. */
     allowedModelIds: nonReasoningChatModelIds,
     supportsRunnerMode: true,
