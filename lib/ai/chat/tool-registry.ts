@@ -8,6 +8,7 @@ import { analyzeProcessoPipeline } from "@/lib/ai/tools/analyze-processo-pipelin
 import { createAutuoriaDocuments } from "@/lib/ai/tools/create-autuoria-documents";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { createMasterDocuments } from "@/lib/ai/tools/create-master-documents";
+import { createAvaliadorContestacaoDocument } from "@/lib/ai/tools/create-avaliador-contestacao-document";
 import { createRedatorContestacaoDocument } from "@/lib/ai/tools/create-redator-contestacao-document";
 import { createRevisorDefesaDocuments } from "@/lib/ai/tools/create-revisor-defesa-documents";
 import { getWeather } from "@/lib/ai/tools/get-weather";
@@ -81,6 +82,9 @@ export function buildToolsForAgent(
     >;
     analyzeProcessoPipeline?: ReturnType<typeof analyzeProcessoPipeline>;
     createMasterDocuments?: ReturnType<typeof createMasterDocuments>;
+    createAvaliadorContestacaoDocument?: ReturnType<
+      typeof createAvaliadorContestacaoDocument
+    >;
     createAutuoriaDocuments?: ReturnType<typeof createAutuoriaDocuments>;
     intakeProcesso?: ReturnType<typeof createIntakeProcessoTool>;
   };
@@ -101,6 +105,13 @@ export function buildToolsForAgent(
       session: ctx.session,
       dataStream,
     });
+  }
+  if (ctx.agentConfig.useAvaliadorContestacaoTool) {
+    tools.createAvaliadorContestacaoDocument =
+      createAvaliadorContestacaoDocument({
+        session: ctx.session,
+        dataStream,
+      });
   }
   if (ctx.agentConfig.useMasterDocumentsTool) {
     tools.createMasterDocuments = createMasterDocuments({

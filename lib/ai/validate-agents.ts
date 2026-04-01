@@ -7,6 +7,7 @@ import { getAgentConfig } from "@/lib/ai/agents-registry";
 import {
   AGENT_ID_ASSISTENTE_GERAL,
   AGENT_ID_ASSISTJUR_MASTER,
+  AGENT_ID_AUTUORIA_REVISOR,
   AGENT_ID_AVALIADOR_CONTESTACAO,
   AGENT_ID_REDATOR_CONTESTACAO,
   AGENT_ID_REVISOR_DEFESAS,
@@ -225,6 +226,7 @@ export function validateAllBuiltInAgents(): AgentValidationResult[] {
     AGENT_ID_REDATOR_CONTESTACAO,
     AGENT_ID_AVALIADOR_CONTESTACAO,
     AGENT_ID_ASSISTJUR_MASTER,
+    AGENT_ID_AUTUORIA_REVISOR,
   ] as const;
 
   return ids.map((id) => {

@@ -84,8 +84,10 @@ type ActiveToolName =
   | "searchJurisprudencia"
   | "createRevisorDefesaDocuments"
   | "createRedatorContestacaoDocument"
+  | "createAvaliadorContestacaoDocument"
   | "analyzeProcessoPipeline"
-  | "createMasterDocuments";
+  | "createMasterDocuments"
+  | "createAutuoriaDocuments";
 
 export function buildActiveToolNames(opts: {
   isReasoningModel: boolean;
@@ -107,11 +109,17 @@ export function buildActiveToolNames(opts: {
     ...(opts.agentConfig.useRedatorContestacaoTool
       ? (["createRedatorContestacaoDocument"] as const)
       : []),
+    ...(opts.agentConfig.useAvaliadorContestacaoTool
+      ? (["createAvaliadorContestacaoDocument"] as const)
+      : []),
     ...(opts.agentConfig.usePipelineTool
       ? (["analyzeProcessoPipeline"] as const)
       : []),
     ...(opts.agentConfig.useMasterDocumentsTool
       ? (["createMasterDocuments"] as const)
+      : []),
+    ...(opts.agentConfig.useAutuoriaTools
+      ? (["createAutuoriaDocuments"] as const)
       : []),
   ];
 }
