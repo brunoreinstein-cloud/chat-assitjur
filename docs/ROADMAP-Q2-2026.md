@@ -3,12 +3,13 @@
 **Formato:** Now / Next / Later
 **Período:** Abril – Junho 2026
 **Gerado em:** 2026-03-31
+**Última atualização:** 2026-04-11
 
 ---
 
 ## Status Overview
 
-6 sprints concluídos (499 testes, 6 agentes, Design System v3.0). Plataforma core funcional com chat, multi-agente, RBAC, guardrails e geração de documentos. Foco do Q2: **colocar em produção, solidificar o pipeline e fechar lacunas de UX**.
+6 sprints concluídos (511 testes, 6 agentes, Design System v3.0). Plataforma core funcional com chat, multi-agente, RBAC, guardrails e geração de documentos. **Deploy de produção concluído** (Vercel + migrações BD). Foco: solidificar pipeline, fechar lacunas de UX e preparar para utilizadores reais.
 
 ---
 
@@ -16,7 +17,7 @@
 
 | # | Iniciativa | Descrição | Status | Dependências |
 |---|-----------|-----------|--------|-------------|
-| 1 | **Deploy migrações 0029–0035** | RLS, versionamento de prompts, schema de créditos — testados localmente, pendentes em produção | Não iniciado | Acesso Supabase prod |
+| 1 | **Deploy migrações 0029–0035** | RLS, versionamento de prompts, schema de créditos — testados localmente, pendentes em produção | **Concluído** (2026-04-11) | — |
 | 2 | **Intake automático** | Upload de PDF → extração automática de metadados → criação de Processo (sem formulário manual) | Não iniciado | Landmark mapper (concluído) |
 | 3 | **Quality Report UI** | Dashboard frontend para o eval framework (backend completo: 14 casos, 5 agentes, 8 métricas) | Não iniciado | Eval backend (concluído) |
 | 4 | **Estabilização AutuorIA** | Corrigir fallbacks do stream-handler, entitlements lookup, mensagens de modelo vazias — bugs de março | Em andamento | — |
@@ -53,7 +54,7 @@
 
 | Risco | Impacto | Mitigação |
 |-------|---------|-----------|
-| **Migrações não implantadas** | Bloqueia versionamento de prompts, RLS e créditos em prod | Prioridade #1 — implantar primeiro |
+| ~~Migrações não implantadas~~ | ~~Bloqueia versionamento de prompts, RLS e créditos em prod~~ | **Resolvido** (2026-04-11) |
 | **Redis não provisionado** | Bloqueia stream resumption e prompt caching em escala | Pode prosseguir sem Redis (degradação graciosa) |
 | **Infra MCP indefinida** | Bloqueia ativação real de ferramentas MCP | Requer decisão de arquitetura |
 | **Custo de tokens não rastreado** | Sem visibilidade de gasto LLM por usuário | Dashboard de tokens em NEXT |
