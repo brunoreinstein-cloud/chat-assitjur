@@ -28,12 +28,12 @@ const securityHeaders = [
       "default-src 'self'",
       // React requer 'unsafe-eval' em dev para reconstrução de callstacks e HMR
       isDev
-        ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net"
-        : "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "font-src 'self' https://fonts.gstatic.com",
-      "img-src 'self' data: blob: https://avatar.vercel.sh https://*.public.blob.vercel-storage.com https://*.supabase.co",
-      "connect-src 'self' https://*.supabase.co https://*.vercel-storage.com https://cdn.jsdelivr.net https://vercel.com",
+        ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://vercel.live"
+        : "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://vercel.live",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://vercel.live",
+      "font-src 'self' https://fonts.gstatic.com https://vercel.live",
+      "img-src 'self' data: blob: https://avatar.vercel.sh https://*.public.blob.vercel-storage.com https://*.supabase.co https://vercel.live https://vercel.com",
+      "connect-src 'self' https://*.supabase.co https://*.vercel-storage.com https://cdn.jsdelivr.net https://vercel.com https://vercel.live wss://ws-us3.pusher.com",
       "worker-src 'self' blob:",
       "frame-ancestors 'none'",
     ].join("; "),
