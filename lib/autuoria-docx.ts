@@ -148,9 +148,15 @@ const PRESENTE_DISPLAY: Record<string, string> = {
 
 /** Mapeia identificador de criticidade para cor de célula. */
 function critColor(crit: string): string {
-  if (crit === "critico") return COLORS.red;
-  if (crit === "medio") return COLORS.yellow;
-  if (crit === "baixo") return COLORS.green;
+  if (crit === "critico") {
+    return COLORS.red;
+  }
+  if (crit === "medio") {
+    return COLORS.yellow;
+  }
+  if (crit === "baixo") {
+    return COLORS.green;
+  }
   return COLORS.gray;
 }
 
@@ -346,7 +352,7 @@ function buildCorrecoes(items: QuadroCorrecao[]): Table {
           cell(
             CRITICIDADE_DISPLAY[c.criticidade] ?? c.criticidade,
             5,
-            critColor(c.criticidade),
+            critColor(c.criticidade)
           ),
           cell(c.tipo, 12),
           cell(c.acaoRecomendada, 30),
@@ -374,10 +380,10 @@ function buildChecklist(items: QuadroChecklistItem[]): Table {
     (c) =>
       new TableRow({
         children: [
-        cell(c.defesa, 35),
-        cell(CHECKLIST_STATUS_DISPLAY[c.status] ?? c.status, 15),
-        cell(c.obs, 50),
-      ],
+          cell(c.defesa, 35),
+          cell(CHECKLIST_STATUS_DISPLAY[c.status] ?? c.status, 15),
+          cell(c.obs, 50),
+        ],
       })
   );
   return new Table({

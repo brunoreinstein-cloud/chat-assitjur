@@ -39,7 +39,7 @@
     "vercel:env:push": "tsx scripts/vercel-env-push.ts",
     "vercel:review": "tsx scripts/vercel-review-env.ts",
     "vercel:deploy": "npx vercel",
-    "vercel:deploy:prod": "npx vercel --prod",
+    "vercel:deploy:prod": "npx vercel --prod --yes --archive=tgz",
     "_vercel:open": "npx vercel open",
     "skills:check": "npx skills check",
     "skills:list": "npx skills list",

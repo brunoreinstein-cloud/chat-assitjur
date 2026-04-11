@@ -113,6 +113,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       request,
       token: blobToken,
       onBeforeGenerateToken: async (pathname) => {
+        await Promise.resolve();
         if (!isAcceptedType(pathname)) {
           throw new Error("Tipos aceites: JPEG, PNG, PDF, DOC ou DOCX");
         }
@@ -136,6 +137,7 @@ export async function POST(request: Request): Promise<NextResponse> {
         };
       },
       onUploadCompleted: async () => {
+        await Promise.resolve();
         // Callback do Vercel Blob após upload concluído.
         // O processamento real é feito pelo cliente via /api/files/process.
       },

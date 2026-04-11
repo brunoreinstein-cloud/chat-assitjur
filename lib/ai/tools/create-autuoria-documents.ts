@@ -141,15 +141,17 @@ export const createAutuoriaDocuments = ({
             })
           )
           .default([]),
-        documentosDefesa: z.array(
-          z.object({
-            assunto: z.string(),
-            documento: z.string(),
-            presente: z
-              .enum(["presente", "ausente", "parcial"])
-              .describe("presente=✅, ausente=❌, parcial=⚠️"),
-          })
-        ).default([]),
+        documentosDefesa: z
+          .array(
+            z.object({
+              assunto: z.string(),
+              documento: z.string(),
+              presente: z
+                .enum(["presente", "ausente", "parcial"])
+                .describe("presente=✅, ausente=❌, parcial=⚠️"),
+            })
+          )
+          .default([]),
         docsReclamanteImpugnados: z
           .array(
             z.object({
@@ -159,13 +161,15 @@ export const createAutuoriaDocuments = ({
             })
           )
           .default([]),
-        resumoIntervencoes: z.array(
-          z.object({
-            tipo: z.string(),
-            qtd: z.number(),
-            obs: z.string(),
-          })
-        ).default([]),
+        resumoIntervencoes: z
+          .array(
+            z.object({
+              tipo: z.string(),
+              qtd: z.number(),
+              obs: z.string(),
+            })
+          )
+          .default([]),
         ajustesPeca: z
           .array(
             z.object({

@@ -3,3 +3,7 @@ test-results
 playwright-report
 blob-report
 .playwright
+
+# Ferramentas locais / caches (não necessários no build; reduzem ficheiros upload)
+.devtools
+.trae

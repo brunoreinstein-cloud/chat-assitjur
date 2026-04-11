@@ -27,7 +27,11 @@
       "!!**/test-results",
       "!!**/playwright-report",
       "!!**/blob-report",
-      "!!**/.playwright"
+      "!!**/.playwright",
+      "!!.devtools",
+      "!!**/.devtools",
+      "!!.trae",
+      "!!**/.trae"
     ]
   },
   "css": { "parser": { "tailwindDirectives": true } },

@@ -8,7 +8,6 @@ import type { PipelineDashboardData } from "@/components/pipeline-quality-dashbo
 import { initialArtifactData, useArtifact } from "@/hooks/use-artifact";
 import { storeAutuoriaDoc } from "@/lib/autuoria-content-store";
 import {
-  resetAutuoriaProgress,
   setAutuoriaCompletedCount,
   setAutuoriaStarted,
 } from "@/lib/autuoria-progress-store";

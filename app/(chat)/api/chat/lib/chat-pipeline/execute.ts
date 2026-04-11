@@ -566,7 +566,7 @@ function createStreamOnFinishHandler(
         (p): p is { type: "tool-invocation"; toolName?: string } =>
           typeof p === "object" &&
           p !== null &&
-          (p as { type?: unknown }).type === "tool-invocation",
+          (p as { type?: unknown }).type === "tool-invocation"
       )
       .map((p) => p.toolName);
     const expectedToolMap: Record<string, string> = {
@@ -580,7 +580,8 @@ function createStreamOnFinishHandler(
       console.warn(
         `[chat-warn] ⚠️ Agente "${ctx.agentId}" NÃO chamou a ferramenta esperada "${expectedTool}".`,
         "Possíveis causas: maxOutputTokens insuficiente, prompt não seguido, schema validation failure.",
-        "model:", ctx.effectiveModel,
+        "model:",
+        ctx.effectiveModel
       );
     }
 

@@ -26,7 +26,7 @@ describe("Validação de agentes com ficheiros", () => {
         .join("\n");
       expect.fail(`Agentes com erros de validação:\n${msg}`);
     }
-    expect(results).toHaveLength(5);
+    expect(results).toHaveLength(6);
   });
 
   it("Revisor de Defesas contém todas as tags XML obrigatórias", () => {

@@ -6,9 +6,9 @@
 import type { createUIMessageStream } from "ai";
 import { analyzeProcessoPipeline } from "@/lib/ai/tools/analyze-processo-pipeline";
 import { createAutuoriaDocuments } from "@/lib/ai/tools/create-autuoria-documents";
+import { createAvaliadorContestacaoDocument } from "@/lib/ai/tools/create-avaliador-contestacao-document";
 import { createDocument } from "@/lib/ai/tools/create-document";
 import { createMasterDocuments } from "@/lib/ai/tools/create-master-documents";
-import { createAvaliadorContestacaoDocument } from "@/lib/ai/tools/create-avaliador-contestacao-document";
 import { createRedatorContestacaoDocument } from "@/lib/ai/tools/create-redator-contestacao-document";
 import { createRevisorDefesaDocuments } from "@/lib/ai/tools/create-revisor-defesa-documents";
 import { getWeather } from "@/lib/ai/tools/get-weather";
