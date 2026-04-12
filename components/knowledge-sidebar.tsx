@@ -15,7 +15,7 @@ import {
   XIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import useSWR, { useSWRConfig } from "swr";
 import { Button } from "@/components/ui/button";
@@ -168,6 +168,8 @@ export function KnowledgeSidebarContent({
    * Polling após upload: re-fetch a cada 3s até MAX_POLL_ATTEMPTS tentativas.
    * Para documentos jurídicos (PI/Contestação), aguarda o resumo estruturado async.
    */
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const pollForSummaries = useCallback(
     (createdIds: string[]) => {
       if (createdIds.length === 0) {
@@ -176,25 +178,44 @@ export function KnowledgeSidebarContent({
       const MAX_POLL_ATTEMPTS = 5;
       const POLL_INTERVAL_MS = 3000;
       let attempts = 0;
+      let cancelled = false;
       const poll = async () => {
+        if (cancelled) {
+          return;
+        }
         attempts += 1;
         await Promise.all([mutate(docsKey), mutateRecent()]);
-        if (attempts < MAX_POLL_ATTEMPTS) {
-          setTimeout(() => {
+        if (attempts < MAX_POLL_ATTEMPTS && !cancelled) {
+          pollTimerRef.current = setTimeout(() => {
             poll().catch(() => {
               /* fire-and-forget */
             });
           }, POLL_INTERVAL_MS);
         }
       };
-      setTimeout(() => {
+      pollTimerRef.current = setTimeout(() => {
         poll().catch(() => {
           /* fire-and-forget */
         });
       }, POLL_INTERVAL_MS);
+
+      return () => {
+        cancelled = true;
+        if (pollTimerRef.current) {
+          clearTimeout(pollTimerRef.current);
+        }
+      };
     },
     [docsKey, mutate, mutateRecent]
   );
+
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) {
+        clearTimeout(pollTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleAddDocument = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -568,12 +589,16 @@ export function KnowledgeSidebarContent({
   const handleGenerateSummary = async (docId: string) => {
     setGeneratingSummaryIds((prev) => new Set(prev).add(docId));
     try {
-      await fetch(
+      const res = await fetch(
         `/api/knowledge/${encodeURIComponent(docId)}/generate-summary`,
         {
           method: "POST",
         }
       );
+      if (!res.ok) {
+        toast.error("Erro ao gerar resumo.");
+        return;
+      }
       await Promise.all([mutate(docsKey), mutateRecent()]);
     } finally {
       setGeneratingSummaryIds((prev) => {
@@ -594,14 +619,16 @@ export function KnowledgeSidebarContent({
     const ids = pending.map((d) => d.id);
     setGeneratingSummaryIds(new Set(ids));
     try {
-      // Processa sequencialmente para não sobrecarregar o servidor
       for (const id of ids) {
-        await fetch(
+        const res = await fetch(
           `/api/knowledge/${encodeURIComponent(id)}/generate-summary`,
           {
             method: "POST",
           }
         );
+        if (!res.ok) {
+          toast.error("Erro ao gerar resumo de um documento.");
+        }
         setGeneratingSummaryIds((prev) => {
           const next = new Set(prev);
           next.delete(id);

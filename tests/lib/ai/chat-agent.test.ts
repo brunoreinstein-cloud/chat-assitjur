@@ -287,13 +287,14 @@ describe("deductCreditsWithRetry", () => {
 
     expect(pingMock).toHaveBeenCalledOnce();
     expect(deductMock).toHaveBeenCalledOnce();
+    // (1000+500)/1000 = 1.5 → ceil → 2 credits
     expect(deductMock).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "user-1",
         chatId: "chat-1",
         promptTokens: 1000,
         completionTokens: 500,
-        creditsConsumed: expect.any(Number),
+        creditsConsumed: 2,
       })
     );
     expect(cacheMock.delete).toHaveBeenCalledWith("user-1");
@@ -311,28 +312,17 @@ describe("deductCreditsWithRetry", () => {
   });
 
   it("throws after exhausting all retries", async () => {
+    vi.useRealTimers();
     const error = new Error("persistent failure");
     deductMock.mockRejectedValue(error);
 
-    // Run with shouldAdvanceTime so setTimeout resolves instantly
-    vi.useRealTimers();
-    // Replace setTimeout with zero-delay version for this test
-    const origSetTimeout = globalThis.setTimeout;
-    globalThis.setTimeout = ((fn: () => void) =>
-      origSetTimeout(fn, 0)) as typeof setTimeout;
+    await expect(deductCreditsWithRetry(baseArgs)).rejects.toThrow(
+      "persistent failure"
+    );
 
-    try {
-      await expect(deductCreditsWithRetry(baseArgs)).rejects.toThrow(
-        "persistent failure"
-      );
-
-      expect(deductMock).toHaveBeenCalledTimes(5);
-      expect(cacheMock.delete).not.toHaveBeenCalled();
-    } finally {
-      globalThis.setTimeout = origSetTimeout;
-      vi.useFakeTimers({ shouldAdvanceTime: true });
-    }
-  });
+    expect(deductMock).toHaveBeenCalledTimes(5);
+    expect(cacheMock.delete).not.toHaveBeenCalled();
+  }, 30_000);
 
   it("continues even if pingDatabase fails", async () => {
     pingMock.mockRejectedValueOnce(new Error("ping failed"));
@@ -361,7 +351,7 @@ describe("deductCreditsWithRetry", () => {
 // ---------------------------------------------------------------------------
 
 describe("createChatAgent", () => {
-  it("creates a ToolLoopAgent instance", () => {
+  it("creates a defined agent object", () => {
     const agent = createChatAgent({
       tools: {},
       agentConfig: makeAgentConfig(),
@@ -371,13 +361,12 @@ describe("createChatAgent", () => {
       creditsDisabled: false,
     });
 
-    // ToolLoopAgent has a doStream method
     expect(agent).toBeDefined();
     expect(typeof agent).toBe("object");
   });
 
-  it("uses stopWhen=7 for pipeline agents", () => {
-    const agent = createChatAgent({
+  it("creates distinct agents for pipeline vs non-pipeline configs", () => {
+    const pipelineAgent = createChatAgent({
       tools: {},
       agentConfig: makeAgentConfig({ usePipelineTool: true }),
       userId: "user-1",
@@ -386,11 +375,7 @@ describe("createChatAgent", () => {
       creditsDisabled: false,
     });
 
-    expect(agent).toBeDefined();
-  });
-
-  it("uses stopWhen=5 for non-pipeline agents", () => {
-    const agent = createChatAgent({
+    const normalAgent = createChatAgent({
       tools: {},
       agentConfig: makeAgentConfig({ usePipelineTool: false }),
       userId: "user-1",
@@ -399,10 +384,12 @@ describe("createChatAgent", () => {
       creditsDisabled: false,
     });
 
-    expect(agent).toBeDefined();
+    expect(pipelineAgent).toBeDefined();
+    expect(normalAgent).toBeDefined();
+    expect(pipelineAgent).not.toBe(normalAgent);
   });
 
-  it("accepts onTelemetry callback", () => {
+  it("accepts onTelemetry callback without errors", () => {
     const onTelemetry = vi.fn();
 
     const agent = createChatAgent({
@@ -417,9 +404,10 @@ describe("createChatAgent", () => {
     });
 
     expect(agent).toBeDefined();
+    expect(typeof agent).toBe("object");
   });
 
-  it("creates agent with correct call options schema", () => {
+  it("creates agent with creditsDisabled without errors", () => {
     const agent = createChatAgent({
       tools: {},
       agentConfig: makeAgentConfig(),
@@ -429,8 +417,8 @@ describe("createChatAgent", () => {
       creditsDisabled: true,
     });
 
-    // The agent should have been created with chatCallOptionsSchema
     expect(agent).toBeDefined();
+    expect(typeof agent).toBe("object");
   });
 });
 

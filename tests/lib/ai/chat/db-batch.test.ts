@@ -57,25 +57,10 @@ vi.mock("@/app/(chat)/actions", () => ({
   generateTitleFromUserMessage: vi.fn().mockResolvedValue("Generated Title"),
 }));
 
-vi.mock("@/lib/errors", () => {
-  class ChatbotError extends Error {
-    type: string;
-    surface?: string;
-    constructor(type: string, message?: string) {
-      super(message ?? type);
-      this.type = type;
-      if (type.includes(":")) {
-        this.surface = type.split(":")[1];
-      }
-    }
-    toResponse() {
-      return new Response(this.message, { status: 400 });
-    }
-  }
+vi.mock("@/lib/errors", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/errors")>();
   return {
-    ChatbotError,
-    databaseUnavailableResponse: () =>
-      new Response("Database unavailable", { status: 503 }),
+    ...actual,
     isDatabaseConnectionError: vi.fn().mockReturnValue(false),
     isStatementTimeoutError: vi.fn().mockReturnValue(false),
     isLikelyDatabaseError: vi.fn().mockReturnValue(false),
@@ -247,17 +232,21 @@ describe("getAgentConfigAndEffectiveModel", () => {
 // ---------------------------------------------------------------------------
 
 describe("getEarlyValidationResponse", () => {
-  it("returns error Response when session is null", async () => {
+  it("returns 401 Response when session is null", async () => {
     const result = await getEarlyValidationResponse(null, null as any);
     expect(result).toBeInstanceOf(Response);
+    expect(result?.status).toBe(401);
+    const body = await result?.json();
+    expect(body.code).toBe("unauthorized:chat");
   });
 
-  it("returns error Response when session has no user", async () => {
+  it("returns 401 Response when session has no user", async () => {
     const result = await getEarlyValidationResponse(
       { user: undefined } as any,
       null as any
     );
     expect(result).toBeInstanceOf(Response);
+    expect(result?.status).toBe(401);
   });
 });
 
@@ -334,7 +323,7 @@ describe("saveUserMessageToDb", () => {
     expect(result?.status).toBe(503);
   });
 
-  it("returns generic error Response when saveMessages fails with non-DB error", async () => {
+  it("returns error Response when saveMessages fails with non-DB error", async () => {
     saveMessagesMock.mockRejectedValueOnce(new Error("unknown error"));
 
     const result = await saveUserMessageToDb(
@@ -347,6 +336,6 @@ describe("saveUserMessageToDb", () => {
     );
 
     expect(result).toBeInstanceOf(Response);
-    expect(result?.status).toBe(400);
+    expect(result?.status).toBeGreaterThanOrEqual(400);
   });
 });

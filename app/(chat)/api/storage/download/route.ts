@@ -102,8 +102,10 @@ export async function GET(request: Request) {
 
     const signedUrl = await generateSignedUrl(pathname, bucket, SIGNED_URL_TTL);
     if (!signedUrl) {
-      // Supabase não configurado ou erro ao gerar — fallback para URL original
-      return NextResponse.redirect(targetUrl.toString(), { status: 302 });
+      return NextResponse.json(
+        { error: "Não foi possível gerar URL assinado para o ficheiro." },
+        { status: 502 }
+      );
     }
 
     return NextResponse.redirect(signedUrl, { status: 302 });

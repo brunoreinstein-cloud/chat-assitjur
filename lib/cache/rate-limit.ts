@@ -1,11 +1,10 @@
 /**
- * Rate limiter usando Redis (sliding window counter).
- * Activa-se automaticamente quando REDIS_URL estiver definido.
- * Sem Redis, permite todas as requests (falha aberta) — suficiente para dev
- * e para produção sem Redis configurado; para brute-force severo recomenda-se Redis.
+ * Rate limiter com Redis (primário) e fallback in-memory (por instância).
  *
- * Algoritmo: INCR + EXPIRE (contador por janela de tempo).
- * Não é um sliding window perfeito mas é O(1) e adequado para auth.
+ * Redis: INCR + EXPIRE (contador por janela de tempo). O(1).
+ * In-memory: Map com expiração por janela. Protege contra brute-force
+ * mesmo sem Redis, embora cada instância do servidor tenha contadores
+ * independentes (aceitável para auth com poucas instâncias).
  */
 import "server-only";
 
@@ -37,6 +36,65 @@ async function getRedis(): Promise<ReturnType<typeof createClient> | null> {
   }
 }
 
+// ── In-memory fallback ────────────────────────────────────────────────────────
+
+interface MemoryEntry {
+  count: number;
+  expiresAt: number;
+}
+
+const memoryStore = new Map<string, MemoryEntry>();
+
+const MEMORY_CLEANUP_INTERVAL_MS = 60_000;
+let lastCleanup = Date.now();
+
+function memoryCleanup() {
+  const now = Date.now();
+  if (now - lastCleanup < MEMORY_CLEANUP_INTERVAL_MS) {
+    return;
+  }
+  lastCleanup = now;
+  for (const [k, v] of memoryStore) {
+    if (v.expiresAt <= now) {
+      memoryStore.delete(k);
+    }
+  }
+}
+
+function checkMemoryRateLimit(
+  key: string,
+  maxAttempts: number,
+  windowSeconds: number
+): RateLimitResult {
+  memoryCleanup();
+  const now = Date.now();
+  const existing = memoryStore.get(key);
+
+  if (!existing || existing.expiresAt <= now) {
+    memoryStore.set(key, { count: 1, expiresAt: now + windowSeconds * 1000 });
+    return {
+      allowed: true,
+      remaining: maxAttempts - 1,
+      resetInSeconds: windowSeconds,
+    };
+  }
+
+  existing.count += 1;
+  const remaining = Math.max(0, maxAttempts - existing.count);
+  const resetInSeconds = Math.max(
+    1,
+    Math.ceil((existing.expiresAt - now) / 1000)
+  );
+
+  return {
+    allowed: existing.count <= maxAttempts,
+    remaining,
+    resetInSeconds,
+  };
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
 export interface RateLimitResult {
   allowed: boolean;
   /** Tentativas restantes na janela actual. */
@@ -48,11 +106,8 @@ export interface RateLimitResult {
 /**
  * Verifica e incrementa o contador de rate limit.
  *
- * @param key           Chave única (ex: "auth:login:192.168.1.1" ou "auth:email:user@x.com").
- * @param maxAttempts   Limite de tentativas por janela.
- * @param windowSeconds Duração da janela em segundos.
- * @returns `allowed: true` se dentro do limite, `false` se excedido.
- *          Sem Redis configurado, retorna sempre `allowed: true`.
+ * Prioridade: Redis → in-memory fallback (por instância).
+ * Sem Redis configurado ou em erro, usa contadores locais em memória.
  */
 export async function checkRateLimit(
   key: string,
@@ -62,11 +117,7 @@ export async function checkRateLimit(
   const redis = await getRedis();
 
   if (!redis) {
-    return {
-      allowed: true,
-      remaining: maxAttempts - 1,
-      resetInSeconds: windowSeconds,
-    };
+    return checkMemoryRateLimit(key, maxAttempts, windowSeconds);
   }
 
   const redisKey = `rl:${key}`;
@@ -83,11 +134,6 @@ export async function checkRateLimit(
       resetInSeconds: ttl > 0 ? ttl : windowSeconds,
     };
   } catch {
-    // Erro Redis: falha aberta (permite a request para não bloquear utilizadores legítimos)
-    return {
-      allowed: true,
-      remaining: maxAttempts - 1,
-      resetInSeconds: windowSeconds,
-    };
+    return checkMemoryRateLimit(key, maxAttempts, windowSeconds);
   }
 }
