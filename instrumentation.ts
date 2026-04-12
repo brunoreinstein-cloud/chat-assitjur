@@ -9,7 +9,12 @@ interface OtelSpanExporter {
   shutdown(): Promise<void>;
 }
 
-export function register() {
+export async function register() {
+  // Validação de env vars — falha rápido no boot se faltar variável obrigatória.
+  // Só corre no runtime Node.js (não no Edge, não no browser).
+  if (process.env.NEXT_RUNTIME === "nodejs") {
+    await import("./lib/env");
+  }
   // Langfuse OTel exporter — activo quando LANGFUSE_PUBLIC_KEY está configurada.
   // Requer pnpm add langfuse-vercel. Se o pacote não estiver instalado, é ignorado silenciosamente.
   let traceExporter: OtelSpanExporter | undefined;

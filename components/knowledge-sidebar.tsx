@@ -1,18 +1,13 @@
 "use client";
 
-import { formatDistanceToNow } from "date-fns";
-import { pt } from "date-fns/locale";
 import {
   BookOpenIcon,
   ChevronDownIcon,
-  EllipsisVertical,
-  EyeIcon,
   FolderIcon,
   FolderInput,
   FolderOpenIcon,
   FolderPlusIcon,
   Loader2,
-  Pencil,
   SearchIcon,
   SparklesIcon,
   Trash2,
@@ -23,16 +18,6 @@ import type { ReactNode } from "react";
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 import useSWR, { useSWRConfig } from "swr";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
@@ -40,20 +25,10 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -79,9 +54,10 @@ import type {
 import {
   filterAcceptedFiles,
   getDocumentCoverageInfo,
-  parseSummaryBadge,
 } from "@/lib/knowledge/utils";
 import { cn, fetcher } from "@/lib/utils";
+import { KnowledgeDialogs } from "./knowledge/knowledge-dialogs";
+import { KnowledgeDocRow } from "./knowledge/knowledge-doc-row";
 
 export function KnowledgeSidebarContent({
   knowledgeDocumentIds,
@@ -815,187 +791,25 @@ export function KnowledgeSidebarContent({
   } else {
     listContent = (
       <ul className="grid gap-2">
-        {filteredKnowledgeDocs.map((doc) => {
-          const dateLabel =
-            doc.createdAt != null
-              ? formatDistanceToNow(new Date(doc.createdAt), {
-                  addSuffix: true,
-                  locale: pt,
-                })
-              : null;
-          const isSelected = knowledgeDocumentIds.includes(doc.id);
-          return (
-            <li
-              className={cn(
-                "group flex min-w-0 flex-col gap-0.5 rounded-md py-0.5 pr-0.5 transition-colors",
-                isSelected && "border-primary border-l-2 bg-primary/5"
-              )}
-              key={doc.id}
-            >
-              <div className="flex min-w-0 flex-wrap items-center gap-1 rounded-md px-2 py-1 hover:bg-muted/40">
-                <input
-                  aria-describedby={`kb-${doc.id}-title`}
-                  checked={isSelected}
-                  className="shrink-0"
-                  id={`kb-${doc.id}`}
-                  onChange={() => toggleKnowledgeId(doc.id)}
-                  title="Usar no chat, mover ou eliminar"
-                  type="checkbox"
-                />
-                <Label
-                  className="min-w-0 flex-1 cursor-pointer truncate font-normal"
-                  htmlFor={`kb-${doc.id}`}
-                  id={`kb-${doc.id}-title`}
-                  title={doc.title}
-                >
-                  {doc.title}
-                </Label>
-                {doc.indexingStatus === "pending" && (
-                  <span
-                    className="shrink-0 rounded bg-amber-500/20 px-1.5 py-0 text-[10px] text-amber-700 dark:text-amber-400"
-                    title="Ainda não indexado; use «Indexar pendentes» ou aguarde o job."
-                  >
-                    Pendente
-                  </span>
-                )}
-                {doc.indexingStatus === "failed" && (
-                  <span
-                    className="shrink-0 rounded bg-destructive/20 px-1.5 py-0 text-[10px] text-destructive"
-                    title="Erro ao vetorizar; pode reindexar depois."
-                  >
-                    Erro
-                  </span>
-                )}
-                {doc.structuredSummary &&
-                  (() => {
-                    const { docType, pedidosCount, isPartial } =
-                      parseSummaryBadge(doc.structuredSummary);
-                    const label = docType === "pi" ? "PI" : "Cont.";
-                    const pedidosLabel =
-                      pedidosCount > 0 ? ` • ${pedidosCount} pedidos` : "";
-                    const partialLabel = isPartial ? " • ⚠️ parcial" : "";
-                    const tooltip =
-                      docType === "pi"
-                        ? `Petição Inicial — resumo estruturado gerado por IA${pedidosCount > 0 ? ` (${pedidosCount} pedidos mapeados)` : ""}${isPartial ? " — cobertura parcial (documento muito grande)" : " — cobertura completa"}`
-                        : `Contestação — resumo estruturado gerado por IA${isPartial ? " — cobertura parcial (documento muito grande)" : " — cobertura completa"}`;
-                    return (
-                      <span
-                        className={`shrink-0 rounded px-1.5 py-0 text-[10px] ${isPartial ? "bg-amber-500/20 text-amber-700 dark:text-amber-400" : "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400"}`}
-                        title={tooltip}
-                      >
-                        📋 {label}
-                        {pedidosLabel}
-                        {partialLabel}
-                      </span>
-                    );
-                  })()}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      aria-label={`Ações do documento «${doc.title}»`}
-                      className="size-7 shrink-0 opacity-0 transition-opacity focus:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100"
-                      size="icon"
-                      type="button"
-                      variant="ghost"
-                    >
-                      <EllipsisVertical aria-hidden className="size-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="min-w-[180px]">
-                    <DropdownMenuItem
-                      onSelect={(e) => {
-                        e.preventDefault();
-                        setDocToView({ id: doc.id, title: doc.title });
-                      }}
-                    >
-                      <EyeIcon aria-hidden className="size-4" />
-                      Ver
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={(e) => {
-                        e.preventDefault();
-                        openRenameDialog(doc);
-                      }}
-                    >
-                      <Pencil aria-hidden className="size-4" />
-                      Renomear
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      disabled={generatingSummaryIds.has(doc.id)}
-                      onSelect={(e) => {
-                        e.preventDefault();
-                        handleGenerateSummary(doc.id).catch(() => {
-                          /* fire-and-forget */
-                        });
-                      }}
-                    >
-                      {generatingSummaryIds.has(doc.id) ? (
-                        <Loader2 aria-hidden className="size-4 animate-spin" />
-                      ) : (
-                        <span
-                          aria-hidden
-                          className="size-4 text-center leading-none"
-                        >
-                          📋
-                        </span>
-                      )}
-                      {doc.structuredSummary
-                        ? "Regenerar resumo"
-                        : "Gerar resumo"}
-                    </DropdownMenuItem>
-                    <DropdownMenuSub>
-                      <DropdownMenuSubTrigger>
-                        <FolderInput aria-hidden className="size-4" />
-                        Mover para pasta
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuSubContent>
-                        <DropdownMenuItem
-                          onSelect={() => handleMoveToFolder(doc.id, null)}
-                        >
-                          Raiz
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        {folders.map((folder) => (
-                          <DropdownMenuItem
-                            key={folder.id}
-                            onSelect={() =>
-                              handleMoveToFolder(doc.id, folder.id)
-                            }
-                          >
-                            {folder.name}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuSubContent>
-                    </DropdownMenuSub>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      className="text-destructive focus:text-destructive"
-                      onSelect={(e) => {
-                        e.preventDefault();
-                        setDocToDelete(doc);
-                      }}
-                    >
-                      <Trash2 aria-hidden className="size-4" />
-                      Eliminar
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-              {dateLabel != null && (
-                <span
-                  className="pl-6 text-[11px] text-muted-foreground/80"
-                  title={
-                    doc.createdAt != null
-                      ? new Date(doc.createdAt).toLocaleString("pt-PT")
-                      : undefined
-                  }
-                >
-                  {dateLabel}
-                </span>
-              )}
-            </li>
-          );
-        })}
+        {filteredKnowledgeDocs.map((doc) => (
+          <KnowledgeDocRow
+            doc={doc}
+            folders={folders}
+            generatingSummaryIds={generatingSummaryIds}
+            isSelected={knowledgeDocumentIds.includes(doc.id)}
+            key={doc.id}
+            onDeleteRequest={setDocToDelete}
+            onGenerateSummary={(id) => {
+              handleGenerateSummary(id).catch(() => {
+                /* fire-and-forget */
+              });
+            }}
+            onMoveToFolder={handleMoveToFolder}
+            onRename={openRenameDialog}
+            onToggle={toggleKnowledgeId}
+            onView={setDocToView}
+          />
+        ))}
       </ul>
     );
   }
@@ -1008,12 +822,6 @@ export function KnowledgeSidebarContent({
         className
       )}
     >
-      <style
-        dangerouslySetInnerHTML={{
-          __html:
-            "@keyframes kb-shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-4px)}40%{transform:translateX(4px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}.kb-shake{animation:kb-shake 0.4s ease}",
-        }}
-      />
       <header className="flex shrink-0 flex-col gap-0.5 border-b px-4 py-3">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
@@ -1735,163 +1543,26 @@ export function KnowledgeSidebarContent({
         </Collapsible>
       </div>
 
-      <Dialog
-        onOpenChange={(open) => {
-          if (!open) {
-            setDocToView(null);
-          }
-        }}
-        open={docToView !== null}
-      >
-        <DialogContent
-          aria-describedby="view-doc-content"
-          className="flex max-h-[85vh] max-w-2xl flex-col gap-2"
-        >
-          <DialogTitle id="view-doc-title">
-            {docToView ? `Ver — ${docToView.title}` : "Documento"}
-          </DialogTitle>
-          <div
-            className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap rounded border border-border bg-muted/30 p-3 font-mono text-xs"
-            id="view-doc-content"
-          >
-            {(() => {
-              if (viewedDoc == null && docToView != null) {
-                return (
-                  <span className="text-muted-foreground">A carregar…</span>
-                );
-              }
-              if (viewedDoc && typeof viewedDoc.content === "string") {
-                return viewedDoc.content;
-              }
-              if (viewedDoc) {
-                return (
-                  <span className="text-muted-foreground">
-                    Documento sem conteúdo.
-                  </span>
-                );
-              }
-              return null;
-            })()}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog
-        onOpenChange={(open) => {
-          if (!open) {
-            setDocToRename(null);
-          }
-        }}
-        open={docToRename !== null}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Renomear documento</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-2 py-2">
-            <Label htmlFor="kb-rename-title">Título</Label>
-            <Input
-              id="kb-rename-title"
-              maxLength={512}
-              onChange={(e) => setRenameInputValue(e.target.value)}
-              value={renameInputValue}
-            />
-          </div>
-          <DialogFooter>
-            <Button
-              onClick={() => setDocToRename(null)}
-              type="button"
-              variant="outline"
-            >
-              Cancelar
-            </Button>
-            <Button
-              disabled={!renameInputValue.trim() || isPatchingDoc}
-              onClick={handleRenameSubmit}
-              type="button"
-            >
-              {isPatchingDoc ? "A guardar…" : "Guardar"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <AlertDialog
-        onOpenChange={(open) => {
-          if (!open) {
-            setDocToDelete(null);
-          }
-        }}
-        open={docToDelete !== null}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar documento?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {docToDelete ? (
-                <>
-                  «{docToDelete.title}» será eliminado da base de conhecimento.
-                  Esta ação não pode ser desfeita.
-                </>
-              ) : null}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel type="button">Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={isDeleting}
-              onClick={(e) => {
-                e.preventDefault();
-                handleDeleteConfirm();
-              }}
-              type="button"
-            >
-              {isDeleting ? "A eliminar…" : "Eliminar"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog
-        onOpenChange={(open) => {
-          if (!(open || isBulkDeleting)) {
-            setBulkDeleteConfirmOpen(false);
-          }
-        }}
-        open={bulkDeleteConfirmOpen}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              Eliminar documentos selecionados?
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {knowledgeDocumentIds.length} documento(s) serão eliminados da
-              base de conhecimento. Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              onClick={() => setBulkDeleteConfirmOpen(false)}
-              type="button"
-            >
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={isBulkDeleting}
-              onClick={(e) => {
-                e.preventDefault();
-                handleBulkDeleteConfirm();
-              }}
-              type="button"
-            >
-              {isBulkDeleting ? "A eliminar…" : "Eliminar todos"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <KnowledgeDialogs
+        bulkDeleteConfirmOpen={bulkDeleteConfirmOpen}
+        docToDelete={docToDelete}
+        docToRename={docToRename}
+        docToView={docToView}
+        isBulkDeleting={isBulkDeleting}
+        isDeleting={isDeleting}
+        isPatchingDoc={isPatchingDoc}
+        onBulkDeleteConfirm={handleBulkDeleteConfirm}
+        onCloseBulkDelete={() => setBulkDeleteConfirmOpen(false)}
+        onCloseDelete={() => setDocToDelete(null)}
+        onCloseRename={() => setDocToRename(null)}
+        onCloseView={() => setDocToView(null)}
+        onDeleteConfirm={handleDeleteConfirm}
+        onRenameSubmit={handleRenameSubmit}
+        renameInputValue={renameInputValue}
+        selectedCount={knowledgeDocumentIds.length}
+        setRenameInputValue={setRenameInputValue}
+        viewedDoc={viewedDoc}
+      />
     </section>
   );
 }

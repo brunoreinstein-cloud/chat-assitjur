@@ -399,7 +399,9 @@ export const PromptInputSpeechButton = ({
       };
 
       speechRecognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.error("Speech recognition error:", event.error);
+        if (process.env.NODE_ENV === "development") {
+          console.error("Speech recognition error:", event.error);
+        }
         setIsListening(false);
       };
 

@@ -33,6 +33,11 @@ export default function Page() {
         type: "error",
         description: "Falha ao validar o envio. Tente novamente.",
       });
+    } else if (state.status === "rate_limited") {
+      toast({
+        type: "error",
+        description: "Muitas tentativas. Aguarde 15 minutos e tente novamente.",
+      });
     } else if (state.status === "success") {
       toast({ type: "success", description: "Conta criada com sucesso!" });
       setIsSuccessful(true);

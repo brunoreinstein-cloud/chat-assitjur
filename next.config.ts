@@ -42,6 +42,9 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   cacheComponents: true,
+  // Permite pedidos de 127.0.0.1 ao servidor dev (necessário para testes E2E com Playwright).
+  // Next.js 15+ bloqueia cross-origin por defeito; 127.0.0.1 é usado como baseURL nos testes.
+  ...(isDev && { allowedDevOrigins: ["127.0.0.1"] }),
   headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },

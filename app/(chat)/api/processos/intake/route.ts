@@ -29,6 +29,10 @@ import {
   updateProcessoIntake,
 } from "@/lib/db/queries";
 import { ChatbotError } from "@/lib/errors";
+import {
+  downloadFromStorage,
+  parseSupabaseStorageUrl,
+} from "@/lib/supabase/server";
 
 export const maxDuration = 120;
 
@@ -230,24 +234,45 @@ export async function POST(request: Request) {
       data: { intakeStatus: "processing" },
     });
 
-    // Busca o blob
+    // Busca o blob — usa service role para ficheiros Supabase (independente de o bucket
+    // ser público ou privado); fetch directo para Vercel Blob (sempre público).
     let pdfBuffer: ArrayBuffer;
     try {
-      const resp = await fetch(blobUrl, {
-        signal: AbortSignal.timeout(60_000),
-      });
-      if (!resp.ok) {
-        throw new Error(`Blob fetch failed: ${resp.status}`);
+      const supabaseParsed = parseSupabaseStorageUrl(blobUrl);
+      if (supabaseParsed) {
+        // Download via service role: não depende de URLs públicos nem de signed URLs.
+        const buffer = await downloadFromStorage(
+          supabaseParsed.pathname,
+          supabaseParsed.bucket
+        );
+        if (!buffer) {
+          throw new Error(
+            "Falha ao transferir o ficheiro do Supabase Storage."
+          );
+        }
+        pdfBuffer = buffer;
+      } else {
+        // Vercel Blob ou outro URL público
+        const resp = await fetch(blobUrl, {
+          signal: AbortSignal.timeout(60_000),
+        });
+        if (!resp.ok) {
+          throw new Error(`Blob fetch failed: ${resp.status}`);
+        }
+        pdfBuffer = await resp.arrayBuffer();
       }
-      pdfBuffer = await resp.arrayBuffer();
-    } catch (_err) {
+    } catch (fetchErr) {
+      const fetchMsg =
+        fetchErr instanceof Error
+          ? fetchErr.message
+          : "Erro ao buscar ficheiro";
       await updateProcessoIntake({
         id: processoId,
         userId,
         data: { intakeStatus: "error" },
       });
       return Response.json(
-        { error: "Não foi possível buscar o arquivo. Verifique a URL." },
+        { error: `Não foi possível buscar o arquivo. ${fetchMsg}` },
         { status: 422 }
       );
     }

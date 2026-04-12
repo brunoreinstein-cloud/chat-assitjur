@@ -78,6 +78,19 @@ export async function uploadFile(
     };
   }
 
+  // Usar URL assinado (2h) em vez de URL público permanente.
+  // Para que o signed URL restrinja o acesso efectivamente, o bucket DEVE estar
+  // privado: Supabase Dashboard → Storage → [bucket] → desactivar "Public".
+  // Se o createSignedUrl falhar, cai para getPublicUrl como fallback.
+  const { data: signData } = await supabase.storage
+    .from(SUPABASE_BUCKET)
+    .createSignedUrl(path, 7200);
+
+  if (signData?.signedUrl) {
+    return { ok: true, url: signData.signedUrl, pathname: path };
+  }
+
+  // Fallback: URL público (bucket ainda público ou erro ao assinar)
   const {
     data: { publicUrl },
   } = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(path);

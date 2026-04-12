@@ -1,2 +1,10 @@
+export { AgentInstructionsDialog } from "./agent-instructions-dialog";
+export { AttachmentChips } from "./attachment-chips";
 export { AttachmentsButton } from "./attachments-button";
+export { DragDropOverlay } from "./drag-drop-overlay";
+export type { CustomAgentRow } from "./manage-agents-sheet";
+export { ManageAgentsSheet } from "./manage-agents-sheet";
+export { RevisorHint } from "./revisor-hint";
+export { RevisorStatusBanner } from "./revisor-status-banner";
 export { StopButton } from "./stop-button";
+export { useCustomAgents } from "./use-custom-agents";

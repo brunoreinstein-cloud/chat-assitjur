@@ -581,7 +581,7 @@ async function ProcessoPageContent({
                     {p.blobUrl && (
                       <a
                         className="rounded border border-border/60 px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-muted/50 dark:border-white/10 dark:hover:bg-white/5"
-                        href={p.blobUrl}
+                        href={`/api/storage/download?url=${encodeURIComponent(p.blobUrl)}`}
                         rel="noreferrer"
                         target="_blank"
                       >

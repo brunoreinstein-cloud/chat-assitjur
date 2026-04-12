@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { useActionState, useEffect, useState } from "react";
+import { Suspense, useActionState, useEffect, useState } from "react";
 
 import { AuthForm } from "@/components/auth-form";
 import { SubmitButton } from "@/components/submit-button";
@@ -15,8 +15,12 @@ import {
   login,
 } from "../actions";
 
-export default function Page() {
+const RATE_LIMIT_MSG =
+  "Muitas tentativas. Aguarde 15 minutos e tente novamente.";
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [isSuccessful, setIsSuccessful] = useState(false);
 
@@ -39,10 +43,12 @@ export default function Page() {
         description:
           "Não foi possível iniciar como visitante. Tente de novo ou use uma conta.",
       });
+    } else if (guestState.status === "rate_limited") {
+      toast({ type: "error", description: RATE_LIMIT_MSG });
     }
   }, [guestState.status]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: router and updateSession are stable refs
+  // biome-ignore lint/correctness/useExhaustiveDependencies: router, updateSession e searchParams são refs estáveis
   useEffect(() => {
     if (state.status === "failed") {
       toast({
@@ -55,11 +61,17 @@ export default function Page() {
         type: "error",
         description: "Falha ao validar o envio. Tente novamente.",
       });
+    } else if (state.status === "rate_limited") {
+      toast({ type: "error", description: RATE_LIMIT_MSG });
     } else if (state.status === "success") {
       setIsSuccessful(true);
       updateSession();
       router.refresh();
-      router.push("/chat");
+      // Redirecionar para a página que o utilizador tentou aceder antes do login;
+      // validar que é um caminho relativo para prevenir open redirect.
+      const raw = searchParams.get("callbackUrl") ?? "";
+      const destination = raw.startsWith("/") ? raw : "/chat";
+      router.push(destination);
     }
   }, [state.status]);
 
@@ -102,5 +114,13 @@ export default function Page() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }
