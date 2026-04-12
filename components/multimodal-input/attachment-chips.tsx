@@ -134,7 +134,7 @@ export function AttachmentChips({
               );
             })()}
             <Button
-              aria-label="Remover anexo"
+              aria-label={`Remover anexo ${attachment.name}`}
               className="size-5 shrink-0 rounded-full p-0"
               onClick={onRemoveAttachment(attachment.url)}
               type="button"

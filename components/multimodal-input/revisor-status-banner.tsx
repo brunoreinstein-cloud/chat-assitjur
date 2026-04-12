@@ -41,7 +41,10 @@ export function RevisorStatusBanner({
   })();
 
   return (
-    <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-1.5">
+    <div
+      aria-live="polite"
+      className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-1.5"
+    >
       <span className="text-amber-800 text-sm dark:text-amber-200">
         Falta anexar: {missingLabel}
       </span>

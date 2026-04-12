@@ -31,6 +31,9 @@ const registerFormSchema = z.object({
     .min(8, "Mínimo 8 caracteres")
     .regex(/[A-Z]/, "Deve conter pelo menos uma letra maiúscula")
     .regex(/\d/, "Deve conter pelo menos um número"),
+  lgpdConsent: z
+    .string()
+    .refine((v) => v === "on", "Consentimento LGPD é obrigatório"),
 });
 
 /** Extrai o IP do cliente a partir dos headers do request. */
@@ -152,6 +155,7 @@ export const register = async (
     const validatedData = registerFormSchema.parse({
       email: formData.get("email"),
       password: formData.get("password"),
+      lgpdConsent: formData.get("lgpdConsent"),
     });
 
     const ip = await getClientIp();
@@ -202,8 +206,12 @@ export const register = async (
       console.error("[register] erro ao criar conta:", error);
     }
 
-    const err = error as { code?: string } | undefined;
-    if (err?.code === "23505") {
+    const cause =
+      error instanceof Error ? (error.cause as { code?: string }) : undefined;
+    if (
+      cause?.code === "23505" ||
+      (error instanceof Error && error.message.includes("duplicate"))
+    ) {
       return { status: "user_exists" } as RegisterActionState;
     }
 

@@ -409,18 +409,21 @@ export function KnowledgeSidebarContent({
     }
   };
 
+  const knowledgeDocumentIdsRef = useRef(knowledgeDocumentIds);
+  knowledgeDocumentIdsRef.current = knowledgeDocumentIds;
+
   const toggleKnowledgeId = (id: string) => {
-    setKnowledgeDocumentIds((prev) => {
-      if (prev.includes(id)) {
-        return prev.filter((x) => x !== id);
-      }
-      if (prev.length < MAX_KNOWLEDGE_SELECT) {
-        return [...prev, id];
-      }
+    const prev = knowledgeDocumentIdsRef.current;
+    if (prev.includes(id)) {
+      setKnowledgeDocumentIds(prev.filter((x) => x !== id));
+      return;
+    }
+    if (prev.length >= MAX_KNOWLEDGE_SELECT) {
       setShakeLimit(true);
       setTimeout(() => setShakeLimit(false), 400);
-      return prev;
-    });
+      return;
+    }
+    setKnowledgeDocumentIds([...prev, id]);
   };
 
   const toggleArchivoId = (id: string) => {

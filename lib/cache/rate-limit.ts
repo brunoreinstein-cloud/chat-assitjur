@@ -31,6 +31,7 @@ async function getRedis(): Promise<ReturnType<typeof createClient> | null> {
     redisReady = true;
     return redisClient;
   } catch {
+    redisClient = null;
     redisReady = false;
     return null;
   }

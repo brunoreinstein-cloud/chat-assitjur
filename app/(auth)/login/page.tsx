@@ -70,7 +70,8 @@ function LoginForm() {
       // Redirecionar para a página que o utilizador tentou aceder antes do login;
       // validar que é um caminho relativo para prevenir open redirect.
       const raw = searchParams.get("callbackUrl") ?? "";
-      const destination = raw.startsWith("/") ? raw : "/chat";
+      const destination =
+        raw.startsWith("/") && !raw.startsWith("//") ? raw : "/chat";
       router.push(destination);
     }
   }, [state.status]);

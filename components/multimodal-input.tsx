@@ -711,7 +711,7 @@ function PureMultimodalInput({
           toast.error(`${failedCount} imagem(ns) falhou/falharam ao enviar`);
         }
       } finally {
-        setUploadQueue([]);
+        setUploadQueue((q) => q.filter((item) => item.id !== imgQueueId));
       }
     },
     [setAttachments, uploadFile]
@@ -729,6 +729,7 @@ function PureMultimodalInput({
   }, [handlePaste]);
 
   // Window-level drag listeners: extend drop zone to entire viewport
+  const isDraggingOverRef = useRef(false);
   useEffect(() => {
     const onWindowDragOver = (e: DragEvent) => {
       if (knowledgeSidebarOpen) {
@@ -736,16 +737,21 @@ function PureMultimodalInput({
       }
       if (e.dataTransfer?.types.includes("Files")) {
         e.preventDefault();
-        setIsDraggingOver(true);
+        if (!isDraggingOverRef.current) {
+          isDraggingOverRef.current = true;
+          setIsDraggingOver(true);
+        }
       }
     };
     const onWindowDragLeave = (e: DragEvent) => {
       if (e.relatedTarget === null) {
+        isDraggingOverRef.current = false;
         setIsDraggingOver(false);
       }
     };
     const onWindowDrop = (e: DragEvent) => {
       e.preventDefault();
+      isDraggingOverRef.current = false;
       setIsDraggingOver(false);
     };
     window.addEventListener("dragover", onWindowDragOver);
@@ -1333,21 +1339,31 @@ function PureMultimodalInput({
   );
 }
 
-/**
- * Comparador do memo: inclui callbacks (sendMessage, setAgentId, etc.) para que
- * o componente re-renderize quando o pai passar novas referências.
- * O pai deve usar useCallback nesses callbacks para evitar re-renders desnecessários.
- */
 export const MultimodalInput = memo(
   PureMultimodalInput,
   (prevProps, nextProps) => {
+    if (prevProps.chatId !== nextProps.chatId) {
+      return false;
+    }
     if (prevProps.input !== nextProps.input) {
       return false;
     }
     if (prevProps.status !== nextProps.status) {
       return false;
     }
+    if (prevProps.stop !== nextProps.stop) {
+      return false;
+    }
     if (prevProps.sendMessage !== nextProps.sendMessage) {
+      return false;
+    }
+    if (prevProps.setInput !== nextProps.setInput) {
+      return false;
+    }
+    if (prevProps.setAttachments !== nextProps.setAttachments) {
+      return false;
+    }
+    if (prevProps.setMessages !== nextProps.setMessages) {
       return false;
     }
     if (!equal(prevProps.attachments, nextProps.attachments)) {
@@ -1357,6 +1373,18 @@ export const MultimodalInput = memo(
       return false;
     }
     if (prevProps.selectedModelId !== nextProps.selectedModelId) {
+      return false;
+    }
+    if (prevProps.className !== nextProps.className) {
+      return false;
+    }
+    if (prevProps.inputRef !== nextProps.inputRef) {
+      return false;
+    }
+    if (prevProps.knowledgeSidebarOpen !== nextProps.knowledgeSidebarOpen) {
+      return false;
+    }
+    if (prevProps.processoId !== nextProps.processoId) {
       return false;
     }
     if (

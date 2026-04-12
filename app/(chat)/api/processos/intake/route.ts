@@ -34,6 +34,27 @@ import {
   parseSupabaseStorageUrl,
 } from "@/lib/supabase/server";
 
+const VERCEL_BLOB_SUFFIX = "blob.vercel-storage.com";
+
+/** Verifica se o URL pertence a um host de storage autorizado (Supabase ou Vercel Blob). */
+function isAllowedStorageHost(url: URL): boolean {
+  const host = url.hostname.toLowerCase();
+  if (host === VERCEL_BLOB_SUFFIX || host.endsWith(`.${VERCEL_BLOB_SUFFIX}`)) {
+    return true;
+  }
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (supabaseUrl) {
+    try {
+      if (host === new URL(supabaseUrl).hostname) {
+        return true;
+      }
+    } catch {
+      /* ignorar URL Supabase malformado */
+    }
+  }
+  return false;
+}
+
 export const maxDuration = 120;
 
 const PDFJS_OPTIONS = {
@@ -234,13 +255,37 @@ export async function POST(request: Request) {
       data: { intakeStatus: "processing" },
     });
 
-    // Busca o blob — usa service role para ficheiros Supabase (independente de o bucket
-    // ser público ou privado); fetch directo para Vercel Blob (sempre público).
+    // Validar host antes de qualquer fetch (SSRF)
+    let parsedBlobUrl: URL;
+    try {
+      parsedBlobUrl = new URL(blobUrl);
+    } catch {
+      return Response.json({ error: "blobUrl inválido." }, { status: 400 });
+    }
+    if (parsedBlobUrl.protocol !== "https:") {
+      return Response.json(
+        { error: "Apenas URLs HTTPS são permitidos." },
+        { status: 400 }
+      );
+    }
+    if (!isAllowedStorageHost(parsedBlobUrl)) {
+      return Response.json(
+        { error: "Host de storage não autorizado." },
+        { status: 403 }
+      );
+    }
+
     let pdfBuffer: ArrayBuffer;
     try {
       const supabaseParsed = parseSupabaseStorageUrl(blobUrl);
       if (supabaseParsed) {
-        // Download via service role: não depende de URLs públicos nem de signed URLs.
+        // IDOR: pathname deve começar com o userId do utilizador autenticado
+        if (!supabaseParsed.pathname.startsWith(`${userId}/`)) {
+          return Response.json(
+            { error: "Acesso negado a este ficheiro." },
+            { status: 403 }
+          );
+        }
         const buffer = await downloadFromStorage(
           supabaseParsed.pathname,
           supabaseParsed.bucket
@@ -252,7 +297,6 @@ export async function POST(request: Request) {
         }
         pdfBuffer = buffer;
       } else {
-        // Vercel Blob ou outro URL público
         const resp = await fetch(blobUrl, {
           signal: AbortSignal.timeout(60_000),
         });

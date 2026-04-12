@@ -174,16 +174,16 @@ async function ProcessoPageContent({
 
   await ensureStatementTimeout();
 
-  const [proc, tasks, pecas] = await Promise.all([
-    getProcessoById({ id, userId: session.user.id }),
+  const proc = await getProcessoById({ id, userId: session.user.id });
+  if (!proc) {
+    notFound();
+  }
+
+  const [tasks, pecas] = await Promise.all([
     getTaskExecutionsByProcessoId({ processoId: id }),
     getPecasByProcessoId({ processoId: id }),
   ]);
   const canApprove = can(session.user.role ?? null, "peca:approve");
-
-  if (!proc) {
-    notFound();
-  }
 
   const hasIntake = proc.intakeStatus === "ready" && !!proc.parsedText;
   const isProcessing = proc.intakeStatus === "processing";

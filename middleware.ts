@@ -41,7 +41,9 @@ export default auth((req) => {
 
   if (!(isLoggedIn || isPublicPath(pathname))) {
     const loginUrl = new URL("/login", req.url);
-    loginUrl.searchParams.set("callbackUrl", pathname);
+    const safeCallback =
+      pathname.startsWith("/") && !pathname.startsWith("//") ? pathname : "/";
+    loginUrl.searchParams.set("callbackUrl", safeCallback);
     return NextResponse.redirect(loginUrl);
   }
 });
