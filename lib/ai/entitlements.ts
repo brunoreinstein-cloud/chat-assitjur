@@ -16,6 +16,8 @@ const regularEntitlements: Entitlements = {
 
 export const entitlementsByUserType: Record<UserType, Entitlements> = {
   regular: regularEntitlements,
+  /** Visitante: mesmos limites de créditos; histórico não persistido conforme produto. */
+  guest: regularEntitlements,
 };
 
 /**

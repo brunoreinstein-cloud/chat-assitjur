@@ -8,7 +8,12 @@ import { useActionState, useEffect, useState } from "react";
 import { AuthForm } from "@/components/auth-form";
 import { SubmitButton } from "@/components/submit-button";
 import { toast } from "@/components/toast";
-import { type LoginActionState, login } from "../actions";
+import {
+  type GuestLoginActionState,
+  guestLogin,
+  type LoginActionState,
+  login,
+} from "../actions";
 
 export default function Page() {
   const router = useRouter();
@@ -20,7 +25,22 @@ export default function Page() {
     { status: "idle" }
   );
 
+  const [guestState, guestFormAction] = useActionState<
+    GuestLoginActionState,
+    FormData
+  >(guestLogin, { status: "idle" });
+
   const { update: updateSession } = useSession();
+
+  useEffect(() => {
+    if (guestState.status === "failed") {
+      toast({
+        type: "error",
+        description:
+          "Não foi possível iniciar como visitante. Tente de novo ou use uma conta.",
+      });
+    }
+  }, [guestState.status]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: router and updateSession are stable refs
   useEffect(() => {
@@ -61,17 +81,25 @@ export default function Page() {
         </div>
         <AuthForm action={handleSubmit} defaultEmail={email}>
           <SubmitButton isSuccessful={isSuccessful}>Entrar</SubmitButton>
-          <p className="mt-5 text-center text-assistjur-gray text-sm">
-            Não tem uma conta?{" "}
-            <Link
-              className="font-semibold text-assistjur-purple-dark underline underline-offset-2 hover:no-underline focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-              href="/register"
-            >
-              Cadastre-se
-            </Link>{" "}
-            gratuitamente.
-          </p>
         </AuthForm>
+        <form action={guestFormAction} className="mt-4">
+          <button
+            className="w-full rounded-lg border border-assistjur-purple/30 bg-white px-4 py-2.5 font-medium text-assistjur-purple-dark text-sm transition hover:bg-assistjur-purple/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent focus-visible:ring-offset-2"
+            type="submit"
+          >
+            Continuar como visitante
+          </button>
+        </form>
+        <p className="mt-5 text-center text-assistjur-gray text-sm">
+          Não tem uma conta?{" "}
+          <Link
+            className="font-semibold text-assistjur-purple-dark underline underline-offset-2 hover:no-underline focus-visible:rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-accent focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+            href="/register"
+          >
+            Cadastre-se
+          </Link>{" "}
+          gratuitamente.
+        </p>
       </div>
     </div>
   );

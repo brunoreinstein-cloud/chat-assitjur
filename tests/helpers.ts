@@ -17,13 +17,16 @@ function isConnectionError(e: unknown): boolean {
 }
 
 /**
- * Abre /chat quando a sessão já está nos cookies (ex.: storageState).
+ * Abre /chat com sessão de visitante (GET /api/auth/guest → redirect).
  */
 export async function gotoChatPage(
   page: Page,
   timeout = 60_000
 ): Promise<void> {
-  await page.goto("/chat", { waitUntil: "load", timeout: 35_000 });
+  await page.goto("/api/auth/guest?callbackUrl=/chat", {
+    waitUntil: "load",
+    timeout: 35_000,
+  });
   const input = page.getByTestId("multimodal-input");
   await input.waitFor({ state: "visible", timeout });
 }

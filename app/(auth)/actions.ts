@@ -1,5 +1,6 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { createUser, getUser } from "@/lib/db/queries";
@@ -22,6 +23,30 @@ const registerFormSchema = z.object({
 
 export interface LoginActionState {
   status: "idle" | "in_progress" | "success" | "failed" | "invalid_data";
+}
+
+export interface GuestLoginActionState {
+  status: "idle" | "failed";
+}
+
+/** Inicia sessão como visitante (utilizador `guest-*@guest.local` na BD). */
+export async function guestLogin(
+  _prev: GuestLoginActionState,
+  _formData: FormData
+): Promise<GuestLoginActionState> {
+  const result = await signIn("credentials", {
+    guest: "true",
+    redirect: false,
+  });
+  const failed =
+    result &&
+    typeof result === "object" &&
+    "error" in result &&
+    Boolean((result as { error?: string }).error);
+  if (failed) {
+    return { status: "failed" };
+  }
+  redirect("/chat");
 }
 
 export const login = async (

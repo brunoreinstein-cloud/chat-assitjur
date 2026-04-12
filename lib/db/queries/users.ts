@@ -38,6 +38,37 @@ export async function getUser(email: string): Promise<User[]> {
   }
 }
 
+/**
+ * Cria um utilizador anónimo (modo visitante). Email `guest-<uuid>@guest.local`
+ * (prefixo `guest-` excluído de listagens admin).
+ */
+export async function createGuestUser(): Promise<User> {
+  const email = `guest-${crypto.randomUUID()}@guest.local`;
+  const hashedPassword = generateHashedPassword(
+    `${crypto.randomUUID()}${crypto.randomUUID()}`
+  );
+  try {
+    const [row] = await getDb()
+      .insert(user)
+      .values({ email, password: hashedPassword, role: null })
+      .returning();
+    if (!row) {
+      throw new ChatbotError(
+        "bad_request:database",
+        "Failed to create guest user (no row returned)"
+      );
+    }
+    return row;
+  } catch (err) {
+    const detail =
+      err instanceof Error ? err.message : "Unknown database error";
+    throw new ChatbotError(
+      "bad_request:database",
+      `Failed to create guest user: ${detail}`
+    );
+  }
+}
+
 export async function createUser(email: string, password: string) {
   const hashedPassword = generateHashedPassword(password);
 

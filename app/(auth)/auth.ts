@@ -3,10 +3,10 @@ import NextAuth, { type DefaultSession } from "next-auth";
 import type { DefaultJWT } from "next-auth/jwt";
 import Credentials from "next-auth/providers/credentials";
 import { DUMMY_PASSWORD } from "@/lib/constants";
-import { getUser } from "@/lib/db/queries";
+import { createGuestUser, getUser } from "@/lib/db/queries";
 import { authConfig } from "./auth.config";
 
-export type UserType = "regular";
+export type UserType = "regular" | "guest";
 
 declare module "next-auth" {
   interface Session extends DefaultSession {
@@ -64,14 +64,34 @@ export const {
   },
   providers: [
     Credentials({
-      credentials: {},
-      async authorize({
-        email,
-        password,
-      }: {
-        email?: string;
-        password?: string;
-      }) {
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+        guest: { label: "Guest", type: "text" },
+      },
+      async authorize(credentials) {
+        if (credentials?.guest === "true") {
+          try {
+            const guest = await createGuestUser();
+            return {
+              id: guest.id,
+              email: guest.email,
+              type: "guest",
+              role: guest.role ?? null,
+            };
+          } catch (err) {
+            if (process.env.NODE_ENV === "development") {
+              console.error("[auth] authorize (guest) failed:", err);
+            }
+            return null;
+          }
+        }
+
+        const emailRaw = credentials?.email;
+        const password = credentials?.password;
+        const email =
+          typeof emailRaw === "string" && emailRaw.length > 0 ? emailRaw : null;
+
         if (!email || typeof password !== "string") {
           return null;
         }
