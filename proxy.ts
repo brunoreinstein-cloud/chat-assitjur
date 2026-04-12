@@ -16,15 +16,33 @@ function shouldShowConfigRequired(pathname: string): boolean {
   return !(process.env.POSTGRES_URL && process.env.AUTH_SECRET);
 }
 
+/** Rotas públicas que não requerem autenticação. */
+function isPublicPath(pathname: string): boolean {
+  return (
+    pathname === "/" ||
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/register") ||
+    pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/health") ||
+    pathname.startsWith("/ajuda") ||
+    pathname.startsWith("/privacy") ||
+    pathname.startsWith("/terms") ||
+    pathname.startsWith("/design") ||
+    pathname.startsWith("/comprimir-pdf") ||
+    pathname.startsWith("/lp") ||
+    pathname.startsWith("/config-required")
+  );
+}
+
 function handleNoToken(request: NextRequest, pathname: string): NextResponse {
-  const isAuthPage = pathname === "/login" || pathname === "/register";
-  if (isAuthPage) {
+  if (isPublicPath(pathname)) {
     return NextResponse.next();
   }
   const loginUrl = new URL("/login", request.url);
-  const callbackPath = pathname + (request.nextUrl.search || "");
-  if (callbackPath && callbackPath !== "/") {
-    loginUrl.searchParams.set("callbackUrl", callbackPath);
+  const safeCallback =
+    pathname.startsWith("/") && !pathname.startsWith("//") ? pathname : "/";
+  if (safeCallback !== "/") {
+    loginUrl.searchParams.set("callbackUrl", safeCallback);
   }
   return NextResponse.redirect(loginUrl);
 }
