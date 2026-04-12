@@ -171,7 +171,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/word-extractor": "^1.0.6",
-    "@vitest/coverage-v8": "^4.1.1",
+    "@vitest/coverage-v8": "^2.1.9",
     "baseline-browser-mapping": "^2.10.0",
     "cross-env": "^10.1.0",
     "drizzle-kit": "^0.31.10",
