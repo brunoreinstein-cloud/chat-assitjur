@@ -1,7 +1,7 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { BookOpenIcon, FileTextIcon, MessageCircleIcon } from "lucide-react";
+import { motion } from "motion/react";
 import {
   AGENT_ID_REVISOR_DEFESAS,
   getAgentConfig,

@@ -1,8 +1,8 @@
 import type { UseChatHelpers } from "@ai-sdk/react";
 import { formatDistance } from "date-fns";
 import equal from "fast-deep-equal";
-import { AnimatePresence, motion } from "framer-motion";
 import { Printer } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import {
   type Dispatch,
   memo,

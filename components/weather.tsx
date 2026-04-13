@@ -1,8 +1,8 @@
 "use client";
 
-import cx from "classnames";
 import { format, isWithinInterval } from "date-fns";
 import { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
 
 const SunIcon = ({ size = 40 }: { size?: number }) => (
   <svg
@@ -350,7 +350,7 @@ export function Weather({
 
   return (
     <div
-      className={cx(
+      className={cn(
         "relative flex w-full flex-col gap-3 overflow-hidden rounded-2xl p-4 shadow-lg backdrop-blur-sm",
         {
           "bg-linear-to-br from-sky-400 via-blue-500 to-blue-600": isDay,
@@ -373,7 +373,7 @@ export function Weather({
         <div className="mb-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div
-              className={cx("text-white/90", {
+              className={cn("text-white/90", {
                 "text-yellow-200": isDay,
                 "text-blue-200": !isDay,
               })}
@@ -408,7 +408,7 @@ export function Weather({
 
               return (
                 <div
-                  className={cx(
+                  className={cn(
                     "flex min-w-0 flex-1 flex-col items-center gap-1 rounded-md px-1 py-1.5",
                     {
                       "bg-white/20": isCurrentHour,
@@ -421,7 +421,7 @@ export function Weather({
                   </div>
 
                   <div
-                    className={cx("text-white/60", {
+                    className={cn("text-white/60", {
                       "text-yellow-200": isDay,
                       "text-blue-200": !isDay,
                     })}

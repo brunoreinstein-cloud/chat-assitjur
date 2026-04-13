@@ -1,8 +1,9 @@
 "use client";
 
-import type { DialogProps } from "@radix-ui/react-dialog";
 import { Command as CommandPrimitive } from "cmdk";
 import { Search } from "lucide-react";
+import type { Dialog as RadixDialog } from "radix-ui";
+import type { ComponentProps } from "react";
 import * as React from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -21,6 +22,8 @@ const Command = React.forwardRef<
   />
 ));
 Command.displayName = CommandPrimitive.displayName;
+
+type DialogProps = ComponentProps<typeof RadixDialog.Root>;
 
 const CommandDialog = ({ children, ...props }: DialogProps) => {
   return (
