@@ -81,12 +81,6 @@ export function getDb() {
         : `${url}?sslmode=require`;
     }
     /**
-     * Em dev usa-se 3 conexões para reduzir contenção entre chat, credits e health
-     * (mesmo processo). Em produção usa-se 3 também — com pooler Supabase (porta 6543,
-     * transaction mode) cada invocação serverless pode ter pedidos concorrentes
-     * (ex.: Promise.all de ensureStatementTimeout + queries); max:1 forçava fila.
-     */
-    /**
      * Em dev usa-se 5 conexões para reduzir contenção: o processo único serve
      * chat pipeline (7 queries paralelas), sidebar (credits, history, processos),
      * e warmup. 3 conexões causava filas de ~30s com BD remota (Supabase US East).
@@ -212,6 +206,39 @@ export async function withRetry<T>(
     }
   }
   throw lastError;
+}
+
+/**
+ * Timeout por query (Promise.race). Protecção real contra queries suspensas,
+ * independente de SET statement_timeout (que não funciona em Supabase transaction mode).
+ *
+ * Quando o timeout dispara, a query continua no server Postgres até statement_timeout
+ * ou max_lifetime reciclar a conexão — mas a resposta HTTP retorna imediatamente.
+ *
+ * @param fn        Função async (query Drizzle).
+ * @param timeoutMs Timeout em ms (default: 15s — abaixo do maxDuration 30s da Vercel).
+ * @param label     Label para a mensagem de erro (ex.: nome da query).
+ */
+export async function withQueryTimeout<T>(
+  fn: () => Promise<T>,
+  timeoutMs = 15_000,
+  label = "query"
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      const err = new ChatbotError(
+        "bad_request:database",
+        `Query timeout: ${label} excedeu ${timeoutMs}ms`
+      );
+      reject(err);
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([fn(), timeoutPromise]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
