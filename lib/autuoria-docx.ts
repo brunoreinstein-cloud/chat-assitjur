@@ -1,20 +1,14 @@
 import "server-only";
 
 import {
-  AlignmentType,
   BorderStyle,
   CommentRangeEnd,
   CommentRangeStart,
   CommentReference,
-  Document,
   type FileChild,
-  Footer,
-  Header,
   HeadingLevel,
   type ICommentOptions,
   Packer,
-  PageNumber,
-  PageOrientation,
   Paragraph,
   ShadingType,
   Table,
@@ -23,6 +17,7 @@ import {
   TextRun,
   WidthType,
 } from "docx";
+import { createDocxDocument } from "@/lib/docx/create-docx-document";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -599,80 +594,20 @@ export async function createQuadroDocxBuffer(
     })
   );
 
-  const headerText = `AutuorIA — Quadro de Correções | ${data.cabecalho.processo}`;
-
-  const doc = new Document({
-    sections: [
-      {
-        properties: {
-          page: {
-            size: {
-              width: 16_838,
-              height: 11_906,
-              orientation: PageOrientation.LANDSCAPE,
-            },
-            margin: {
-              top: AUTUORIA_MARGIN,
-              right: AUTUORIA_MARGIN,
-              bottom: AUTUORIA_MARGIN,
-              left: AUTUORIA_MARGIN,
-            },
-          },
-        },
-        headers: {
-          default: new Header({
-            children: [
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: headerText,
-                    font: FONT,
-                    size: FONT_SIZE_SMALL,
-                    color: COLORS.charcoal,
-                  }),
-                ],
-              }),
-            ],
-          }),
-        },
-        footers: {
-          default: new Footer({
-            children: [
-              new Paragraph({
-                alignment: AlignmentType.RIGHT,
-                children: [
-                  new TextRun({
-                    text: "AutuorIA | Pág. ",
-                    font: FONT,
-                    size: FONT_SIZE_SMALL,
-                    color: COLORS.charcoal,
-                  }),
-                  new TextRun({
-                    children: [PageNumber.CURRENT],
-                    font: FONT,
-                    size: FONT_SIZE_SMALL,
-                    color: COLORS.charcoal,
-                  }),
-                  new TextRun({
-                    text: " / ",
-                    font: FONT,
-                    size: FONT_SIZE_SMALL,
-                    color: COLORS.charcoal,
-                  }),
-                  new TextRun({
-                    children: [PageNumber.TOTAL_PAGES],
-                    font: FONT,
-                    size: FONT_SIZE_SMALL,
-                    color: COLORS.charcoal,
-                  }),
-                ],
-              }),
-            ],
-          }),
-        },
-        children,
-      },
-    ],
+  const doc = createDocxDocument({
+    children,
+    headerText: `AutuorIA — Quadro de Correções | ${data.cabecalho.processo}`,
+    footerText: "AutuorIA",
+    font: FONT,
+    fontSize: FONT_SIZE_SMALL,
+    color: COLORS.charcoal,
+    orientation: "landscape",
+    margins: {
+      top: AUTUORIA_MARGIN,
+      right: AUTUORIA_MARGIN,
+      bottom: AUTUORIA_MARGIN,
+      left: AUTUORIA_MARGIN,
+    },
   });
 
   return Buffer.from(await Packer.toBuffer(doc));
@@ -964,77 +899,20 @@ export async function createRevisadaDocxBuffer(
     }
   }
 
-  const doc = new Document({
-    comments: allComments.length > 0 ? { children: allComments } : undefined,
-    sections: [
-      {
-        properties: {
-          page: {
-            margin: {
-              top: AUTUORIA_MARGIN,
-              right: AUTUORIA_MARGIN,
-              bottom: AUTUORIA_MARGIN,
-              left: AUTUORIA_MARGIN,
-            },
-          },
-        },
-        headers: {
-          default: new Header({
-            children: [
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: `AutuorIA — Contestação Revisada | ${title}`,
-                    font: FONT,
-                    size: FONT_SIZE_SMALL,
-                    color: COLORS.charcoal,
-                  }),
-                ],
-              }),
-            ],
-          }),
-        },
-        footers: {
-          default: new Footer({
-            children: [
-              new Paragraph({
-                alignment: AlignmentType.RIGHT,
-                children: [
-                  new TextRun({
-                    text: "AutuorIA | Pág. ",
-                    font: FONT,
-                    size: FONT_SIZE_SMALL,
-                    color: COLORS.charcoal,
-                  }),
-                  new TextRun({
-                    children: [PageNumber.CURRENT],
-                    font: FONT,
-                    size: FONT_SIZE_SMALL,
-                    color: COLORS.charcoal,
-                  }),
-                  new TextRun({
-                    text: " / ",
-                    font: FONT,
-                    size: FONT_SIZE_SMALL,
-                    color: COLORS.charcoal,
-                  }),
-                  new TextRun({
-                    children: [PageNumber.TOTAL_PAGES],
-                    font: FONT,
-                    size: FONT_SIZE_SMALL,
-                    color: COLORS.charcoal,
-                  }),
-                ],
-              }),
-            ],
-          }),
-        },
-        children:
-          bodyChildren.length > 0
-            ? bodyChildren
-            : [new Paragraph({ text: "" })],
-      },
-    ],
+  const doc = createDocxDocument({
+    children: bodyChildren,
+    headerText: `AutuorIA — Contestação Revisada | ${title}`,
+    footerText: "AutuorIA",
+    font: FONT,
+    fontSize: FONT_SIZE_SMALL,
+    color: COLORS.charcoal,
+    margins: {
+      top: AUTUORIA_MARGIN,
+      right: AUTUORIA_MARGIN,
+      bottom: AUTUORIA_MARGIN,
+      left: AUTUORIA_MARGIN,
+    },
+    comments: allComments,
   });
 
   return Buffer.from(await Packer.toBuffer(doc));

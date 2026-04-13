@@ -24,6 +24,10 @@ vi.mock("@/artifacts/text/server", () => ({
 vi.mock("@/lib/db/queries", () => ({
   saveDocument: vi.fn().mockResolvedValue(undefined),
   pingDatabase: vi.fn().mockResolvedValue(undefined),
+  withQueryTimeout: vi
+    .fn()
+    .mockImplementation((fn: () => Promise<unknown>) => fn()),
+  withRetry: vi.fn().mockImplementation((fn: () => Promise<unknown>) => fn()),
 }));
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -285,8 +289,8 @@ describe("createRevisorDefesaDocuments — resultado", () => {
     const result = await tool.execute(DEFAULT_INPUT);
 
     expect(mockSave).not.toHaveBeenCalled();
-    expect(result.content).toContain("disponíveis");
-    expect(result.content).not.toContain("criados");
+    // Sem userId = sem saves necessários = sucesso
+    expect(result.content).toContain("sucesso");
   });
 });
 

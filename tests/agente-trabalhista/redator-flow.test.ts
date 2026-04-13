@@ -214,7 +214,7 @@ describe("Redator de Contestações — ferramenta createRedatorContestacaoDocum
     expect(src).toContain("inputSchema");
   });
 
-  it("tool implementa retry com backoff (SAVE_MAX_RETRIES, SAVE_RETRY_BASE_MS)", () => {
+  it("tool implementa retry com backoff (withRetry + withQueryTimeout)", () => {
     const toolPath = path.join(
       __dirname,
       "..",
@@ -225,39 +225,24 @@ describe("Redator de Contestações — ferramenta createRedatorContestacaoDocum
       "create-redator-contestacao-document.ts"
     );
     const src = readFileSync(toolPath, "utf-8");
-    // Mesmo padrão que Revisor e Master: retry + exponential backoff
-    expect(src).toContain("SAVE_MAX_RETRIES");
-    expect(src).toContain("SAVE_RETRY_BASE_MS");
-    expect(src).toContain("saveWithRetry");
-    expect(src).toContain("saveWithTimeout");
+    // Usa createDocumentTool que encapsula retry, timeout, pingDatabase e save
+    expect(src).toContain("createDocumentTool");
   });
 
-  it("tool faz pingDatabase warm-up antes de gravar", () => {
-    const toolPath = path.join(
+  it("a base (document-tool-base) inclui pingDatabase, withRetry e timeout padrão 5000ms", () => {
+    const basePath = path.join(
       __dirname,
       "..",
       "..",
       "lib",
       "ai",
       "tools",
-      "create-redator-contestacao-document.ts"
+      "document-tool-base.ts"
     );
-    const src = readFileSync(toolPath, "utf-8");
+    const src = readFileSync(basePath, "utf-8");
     expect(src).toContain("pingDatabase");
-  });
-
-  it("tool usa SAVE_ATTEMPT_TIMEOUT_MS=5000 (mesmo padrão Revisor e Master)", () => {
-    const toolPath = path.join(
-      __dirname,
-      "..",
-      "..",
-      "lib",
-      "ai",
-      "tools",
-      "create-redator-contestacao-document.ts"
-    );
-    const src = readFileSync(toolPath, "utf-8");
-    expect(src).toContain("SAVE_ATTEMPT_TIMEOUT_MS");
+    expect(src).toContain("withRetry");
+    expect(src).toContain("withQueryTimeout");
     expect(src).toContain("5000");
   });
 

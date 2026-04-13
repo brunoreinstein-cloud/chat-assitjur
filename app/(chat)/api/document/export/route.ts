@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { auth } from "@/app/(auth)/auth";
 import { docxCache } from "@/lib/cache/document-cache";
 import { getDocumentById } from "@/lib/db/queries";
@@ -12,7 +13,12 @@ import { ChatbotError } from "@/lib/errors";
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
-const LAYOUT_VALUES = new Set<DocxLayout>(["default", "assistjur-master"]);
+const LAYOUT_VALUES = new Set<DocxLayout>([
+  "default",
+  "assistjur-master",
+  "autuoria-quadro",
+  "autuoria-revisada",
+]);
 
 /**
  * GET /api/document/export?id=xxx&layout=assistjur-master
@@ -121,8 +127,29 @@ export async function POST(request: Request) {
       ? (body.layout as DocxLayout)
       : "default";
 
+  const userId = session.user.id;
+
+  // Cache por content-hash: mesmo conteúdo nunca gera dois buffers DOCX.
+  const contentHash = createHash("md5")
+    .update(`${body.title}\0${body.content}\0${layout}`)
+    .digest("hex");
+
+  const cached = docxCache.get(userId, contentHash);
+  if (cached !== undefined) {
+    const safeFilename = toByteStringSafe(cached.filename);
+    return new Response(new Uint8Array(cached.buffer), {
+      status: 200,
+      headers: {
+        "Content-Type": DOCX_MIME,
+        "Content-Disposition": `attachment; filename="${safeFilename}"`,
+        "Cache-Control": "private, no-store",
+      },
+    });
+  }
+
   const buffer = await createDocxBuffer(body.title, body.content, layout);
   const filename = sanitizeDocxFilename(body.title);
+  docxCache.set(userId, contentHash, buffer, filename);
   const safeFilename = toByteStringSafe(filename);
 
   return new Response(new Uint8Array(buffer), {

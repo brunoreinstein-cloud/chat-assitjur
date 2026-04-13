@@ -19,6 +19,11 @@ import {
   setMasterTotalCount,
 } from "@/lib/master-progress-store";
 import { setPipelineDashboardData } from "@/lib/pipeline-dashboard-store";
+import { storeRedatorDoc } from "@/lib/redator-content-store";
+import {
+  setRedatorCompletedCount,
+  setRedatorStarted,
+} from "@/lib/redator-progress-store";
 import { storeRevisorDoc } from "@/lib/revisor-content-store";
 import {
   resetRevisorProgress,
@@ -34,20 +39,115 @@ import { useDataStream } from "./data-stream-provider";
 import { useDbFallback } from "./db-fallback-context";
 import { getChatHistoryPaginationKey } from "./sidebar-history";
 
-// Acumuladores de conteúdo do stream para o revisor-content-store
-let _docId = "";
-let _docTitle = "";
-let _docContent = "";
+// ---------------------------------------------------------------------------
+// Table-driven document stream accumulator
+// ---------------------------------------------------------------------------
 
-// Acumuladores de conteúdo do stream para o master-content-store
-let _mdocId = "";
-let _mdocTitle = "";
-let _mdocContent = "";
+/** Prefixos de streaming de documentos. Mesma lista de document-stream-types.ts. */
+const DOC_PREFIXES = ["rdoc", "mdoc", "autuoria", "redator"] as const;
+type DocPrefix = (typeof DOC_PREFIXES)[number];
 
-// Acumuladores de conteúdo do stream para o autuoria-content-store
-let _autuoriaDocId = "";
-let _autuoriaDocTitle = "";
-let _autuoriaDocContent = "";
+/** Acumulador por prefixo (module-level — persiste durante a sessão). */
+const acc: Record<DocPrefix, { id: string; title: string; content: string }> = {
+  rdoc: { id: "", title: "", content: "" },
+  mdoc: { id: "", title: "", content: "" },
+  autuoria: { id: "", title: "", content: "" },
+  redator: { id: "", title: "", content: "" },
+};
+
+/** Funções de store por prefixo. */
+const storeHandlers: Record<
+  DocPrefix,
+  (id: string, title: string, content: string) => void
+> = {
+  rdoc: storeRevisorDoc,
+  mdoc: storeMasterDoc,
+  autuoria: storeAutuoriaDoc,
+  redator: storeRedatorDoc,
+};
+
+/** Start handlers por prefixo. */
+const startHandlers: Record<DocPrefix, (() => void) | null> = {
+  rdoc: setRevisorStarted,
+  mdoc: null, // Master usa setMasterTotalCount (com data)
+  autuoria: setAutuoriaStarted,
+  redator: setRedatorStarted,
+};
+
+/**
+ * Tenta processar um delta como evento de documento (prefixado).
+ * Retorna true se tratado, false se não reconhecido.
+ */
+function handleDocEvent(
+  deltaType: string,
+  deltaData: unknown,
+  setArtifact: (fn: (draft: UIArtifact) => UIArtifact) => void
+): boolean {
+  for (const prefix of DOC_PREFIXES) {
+    const p = `data-${prefix}`;
+    if (!deltaType.startsWith(p)) {
+      continue;
+    }
+    const suffix = deltaType.slice(p.length);
+
+    switch (suffix) {
+      case "Id":
+        acc[prefix].id = deltaData as string;
+        return true;
+      case "Title":
+        acc[prefix].title = deltaData as string;
+        return true;
+      case "Kind":
+        return true; // ignorar (sempre "text")
+      case "Clear":
+        acc[prefix].content = "";
+        return true;
+      case "Delta":
+        acc[prefix].content += deltaData as string;
+        return true;
+      case "Finish": {
+        const a = acc[prefix];
+        if (a.id) {
+          storeHandlers[prefix](a.id, a.title, a.content);
+          // Redator: popula artifact panel para compatibilidade com DocumentToolResult.
+          if (prefix === "redator") {
+            setArtifact((draft) => ({
+              ...draft,
+              documentId: a.id,
+              title: a.title,
+              content: a.content,
+              kind: "text" as ArtifactKind,
+              status: "idle",
+            }));
+          }
+        }
+        a.id = "";
+        a.content = "";
+        return true;
+      }
+      case "Start": {
+        const handler = startHandlers[prefix];
+        if (handler) {
+          handler();
+        }
+        // Master start também captura o total
+        if (prefix === "mdoc") {
+          setMasterTotalCount(deltaData as number);
+        }
+        return true;
+      }
+      case "Done":
+        return true; // Apenas sinalização — tratamento no UI component
+      default:
+        return false; // Sufixo desconhecido — não é evento de documento
+    }
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export function DataStreamHandler() {
   const { dataStream, setDataStream } = useDataStream();
@@ -65,129 +165,29 @@ export function DataStreamHandler() {
     setDataStream([]);
 
     for (const delta of newDeltas) {
-      // Acumulação de conteúdo para o revisor-content-store (sem DB).
-      // Usa prefixo rdoc — estes eventos NÃO chegam ao setArtifact abaixo,
-      // pelo que o painel artifact.tsx nunca faz GET /api/document para docs do Revisor.
-      if (delta.type === "data-rdocId") {
-        _docId = delta.data as string;
-        continue;
-      }
-      if (delta.type === "data-rdocTitle") {
-        _docTitle = delta.data as string;
-        continue;
-      }
-      if (delta.type === "data-rdocKind") {
-        continue; // ignorar kind (sempre "text")
-      }
-      if (delta.type === "data-rdocClear") {
-        _docContent = "";
-        continue;
-      }
-      if (delta.type === "data-rdocDelta") {
-        _docContent += delta.data as string;
-        continue;
-      }
-      if (delta.type === "data-rdocFinish") {
-        if (_docId) {
-          storeRevisorDoc(_docId, _docTitle, _docContent);
-        }
-        _docId = "";
-        _docContent = "";
+      // 1. Document stream events (table-driven: rdoc, mdoc, autuoria, redator)
+      if (handleDocEvent(delta.type, delta.data, setArtifact)) {
         continue;
       }
 
-      // Acumulação de conteúdo para o master-content-store (sem DB).
-      // Usa prefixo mdoc — estes eventos NÃO activam o painel artifact.
-      if (delta.type === "data-mdocId") {
-        _mdocId = delta.data as string;
-        continue;
-      }
-      if (delta.type === "data-mdocTitle") {
-        _mdocTitle = delta.data as string;
-        continue;
-      }
-      if (delta.type === "data-mdocClear") {
-        _mdocContent = "";
-        continue;
-      }
-      if (delta.type === "data-mdocDelta") {
-        _mdocContent += delta.data as string;
-        continue;
-      }
-      if (delta.type === "data-mdocFinish") {
-        if (_mdocId) {
-          storeMasterDoc(_mdocId, _mdocTitle, _mdocContent);
-        }
-        _mdocId = "";
-        _mdocContent = "";
-        continue;
-      }
-      if (delta.type === "data-mdocStart") {
-        // Captura total de documentos e regista timestamp de início para ETA.
-        setMasterTotalCount(delta.data as number);
-        continue;
-      }
-      if (delta.type === "data-mdocDone") {
-        continue; // Apenas sinalização — tratamento no UI component
-      }
-      if (delta.type === "data-rdocStart") {
-        // Regista timestamp de início para o timer e ETA do loading state.
-        setRevisorStarted();
-        continue;
-      }
-      if (delta.type === "data-rdocDone") {
-        continue; // Apenas sinalização — tratamento no UI component
-      }
-
-      // Acumulação de conteúdo para o autuoria-content-store.
-      // Usa prefixo autuoria — estes eventos NÃO activam o painel artifact.
-      if (delta.type === "data-autuoriaId") {
-        _autuoriaDocId = delta.data as string;
-        continue;
-      }
-      if (delta.type === "data-autuoriaTitle") {
-        _autuoriaDocTitle = delta.data as string;
-        continue;
-      }
-      if (delta.type === "data-autuoriaKind") {
-        continue; // ignorar kind (sempre "text")
-      }
-      if (delta.type === "data-autuoriaClear") {
-        _autuoriaDocContent = "";
-        continue;
-      }
-      if (delta.type === "data-autuoriaDelta") {
-        _autuoriaDocContent += delta.data as string;
-        continue;
-      }
-      if (delta.type === "data-autuoriaFinish") {
-        if (_autuoriaDocId) {
-          storeAutuoriaDoc(
-            _autuoriaDocId,
-            _autuoriaDocTitle,
-            _autuoriaDocContent
-          );
-        }
-        _autuoriaDocId = "";
-        _autuoriaDocContent = "";
-        continue;
-      }
-      if (delta.type === "data-autuoriaStart") {
-        setAutuoriaStarted();
-        continue;
-      }
-      if (delta.type === "data-autuoriaDone") {
-        continue; // Apenas sinalização — tratamento no UI component
-      }
-      if (delta.type === "data-autuoriaProgress") {
+      // 2. Agent-specific progress events
+      if (delta.type === "data-revisorProgress") {
         const completedCount = delta.data as number;
-        // Não resetar progresso no meio da geração — reset ocorre em data-autuoriaStart.
-        // Bug anterior: resetAutuoriaProgress() em completedCount===1 zerava startedAt,
-        // quebrando o timer/ETA no componente de progresso.
-        setAutuoriaCompletedCount(completedCount);
+        if (completedCount === 1) {
+          // Primeiro doc concluído: reinicia contagem (nova geração iniciada)
+          resetRevisorProgress();
+        }
+        setRevisorCompletedCount(completedCount);
         continue;
       }
-
+      if (delta.type === "data-masterProgress") {
+        const completedCount = delta.data as number;
+        if (completedCount === 1) {
+          resetMasterProgress();
+        }
+        setMasterCompletedCount(completedCount);
+        continue;
+      }
       if (delta.type === "data-masterTitle") {
         try {
           const { index, title } = JSON.parse(delta.data as string) as {
@@ -200,15 +200,18 @@ export function DataStreamHandler() {
         }
         continue;
       }
-      if (delta.type === "data-masterProgress") {
+      if (delta.type === "data-autuoriaProgress") {
         const completedCount = delta.data as number;
-        if (completedCount === 1) {
-          resetMasterProgress();
-        }
-        setMasterCompletedCount(completedCount);
+        // Não resetar progresso no meio da geração — reset ocorre em data-autuoriaStart.
+        setAutuoriaCompletedCount(completedCount);
+        continue;
+      }
+      if (delta.type === "data-redatorProgress") {
+        setRedatorCompletedCount(delta.data as number);
         continue;
       }
 
+      // 3. Chat / status events
       if (delta.type === "data-chat-title") {
         mutate(unstable_serialize(getChatHistoryPaginationKey));
         continue;
@@ -239,8 +242,6 @@ export function DataStreamHandler() {
       }
       if (delta.type === "data-pipeline-progress") {
         const msg = delta.data as string;
-        // Mensagem de conclusão (✅) → toast de sucesso com duração normal.
-        // Restantes → toast loading persistente que actualiza em cada bloco.
         const isComplete = msg.startsWith("✅");
         if (isComplete) {
           toast.success(msg, { id: "pipeline-progress", duration: 6000 });
@@ -249,15 +250,8 @@ export function DataStreamHandler() {
         }
         continue;
       }
-      if (delta.type === "data-revisorProgress") {
-        const completedCount = delta.data as number;
-        if (completedCount === 1) {
-          // Primeiro doc concluído: reinicia contagem (nova geração iniciada)
-          resetRevisorProgress();
-        }
-        setRevisorCompletedCount(completedCount);
-        continue;
-      }
+
+      // 4. Artifact panel (legacy create-document.ts events: data-id, data-title, etc.)
       const artifactDefinition = artifactDefinitions.find(
         (currentArtifactDefinition) =>
           currentArtifactDefinition.kind === artifact.kind

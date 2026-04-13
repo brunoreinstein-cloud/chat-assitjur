@@ -1,8 +1,8 @@
 import type { Document } from "@/lib/db/schema";
 import { LruTtlMap } from "./lru-ttl-map";
 
-const DEFAULT_TTL_MS = 30_000;
-const PREVIEW_TTL_MS = 60_000;
+const DEFAULT_TTL_MS = 300_000; // 5 min — advogado demora 2-5 min entre gerar e baixar
+const PREVIEW_TTL_MS = 300_000;
 
 const store = new LruTtlMap<Document[]>(500);
 const docxStore = new LruTtlMap<{ buffer: Buffer; filename: string }>(100);

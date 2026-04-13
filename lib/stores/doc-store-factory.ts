@@ -16,11 +16,26 @@ export interface DocStore {
   ) => Array<{ id: string; title: string; content: string }>;
 }
 
-export function createDocStore(): DocStore {
+/**
+ * Cria um store em memória com eviction FIFO quando excede maxSize.
+ * Map preserva ordem de inserção — o primeiro entry é o mais antigo.
+ */
+export function createDocStore(maxSize = 200): DocStore {
   const map = new Map<string, DocEntry>();
   return {
     storeDoc(id, title, content) {
+      // Se já existe, deletar para re-inserir no final (atualização)
+      if (map.has(id)) {
+        map.delete(id);
+      }
       map.set(id, { title, content });
+      // Evict oldest entry se exceder maxSize
+      if (map.size > maxSize) {
+        const oldest = map.keys().next().value;
+        if (oldest !== undefined) {
+          map.delete(oldest);
+        }
+      }
     },
     getDoc(id) {
       return map.get(id);
