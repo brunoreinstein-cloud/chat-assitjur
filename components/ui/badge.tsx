@@ -42,6 +42,13 @@ const badgeVariants = cva(
           "border-transparent bg-source-review-bg text-source-review hover:bg-source-review-bg/80",
         "source-verified":
           "border-transparent bg-source-verified-bg text-source-verified hover:bg-source-verified-bg/80",
+        // Confiança — nível de certeza da IA
+        "confidence-high":
+          "border-transparent bg-confidence-high-bg text-confidence-high hover:bg-confidence-high-bg/80",
+        "confidence-medium":
+          "border-transparent bg-confidence-medium-bg text-confidence-medium hover:bg-confidence-medium-bg/80",
+        "confidence-low":
+          "border-transparent bg-confidence-low-bg text-confidence-low hover:bg-confidence-low-bg/80",
       },
     },
     defaultVariants: {

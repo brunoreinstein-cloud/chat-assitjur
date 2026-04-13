@@ -100,6 +100,26 @@
   --source-verified: hsl(142 71% 36%);
   --source-verified-bg: hsl(142 76% 96%);
 
+  /* ── Confidence ── */
+  --confidence-high: hsl(152 60% 36%);
+  --confidence-high-bg: hsl(152 60% 95%);
+  --confidence-medium: hsl(38 92% 45%);
+  --confidence-medium-bg: hsl(38 92% 95%);
+  --confidence-low: hsl(0 72% 51%);
+  --confidence-low-bg: hsl(0 72% 95%);
+
+  /* ── Citation types ── */
+  --citation-legislation: hsl(234 62% 52%);
+  --citation-sumula: hsl(271 62% 52%);
+  --citation-jurisprudence: hsl(213 72% 48%);
+  --citation-document: hsl(152 60% 36%);
+  --citation-calculation: hsl(25 90% 48%);
+
+  /* ── Actor types ── */
+  --actor-ai: hsl(213 72% 48%);
+  --actor-human: hsl(220 14% 40%);
+  --actor-system: hsl(220 10% 62%);
+
   /* Superfícies de layout */
   --surface-workspace: hsl(30 4% 98%);
   --surface-panel: hsl(0 0% 100%);
@@ -271,6 +291,26 @@
   --source-verified: hsl(142 65% 48%);
   --source-verified-bg: hsl(142 50% 10%);
 
+  /* ── Confidence — dark mode ── */
+  --confidence-high: hsl(152 55% 55%);
+  --confidence-high-bg: hsl(152 30% 15%);
+  --confidence-medium: hsl(38 80% 55%);
+  --confidence-medium-bg: hsl(38 40% 15%);
+  --confidence-low: hsl(0 65% 60%);
+  --confidence-low-bg: hsl(0 40% 15%);
+
+  /* ── Citation types — dark mode ── */
+  --citation-legislation: hsl(234 70% 70%);
+  --citation-sumula: hsl(271 65% 70%);
+  --citation-jurisprudence: hsl(213 75% 65%);
+  --citation-document: hsl(152 55% 55%);
+  --citation-calculation: hsl(25 85% 60%);
+
+  /* ── Actor types — dark mode ── */
+  --actor-ai: hsl(213 75% 65%);
+  --actor-human: hsl(220 14% 70%);
+  --actor-system: hsl(220 10% 50%);
+
   /* Superfícies de layout — dark mode */
   --surface-workspace: hsl(256 18% 7%);
   --surface-panel: hsl(256 16% 10%);
@@ -410,6 +450,26 @@
   --color-source-review-bg: var(--source-review-bg);
   --color-source-verified: var(--source-verified);
   --color-source-verified-bg: var(--source-verified-bg);
+
+  /* Confidence */
+  --color-confidence-high: var(--confidence-high);
+  --color-confidence-high-bg: var(--confidence-high-bg);
+  --color-confidence-medium: var(--confidence-medium);
+  --color-confidence-medium-bg: var(--confidence-medium-bg);
+  --color-confidence-low: var(--confidence-low);
+  --color-confidence-low-bg: var(--confidence-low-bg);
+
+  /* Citation types */
+  --color-citation-legislation: var(--citation-legislation);
+  --color-citation-sumula: var(--citation-sumula);
+  --color-citation-jurisprudence: var(--citation-jurisprudence);
+  --color-citation-document: var(--citation-document);
+  --color-citation-calculation: var(--citation-calculation);
+
+  /* Actor types */
+  --color-actor-ai: var(--actor-ai);
+  --color-actor-human: var(--actor-human);
+  --color-actor-system: var(--actor-system);
 
   /* Superfícies de layout */
   --color-surface-workspace: var(--surface-workspace);
