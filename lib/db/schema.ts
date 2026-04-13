@@ -5,8 +5,10 @@ import {
   index,
   integer,
   json,
+  jsonb,
   pgTable,
   primaryKey,
+  real,
   text,
   timestamp,
   uniqueIndex,
@@ -678,3 +680,40 @@ export const lead = pgTable("Lead", {
 });
 
 export type Lead = InferSelectModel<typeof lead>;
+
+// ─── Audit Trail ───────────────────────────────────────────────────────────
+
+export type ActorType = "ai_agent" | "human" | "system";
+
+export const auditEvent = pgTable(
+  "AuditEvent",
+  {
+    id: uuid("id").primaryKey().notNull().defaultRandom(),
+    processoId: uuid("processoId").references(() => processo.id, {
+      onDelete: "cascade",
+    }),
+    userId: uuid("userId")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    actorType: text("actorType").notNull().$type<ActorType>(),
+    actorId: text("actorId").notNull(),
+    action: text("action").notNull(),
+    confidence: real("confidence"),
+    creditsConsumed: integer("creditsConsumed").default(0),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
+  },
+  (table) => ({
+    processoCreatedAtIdx: index("AuditEvent_processoId_createdAt_idx").on(
+      table.processoId,
+      table.createdAt
+    ),
+    actorIdx: index("AuditEvent_actorType_actorId_idx").on(
+      table.actorType,
+      table.actorId
+    ),
+    actionIdx: index("AuditEvent_action_idx").on(table.action),
+  })
+);
+
+export type AuditEvent = InferSelectModel<typeof auditEvent>;
